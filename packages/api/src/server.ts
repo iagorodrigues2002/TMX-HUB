@@ -76,10 +76,11 @@ async function main() {
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
   process.on('SIGINT', () => void shutdown('SIGINT'));
 
+  const port = env.PORT ?? env.API_PORT;
   try {
-    await app.listen({ port: env.API_PORT, host: env.API_HOST });
-    app.log.info(`Page Cloner API listening on http://${env.API_HOST}:${env.API_PORT}`);
-    app.log.info(`API docs at http://${env.API_HOST}:${env.API_PORT}/docs`);
+    await app.listen({ port, host: env.API_HOST });
+    app.log.info(`Page Cloner API listening on http://${env.API_HOST}:${port}`);
+    app.log.info(`API docs at http://${env.API_HOST}:${port}/docs`);
   } catch (err) {
     app.log.error({ err }, 'failed to start server');
     process.exit(1);

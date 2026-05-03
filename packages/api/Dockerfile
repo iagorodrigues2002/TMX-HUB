@@ -7,12 +7,12 @@ RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
 
 # ---- deps ----
 FROM base AS deps
-COPY pnpm-workspace.yaml package.json ./
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY tsconfig.base.json biome.json ./
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/core/package.json ./packages/core/
 COPY packages/api/package.json ./packages/api/
-RUN pnpm install --frozen-lockfile=false
+RUN pnpm install --frozen-lockfile
 
 # ---- build ----
 FROM deps AS build
@@ -25,8 +25,8 @@ RUN pnpm --filter @page-cloner/core build && pnpm --filter @page-cloner/api buil
 # ---- runtime ----
 FROM base AS runtime
 ENV NODE_ENV=production
-ENV API_PORT=4000
 ENV API_HOST=0.0.0.0
+# Railway / generic platforms set PORT; env.ts falls back to API_PORT/4000.
 
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/packages/shared ./packages/shared

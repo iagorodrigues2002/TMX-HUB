@@ -10,6 +10,9 @@ const numberFromString = z.coerce.number();
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 
+  // PORT is the platform-standard env var (Railway/Heroku/Fly all set it).
+  // We honor PORT when present, otherwise fall back to API_PORT or 4000.
+  PORT: numberFromString.optional(),
   API_PORT: numberFromString.default(4000),
   API_HOST: z.string().default('0.0.0.0'),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
