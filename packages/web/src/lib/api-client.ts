@@ -4,6 +4,7 @@ import type {
   BulkLinkUpdate,
   CloneState,
   Form,
+  InspectResult,
   Link,
   Problem,
   UpdateFormRequest,
@@ -269,6 +270,10 @@ function fromBuildJobWire(w: BuildJobWire): BuildJob {
 export const apiClient = {
   baseUrl: env.NEXT_PUBLIC_API_URL,
 
+  async inspectPage(url: string, signal?: AbortSignal): Promise<InspectResult> {
+    return request<InspectResult>('/v1/inspect', { method: 'POST', body: { url }, signal });
+  },
+
   async createClone(input: z.infer<typeof CreateCloneRequestSchema>): Promise<CloneJob> {
     const parsed = CreateCloneRequestSchema.parse(input);
     const body = {
@@ -280,6 +285,8 @@ export const apiClient = {
               inline_assets: parsed.options.inlineAssets,
               user_agent: parsed.options.userAgent,
               viewport: parsed.options.viewport,
+              link_replacements: parsed.options.linkReplacements,
+              keep_script_srcs: parsed.options.keepScriptSrcs,
             },
           }
         : {}),

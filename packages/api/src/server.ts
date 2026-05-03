@@ -44,12 +44,12 @@ async function main() {
   // containers (one for `render`, one for `bundle`) so that browser crashes
   // or long-running renders don't impact API latency.
   const renderWorker = createRenderWorker({
-    connection: app.redis,
+    redisUrl: env.REDIS_URL,
     jobStore: app.jobStore,
     storage: app.storage,
   });
   const bundleWorker = createBundleWorker({
-    connection: app.redis,
+    redisUrl: env.REDIS_URL,
     jobStore: app.jobStore,
     storage: app.storage,
   });

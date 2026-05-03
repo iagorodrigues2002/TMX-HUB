@@ -19,10 +19,13 @@ export function sanitize(html: string, opts: SanitizeOptions = {}): SanitizeResu
 
   const $ = cheerio.load(html, { xml: false });
 
-  $('script').each(() => {
+  const keepSrcs = new Set(opts.keepScriptSrcs ?? []);
+  $('script').each((_, el) => {
+    const src = $(el).attr('src');
+    if (src && keepSrcs.has(src)) return;
     counts.scripts += 1;
+    $(el).remove();
   });
-  $('script').remove();
 
   $('noscript').each(() => {
     counts.noscripts += 1;

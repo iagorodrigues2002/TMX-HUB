@@ -48,6 +48,7 @@ export interface SanitizeOptions {
   stripTemplates?: boolean;
   allowDataAttributes?: boolean;
   extraTrackingHosts?: string[];
+  keepScriptSrcs?: string[];
 }
 
 export interface SanitizeRemovalCounts {

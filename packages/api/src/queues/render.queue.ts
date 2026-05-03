@@ -1,8 +1,9 @@
 import { Queue } from 'bullmq';
-import type { Redis } from 'ioredis';
+import { Redis } from 'ioredis';
 import { RENDER_QUEUE_NAME, type RenderJobData } from './index.js';
 
-export function createRenderQueue(connection: Redis): Queue<RenderJobData> {
+export function createRenderQueue(redisUrl: string): Queue<RenderJobData> {
+  const connection = new Redis(redisUrl, { maxRetriesPerRequest: null, enableReadyCheck: false });
   return new Queue<RenderJobData>(RENDER_QUEUE_NAME, {
     connection,
     defaultJobOptions: {

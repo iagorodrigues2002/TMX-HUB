@@ -1,4 +1,5 @@
 export { fetchPage } from './fetch/fetch-page.js';
+export { inspectHtml } from './extract/inspect.js';
 export { sanitize } from './sanitize/index.js';
 export { resolveAssets } from './assets/resolve.js';
 export { extractForms } from './extract/forms.js';

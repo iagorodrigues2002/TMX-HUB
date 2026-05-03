@@ -3,6 +3,7 @@ import buildsRoutes from './builds.js';
 import clonesRoutes from './clones.js';
 import formsRoutes from './forms.js';
 import healthRoutes from './health.js';
+import inspectRoutes from './inspect.js';
 import linksRoutes from './links.js';
 import previewRoutes from './preview.js';
 
@@ -14,6 +15,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   await app.register(
     async (v1) => {
       await v1.register(clonesRoutes);
+      await v1.register(inspectRoutes);
       await v1.register(previewRoutes);
       await v1.register(formsRoutes);
       await v1.register(linksRoutes);

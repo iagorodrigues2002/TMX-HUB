@@ -19,6 +19,11 @@ export const ViewportSchema = z.object({
   height: z.number().int().min(320).max(2160),
 });
 
+export const LinkReplacementSchema = z.object({
+  from: z.string().url(),
+  to: z.string().url(),
+});
+
 export const CloneOptionsSchema = z
   .object({
     renderMode: RenderModeSchema.default('js'),
@@ -27,8 +32,12 @@ export const CloneOptionsSchema = z
     viewport: ViewportSchema.optional(),
     escalation: EscalationSchema.default('auto'),
     webhookUrl: z.string().url().optional(),
+    linkReplacements: z.array(LinkReplacementSchema).max(100).optional(),
+    keepScriptSrcs: z.array(z.string()).max(50).optional(),
   })
   .strict();
+
+export const InspectRequestSchema = z.object({ url: z.string().url() }).strict();
 
 export const CreateCloneRequestSchema = z
   .object({
@@ -111,3 +120,4 @@ export type UpdateLinkRequest = z.infer<typeof UpdateLinkRequestSchema>;
 export type BulkLinkUpdate = z.infer<typeof BulkLinkUpdateSchema>;
 export type BuildOptionsRequest = z.infer<typeof BuildOptionsSchema>;
 export type Problem = z.infer<typeof ProblemSchema>;
+export type InspectRequest = z.infer<typeof InspectRequestSchema>;

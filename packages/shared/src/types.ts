@@ -59,6 +59,11 @@ export type CloneStatus =
 export type RenderMode = 'static' | 'js';
 export type Escalation = 'off' | 'auto' | 'max';
 
+export interface LinkReplacement {
+  from: string;
+  to: string;
+}
+
 export interface CloneOptions {
   renderMode?: RenderMode;
   inlineAssets?: boolean;
@@ -66,6 +71,27 @@ export interface CloneOptions {
   viewport?: { width: number; height: number };
   escalation?: Escalation;
   webhookUrl?: string;
+  linkReplacements?: LinkReplacement[];
+  keepScriptSrcs?: string[];
+}
+
+export interface InspectCheckoutLink {
+  href: string;
+  text: string;
+  occurrences: number;
+}
+
+export interface InspectHeadScript {
+  src: string;
+  type: string | null;
+}
+
+export interface InspectResult {
+  url: string;
+  finalUrl: string;
+  checkoutLinks: InspectCheckoutLink[];
+  headScripts: InspectHeadScript[];
+  inlineScriptCount: number;
 }
 
 export interface CloneState {

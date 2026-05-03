@@ -15,17 +15,24 @@ declare module 'fastify' {
 }
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
-  // BullMQ requires `maxRetriesPerRequest: null` on the connection.
+  // Job-store Redis: fail fast (maxRetriesPerRequest: 3) so HTTP handlers return
+  // a proper 500 instead of hanging when Redis is unavailable. Hanging requests
+  // cause Railway's LB to return a 502 without CORS headers, which the browser
+  // misreports as "Network error: Failed to fetch".
   const redis = new Redis(env.REDIS_URL, {
-    maxRetriesPerRequest: null,
-    enableReadyCheck: true,
+    maxRetriesPerRequest: 3,
+    connectTimeout: 5_000,
+    enableReadyCheck: false,
   });
   redis.on('error', (err) => {
     app.log.error({ err }, 'redis error');
   });
 
-  const renderQueue = createRenderQueue(redis);
-  const bundleQueue = createBundleQueue(redis);
+  // BullMQ queues and workers each need their own dedicated Redis connections
+  // with maxRetriesPerRequest: null (BullMQ requirement for blocking commands).
+  // Pass the URL so each queue creates an independent connection.
+  const renderQueue = createRenderQueue(env.REDIS_URL);
+  const bundleQueue = createBundleQueue(env.REDIS_URL);
 
   app.decorate('redis', redis);
   app.decorate('renderQueue', renderQueue);

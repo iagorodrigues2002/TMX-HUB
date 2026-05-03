@@ -1,6 +1,6 @@
 import type { CloneState } from '@page-cloner/shared';
 import { Worker } from 'bullmq';
-import type { Redis } from 'ioredis';
+import { Redis } from 'ioredis';
 import { env } from '../env.js';
 import { logger } from '../lib/logger.js';
 import { RENDER_QUEUE_NAME, type RenderJobData } from '../queues/index.js';
@@ -48,11 +48,12 @@ async function loadCore(): Promise<CoreModule> {
 }
 
 export function createRenderWorker(args: {
-  connection: Redis;
+  redisUrl: string;
   jobStore: JobStore;
   storage: StorageService;
 }): Worker<RenderJobData> {
-  const { connection, jobStore, storage } = args;
+  const { redisUrl, jobStore, storage } = args;
+  const connection = new Redis(redisUrl, { maxRetriesPerRequest: null, enableReadyCheck: false });
   const log = logger.child({ component: 'render-worker' });
 
   const worker = new Worker<RenderJobData>(
@@ -77,11 +78,12 @@ export function createRenderWorker(args: {
               timeoutMs: env.MAX_RENDER_TIMEOUT_MS,
             });
 
-            // 2. Sanitize
+            // 2. Sanitize (optionally preserve specific scripts chosen by the user)
             await jobStore.setCloneStatus(jobId, 'sanitizing', { progress: 35 });
             const sanitized = await core.sanitize(fetched.html, {
               removeTracking: true,
               stripTemplates: true,
+              keepScriptSrcs: meta.options.keepScriptSrcs ?? [],
             });
 
             // 3. Resolve assets (download enabled)
@@ -105,7 +107,16 @@ export function createRenderWorker(args: {
 
             // 5. Extract forms + links
             const forms = core.extractForms(resolved.html);
-            const links = core.extractLinks(resolved.html);
+            const rawLinks = core.extractLinks(resolved.html);
+
+            // Apply link replacements specified by the user at clone-creation time.
+            const replacements = meta.options.linkReplacements ?? [];
+            const links = replacements.length
+              ? rawLinks.map((lnk) => {
+                  const match = replacements.find((r) => lnk.originalHref === r.from || lnk.currentHref === r.from);
+                  return match ? { ...lnk, currentHref: match.to } : lnk;
+                })
+              : rawLinks;
 
             const totalBytes =
               Buffer.byteLength(resolved.html, 'utf-8') +

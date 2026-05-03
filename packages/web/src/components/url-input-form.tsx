@@ -1,50 +1,88 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { Globe, Loader2 } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { Globe, Loader2, Search } from 'lucide-react';
 import { toast } from 'sonner';
-import { z } from 'zod';
+import type { InspectResult, LinkReplacement } from '@page-cloner/shared';
 import { apiClient } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
+import { InspectionPanel } from './inspection-panel';
 
-const FormSchema = z.object({
-  url: z.string().url({ message: 'Digite uma URL http(s) válida.' }),
-  inlineAssets: z.boolean().default(false),
-  renderJs: z.boolean().default(true),
-});
-
-type FormValues = z.infer<typeof FormSchema>;
+type Step = 'idle' | 'inspecting' | 'inspected' | 'cloning';
 
 export function UrlInputForm() {
   const router = useRouter();
-  const [submitting, setSubmitting] = useState(false);
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<FormValues>({
-    resolver: zodResolver(FormSchema),
-    defaultValues: {
-      url: '',
-      inlineAssets: false,
-      renderJs: true,
-    },
-  });
+  const [url, setUrl] = useState('');
+  const [urlError, setUrlError] = useState('');
+  const [renderJs, setRenderJs] = useState(true);
+  const [inlineAssets, setInlineAssets] = useState(false);
+  const [step, setStep] = useState<Step>('idle');
+  const [inspectResult, setInspectResult] = useState<InspectResult | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
-  const onSubmit = handleSubmit(async (values) => {
-    setSubmitting(true);
+  const validateUrl = (value: string): boolean => {
+    try {
+      new URL(value);
+      setUrlError('');
+      return true;
+    } catch {
+      setUrlError('Digite uma URL http(s) válida.');
+      return false;
+    }
+  };
+
+  const handleInspect = async () => {
+    if (!validateUrl(url)) return;
+    setStep('inspecting');
+    abortRef.current = new AbortController();
+    try {
+      const result = await apiClient.inspectPage(url, abortRef.current.signal);
+      setInspectResult(result);
+      setStep('inspected');
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') return;
+      toast.error((err as Error).message);
+      setStep('idle');
+    }
+  };
+
+  const handleClone = async (opts: {
+    linkReplacements: LinkReplacement[];
+    keepScriptSrcs: string[];
+  }) => {
+    setStep('cloning');
     try {
       const job = await apiClient.createClone({
-        url: values.url,
+        url,
         options: {
-          renderMode: values.renderJs ? 'js' : 'static',
-          inlineAssets: values.inlineAssets,
+          renderMode: renderJs ? 'js' : 'static',
+          inlineAssets,
+          escalation: 'auto',
+          linkReplacements: opts.linkReplacements.length ? opts.linkReplacements : undefined,
+          keepScriptSrcs: opts.keepScriptSrcs.length ? opts.keepScriptSrcs : undefined,
+        },
+      });
+      toast.success('Clone iniciado');
+      router.push(`/cloner/jobs/${job.id}`);
+    } catch (err) {
+      toast.error((err as Error).message);
+      setStep('inspected');
+    }
+  };
+
+  const handleCloneDirect = async () => {
+    if (!validateUrl(url)) return;
+    setStep('cloning');
+    try {
+      const job = await apiClient.createClone({
+        url,
+        options: {
+          renderMode: renderJs ? 'js' : 'static',
+          inlineAssets,
           escalation: 'auto',
         },
       });
@@ -52,12 +90,25 @@ export function UrlInputForm() {
       router.push(`/cloner/jobs/${job.id}`);
     } catch (err) {
       toast.error((err as Error).message);
-      setSubmitting(false);
+      setStep('idle');
     }
-  });
+  };
+
+  if ((step === 'inspected' || step === 'cloning') && inspectResult) {
+    return (
+      <InspectionPanel
+        result={inspectResult}
+        onClone={handleClone}
+        onCancel={() => setStep('idle')}
+        submitting={step === 'cloning'}
+      />
+    );
+  }
+
+  const busy = step === 'inspecting' || step === 'cloning';
 
   return (
-    <form onSubmit={onSubmit} className="space-y-6">
+    <div className="space-y-6">
       <div className="space-y-2">
         <Label htmlFor="url">URL da página</Label>
         <div className="relative">
@@ -69,12 +120,17 @@ export function UrlInputForm() {
             autoComplete="off"
             spellCheck={false}
             className="h-12 pl-11 text-[14px]"
-            {...register('url')}
+            value={url}
+            onChange={(e) => {
+              setUrl(e.target.value);
+              if (urlError) validateUrl(e.target.value);
+            }}
+            disabled={busy}
           />
         </div>
-        {errors.url && (
+        {urlError && (
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-rose-300">
-            {errors.url.message}
+            {urlError}
           </p>
         )}
       </div>
@@ -84,25 +140,60 @@ export function UrlInputForm() {
           Opções
         </legend>
         <label className="flex cursor-pointer items-center gap-3 text-[13px] text-white/75">
-          <Checkbox defaultChecked {...register('renderJs')} />
-          <span>Executar JavaScript (mais lento, mas necessário para SPAs)</span>
+          <Checkbox
+            checked={renderJs}
+            onChange={(e) => setRenderJs(e.target.checked)}
+            disabled={busy}
+          />
+          <span>Executar JavaScript (mais lento, necessário para SPAs)</span>
         </label>
         <label className="flex cursor-pointer items-center gap-3 text-[13px] text-white/75">
-          <Checkbox {...register('inlineAssets')} />
+          <Checkbox
+            checked={inlineAssets}
+            onChange={(e) => setInlineAssets(e.target.checked)}
+            disabled={busy}
+          />
           <span>Embutir assets (imagens, CSS, fontes) como data-URIs</span>
         </label>
       </fieldset>
 
-      <Button type="submit" disabled={submitting} size="lg" className="w-full gap-2">
-        {submitting ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Iniciando…
-          </>
-        ) : (
-          'Clonar página'
-        )}
-      </Button>
-    </form>
+      <div className="space-y-2">
+        <Button
+          type="button"
+          onClick={handleInspect}
+          disabled={busy || !url}
+          size="lg"
+          className="w-full gap-2"
+        >
+          {step === 'inspecting' ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Inspecionando…
+            </>
+          ) : (
+            <>
+              <Search className="h-4 w-4" />
+              Inspecionar e configurar
+            </>
+          )}
+        </Button>
+
+        <button
+          type="button"
+          onClick={handleCloneDirect}
+          disabled={busy || !url}
+          className="w-full text-center text-[11px] text-white/35 transition hover:text-white/60 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {step === 'cloning' ? (
+            <span className="flex items-center justify-center gap-1.5">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Clonando…
+            </span>
+          ) : (
+            'Ou clonar diretamente sem inspecionar'
+          )}
+        </button>
+      </div>
+    </div>
   );
 }
