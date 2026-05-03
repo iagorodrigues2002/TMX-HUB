@@ -33,7 +33,9 @@ const EnvSchema = z.object({
 
   WEBHOOK_SECRET: z.string().default('dev-webhook-secret-change-me-in-production'),
 
-  PUBLIC_BASE_URL: z.string().url().default('http://localhost:4000'),
+  // Accept any string so Railway template refs like "https://${{DOMAIN}}"
+  // don't crash on startup if the variable isn't resolved yet.
+  PUBLIC_BASE_URL: z.string().default('http://localhost:4000'),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

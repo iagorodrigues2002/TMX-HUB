@@ -1,10 +1,11 @@
 import type { Queue } from 'bullmq';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
-import { Redis } from 'ioredis';
 import { env } from '../env.js';
+import { makeRedis } from '../lib/redis.js';
 import { createBundleQueue } from '../queues/bundle.queue.js';
 import type { BundleJobData, RenderJobData } from '../queues/index.js';
 import { createRenderQueue } from '../queues/render.queue.js';
+import type { Redis } from 'ioredis';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -19,7 +20,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   // a proper 500 instead of hanging when Redis is unavailable. Hanging requests
   // cause Railway's LB to return a 502 without CORS headers, which the browser
   // misreports as "Network error: Failed to fetch".
-  const redis = new Redis(env.REDIS_URL, {
+  const redis = makeRedis(env.REDIS_URL, {
     maxRetriesPerRequest: 3,
     connectTimeout: 5_000,
     enableReadyCheck: false,

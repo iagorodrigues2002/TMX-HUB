@@ -1,7 +1,7 @@
 import type { CloneState } from '@page-cloner/shared';
 import { Worker } from 'bullmq';
-import { Redis } from 'ioredis';
 import { env } from '../env.js';
+import { makeRedis } from '../lib/redis.js';
 import { logger } from '../lib/logger.js';
 import { RENDER_QUEUE_NAME, type RenderJobData } from '../queues/index.js';
 import type { JobStore } from '../services/job-store.js';
@@ -53,7 +53,7 @@ export function createRenderWorker(args: {
   storage: StorageService;
 }): Worker<RenderJobData> {
   const { redisUrl, jobStore, storage } = args;
-  const connection = new Redis(redisUrl, { maxRetriesPerRequest: null, enableReadyCheck: false });
+  const connection = makeRedis(redisUrl, { maxRetriesPerRequest: null, enableReadyCheck: false });
   const log = logger.child({ component: 'render-worker' });
 
   const worker = new Worker<RenderJobData>(

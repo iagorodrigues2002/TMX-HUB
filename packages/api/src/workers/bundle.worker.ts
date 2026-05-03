@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 import type { CloneState, Form } from '@page-cloner/shared';
 import { Worker } from 'bullmq';
-import { Redis } from 'ioredis';
 import { logger } from '../lib/logger.js';
+import { makeRedis } from '../lib/redis.js';
 import { BUNDLE_QUEUE_NAME, type BundleJobData } from '../queues/index.js';
 import type { JobStore } from '../services/job-store.js';
 import type { StorageService } from '../services/storage.js';
@@ -23,7 +23,7 @@ export function createBundleWorker(args: {
   storage: StorageService;
 }): Worker<BundleJobData> {
   const { redisUrl, jobStore, storage } = args;
-  const connection = new Redis(redisUrl, { maxRetriesPerRequest: null, enableReadyCheck: false });
+  const connection = makeRedis(redisUrl, { maxRetriesPerRequest: null, enableReadyCheck: false });
   const log = logger.child({ component: 'bundle-worker' });
 
   const worker = new Worker<BundleJobData>(
