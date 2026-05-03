@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Simple Test Page</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <style>
+      .hero {
+        background-image: url("/images/bg.jpg");
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a href="/" class="logo">Home</a>
+      <nav>
+        <a href="/about">About</a>
+        <a href="https://other.example.com/blog">External Blog</a>
+      </nav>
+    </header>
+    <main>
+      <h1>Welcome</h1>
+      <img src="/images/hero.png" alt="Hero" />
+      <a class="btn-primary" href="/signup">Sign Up</a>
+      <button type="button" class="cta">Get Started</button>
+      <form id="contact" action="/contact" method="post">
+        <input type="email" name="email" required />
+        <input type="hidden" name="csrf" value="abc123" />
+        <button type="submit">Send</button>
+      </form>
+      <form action="/newsletter" method="post">
+        <input type="email" name="newsletter_email" required />
+        <button type="submit">Subscribe</button>
+      </form>
+    </main>
+  </body>
+</html>

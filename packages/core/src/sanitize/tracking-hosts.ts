@@ -1,0 +1,50 @@
+export const TRACKING_HOSTS: ReadonlyArray<string> = [
+  'facebook.com/tr',
+  'connect.facebook.net',
+  'google-analytics.com',
+  'googletagmanager.com',
+  'googleadservices.com',
+  'googlesyndication.com',
+  'doubleclick.net',
+  'hotjar.com',
+  'static.hotjar.com',
+  'segment.io',
+  'segment.com',
+  'cdn.segment.com',
+  'mixpanel.com',
+  'cdn.mxpnl.com',
+  'branch.io',
+  'app.link',
+  'fullstory.com',
+  'edge.fullstory.com',
+  'amplitude.com',
+  'cdn.amplitude.com',
+  'snapchat.com/tr',
+  'sc-static.net',
+  'pinterest.com/v3',
+  'analytics.tiktok.com',
+  'cdn.heapanalytics.com',
+  'heap.io',
+  'mc.yandex.ru',
+  'clarity.ms',
+  'matomo.cloud',
+  'piwik.pro',
+  'crazyegg.com',
+  'mouseflow.com',
+  'lucky-orange.com',
+  'newrelic.com',
+  'nr-data.net',
+  'sentry.io',
+  'bugsnag.com',
+  'optimizely.com',
+  'cdn.optimizely.com',
+  'logrocket.com',
+  'cdn.lr-ingest.io',
+];
+
+export function isTrackingUrl(url: string, extra: ReadonlyArray<string> = []): boolean {
+  if (!url) return false;
+  const hosts = TRACKING_HOSTS.concat(extra);
+  const lower = url.toLowerCase();
+  return hosts.some((host) => lower.includes(host));
+}

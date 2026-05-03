@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Relative CSS Test</title>
+    <link rel="stylesheet" href="/assets/css/main.css" />
+    <style>
+      @import url("/assets/css/typography.css");
+      .a { background: url('../images/dot.png'); }
+      .b { background-image: url(/abs.png); }
+      .c { background: url("//cdn.example.com/x.png"); }
+      .d { background: url(data:image/png;base64,abc); }
+      .e { color: red; }
+    </style>
+  </head>
+  <body>
+    <p style="background: url('/inline.png')">Hi</p>
+  </body>
+</html>

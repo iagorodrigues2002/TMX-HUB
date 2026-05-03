@@ -1,0 +1,1492 @@
+openapi: 3.1.0
+info:
+  title: Page Cloner API
+  version: 1.0.0
+  summary: Asynchronous web page cloning, sanitization, and rebundling service.
+  description: |
+    The Page Cloner API renders any public URL with a headless browser, strips
+    scripts/tracking, exposes detected forms and links for editing, and emits
+    a downloadable HTML or ZIP bundle.
+
+    ## Lifecycle
+    1. `POST /v1/clones` to enqueue a clone job (async, returns `202`).
+    2. Poll `GET /v1/clones/{id}` or receive a `webhook_url` callback when `status = ready`.
+    3. Inspect detected `forms` and `links`; mutate via `PATCH` or bulk endpoints.
+    4. `POST /v1/clones/{id}/build` to materialize a final artifact.
+    5. `GET .../builds/{buildId}/download` to stream the file.
+    6. `DELETE /v1/clones/{id}` purges the job and all associated assets.
+
+    ## Conventions
+    - All resource IDs are **ULIDs** (Crockford Base32, 26 chars) — sortable by creation time.
+    - Errors follow **RFC 7807** (`application/problem+json`).
+    - List endpoints use **cursor pagination** (`limit`, `cursor`).
+    - GET responses on stable resources include strong `ETag`s; clients should send
+      `If-None-Match` to save bandwidth and `If-Match` on PATCH for optimistic concurrency.
+    - All timestamps are RFC 3339 in UTC.
+  contact:
+    name: Page Cloner Platform
+    email: api@pagecloner.example
+  license:
+    name: Proprietary
+    url: https://pagecloner.example/terms
+
+servers:
+  - url: https://api.pagecloner.example
+    description: Production
+  - url: https://api.staging.pagecloner.example
+    description: Staging
+
+tags:
+  - name: Clones
+    description: Clone job lifecycle.
+  - name: Preview
+    description: Sanitized HTML preview.
+  - name: Forms
+    description: Detected forms and per-form edits.
+  - name: Links
+    description: Detected anchors / CTA buttons and edits.
+  - name: Builds
+    description: Final bundle production and download.
+
+security:
+  - bearerAuth: []
+  - apiKeyAuth: []
+
+paths:
+  /v1/clones:
+    post:
+      tags: [Clones]
+      operationId: createClone
+      summary: Submit a URL to clone
+      description: |
+        Enqueues a new clone job. Returns `202 Accepted` with a `Location` header
+        pointing at the polling resource. If `webhook_url` is supplied, the API
+        will `POST` a `CloneJob` payload to it once the job reaches a terminal
+        state (`ready` or `failed`).
+
+        Send an **Idempotency-Key** header (recommended UUIDv4 or ULID) to make
+        retries safe — duplicate requests within 24 hours return the original
+        job (`200 OK`) instead of creating a new one.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCloneRequest'
+            examples:
+              minimal:
+                summary: Minimal — just a URL
+                value:
+                  url: https://example.com/landing
+              full:
+                summary: Full options + webhook
+                value:
+                  url: https://example.com/landing
+                  webhook_url: https://hooks.mysite.com/cloner
+                  options:
+                    render_mode: js
+                    inline_assets: true
+                    user_agent: "Mozilla/5.0 (compatible; PageCloner/1.0)"
+                    wait_for: networkidle
+                    timeout_ms: 20000
+                    viewport:
+                      width: 1440
+                      height: 900
+      responses:
+        '202':
+          description: Job accepted and queued.
+          headers:
+            Location:
+              description: URL of the created clone job (poll this).
+              schema:
+                type: string
+                format: uri
+            X-RateLimit-Limit:
+              $ref: '#/components/headers/XRateLimitLimit'
+            X-RateLimit-Remaining:
+              $ref: '#/components/headers/XRateLimitRemaining'
+            X-RateLimit-Reset:
+              $ref: '#/components/headers/XRateLimitReset'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CloneJob'
+              examples:
+                queued:
+                  value:
+                    id: 01HW3K9P2N7XQK4D6V5RYMC1ZB
+                    status: queued
+                    url: https://example.com/landing
+                    options:
+                      render_mode: js
+                      inline_assets: true
+                    progress: 0
+                    created_at: '2026-05-02T14:22:01Z'
+                    updated_at: '2026-05-02T14:22:01Z'
+                    links:
+                      self: /v1/clones/01HW3K9P2N7XQK4D6V5RYMC1ZB
+        '200':
+          description: |
+            Returned when the supplied `Idempotency-Key` matches a recent request;
+            the original job is returned without creating a new one.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CloneJob'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: |
+            Idempotency-Key was reused with a different request body.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /v1/clones/{id}:
+    parameters:
+      - $ref: '#/components/parameters/CloneId'
+    get:
+      tags: [Clones]
+      operationId: getClone
+      summary: Get clone job status and metadata
+      description: |
+        Returns the current state of a clone job. When `status = ready`,
+        the response includes detected counts (forms, links, assets, bytes).
+      parameters:
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Job state.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              schema:
+                type: string
+                example: 'private, max-age=2'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CloneJob'
+              examples:
+                ready:
+                  value:
+                    id: 01HW3K9P2N7XQK4D6V5RYMC1ZB
+                    status: ready
+                    url: https://example.com/landing
+                    progress: 100
+                    options:
+                      render_mode: js
+                      inline_assets: true
+                    counts:
+                      forms: 3
+                      links: 47
+                      assets: 28
+                      bytes: 1842311
+                    final_url: https://example.com/landing
+                    rendered_at: '2026-05-02T14:22:18Z'
+                    created_at: '2026-05-02T14:22:01Z'
+                    updated_at: '2026-05-02T14:22:18Z'
+                    links:
+                      self: /v1/clones/01HW3K9P2N7XQK4D6V5RYMC1ZB
+                      preview: /v1/clones/01HW3K9P2N7XQK4D6V5RYMC1ZB/preview
+                      forms: /v1/clones/01HW3K9P2N7XQK4D6V5RYMC1ZB/forms
+                      links_collection: /v1/clones/01HW3K9P2N7XQK4D6V5RYMC1ZB/links
+                failed:
+                  value:
+                    id: 01HW3K9P2N7XQK4D6V5RYMC1ZB
+                    status: failed
+                    url: https://example.com/landing
+                    progress: 35
+                    error:
+                      code: render_timeout
+                      message: Headless browser exceeded 20000ms timeout.
+                    created_at: '2026-05-02T14:22:01Z'
+                    updated_at: '2026-05-02T14:22:21Z'
+        '304':
+          description: Not Modified (ETag matched).
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Clones]
+      operationId: deleteClone
+      summary: Purge a clone job and all associated assets
+      description: |
+        Removes the job, sanitized HTML, detected forms/links, all builds, and
+        any uploaded assets. Idempotent — returns `204` whether or not the
+        resource existed (after first deletion).
+      responses:
+        '204':
+          description: Deleted.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/clones/{id}/preview:
+    parameters:
+      - $ref: '#/components/parameters/CloneId'
+    get:
+      tags: [Preview]
+      operationId: getClonePreview
+      summary: Get sanitized HTML for iframe preview
+      description: |
+        Returns the sanitized HTML document for the clone. Suitable for direct
+        rendering in a sandboxed `<iframe>`.
+
+        The response sets `Content-Security-Policy` and
+        `X-Content-Type-Options: nosniff`. Embedded `<script>` tags are stripped
+        during sanitization; tracking pixels and known analytics endpoints are
+        neutralized.
+      parameters:
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Sanitized HTML body.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Content-Security-Policy:
+              schema:
+                type: string
+                example: "default-src 'none'; img-src * data:; style-src 'unsafe-inline' *; font-src *"
+            X-Content-Type-Options:
+              schema:
+                type: string
+                example: nosniff
+          content:
+            text/html:
+              schema:
+                type: string
+                contentMediaType: text/html
+                examples:
+                  - "<!doctype html><html>...</html>"
+        '304':
+          description: Not Modified.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Clone is not yet `ready`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /v1/clones/{id}/forms:
+    parameters:
+      - $ref: '#/components/parameters/CloneId'
+    get:
+      tags: [Forms]
+      operationId: listForms
+      summary: List all detected forms
+      description: |
+        Returns paginated forms detected in the sanitized DOM. Each form carries
+        a stable `id` (derived from a content hash + DOM path) so it remains
+        addressable across rebuilds and minor sanitization changes.
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Paginated forms.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedForms'
+              examples:
+                page:
+                  value:
+                    data:
+                      - id: frm_01HW3KA8H8Y4N5Q1QH8WV2GZJ7
+                        original_action: https://example.com/checkout
+                        current_action: https://example.com/checkout
+                        method: POST
+                        mode: keep
+                        selector: "form#checkout"
+                        fields:
+                          - name: email
+                            type: email
+                            value: ''
+                            hidden: false
+                          - name: csrf_token
+                            type: hidden
+                            value: abcd1234
+                            hidden: true
+                        redirect_to: null
+                        updated_at: '2026-05-02T14:22:18Z'
+                    pagination:
+                      next_cursor: null
+                      limit: 50
+                      total_estimate: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/clones/{id}/forms/{formId}:
+    parameters:
+      - $ref: '#/components/parameters/CloneId'
+      - $ref: '#/components/parameters/FormId'
+    patch:
+      tags: [Forms]
+      operationId: updateForm
+      summary: Update a form's mode, action, or redirect target
+      description: |
+        Updates a single form. Only fields present in the body are changed
+        (JSON merge semantics). Sending `If-Match` is recommended to avoid
+        clobbering concurrent edits.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateFormRequest'
+            examples:
+              capture:
+                summary: Capture submission and redirect user
+                value:
+                  mode: capture_redirect
+                  current_action: https://capture.mysite.com/leads
+                  redirect_to: https://mysite.com/thanks
+              disable:
+                summary: Disable the form entirely
+                value:
+                  mode: disable
+      responses:
+        '200':
+          description: Updated form.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Form'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /v1/clones/{id}/links:
+    parameters:
+      - $ref: '#/components/parameters/CloneId'
+    get:
+      tags: [Links]
+      operationId: listLinks
+      summary: List all detected anchors and CTA-style buttons
+      description: |
+        Returns paginated links. The `selector` field is a stable CSS path that
+        survives DOM mutations from edits. `is_cta` is heuristic — true when the
+        element is sized prominently or styled as a button.
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - name: cta_only
+          in: query
+          description: Filter to CTA-style links only.
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Paginated links.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedLinks'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/clones/{id}/links/{linkId}:
+    parameters:
+      - $ref: '#/components/parameters/CloneId'
+      - $ref: '#/components/parameters/LinkId'
+    patch:
+      tags: [Links]
+      operationId: updateLink
+      summary: Update a single link's href
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateLinkRequest'
+            examples:
+              redirect:
+                value:
+                  current_href: https://mysite.com/checkout
+      responses:
+        '200':
+          description: Updated link.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Link'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /v1/clones/{id}/links/bulk:
+    parameters:
+      - $ref: '#/components/parameters/CloneId'
+    post:
+      tags: [Links]
+      operationId: bulkUpdateLinks
+      summary: Bulk-replace link hrefs by literal or regex pattern
+      description: |
+        Replaces matching link hrefs in a single transaction. Use `match: "literal"`
+        for exact-string replacement, or `match: "regex"` to interpret `from`
+        as a JavaScript-flavor regex (no flags; matching is global).
+
+        Returns the count of affected links and an array of their IDs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkLinkUpdateRequest'
+            examples:
+              literal:
+                value:
+                  match: literal
+                  from: https://original.com/checkout
+                  to: https://mine.com/checkout
+              regex:
+                value:
+                  match: regex
+                  from: '^https://original\\.com/(.*)$'
+                  to: 'https://mine.com/$1'
+      responses:
+        '200':
+          description: Bulk update summary.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkLinkUpdateResult'
+              examples:
+                summary:
+                  value:
+                    matched: 12
+                    updated: 12
+                    affected_ids:
+                      - lnk_01HW3KAWGE3R4S5T6U7V8W9X0Y
+                      - lnk_01HW3KAWGE3R4S5T6U7V8W9X0Z
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /v1/clones/{id}/build:
+    parameters:
+      - $ref: '#/components/parameters/CloneId'
+    post:
+      tags: [Builds]
+      operationId: createBuild
+      summary: Apply edits and produce a final bundle
+      description: |
+        Snapshots the current edits and starts a build job. Returns `202` with
+        a `Location` pointing at the build status resource.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BuildOptions'
+            examples:
+              singleHtml:
+                value:
+                  format: html
+                  include_assets: true
+              zipBundle:
+                value:
+                  format: zip
+                  include_assets: true
+      responses:
+        '202':
+          description: Build job accepted.
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BuildJob'
+              examples:
+                queued:
+                  value:
+                    id: bld_01HW3KB9C0D1E2F3G4H5J6K7L8
+                    clone_id: 01HW3K9P2N7XQK4D6V5RYMC1ZB
+                    status: queued
+                    options:
+                      format: zip
+                      include_assets: true
+                    created_at: '2026-05-02T14:25:00Z'
+                    updated_at: '2026-05-02T14:25:00Z'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Clone is not in a buildable state (must be `ready`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /v1/clones/{id}/builds/{buildId}:
+    parameters:
+      - $ref: '#/components/parameters/CloneId'
+      - $ref: '#/components/parameters/BuildId'
+    get:
+      tags: [Builds]
+      operationId: getBuild
+      summary: Get build job status
+      description: |
+        Returns the build's status. When `status = ready`, the payload includes
+        a time-limited `download_url` (and the canonical `download` API path).
+      parameters:
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Build state.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BuildJob'
+              examples:
+                ready:
+                  value:
+                    id: bld_01HW3KB9C0D1E2F3G4H5J6K7L8
+                    clone_id: 01HW3K9P2N7XQK4D6V5RYMC1ZB
+                    status: ready
+                    options:
+                      format: zip
+                      include_assets: true
+                    artifact:
+                      bytes: 1923004
+                      content_type: application/zip
+                      sha256: 3a1f5d9b2c87e0f4a6d8b2e4c6a8d0f2e4c6a8d0f2e4c6a8d0f2e4c6a8d0f2e4
+                      filename: example-com-landing.zip
+                    download_url: https://cdn.pagecloner.example/builds/bld_01HW3KB9C0D1E2F3G4H5J6K7L8/example-com-landing.zip?token=...
+                    download_expires_at: '2026-05-02T15:25:00Z'
+                    created_at: '2026-05-02T14:25:00Z'
+                    updated_at: '2026-05-02T14:25:14Z'
+                    links:
+                      self: /v1/clones/01HW3K9P2N7XQK4D6V5RYMC1ZB/builds/bld_01HW3KB9C0D1E2F3G4H5J6K7L8
+                      download: /v1/clones/01HW3K9P2N7XQK4D6V5RYMC1ZB/builds/bld_01HW3KB9C0D1E2F3G4H5J6K7L8/download
+        '304':
+          description: Not Modified.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/clones/{id}/builds/{buildId}/download:
+    parameters:
+      - $ref: '#/components/parameters/CloneId'
+      - $ref: '#/components/parameters/BuildId'
+    get:
+      tags: [Builds]
+      operationId: downloadBuild
+      summary: Download the final bundle
+      description: |
+        Streams the artifact. `Content-Type` is `text/html` for `format=html`
+        bundles and `application/zip` for ZIPs. Returns `409` if the build
+        is not yet `ready` and `410 Gone` if the artifact has been purged.
+      responses:
+        '200':
+          description: Artifact stream.
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: 'attachment; filename="example-com-landing.zip"'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            X-Content-Sha256:
+              schema:
+                type: string
+                description: Hex-encoded SHA-256 of the artifact.
+          content:
+            text/html:
+              schema:
+                type: string
+                contentMediaType: text/html
+            application/zip:
+              schema:
+                type: string
+                format: binary
+                contentMediaType: application/zip
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Build not yet `ready`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '410':
+          description: Artifact purged or expired.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        OAuth 2.0 Bearer access token (JWT). Use for end-user / first-party
+        clients. Tokens carry `scope` claims; minimum required scope is
+        `clones:write` for mutations and `clones:read` for GETs.
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: |
+        Long-lived API key for server-to-server integrations. Treat as a secret;
+        rotate via the dashboard.
+
+  parameters:
+    CloneId:
+      name: id
+      in: path
+      required: true
+      description: Clone job ID (ULID).
+      schema:
+        $ref: '#/components/schemas/UlidId'
+    FormId:
+      name: formId
+      in: path
+      required: true
+      description: Form ID (prefixed ULID, e.g. `frm_…`).
+      schema:
+        $ref: '#/components/schemas/PrefixedUlid'
+    LinkId:
+      name: linkId
+      in: path
+      required: true
+      description: Link ID (prefixed ULID, e.g. `lnk_…`).
+      schema:
+        $ref: '#/components/schemas/PrefixedUlid'
+    BuildId:
+      name: buildId
+      in: path
+      required: true
+      description: Build job ID (prefixed ULID, e.g. `bld_…`).
+      schema:
+        $ref: '#/components/schemas/PrefixedUlid'
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: Maximum items per page (1-200).
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: |
+        Opaque pagination cursor returned in the previous response's
+        `pagination.next_cursor`. Omit to start at the beginning.
+      schema:
+        type: string
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: |
+        Client-generated unique string (UUIDv4 or ULID, max 128 chars).
+        Replays within 24 hours return the original response.
+      schema:
+        type: string
+        maxLength: 128
+        pattern: '^[A-Za-z0-9_\-]+$'
+    IfMatch:
+      name: If-Match
+      in: header
+      required: false
+      description: ETag value for optimistic concurrency control on mutations.
+      schema:
+        type: string
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      description: ETag value to enable `304 Not Modified` short-circuit.
+      schema:
+        type: string
+
+  headers:
+    ETag:
+      description: Strong entity tag for the resource representation.
+      schema:
+        type: string
+        example: '"W3v1k2"'
+    XRateLimitLimit:
+      description: Request quota for the current window.
+      schema:
+        type: integer
+        example: 600
+    XRateLimitRemaining:
+      description: Remaining requests in the current window.
+      schema:
+        type: integer
+        example: 597
+    XRateLimitReset:
+      description: Unix epoch seconds when the rate-limit window resets.
+      schema:
+        type: integer
+        example: 1746197400
+    RetryAfter:
+      description: Seconds the client should wait before retrying.
+      schema:
+        type: integer
+        example: 30
+
+  schemas:
+    UlidId:
+      type: string
+      description: Crockford Base32 ULID (26 chars), sortable by creation time.
+      pattern: '^[0-9A-HJKMNP-TV-Z]{26}$'
+      example: 01HW3K9P2N7XQK4D6V5RYMC1ZB
+
+    PrefixedUlid:
+      type: string
+      description: Resource-prefixed ULID (e.g. `frm_…`, `lnk_…`, `bld_…`).
+      pattern: '^(frm|lnk|bld)_[0-9A-HJKMNP-TV-Z]{26}$'
+      example: frm_01HW3KA8H8Y4N5Q1QH8WV2GZJ7
+
+    CloneStatus:
+      type: string
+      enum:
+        - queued
+        - rendering
+        - sanitizing
+        - resolving_assets
+        - ready
+        - failed
+      description: Lifecycle state of a clone job.
+
+    BuildStatus:
+      type: string
+      enum:
+        - queued
+        - building
+        - ready
+        - failed
+      description: Lifecycle state of a build job.
+
+    RenderMode:
+      type: string
+      enum:
+        - static
+        - js
+      description: |
+        `static` fetches HTML directly (fast, no JS execution).
+        `js` boots a headless browser and waits per `wait_for`.
+
+    WaitFor:
+      type: string
+      enum:
+        - load
+        - domcontentloaded
+        - networkidle
+      default: networkidle
+      description: Headless-browser readiness signal (only used with `render_mode=js`).
+
+    Viewport:
+      type: object
+      additionalProperties: false
+      properties:
+        width:
+          type: integer
+          minimum: 320
+          maximum: 3840
+          default: 1440
+        height:
+          type: integer
+          minimum: 240
+          maximum: 2160
+          default: 900
+
+    CloneJobOptions:
+      type: object
+      additionalProperties: false
+      description: Capture-time options that affect rendering and asset resolution.
+      properties:
+        render_mode:
+          $ref: '#/components/schemas/RenderMode'
+        inline_assets:
+          type: boolean
+          default: false
+          description: Inline images/CSS/fonts as data-URIs in the sanitized HTML.
+        user_agent:
+          type: string
+          maxLength: 512
+          description: Override the headless browser's User-Agent string.
+        wait_for:
+          $ref: '#/components/schemas/WaitFor'
+        timeout_ms:
+          type: integer
+          minimum: 1000
+          maximum: 60000
+          default: 20000
+        viewport:
+          $ref: '#/components/schemas/Viewport'
+        block_third_party:
+          type: boolean
+          default: true
+          description: Block known analytics/tracking domains during render.
+
+    CreateCloneRequest:
+      type: object
+      required: [url]
+      additionalProperties: false
+      properties:
+        url:
+          type: string
+          format: uri
+          maxLength: 2048
+          description: Public URL to clone. Must be `http` or `https`.
+          example: https://example.com/landing
+        webhook_url:
+          type: string
+          format: uri
+          maxLength: 2048
+          description: |
+            Optional. POSTed (`application/json`) with the final `CloneJob`
+            payload when the job reaches a terminal state. Signed via
+            `X-PageCloner-Signature` (HMAC-SHA256 of body using your webhook
+            secret).
+        options:
+          $ref: '#/components/schemas/CloneJobOptions'
+
+    CloneCounts:
+      type: object
+      additionalProperties: false
+      properties:
+        forms:
+          type: integer
+          minimum: 0
+        links:
+          type: integer
+          minimum: 0
+        assets:
+          type: integer
+          minimum: 0
+        bytes:
+          type: integer
+          minimum: 0
+          description: Total sanitized HTML + assets size in bytes.
+
+    CloneJob:
+      type: object
+      required: [id, status, url, created_at, updated_at]
+      properties:
+        id:
+          $ref: '#/components/schemas/UlidId'
+        status:
+          $ref: '#/components/schemas/CloneStatus'
+        url:
+          type: string
+          format: uri
+        final_url:
+          type: string
+          format: uri
+          description: URL after redirects (only when `status=ready`).
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Best-effort progress estimate.
+        options:
+          $ref: '#/components/schemas/CloneJobOptions'
+        counts:
+          $ref: '#/components/schemas/CloneCounts'
+        error:
+          $ref: '#/components/schemas/JobError'
+        webhook_url:
+          type: string
+          format: uri
+          description: If supplied at creation, echoed back here.
+        rendered_at:
+          type: string
+          format: date-time
+          description: Timestamp when rendering completed.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        links:
+          $ref: '#/components/schemas/CloneJobLinks'
+
+    CloneJobLinks:
+      type: object
+      description: HATEOAS-style affordances for the client.
+      additionalProperties: false
+      properties:
+        self:
+          type: string
+          format: uri-reference
+        preview:
+          type: string
+          format: uri-reference
+        forms:
+          type: string
+          format: uri-reference
+        links_collection:
+          type: string
+          format: uri-reference
+
+    JobError:
+      type: object
+      required: [code, message]
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          enum:
+            - render_timeout
+            - dns_failure
+            - tls_error
+            - http_error
+            - blocked_by_robots
+            - too_large
+            - sanitization_failed
+            - internal_error
+        message:
+          type: string
+        http_status:
+          type: integer
+          description: Upstream HTTP status, if applicable.
+
+    FormMode:
+      type: string
+      enum:
+        - keep
+        - replace
+        - capture_redirect
+        - disable
+      description: |
+        - `keep`: leave the original `action` and method untouched.
+        - `replace`: rewrite `action` to `current_action`.
+        - `capture_redirect`: POST to `current_action`, then 302 user to `redirect_to`.
+        - `disable`: prevent submission entirely (button becomes inert).
+
+    FormFieldType:
+      type: string
+      enum:
+        - text
+        - email
+        - password
+        - tel
+        - number
+        - url
+        - search
+        - date
+        - datetime-local
+        - month
+        - week
+        - time
+        - color
+        - file
+        - range
+        - checkbox
+        - radio
+        - hidden
+        - select
+        - textarea
+        - submit
+        - button
+        - other
+
+    FormField:
+      type: object
+      required: [name, type, hidden]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          maxLength: 256
+        type:
+          $ref: '#/components/schemas/FormFieldType'
+        value:
+          type: string
+          description: Default value as detected in the rendered DOM.
+        hidden:
+          type: boolean
+        required:
+          type: boolean
+        placeholder:
+          type: string
+
+    Form:
+      type: object
+      required:
+        - id
+        - original_action
+        - current_action
+        - method
+        - mode
+        - selector
+        - fields
+        - updated_at
+      properties:
+        id:
+          $ref: '#/components/schemas/PrefixedUlid'
+        original_action:
+          type: string
+          format: uri
+          description: The `action` URL as detected on the source page.
+        current_action:
+          type: string
+          format: uri
+          description: The action URL that will be written into the final bundle.
+        method:
+          type: string
+          enum: [GET, POST, PUT, PATCH, DELETE]
+        mode:
+          $ref: '#/components/schemas/FormMode'
+        selector:
+          type: string
+          description: |
+            Stable CSS selector used to relocate this form in the DOM during
+            build. Generated from the closest unique ancestor + nth-of-type path.
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/FormField'
+        redirect_to:
+          type: string
+          format: uri
+          nullable: true
+          description: Required when `mode=capture_redirect`.
+        updated_at:
+          type: string
+          format: date-time
+
+    UpdateFormRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        mode:
+          $ref: '#/components/schemas/FormMode'
+        current_action:
+          type: string
+          format: uri
+        redirect_to:
+          type: string
+          format: uri
+          nullable: true
+
+    Link:
+      type: object
+      required:
+        - id
+        - original_href
+        - current_href
+        - selector
+        - is_cta
+        - updated_at
+      properties:
+        id:
+          $ref: '#/components/schemas/PrefixedUlid'
+        original_href:
+          type: string
+          format: uri
+        current_href:
+          type: string
+          format: uri
+        text:
+          type: string
+          description: Visible inner text (truncated to 256 chars).
+          maxLength: 256
+        selector:
+          type: string
+          description: Stable CSS selector for re-finding the element in the DOM.
+        is_cta:
+          type: boolean
+          description: |
+            Heuristic flag. True when the element is rendered as a button
+            (large size, prominent color contrast, or `role=button`).
+        rel:
+          type: string
+          description: HTML `rel` attribute, if present.
+        target:
+          type: string
+          description: HTML `target` attribute, if present.
+        updated_at:
+          type: string
+          format: date-time
+
+    UpdateLinkRequest:
+      type: object
+      additionalProperties: false
+      required: [current_href]
+      properties:
+        current_href:
+          type: string
+          format: uri
+
+    BulkLinkUpdateRequest:
+      type: object
+      required: [match, from, to]
+      additionalProperties: false
+      properties:
+        match:
+          type: string
+          enum: [literal, regex]
+          default: literal
+        from:
+          type: string
+          maxLength: 2048
+          description: Literal URL or regex pattern (per `match`).
+        to:
+          type: string
+          maxLength: 2048
+          description: Replacement string. Capture groups (`$1`…) supported in `regex` mode.
+        scope:
+          type: string
+          enum: [all, cta_only]
+          default: all
+
+    BulkLinkUpdateResult:
+      type: object
+      required: [matched, updated, affected_ids]
+      additionalProperties: false
+      properties:
+        matched:
+          type: integer
+          minimum: 0
+        updated:
+          type: integer
+          minimum: 0
+        affected_ids:
+          type: array
+          items:
+            $ref: '#/components/schemas/PrefixedUlid'
+
+    BuildOptions:
+      type: object
+      required: [format]
+      additionalProperties: false
+      properties:
+        format:
+          type: string
+          enum: [html, zip]
+        include_assets:
+          type: boolean
+          default: true
+          description: |
+            When `true`, downloads and bundles referenced images/CSS/fonts.
+            For `format=html`, assets are inlined as data-URIs.
+            For `format=zip`, assets are placed in `/assets/` and rewritten.
+
+    BuildArtifact:
+      type: object
+      required: [bytes, content_type, sha256, filename]
+      additionalProperties: false
+      properties:
+        bytes:
+          type: integer
+          minimum: 0
+        content_type:
+          type: string
+          example: application/zip
+        sha256:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+        filename:
+          type: string
+
+    BuildJob:
+      type: object
+      required: [id, clone_id, status, options, created_at, updated_at]
+      properties:
+        id:
+          $ref: '#/components/schemas/PrefixedUlid'
+        clone_id:
+          $ref: '#/components/schemas/UlidId'
+        status:
+          $ref: '#/components/schemas/BuildStatus'
+        options:
+          $ref: '#/components/schemas/BuildOptions'
+        artifact:
+          $ref: '#/components/schemas/BuildArtifact'
+        download_url:
+          type: string
+          format: uri
+          description: |
+            Time-limited, pre-signed URL for direct CDN download. Only present
+            when `status = ready`.
+        download_expires_at:
+          type: string
+          format: date-time
+        error:
+          $ref: '#/components/schemas/JobError'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        links:
+          type: object
+          additionalProperties: false
+          properties:
+            self:
+              type: string
+              format: uri-reference
+            download:
+              type: string
+              format: uri-reference
+
+    Pagination:
+      type: object
+      required: [limit]
+      additionalProperties: false
+      properties:
+        next_cursor:
+          type: string
+          nullable: true
+          description: Pass to subsequent request's `cursor` query param.
+        limit:
+          type: integer
+        total_estimate:
+          type: integer
+          description: Approximate total count (may be omitted for very large sets).
+
+    PaginatedForms:
+      type: object
+      required: [data, pagination]
+      additionalProperties: false
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Form'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    PaginatedLinks:
+      type: object
+      required: [data, pagination]
+      additionalProperties: false
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Link'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    Problem:
+      type: object
+      description: RFC 7807 Problem Details object.
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+          default: about:blank
+          description: A URI reference identifying the problem type.
+        title:
+          type: string
+          description: Short, human-readable summary of the problem type.
+        status:
+          type: integer
+          minimum: 100
+          maximum: 599
+        detail:
+          type: string
+          description: Human-readable explanation specific to this occurrence.
+        instance:
+          type: string
+          format: uri-reference
+          description: URI reference identifying the specific occurrence.
+        code:
+          type: string
+          description: Machine-readable application error code.
+        errors:
+          type: array
+          description: |
+            Field-level validation errors (only on `422`). Each entry points
+            at a JSON Pointer path within the request body.
+          items:
+            type: object
+            required: [pointer, message]
+            properties:
+              pointer:
+                type: string
+                example: /options/timeout_ms
+              message:
+                type: string
+                example: must be <= 60000
+              code:
+                type: string
+                example: out_of_range
+
+  responses:
+    BadRequest:
+      description: Malformed request (invalid JSON, missing required fields).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: https://pagecloner.example/problems/bad-request
+            title: Bad Request
+            status: 400
+            detail: Request body is not valid JSON.
+            code: bad_request
+
+    Unauthorized:
+      description: Missing or invalid credentials.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: https://pagecloner.example/problems/unauthorized
+            title: Unauthorized
+            status: 401
+            detail: Bearer token is missing or expired.
+            code: unauthorized
+
+    NotFound:
+      description: Resource does not exist or has been purged.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: https://pagecloner.example/problems/not-found
+            title: Not Found
+            status: 404
+            detail: No clone job with id 01HW3K9P2N7XQK4D6V5RYMC1ZB.
+            code: not_found
+
+    PreconditionFailed:
+      description: ETag in `If-Match` header did not match the current resource.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: https://pagecloner.example/problems/precondition-failed
+            title: Precondition Failed
+            status: 412
+            detail: Resource was modified since you last fetched it. Re-fetch and retry.
+            code: precondition_failed
+
+    UnprocessableEntity:
+      description: Request was syntactically valid but failed semantic validation.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: https://pagecloner.example/problems/validation
+            title: Unprocessable Entity
+            status: 422
+            detail: One or more fields failed validation.
+            code: validation_failed
+            errors:
+              - pointer: /url
+                message: must be a valid http(s) URL
+                code: invalid_format
+              - pointer: /options/timeout_ms
+                message: must be <= 60000
+                code: out_of_range
+
+    TooManyRequests:
+      description: Rate limit exceeded.
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+        X-RateLimit-Limit:
+          $ref: '#/components/headers/XRateLimitLimit'
+        X-RateLimit-Remaining:
+          $ref: '#/components/headers/XRateLimitRemaining'
+        X-RateLimit-Reset:
+          $ref: '#/components/headers/XRateLimitReset'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: https://pagecloner.example/problems/rate-limited
+            title: Too Many Requests
+            status: 429
+            detail: Rate limit exceeded. Retry after 30 seconds.
+            code: rate_limited
