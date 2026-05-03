@@ -81,6 +81,9 @@ importers:
       pino-pretty:
         specifier: ^11.3.0
         version: 11.3.0
+      tsup:
+        specifier: ^8.3.5
+        version: 8.5.1(jiti@2.6.1)(postcss@8.5.13)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.4)
       tsx:
         specifier: ^4.19.2
         version: 4.21.0
