@@ -9,6 +9,9 @@ import type {
   Problem,
   UpdateFormRequest,
   UpdateLinkRequest,
+  FunnelJob,
+  FunnelJobStatus,
+  FunnelPage,
   VslJob,
   VslJobStatus,
   VslManifestKind,
@@ -367,6 +370,51 @@ function fromVslJobWire(w: VslJobWire): VslJobView {
   };
 }
 
+// ---- Funnel job (snake/camel) ----
+
+interface FunnelJobWire {
+  id: string;
+  root_url: string;
+  status: FunnelJobStatus;
+  progress: number;
+  max_depth: number;
+  max_pages: number;
+  pages: FunnelPage[];
+  total_bytes?: number;
+  filename?: string;
+  storage_key?: string;
+  expires_at?: string;
+  download_url?: string;
+  error?: { code: string; message: string };
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FunnelJobView extends FunnelJob {
+  downloadUrl?: string;
+  error?: { code: string; message: string };
+}
+
+function fromFunnelJobWire(w: FunnelJobWire): FunnelJobView {
+  return {
+    id: w.id,
+    rootUrl: w.root_url,
+    status: w.status,
+    progress: w.progress,
+    maxDepth: w.max_depth,
+    maxPages: w.max_pages,
+    pages: w.pages ?? [],
+    totalBytes: w.total_bytes,
+    filename: w.filename,
+    storageKey: w.storage_key,
+    expiresAt: w.expires_at,
+    downloadUrl: w.download_url,
+    error: w.error,
+    createdAt: w.created_at,
+    updatedAt: w.updated_at,
+  };
+}
+
 // ---- public methods ----
 
 export const apiClient = {
@@ -374,6 +422,23 @@ export const apiClient = {
 
   async inspectPage(url: string, signal?: AbortSignal): Promise<InspectResult> {
     return request<InspectResult>('/v1/inspect', { method: 'POST', body: { url }, signal });
+  },
+
+  async createFunnelJob(input: {
+    url: string;
+    max_depth?: number;
+    max_pages?: number;
+  }): Promise<FunnelJobView> {
+    const wire = await request<FunnelJobWire>('/v1/funnel-jobs', {
+      method: 'POST',
+      body: input,
+    });
+    return fromFunnelJobWire(wire);
+  },
+
+  async getFunnelJob(id: string, signal?: AbortSignal): Promise<FunnelJobView> {
+    const wire = await request<FunnelJobWire>(`/v1/funnel-jobs/${id}`, { signal });
+    return fromFunnelJobWire(wire);
   },
 
   async pageDiff(input: {

@@ -1,4 +1,12 @@
-import { BarChart3, FileAudio, GitCompare, Layers, Video, Webhook } from 'lucide-react';
+import {
+  BarChart3,
+  FileAudio,
+  GitCompare,
+  Layers,
+  Network,
+  Video,
+  Webhook,
+} from 'lucide-react';
 import { HubShell } from '@/components/hub/hub-shell';
 import { ToolCard } from '@/components/hub/tool-card';
 
@@ -48,6 +56,13 @@ export default function ToolsIndexPage() {
             title="Page Diff"
             description="Compara duas URLs e mostra exatamente o que mudou no texto visível. Útil pra monitorar competidores ou validar mudanças no próprio funil."
             href="/tools/page-diff"
+            badge="Novo"
+          />
+          <ToolCard
+            icon={<Network className="h-6 w-6" />}
+            title="Funnel Full Clone"
+            description="Descobre o funil inteiro a partir do front (segue CTAs, upsells, downsells, thanks) e empacota tudo num ZIP organizado por etapa."
+            href="/tools/funnel-clone"
             badge="Novo"
           />
           <ToolCard

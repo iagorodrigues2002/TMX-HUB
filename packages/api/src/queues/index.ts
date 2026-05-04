@@ -1,6 +1,7 @@
 export const RENDER_QUEUE_NAME = 'render-queue';
 export const BUNDLE_QUEUE_NAME = 'bundle-queue';
 export const VSL_QUEUE_NAME = 'vsl-queue';
+export const FUNNEL_QUEUE_NAME = 'funnel-queue';
 
 export interface RenderJobData {
   jobId: string;
@@ -14,6 +15,11 @@ export interface BundleJobData {
 }
 
 export interface VslJobData {
+  jobId: string;
+  url: string;
+}
+
+export interface FunnelJobData {
   jobId: string;
   url: string;
 }

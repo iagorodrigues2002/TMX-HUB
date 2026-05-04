@@ -9,6 +9,7 @@ import storagePlugin from './plugins/storage.js';
 import swaggerPlugin from './plugins/swagger.js';
 import routes from './routes/index.js';
 import { createBundleWorker } from './workers/bundle.worker.js';
+import { createFunnelWorker } from './workers/funnel.worker.js';
 import { createRenderWorker } from './workers/render.worker.js';
 import { createVslWorker } from './workers/vsl.worker.js';
 
@@ -59,6 +60,11 @@ async function main() {
     jobStore: app.vslJobStore,
     storage: app.storage,
   });
+  const funnelWorker = createFunnelWorker({
+    redisUrl: env.REDIS_URL,
+    jobStore: app.funnelJobStore,
+    storage: app.storage,
+  });
 
   let shuttingDown = false;
   const shutdown = async (signal: string) => {
@@ -72,6 +78,7 @@ async function main() {
       await renderWorker.close();
       await bundleWorker.close();
       await vslWorker.close();
+      await funnelWorker.close();
       app.log.info('shutdown complete');
       process.exit(0);
     } catch (err) {

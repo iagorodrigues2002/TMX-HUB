@@ -179,3 +179,53 @@ export interface VslObservedMedia {
   kind: 'hls' | 'dash' | 'mp4' | 'segment' | 'unknown';
   source: 'extension' | 'content-type' | 'body-sniff' | 'segment-inference';
 }
+
+// ---- Funnel Full Clone ----
+
+export type FunnelJobStatus =
+  | 'queued'
+  | 'crawling'
+  | 'packaging'
+  | 'uploading'
+  | 'ready'
+  | 'failed';
+
+export interface FunnelPage {
+  url: string;
+  /** BFS depth from the root URL (root = 0). */
+  depth: number;
+  /** 0-indexed visit order, used for the "01-...", "02-..." naming. */
+  index: number;
+  /** Display label inferred from the link that brought us here, or page <title>. */
+  label: string;
+  /** HTML byte size after sanitize/asset-resolve. */
+  bytes?: number;
+  /** Final URL after redirects. */
+  finalUrl?: string;
+  /** Discovery error, if any. */
+  error?: string;
+}
+
+export interface FunnelJob {
+  id: string;
+  rootUrl: string;
+  status: FunnelJobStatus;
+  progress: number;
+  maxDepth: number;
+  maxPages: number;
+  pages: FunnelPage[];
+  totalBytes?: number;
+  filename?: string;
+  storageKey?: string;
+  expiresAt?: string;
+  errorCode?: string;
+  errorMessage?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateFunnelJobRequest {
+  url: string;
+  max_depth?: number;
+  max_pages?: number;
+}

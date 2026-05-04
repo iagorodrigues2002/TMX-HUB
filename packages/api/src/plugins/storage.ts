@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import { FunnelJobStore } from '../services/funnel-job-store.js';
 import { JobStore } from '../services/job-store.js';
 import { StorageService } from '../services/storage.js';
 import { VslJobStore } from '../services/vsl-job-store.js';
@@ -8,6 +9,7 @@ declare module 'fastify' {
     storage: StorageService;
     jobStore: JobStore;
     vslJobStore: VslJobStore;
+    funnelJobStore: FunnelJobStore;
   }
 }
 
@@ -16,6 +18,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.decorate('storage', storage);
   app.decorate('jobStore', new JobStore(app.redis, storage));
   app.decorate('vslJobStore', new VslJobStore(app.redis));
+  app.decorate('funnelJobStore', new FunnelJobStore(app.redis));
 
   app.addHook('onClose', async () => {
     await storage.close();

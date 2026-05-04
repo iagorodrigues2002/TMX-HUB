@@ -3,7 +3,13 @@ import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { env } from '../env.js';
 import { makeRedis } from '../lib/redis.js';
 import { createBundleQueue } from '../queues/bundle.queue.js';
-import type { BundleJobData, RenderJobData, VslJobData } from '../queues/index.js';
+import { createFunnelQueue } from '../queues/funnel.queue.js';
+import type {
+  BundleJobData,
+  FunnelJobData,
+  RenderJobData,
+  VslJobData,
+} from '../queues/index.js';
 import { createRenderQueue } from '../queues/render.queue.js';
 import { createVslQueue } from '../queues/vsl.queue.js';
 import type { Redis } from 'ioredis';
@@ -14,6 +20,7 @@ declare module 'fastify' {
     renderQueue: Queue<RenderJobData>;
     bundleQueue: Queue<BundleJobData>;
     vslQueue: Queue<VslJobData>;
+    funnelQueue: Queue<FunnelJobData>;
   }
 }
 
@@ -37,16 +44,19 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   const renderQueue = createRenderQueue(env.REDIS_URL);
   const bundleQueue = createBundleQueue(env.REDIS_URL);
   const vslQueue = createVslQueue(env.REDIS_URL);
+  const funnelQueue = createFunnelQueue(env.REDIS_URL);
 
   app.decorate('redis', redis);
   app.decorate('renderQueue', renderQueue);
   app.decorate('bundleQueue', bundleQueue);
   app.decorate('vslQueue', vslQueue);
+  app.decorate('funnelQueue', funnelQueue);
 
   app.addHook('onClose', async () => {
     await renderQueue.close();
     await bundleQueue.close();
     await vslQueue.close();
+    await funnelQueue.close();
     await redis.quit();
   });
 };

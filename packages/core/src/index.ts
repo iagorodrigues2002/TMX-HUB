@@ -11,6 +11,8 @@ export { disposeBrowser, getBrowser } from './fetch/browser-pool.js';
 export { extractVisibleText } from './diff/extract-text.js';
 export { diffLines } from './diff/lcs-diff.js';
 export type { DiffEntry, DiffResult, DiffSummary, DiffOp } from './diff/lcs-diff.js';
+export { discoverNextSteps } from './funnel/discover.js';
+export type { DiscoveredStep } from './funnel/discover.js';
 export { detectBothManifests, detectVideoManifest } from './vsl/detect.js';
 export { downloadManifestToFile } from './vsl/download.js';
 export type {

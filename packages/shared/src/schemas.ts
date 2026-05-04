@@ -133,3 +133,11 @@ export type BulkLinkUpdate = z.infer<typeof BulkLinkUpdateSchema>;
 export type BuildOptionsRequest = z.infer<typeof BuildOptionsSchema>;
 export type Problem = z.infer<typeof ProblemSchema>;
 export type InspectRequest = z.infer<typeof InspectRequestSchema>;
+
+export const CreateFunnelJobRequestSchema = z
+  .object({
+    url: z.string().url(),
+    max_depth: z.number().int().min(1).max(8).default(4),
+    max_pages: z.number().int().min(1).max(30).default(12),
+  })
+  .strict();

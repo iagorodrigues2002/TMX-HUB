@@ -50,6 +50,9 @@ importers:
       '@page-cloner/shared':
         specifier: workspace:*
         version: link:../shared
+      archiver:
+        specifier: ^7.0.1
+        version: 7.0.1
       bullmq:
         specifier: ^5.34.5
         version: 5.76.5
@@ -81,6 +84,9 @@ importers:
         specifier: ^3.23.8
         version: 3.25.76
     devDependencies:
+      '@types/archiver':
+        specifier: ^6.0.3
+        version: 6.0.4
       '@types/js-yaml':
         specifier: ^4.0.9
         version: 4.0.9

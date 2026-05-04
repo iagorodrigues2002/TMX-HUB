@@ -6,6 +6,7 @@ import healthRoutes from './health.js';
 import inspectRoutes from './inspect.js';
 import linksRoutes from './links.js';
 import previewRoutes from './preview.js';
+import funnelJobsRoutes from './funnel-jobs.js';
 import pageDiffRoutes from './page-diff.js';
 import vslJobsRoutes from './vsl-jobs.js';
 import webhookTestRoutes from './webhook-test.js';
@@ -26,6 +27,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       await v1.register(vslJobsRoutes);
       await v1.register(webhookTestRoutes);
       await v1.register(pageDiffRoutes);
+      await v1.register(funnelJobsRoutes);
     },
     { prefix: '/v1' },
   );
