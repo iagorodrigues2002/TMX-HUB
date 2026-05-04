@@ -3,7 +3,13 @@ import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   await app.register(cors, {
-    origin: true,
+    // Echo the request origin (works for any client). We log every preflight
+    // so we can spot a misconfigured origin in Railway logs immediately.
+    origin: (origin, cb) => {
+      app.log.info({ origin }, 'cors origin check');
+      // Allow same-origin / curl (no Origin header) and any browser origin.
+      cb(null, true);
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [

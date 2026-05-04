@@ -13,6 +13,10 @@ COPY packages/shared/package.json ./packages/shared/
 COPY packages/core/package.json ./packages/core/
 COPY packages/api/package.json ./packages/api/
 RUN pnpm install --frozen-lockfile
+# Install the exact Chromium revision that playwright@x.y.z (lock file version) expects.
+# playwright is a devDep of @page-cloner/core, so we use pnpm --filter to reach its binary.
+# PLAYWRIGHT_BROWSERS_PATH=/ms-playwright is inherited from the base image.
+RUN pnpm --filter @page-cloner/core exec playwright install chromium
 
 # ---- build ----
 FROM deps AS build
@@ -35,6 +39,8 @@ COPY --from=build /app/packages/api ./packages/api
 COPY --from=build /app/docs ./docs
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
+# Bring the correct Chromium revision into the runtime image.
+COPY --from=deps /ms-playwright /ms-playwright
 
 WORKDIR /app/packages/api
 EXPOSE 4000

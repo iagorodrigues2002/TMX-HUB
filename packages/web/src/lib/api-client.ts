@@ -49,7 +49,8 @@ interface RequestOptions {
 }
 
 async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
-  const url = `${env.NEXT_PUBLIC_API_URL}${path}`;
+  const baseUrl = env.NEXT_PUBLIC_API_URL;
+  const url = `${baseUrl}${path}`;
   const headers: Record<string, string> = {
     Accept: 'application/json',
     ...opts.headers,
@@ -68,7 +69,47 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
       cache: 'no-store',
     });
   } catch (err) {
-    throw new ApiError(`Network error: ${(err as Error).message}`, 0);
+    // The browser's "Failed to fetch" is opaque. Try to surface the real cause:
+    // CORS, mixed content, DNS, offline, etc. — and always include the URL.
+    const cause = (err as Error)?.message || 'unknown error';
+    const pageOrigin = typeof window !== 'undefined' ? window.location.origin : 'server';
+    const pageProto = typeof window !== 'undefined' ? window.location.protocol : 'unknown:';
+    let apiProto = 'unknown:';
+    try {
+      apiProto = new URL(baseUrl).protocol;
+    } catch {
+      // ignore — env validates URL at boot, but be defensive.
+    }
+    const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+
+    let hint = '';
+    if (offline) {
+      hint = ' (browser is offline)';
+    } else if (pageProto === 'https:' && apiProto === 'http:') {
+      hint = ' (mixed content blocked: page is HTTPS but API URL is HTTP)';
+    } else if (cause.toLowerCase().includes('failed to fetch')) {
+      hint = ' (CORS, DNS failure, API down, or unreachable)';
+    }
+
+    const fullMsg =
+      `Falha ao chamar a API: ${cause}${hint}` +
+      `\n  URL: ${opts.method ?? 'GET'} ${url}` +
+      `\n  Origem: ${pageOrigin}` +
+      `\n  API base: ${baseUrl}`;
+
+    if (typeof console !== 'undefined') {
+      console.error('[api-client] request failed', {
+        method: opts.method ?? 'GET',
+        url,
+        baseUrl,
+        pageOrigin,
+        offline,
+        cause,
+        error: err,
+      });
+    }
+
+    throw new ApiError(fullMsg, 0);
   }
 
   if (res.status === 204) {
