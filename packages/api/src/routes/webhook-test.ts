@@ -78,6 +78,18 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       res.headers.forEach((v, k) => {
         respHeaders[k] = v;
       });
+
+      if (req.user) {
+        const now = new Date().toISOString();
+        await app.activityStore.record(req.user.sub, {
+          kind: 'webhook',
+          id: `${Date.parse(now).toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+          label: `${method} ${url}`,
+          status: `HTTP ${res.status}`,
+          createdAt: now,
+        });
+      }
+
       return reply.send({
         ok: res.status >= 200 && res.status < 300,
         status: res.status,

@@ -33,6 +33,16 @@ const EnvSchema = z.object({
 
   WEBHOOK_SECRET: z.string().default('dev-webhook-secret-change-me-in-production'),
 
+  // Auth — JWT signing secret. MUST be overridden in production.
+  JWT_SECRET: z.string().default('dev-jwt-secret-change-me-in-production'),
+  // Bootstrap admin (created on first boot if no users exist).
+  ADMIN_EMAIL: z.string().optional(),
+  ADMIN_PASSWORD: z.string().optional(),
+  ADMIN_NAME: z.string().default('Admin'),
+  // Allow self-registration via /v1/auth/register. Off by default — TMX HUB
+  // is intended for invited operators.
+  ALLOW_REGISTRATION: booleanFromString.default(false),
+
   // Accept any string so Railway template refs like "https://${{DOMAIN}}"
   // don't crash on startup if the variable isn't resolved yet.
   PUBLIC_BASE_URL: z.string().default('http://localhost:4000'),

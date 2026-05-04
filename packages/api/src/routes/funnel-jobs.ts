@@ -40,6 +40,17 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       maxPages: parsed.data.max_pages,
     });
     await app.funnelQueue.add('funnel', { jobId: id, url: parsed.data.url }, { jobId: id });
+
+    if (req.user) {
+      await app.activityStore.record(req.user.sub, {
+        kind: 'funnel',
+        id,
+        label: parsed.data.url,
+        status: meta.status,
+        createdAt: meta.createdAt,
+      });
+    }
+
     return reply.code(202).send(toWire(meta));
   });
 

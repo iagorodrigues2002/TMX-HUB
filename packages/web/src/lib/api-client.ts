@@ -54,6 +54,35 @@ interface RequestOptions {
   signal?: AbortSignal;
 }
 
+const TOKEN_STORAGE_KEY = 'tmx-hub:auth-token';
+
+export const authToken = {
+  get(): string | null {
+    if (typeof window === 'undefined') return null;
+    try {
+      return window.localStorage.getItem(TOKEN_STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  },
+  set(token: string): void {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
+    } catch {
+      // ignore
+    }
+  },
+  clear(): void {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+  },
+};
+
 async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   const baseUrl = env.NEXT_PUBLIC_API_URL;
   const url = `${baseUrl}${path}`;
@@ -63,6 +92,11 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   };
   if (opts.body !== undefined) {
     headers['Content-Type'] = 'application/json';
+  }
+  // Inject auth token automatically when present.
+  const token = authToken.get();
+  if (token && !headers.Authorization) {
+    headers.Authorization = `Bearer ${token}`;
   }
 
   let res: Response;
@@ -415,10 +449,66 @@ function fromFunnelJobWire(w: FunnelJobWire): FunnelJobView {
   };
 }
 
+// ---- Auth ----
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+  role: 'admin' | 'user';
+  createdAt: string;
+}
+
+interface AuthSessionWire {
+  user: { id: string; email: string; name: string; role: 'admin' | 'user'; createdAt: string };
+  token: string;
+  expires_at: string;
+}
+
 // ---- public methods ----
 
 export const apiClient = {
   baseUrl: env.NEXT_PUBLIC_API_URL,
+
+  async login(email: string, password: string): Promise<{ user: AuthUser; token: string }> {
+    const wire = await request<AuthSessionWire>('/v1/auth/login', {
+      method: 'POST',
+      body: { email, password },
+    });
+    return { user: wire.user, token: wire.token };
+  },
+
+  async register(email: string, name: string, password: string): Promise<{ user: AuthUser; token: string }> {
+    const wire = await request<AuthSessionWire>('/v1/auth/register', {
+      method: 'POST',
+      body: { email, name, password },
+    });
+    return { user: wire.user, token: wire.token };
+  },
+
+  async me(): Promise<AuthUser> {
+    const wire = await request<{ user: AuthUser }>('/v1/auth/me');
+    return wire.user;
+  },
+
+  async listActivity(): Promise<Array<{
+    kind: 'clone' | 'vsl' | 'funnel' | 'inspect' | 'webhook' | 'page-diff';
+    id: string;
+    label: string;
+    status: string;
+    createdAt: string;
+  }>> {
+    const wire = await request<{
+      entries: Array<{
+        kind: 'clone' | 'vsl' | 'funnel' | 'inspect' | 'webhook' | 'page-diff';
+        id: string;
+        label: string;
+        status: string;
+        createdAt: string;
+      }>;
+    }>('/v1/activity');
+    return wire.entries;
+  },
 
   async inspectPage(url: string, signal?: AbortSignal): Promise<InspectResult> {
     return request<InspectResult>('/v1/inspect', { method: 'POST', body: { url }, signal });

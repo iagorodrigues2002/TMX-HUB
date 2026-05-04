@@ -15,6 +15,16 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
     await app.vslQueue.add('vsl', { jobId: id, url: parsed.data.url }, { jobId: id });
 
+    if (req.user) {
+      await app.activityStore.record(req.user.sub, {
+        kind: 'vsl',
+        id,
+        label: parsed.data.url,
+        status: meta.status,
+        createdAt: meta.createdAt,
+      });
+    }
+
     return reply.code(202).send(toWire(meta, app.storage));
   });
 

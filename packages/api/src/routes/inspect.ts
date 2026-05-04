@@ -22,6 +22,17 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const fetched = await core.fetchPage(url, { renderMode: 'static', timeoutMs: 20_000 });
     const result = core.inspectHtml(fetched.html, fetched.finalUrl) as Record<string, unknown>;
 
+    if (req.user) {
+      const now = new Date().toISOString();
+      await app.activityStore.record(req.user.sub, {
+        kind: 'inspect',
+        id: `${Date.parse(now).toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+        label: url,
+        status: 'inspected',
+        createdAt: now,
+      });
+    }
+
     return reply.send({
       ...result,
       url,

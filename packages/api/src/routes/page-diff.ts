@@ -48,6 +48,17 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const linesB = core.extractVisibleText(b.html);
     const result = core.diffLines(linesA, linesB);
 
+    if (req.user) {
+      const now = new Date().toISOString();
+      await app.activityStore.record(req.user.sub, {
+        kind: 'page-diff',
+        id: `${Date.parse(now).toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+        label: `${url_a} ↔ ${url_b}`,
+        status: `+${result.summary.added}/-${result.summary.removed}`,
+        createdAt: now,
+      });
+    }
+
     return reply.send({
       url_a: { input: url_a, final: a.finalUrl, status: a.statusCode, lines: linesA.length },
       url_b: { input: url_b, final: b.finalUrl, status: b.statusCode, lines: linesB.length },

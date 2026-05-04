@@ -229,3 +229,31 @@ export interface CreateFunnelJobRequest {
   max_depth?: number;
   max_pages?: number;
 }
+
+// ---- Auth & Activity ----
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  role: 'admin' | 'user';
+  createdAt: string;
+}
+
+export interface AuthSession {
+  user: User;
+  token: string;
+  expiresAt: string;
+}
+
+export type ActivityKind = 'clone' | 'vsl' | 'funnel' | 'inspect' | 'webhook' | 'page-diff';
+
+export interface ActivityEntry {
+  kind: ActivityKind;
+  id: string;
+  /** Best display label (URL or label depending on kind). */
+  label: string;
+  /** kind-specific status string. */
+  status: string;
+  createdAt: string;
+}

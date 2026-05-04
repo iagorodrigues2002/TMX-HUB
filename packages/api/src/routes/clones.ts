@@ -136,6 +136,16 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       await app.jobStore.storeIdempotency(idempotencyKey, parsed.data, jobId);
     }
 
+    if (req.user) {
+      await app.activityStore.record(req.user.sub, {
+        kind: 'clone',
+        id: jobId,
+        label: parsed.data.url,
+        status: meta.status,
+        createdAt: meta.createdAt,
+      });
+    }
+
     return reply.code(202).header('location', `/v1/clones/${jobId}`).send(metaToCloneJob(meta));
   });
 
