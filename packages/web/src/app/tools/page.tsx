@@ -1,4 +1,4 @@
-import { BarChart3, Layers, Video } from 'lucide-react';
+import { BarChart3, FileAudio, Layers, Video, Webhook } from 'lucide-react';
 import { HubShell } from '@/components/hub/hub-shell';
 import { ToolCard } from '@/components/hub/tool-card';
 
@@ -35,6 +35,21 @@ export default function ToolsIndexPage() {
             title="Upsell Analyzer"
             description="Calcula taxas de aceite, rejeite e não-vista de funis de upsell. Funciona com Hotmart, Kiwify, Eduzz, Monetizze, Braip, Ticto e mais."
             href="/tools/upsell-analyzer"
+          />
+          <ToolCard
+            icon={<Webhook className="h-6 w-6" />}
+            title="Webhook Tester"
+            description="Simula webhooks de Hotmart, Kiwify, Eduzz, Stripe e outros. Edita o payload, dispara e vê a resposta — sem precisar fazer venda real."
+            href="/tools/webhook-tester"
+            badge="Novo"
+          />
+          <ToolCard
+            icon={<FileAudio className="h-6 w-6" />}
+            title="VSL Transcriber"
+            description="Transcreve a VSL com timestamps e identifica seções (gancho, prova, oferta, escassez, CTA) — em cima do MP4 baixado pelo VSL Downloader."
+            href="#"
+            badge="Em breve"
+            disabled
           />
         </div>
       </section>

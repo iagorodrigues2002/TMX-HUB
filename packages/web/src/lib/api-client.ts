@@ -376,6 +376,24 @@ export const apiClient = {
     return request<InspectResult>('/v1/inspect', { method: 'POST', body: { url }, signal });
   },
 
+  async fireWebhook(input: {
+    url: string;
+    method?: 'POST' | 'PUT' | 'PATCH';
+    headers?: Record<string, string>;
+    body: unknown;
+    timeout_ms?: number;
+  }): Promise<{
+    ok: boolean;
+    status: number;
+    duration_ms: number;
+    response_headers?: Record<string, string>;
+    response_body?: string;
+    error?: string;
+    sent: { url: string; method: string; headers: Record<string, string>; body: string };
+  }> {
+    return request('/v1/webhook-test', { method: 'POST', body: input });
+  },
+
   async createVslJob(url: string): Promise<VslJobView> {
     const wire = await request<VslJobWire>('/v1/vsl-jobs', { method: 'POST', body: { url } });
     return fromVslJobWire(wire);

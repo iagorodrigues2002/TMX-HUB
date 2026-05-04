@@ -7,6 +7,7 @@ import inspectRoutes from './inspect.js';
 import linksRoutes from './links.js';
 import previewRoutes from './preview.js';
 import vslJobsRoutes from './vsl-jobs.js';
+import webhookTestRoutes from './webhook-test.js';
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   // Health endpoints live at root, not under /v1.
@@ -22,6 +23,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       await v1.register(linksRoutes);
       await v1.register(buildsRoutes);
       await v1.register(vslJobsRoutes);
+      await v1.register(webhookTestRoutes);
     },
     { prefix: '/v1' },
   );
