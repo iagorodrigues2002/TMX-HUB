@@ -1,4 +1,4 @@
-import { BarChart3, FileAudio, Layers, Video, Webhook } from 'lucide-react';
+import { BarChart3, FileAudio, GitCompare, Layers, Video, Webhook } from 'lucide-react';
 import { HubShell } from '@/components/hub/hub-shell';
 import { ToolCard } from '@/components/hub/tool-card';
 
@@ -41,6 +41,13 @@ export default function ToolsIndexPage() {
             title="Webhook Tester"
             description="Simula webhooks de Hotmart, Kiwify, Eduzz, Stripe e outros. Edita o payload, dispara e vê a resposta — sem precisar fazer venda real."
             href="/tools/webhook-tester"
+            badge="Novo"
+          />
+          <ToolCard
+            icon={<GitCompare className="h-6 w-6" />}
+            title="Page Diff"
+            description="Compara duas URLs e mostra exatamente o que mudou no texto visível. Útil pra monitorar competidores ou validar mudanças no próprio funil."
+            href="/tools/page-diff"
             badge="Novo"
           />
           <ToolCard

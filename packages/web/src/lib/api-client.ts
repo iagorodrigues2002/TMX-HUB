@@ -376,6 +376,21 @@ export const apiClient = {
     return request<InspectResult>('/v1/inspect', { method: 'POST', body: { url }, signal });
   },
 
+  async pageDiff(input: {
+    url_a: string;
+    url_b: string;
+    render_mode?: 'static' | 'js';
+  }): Promise<{
+    url_a: { input: string; final: string; status: number; lines: number };
+    url_b: { input: string; final: string; status: number; lines: number };
+    render_mode: 'static' | 'js';
+    duration_ms: number;
+    summary: { added: number; removed: number; unchanged: number };
+    entries: Array<{ op: 'equal' | 'add' | 'remove'; text: string }>;
+  }> {
+    return request('/v1/page-diff', { method: 'POST', body: input });
+  },
+
   async fireWebhook(input: {
     url: string;
     method?: 'POST' | 'PUT' | 'PATCH';
