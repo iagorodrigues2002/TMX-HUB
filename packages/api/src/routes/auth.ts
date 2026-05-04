@@ -58,15 +58,28 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     });
   });
 
-  // POST /v1/auth/register — gated by ALLOW_REGISTRATION env or admin caller.
+  // POST /v1/auth/register
+  // Three-tier policy:
+  //   1) First-run bootstrap: if there are zero users yet, the FIRST account
+  //      created via the UI becomes admin. Lets you self-onboard without
+  //      having to set ADMIN_* env vars.
+  //   2) Open: when ALLOW_REGISTRATION=true, anyone can create a user account.
+  //   3) Closed (default after first-run): only an authenticated admin can
+  //      create new users.
   app.post('/auth/register', async (req, reply) => {
     const parsed = RegisterSchema.safeParse(req.body);
     if (!parsed.success) throw zodToProblem(parsed.error, req.url);
     const { email, name, password } = parsed.data;
 
-    // If registration is closed, only an admin can create users.
-    if (!env.ALLOW_REGISTRATION) {
-      // Try to authenticate the caller as admin.
+    const userCount = await app.userStore.count();
+    const isFirstRun = userCount === 0;
+    let creatingAdmin = false;
+
+    if (isFirstRun) {
+      // Anybody can claim the first slot, and they become admin.
+      creatingAdmin = true;
+    } else if (!env.ALLOW_REGISTRATION) {
+      // Tier 3: must be authenticated admin.
       try {
         await app.requireAuth(req);
       } catch {
@@ -78,13 +91,14 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         throw new ForbiddenError('Apenas admins podem criar usuários nesta instância.');
       }
     }
+    // Else: ALLOW_REGISTRATION=true → everyone can self-register as 'user'.
 
     const passwordHash = await hashPassword(password);
     const created = await app.userStore.create({
       email,
       name,
       passwordHash,
-      role: 'user',
+      role: creatingAdmin ? 'admin' : 'user',
     });
     const { token, payload } = signJwt(
       { sub: created.id, email: created.email, role: created.role },
