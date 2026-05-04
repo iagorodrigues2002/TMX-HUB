@@ -10,6 +10,7 @@ import swaggerPlugin from './plugins/swagger.js';
 import routes from './routes/index.js';
 import { createBundleWorker } from './workers/bundle.worker.js';
 import { createRenderWorker } from './workers/render.worker.js';
+import { createVslWorker } from './workers/vsl.worker.js';
 
 // TODO(auth): Authentication is intentionally skipped for the MVP.
 // The OpenAPI spec declares bearerAuth/apiKeyAuth, but no enforcement happens
@@ -53,6 +54,11 @@ async function main() {
     jobStore: app.jobStore,
     storage: app.storage,
   });
+  const vslWorker = createVslWorker({
+    redisUrl: env.REDIS_URL,
+    jobStore: app.vslJobStore,
+    storage: app.storage,
+  });
 
   let shuttingDown = false;
   const shutdown = async (signal: string) => {
@@ -65,6 +71,7 @@ async function main() {
       // Drain workers (they finish in-flight jobs).
       await renderWorker.close();
       await bundleWorker.close();
+      await vslWorker.close();
       app.log.info('shutdown complete');
       process.exit(0);
     } catch (err) {

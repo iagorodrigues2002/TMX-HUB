@@ -9,6 +9,9 @@ import type {
   Problem,
   UpdateFormRequest,
   UpdateLinkRequest,
+  VslJob,
+  VslJobStatus,
+  VslManifestKind,
 } from '@page-cloner/shared';
 import { CreateCloneRequestSchema } from '@page-cloner/shared';
 import { z } from 'zod';
@@ -306,6 +309,51 @@ function fromBuildJobWire(w: BuildJobWire): BuildJob {
   };
 }
 
+// ---- VSL job (snake/camel) ----
+
+interface VslJobWire {
+  id: string;
+  url: string;
+  status: VslJobStatus;
+  progress: number;
+  manifest_url?: string;
+  manifest_kind?: VslManifestKind;
+  bytes?: number;
+  duration_sec?: number;
+  filename?: string;
+  storage_key?: string;
+  expires_at?: string;
+  download_url?: string;
+  error?: { code: string; message: string };
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VslJobView extends VslJob {
+  downloadUrl?: string;
+  error?: { code: string; message: string };
+}
+
+function fromVslJobWire(w: VslJobWire): VslJobView {
+  return {
+    id: w.id,
+    url: w.url,
+    status: w.status,
+    progress: w.progress,
+    manifestUrl: w.manifest_url,
+    manifestKind: w.manifest_kind,
+    bytes: w.bytes,
+    durationSec: w.duration_sec,
+    filename: w.filename,
+    storageKey: w.storage_key,
+    expiresAt: w.expires_at,
+    createdAt: w.created_at,
+    updatedAt: w.updated_at,
+    downloadUrl: w.download_url,
+    error: w.error,
+  };
+}
+
 // ---- public methods ----
 
 export const apiClient = {
@@ -313,6 +361,16 @@ export const apiClient = {
 
   async inspectPage(url: string, signal?: AbortSignal): Promise<InspectResult> {
     return request<InspectResult>('/v1/inspect', { method: 'POST', body: { url }, signal });
+  },
+
+  async createVslJob(url: string): Promise<VslJobView> {
+    const wire = await request<VslJobWire>('/v1/vsl-jobs', { method: 'POST', body: { url } });
+    return fromVslJobWire(wire);
+  },
+
+  async getVslJob(id: string, signal?: AbortSignal): Promise<VslJobView> {
+    const wire = await request<VslJobWire>(`/v1/vsl-jobs/${id}`, { signal });
+    return fromVslJobWire(wire);
   },
 
   async createClone(input: z.infer<typeof CreateCloneRequestSchema>): Promise<CloneJob> {

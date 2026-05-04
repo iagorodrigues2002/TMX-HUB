@@ -8,6 +8,10 @@ export { bundle } from './bundle/index.js';
 export { clone } from './clone.js';
 
 export { disposeBrowser, getBrowser } from './fetch/browser-pool.js';
+export { detectVideoManifest } from './vsl/detect.js';
+export { downloadManifestToFile } from './vsl/download.js';
+export type { DetectOptions, DetectResult } from './vsl/detect.js';
+export type { DownloadOptions, DownloadResult } from './vsl/download.js';
 export { TRACKING_HOSTS, isTrackingUrl } from './sanitize/tracking-hosts.js';
 export { generateSelector } from './extract/selectors.js';
 export { walkCss } from './assets/css-walker.js';

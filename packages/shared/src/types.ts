@@ -129,3 +129,39 @@ export interface BuildJob {
   updatedAt: string;
   error?: { code: string; message: string };
 }
+
+// ---- VSL Downloader ----
+
+export type VslJobStatus =
+  | 'queued'
+  | 'analyzing'
+  | 'extracting'
+  | 'downloading'
+  | 'processing'
+  | 'uploading'
+  | 'ready'
+  | 'failed';
+
+export type VslManifestKind = 'hls' | 'dash' | 'mp4';
+
+export interface VslJob {
+  id: string;
+  url: string;
+  status: VslJobStatus;
+  progress: number;
+  manifestUrl?: string;
+  manifestKind?: VslManifestKind;
+  bytes?: number;
+  durationSec?: number;
+  filename?: string;
+  storageKey?: string;
+  expiresAt?: string;
+  errorCode?: string;
+  errorMessage?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateVslJobRequest {
+  url: string;
+}

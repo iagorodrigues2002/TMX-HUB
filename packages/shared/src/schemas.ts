@@ -39,6 +39,18 @@ export const CloneOptionsSchema = z
 
 export const InspectRequestSchema = z.object({ url: z.string().url() }).strict();
 
+export const CreateVslJobRequestSchema = z.object({ url: z.string().url() }).strict();
+export const VslJobStatusSchema = z.enum([
+  'queued',
+  'analyzing',
+  'extracting',
+  'downloading',
+  'processing',
+  'uploading',
+  'ready',
+  'failed',
+]);
+
 export const CreateCloneRequestSchema = z
   .object({
     url: z.string().url(),

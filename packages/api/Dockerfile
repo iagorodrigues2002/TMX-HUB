@@ -32,6 +32,12 @@ ENV NODE_ENV=production
 ENV API_HOST=0.0.0.0
 # Railway / generic platforms set PORT; env.ts falls back to API_PORT/4000.
 
+# ffmpeg powers the VSL downloader (HLS/DASH muxing). The playwright base image
+# is Ubuntu-based so apt is available.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ffmpeg \
+  && rm -rf /var/lib/apt/lists/*
+
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/packages/shared ./packages/shared
 COPY --from=build /app/packages/core ./packages/core

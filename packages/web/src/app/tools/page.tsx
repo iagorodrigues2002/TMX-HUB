@@ -26,10 +26,9 @@ export default function ToolsIndexPage() {
           <ToolCard
             icon={<Video className="h-6 w-6" />}
             title="VSL Downloader"
-            description="Baixa vídeos de VSLs hospedadas em VTurb, Panda, Vimeo, Wistia, Hotmart e outros players."
-            href="#"
-            badge="Em breve"
-            disabled
+            description="Detecta o vídeo de VSLs em VTURB, Panda, Vimeo, Wistia, Hotmart e outros players, e baixa como MP4."
+            href="/tools/vsl"
+            badge="Beta"
           />
           <ToolCard
             icon={<Sparkles className="h-6 w-6" />}
