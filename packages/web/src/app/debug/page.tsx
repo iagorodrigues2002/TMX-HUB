@@ -104,7 +104,7 @@ export default function DebugPage() {
   return (
     <main className="min-h-screen bg-black p-8 font-mono text-sm text-zinc-200">
       <div className="mx-auto max-w-3xl space-y-6">
-        <h1 className="text-2xl font-bold text-emerald-400">▌ TMX.HUB · DEBUG</h1>
+        <h1 className="text-2xl font-bold text-emerald-400">▌ TMX HUB · DEBUG</h1>
 
         <section className="rounded border border-zinc-800 bg-zinc-950 p-4">
           <h2 className="mb-3 font-semibold text-emerald-400">Cliente (browser)</h2>

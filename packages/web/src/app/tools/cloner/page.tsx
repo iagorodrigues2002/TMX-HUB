@@ -4,7 +4,7 @@ import { UrlInputForm } from '@/components/url-input-form';
 
 export default function ClonerPage() {
   return (
-    <HubShell breadcrumb={['CLONER']}>
+    <HubShell breadcrumb={['TOOLS', 'CLONER']}>
       <div className="mx-auto max-w-2xl">
         <header className="mb-8 space-y-3 text-center">
           <div

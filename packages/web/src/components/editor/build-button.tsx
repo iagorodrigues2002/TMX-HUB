@@ -119,7 +119,7 @@ export function BuildButton({ jobId, disabled }: BuildButtonProps) {
             errorMessage={build.data?.error?.message}
             onView={() => {
               setOpen(false);
-              router.push(`/cloner/jobs/${jobId}/preview`);
+              router.push(`/tools/cloner/jobs/${jobId}/preview`);
             }}
           />
         )}

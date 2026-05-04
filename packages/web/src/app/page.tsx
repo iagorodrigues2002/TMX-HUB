@@ -13,7 +13,7 @@ export default function HubLandingPage() {
             className="bg-clip-text text-transparent"
             style={{ backgroundImage: 'linear-gradient(90deg, #0E7C86 0%, #22D3EE 100%)' }}
           >
-            TMX.HUB
+            TMX HUB
           </span>
         </h1>
         <p className="max-w-xl text-[14px] text-white/55">
@@ -35,7 +35,7 @@ export default function HubLandingPage() {
             icon={<Layers className="h-6 w-6" />}
             title="Page Cloner"
             description="Clone qualquer página, remove scripts e personalize forms/links."
-            href="/cloner"
+            href="/tools/cloner"
           />
           <ToolCard
             icon={<Sparkles className="h-6 w-6" />}

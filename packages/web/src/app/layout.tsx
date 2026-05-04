@@ -12,7 +12,7 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: 'TMX.HUB · TERMINAL DE CONTROLE',
+  title: 'TMX HUB · TERMINAL DE CONTROLE',
   description: 'Hub de ferramentas TMX',
 };
 

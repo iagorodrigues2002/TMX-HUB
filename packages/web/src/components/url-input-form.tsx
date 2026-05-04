@@ -67,7 +67,7 @@ export function UrlInputForm() {
         },
       });
       toast.success('Clone iniciado');
-      router.push(`/cloner/jobs/${job.id}`);
+      router.push(`/tools/cloner/jobs/${job.id}`);
     } catch (err) {
       toast.error((err as Error).message);
       setStep('inspected');
@@ -87,7 +87,7 @@ export function UrlInputForm() {
         },
       });
       toast.success('Clone iniciado');
-      router.push(`/cloner/jobs/${job.id}`);
+      router.push(`/tools/cloner/jobs/${job.id}`);
     } catch (err) {
       toast.error((err as Error).message);
       setStep('idle');

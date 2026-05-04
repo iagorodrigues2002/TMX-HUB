@@ -31,14 +31,14 @@ export function Topbar({ breadcrumb, right }: TopbarProps) {
         </span>
         <span className="flex flex-col leading-tight">
           <span className="text-[20px] font-bold tracking-tight text-white">
-            TMX
+            TMX{' '}
             <span
               className="bg-clip-text text-transparent"
               style={{
                 backgroundImage: 'linear-gradient(90deg, #0E7C86 0%, #22D3EE 100%)',
               }}
             >
-              .HUB
+              HUB
             </span>
           </span>
           <span className="hud-label text-[9px]">TERMINAL DE CONTROLE</span>

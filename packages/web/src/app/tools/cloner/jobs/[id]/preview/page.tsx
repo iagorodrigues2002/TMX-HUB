@@ -20,7 +20,7 @@ export default function PreviewPage({ params }: PreviewPageProps) {
     <div className="flex h-screen flex-col bg-[#04101A]">
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-white/[0.06] bg-[#04101A]/80 px-4 backdrop-blur-xl">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
-          <Link href={`/cloner/jobs/${id}`} className="gap-1">
+          <Link href={`/tools/cloner/jobs/${id}`} className="gap-1">
             <ArrowLeft className="h-4 w-4" />
             <span className="text-[11px] font-semibold uppercase tracking-[0.18em]">
               Voltar ao editor

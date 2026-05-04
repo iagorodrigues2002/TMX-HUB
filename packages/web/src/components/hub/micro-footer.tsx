@@ -15,7 +15,7 @@ export function MicroFooter() {
       <span aria-hidden className="text-white/20">·</span>
       <span>NEURAL-LOCK ENCRYPTION ACTIVE</span>
       <span aria-hidden className="text-white/20">·</span>
-      <span>TMX.HUB v0.1</span>
+      <span>TMX HUB v0.4</span>
     </footer>
   );
 }
