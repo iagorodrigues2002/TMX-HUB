@@ -27,7 +27,10 @@ import {
 import { env } from '@/lib/env';
 import { cn } from '@/lib/utils';
 
-const UTMIFY_DASHBOARD_ID = '690cf9fc15e48d623b09c712';
+// UTMify expõe múltiplos dashboards por conta. Esse é o ID do PFL_ENG (oferta
+// principal de tráfego). Se rodar pra outra oferta, troque manualmente no node
+// Config do n8n — futuro: virar campo editável por oferta no TMX HUB.
+const UTMIFY_DASHBOARD_ID = '69f3b5692659d80c33debea2';
 
 const LOCAL_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', 'host.docker.internal'];
 
