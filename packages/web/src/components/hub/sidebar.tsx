@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, LayoutDashboard, ScrollText, User, Wrench } from 'lucide-react';
+import { Home, LayoutDashboard, ScrollText, Settings, User, Wrench } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
@@ -18,6 +18,7 @@ const NAV: NavItem[] = [
   { label: 'Dashboards', href: '/dashboards', icon: LayoutDashboard },
   { label: 'Tools', href: '/tools', icon: Wrench },
   { label: 'Logs', href: '/logs', icon: ScrollText },
+  { label: 'Configurações', href: '/settings', icon: Settings },
   { label: 'Conta', href: '#', icon: User, disabled: true },
 ];
 
