@@ -8,8 +8,7 @@ interface CoreInspectModule {
 }
 
 async function loadCore(): Promise<CoreInspectModule> {
-  // @ts-expect-error - core dist may not be present at type-check time
-  return (await import('@page-cloner/core')) as CoreInspectModule;
+  return (await import('@page-cloner/core')) as unknown as CoreInspectModule;
 }
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {

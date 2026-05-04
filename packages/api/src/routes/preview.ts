@@ -5,8 +5,11 @@ import { BadRequestError, ConflictError, NotFoundError } from '../lib/problem.js
 
 const IdParamSchema = z.object({ id: z.string() });
 
-const CSP =
-  "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'none'; frame-ancestors 'self'";
+// CSP without frame-ancestors — we set it dynamically per-request below so the
+// preview can be embedded by any origin (the content is sanitized; the URL is
+// already gated by an unguessable ULID).
+const BASE_CSP =
+  "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'none'";
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get('/clones/:id/preview', async (req, reply) => {
@@ -32,7 +35,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
     return reply
       .header('content-type', 'text/html; charset=utf-8')
-      .header('content-security-policy', CSP)
+      // Allow any ancestor — the web app and the API live on different
+      // origins (page-clonerweb vs page-clonerapi). Sanitized content + ULID
+      // gating make permissive frame-ancestors safe here.
+      .header('content-security-policy', `${BASE_CSP}; frame-ancestors *`)
       .header('x-content-type-options', 'nosniff')
       .header('etag', meta.etag)
       .send(state.html);
