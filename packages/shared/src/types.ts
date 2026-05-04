@@ -257,3 +257,76 @@ export interface ActivityEntry {
   status: string;
   createdAt: string;
 }
+
+// ---- Dashboard / Offers ----
+
+/**
+ * An "offer" is one product/funnel you're driving traffic to. Each offer
+ * has its own daily snapshots aggregated from UTMify (or any source via
+ * /v1/offers/:id/ingest). Rendered as a sub-dashboard.
+ */
+export interface Offer {
+  id: string;
+  userId: string;
+  name: string;          // ex. "PFL_ENG"
+  /** UTMify dashboardId, kept for reference + auto-config in n8n. */
+  dashboardId?: string;
+  description?: string;
+  createdAt: string;
+}
+
+/**
+ * Per-adset breakdown of a daily snapshot. Same metrics, scoped to one ad set.
+ */
+export interface AdsetSnapshot {
+  name: string;
+  spend: number;
+  sales: number;
+  revenue: number;
+  ic: number;
+  /** Optional traffic-side metrics. */
+  impressions?: number;
+  clicks?: number;
+}
+
+/**
+ * Aggregated metrics for one offer on one day. Idempotent on
+ * (offerId, date) — re-ingesting overwrites.
+ */
+export interface DailySnapshot {
+  offerId: string;
+  date: string;          // YYYY-MM-DD
+  spend: number;         // BRL
+  sales: number;         // count
+  revenue: number;       // BRL
+  ic: number;            // initiate checkout count
+  impressions?: number;
+  clicks?: number;
+  adsets?: AdsetSnapshot[];
+  updatedAt: string;
+}
+
+/**
+ * Computed metrics surface returned by /v1/offers/summary and /v1/offers/:id/snapshots.
+ * Convenience for the UI so we don't recompute in three places.
+ */
+export interface SnapshotMetrics {
+  spend: number;
+  sales: number;
+  revenue: number;
+  ic: number;
+  /** spend / sales (∞ when no sales) */
+  cpa: number | null;
+  /** spend / ic */
+  icCpa: number | null;
+  /** sales / ic (0..1) */
+  conversionRate: number | null;
+  /** revenue / spend */
+  roas: number | null;
+}
+
+export interface CreateOfferRequest {
+  name: string;
+  dashboard_id?: string;
+  description?: string;
+}

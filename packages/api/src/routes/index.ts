@@ -8,6 +8,7 @@ import funnelJobsRoutes from './funnel-jobs.js';
 import healthRoutes from './health.js';
 import inspectRoutes from './inspect.js';
 import linksRoutes from './links.js';
+import offersRoutes from './offers.js';
 import pageDiffRoutes from './page-diff.js';
 import previewRoutes from './preview.js';
 import vslJobsRoutes from './vsl-jobs.js';
@@ -40,6 +41,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         await protectedRoutes.register(webhookTestRoutes);
         await protectedRoutes.register(pageDiffRoutes);
         await protectedRoutes.register(funnelJobsRoutes);
+        await protectedRoutes.register(offersRoutes);
       });
     },
     { prefix: '/v1' },

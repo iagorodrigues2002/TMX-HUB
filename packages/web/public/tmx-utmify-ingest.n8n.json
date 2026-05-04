@@ -1,0 +1,240 @@
+{
+  "name": "TMX HUB · UTMify → /ingest",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 2
+            }
+          ]
+        }
+      },
+      "id": "trigger-2h",
+      "name": "⏰ A cada 2 horas",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-700, 320]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "TMX_API_URL",
+              "value": "https://page-clonerapi-production.up.railway.app"
+            },
+            {
+              "name": "TMX_TOKEN",
+              "value": "COLE_AQUI_O_TOKEN_DO_TMX"
+            },
+            {
+              "name": "OFFER_ID",
+              "value": "COLE_AQUI_O_ID_DA_OFERTA_NO_TMX"
+            },
+            {
+              "name": "UTMIFY_DASHBOARD_ID",
+              "value": "690cf9fc15e48d623b09c712"
+            }
+          ],
+          "number": [
+            {
+              "name": "DIAS_BUSCA",
+              "value": 30
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "config",
+      "name": "⚙️ Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [-500, 320],
+      "notes": "Edite SOMENTE esse node. As 4 strings + DIAS_BUSCA controlam tudo:\n• TMX_API_URL: URL da API do TMX HUB\n• TMX_TOKEN: copie em /dashboards/<offer> no TMX\n• OFFER_ID: também no TMX\n• UTMIFY_DASHBOARD_ID: copie da URL da UTMify\n• DIAS_BUSCA: quantos dias retroativos puxar"
+    },
+    {
+      "parameters": {
+        "url": "https://server.utmify.com.br/users/auth",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {}
+      },
+      "id": "utmify-auth",
+      "name": "🔐 UTMify · Auth",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-300, 320],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "notes": "Configure HTTP Basic Auth com seu LOGIN e SENHA da UTMify (não API key — é login mesmo)."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Quebra a janela em N requests de 1 dia, contornando o timeout 524 da UTMify.\n// Lê DIAS_BUSCA, TMX_TOKEN, OFFER_ID, UTMIFY_DASHBOARD_ID do node Config.\n\nconst config = $('⚙️ Config').first().json;\nconst token = $json.auth.token;\nconst dias = Number(config.DIAS_BUSCA) || 30;\n\nconst agora = new Date();\nconst inicio = new Date(agora);\ninicio.setUTCDate(inicio.getUTCDate() - dias);\ninicio.setUTCHours(0, 0, 0, 0);\n\nconst janelas = [];\nlet cursor = new Date(inicio);\nwhile (cursor < agora) {\n  const fim = new Date(cursor);\n  fim.setUTCDate(fim.getUTCDate() + 1);\n  janelas.push({\n    json: {\n      _utmifyToken: token,\n      _dashboardId: config.UTMIFY_DASHBOARD_ID,\n      _tmxApiUrl: config.TMX_API_URL,\n      _tmxToken: config.TMX_TOKEN,\n      _offerId: config.OFFER_ID,\n      dateFrom: cursor.toISOString(),\n      dateTo: (fim > agora ? agora : fim).toISOString(),\n      _date: cursor.toISOString().slice(0, 10),\n      _janela: janelas.length + 1,\n    },\n  });\n  cursor.setUTCDate(cursor.getUTCDate() + 1);\n}\nreturn janelas;\n"
+      },
+      "id": "build-windows",
+      "name": "📅 Quebrar em janelas diárias",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-100, 320]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://server.utmify.com.br/orders/search-objects",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "authorization",
+              "value": "=Bearer {{ $json._utmifyToken }}"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json; charset=UTF-8"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"level\": \"adset\",\n  \"dateRange\": {\n    \"from\": \"{{ $json.dateFrom }}\",\n    \"to\": \"{{ $json.dateTo }}\"\n  },\n  \"nameContains\": null,\n  \"productNames\": null,\n  \"orderBy\": \"greater_profit\",\n  \"adObjectStatuses\": null,\n  \"metaAdAccountIds\": null,\n  \"dashboardId\": \"{{ $json._dashboardId }}\"\n}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 2000
+            }
+          },
+          "timeout": 115000
+        }
+      },
+      "id": "utmify-fetch",
+      "name": "📡 UTMify · Buscar dia",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [120, 320],
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "maxTries": 3,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pega o array de results de cada janela diária e devolve UM snapshot por dia,\n// no formato que o TMX HUB aceita em /v1/offers/:id/ingest.\n//\n// O endpoint UTMify /orders/search-objects retorna campos diferentes dependendo\n// da versão da plataforma. Este transform tenta vários nomes — se o seu retorno\n// trouxer um campo com nome diferente, é só adicionar à lista de fallbacks.\n\nfunction num(v) {\n  if (v === null || v === undefined || v === '') return 0;\n  const n = Number(v);\n  return Number.isFinite(n) ? n : 0;\n}\n\n// Safely read multiple potential field names. Returns the first numeric > 0,\n// or 0 if none. UTMify spend is in CENTS — divide /100 to get BRL.\nfunction pickCents(item, names) {\n  for (const k of names) if (num(item[k]) > 0) return num(item[k]);\n  return 0;\n}\nfunction pickInt(item, names) {\n  for (const k of names) if (num(item[k]) > 0) return num(item[k]);\n  return 0;\n}\n\nconst items = $input.all();\nconst byDate = new Map();\n\nlet config = null;\nfor (const it of items) {\n  if (it.json && it.json._date) {\n    config = it.json;\n    break;\n  }\n}\nif (!config) {\n  // First item failed; pull from the windows node.\n  const win = $('📅 Quebrar em janelas diárias').first().json;\n  config = win;\n}\n\nfor (const it of items) {\n  // Skip outright errors.\n  if (it.json && (it.json.error || it.json.errorMessage)) continue;\n\n  const date =\n    it.json._date ||\n    (it.json && (it.json.dateFrom || '').slice(0, 10));\n  if (!date) continue;\n\n  const results = (it.json && it.json.results) || [];\n  if (!byDate.has(date)) {\n    byDate.set(date, {\n      date,\n      spend: 0,\n      sales: 0,\n      revenue: 0,\n      ic: 0,\n      impressions: 0,\n      clicks: 0,\n      adsets: [],\n    });\n  }\n  const day = byDate.get(date);\n\n  for (const r of results) {\n    const spendCents = pickCents(r, ['spend', 'spendCents', 'spendInCents', 'amountSpent']);\n    const revenueCents = pickCents(r, ['revenue', 'revenueCents', 'profit', 'profitCents', 'grossRevenue', 'totalRevenue']);\n    const sales = pickInt(r, ['salesCount', 'sales', 'frontSalesCount', 'orderCount', 'orders', 'purchaseCount', 'purchases']);\n    const ic = pickInt(r, ['initiateCheckoutCount', 'initiateCheckout', 'initiate_checkout', 'icCount']);\n    const impressions = pickInt(r, ['impressions']);\n    const clicks = pickInt(r, ['inlineLinkClicks', 'clicks', 'linkClicks']);\n\n    const adset = {\n      name: String(r.name || r.adsetName || '(sem nome)').slice(0, 200),\n      spend: spendCents / 100,\n      revenue: revenueCents / 100,\n      sales,\n      ic,\n    };\n    if (impressions) adset.impressions = impressions;\n    if (clicks) adset.clicks = clicks;\n    day.adsets.push(adset);\n\n    day.spend += adset.spend;\n    day.revenue += adset.revenue;\n    day.sales += sales;\n    day.ic += ic;\n    day.impressions += impressions;\n    day.clicks += clicks;\n  }\n}\n\nconst snapshots = Array.from(byDate.values()).map((d) => {\n  // Strip impressions/clicks if zero — schema accepts them as optional.\n  if (d.impressions === 0) delete d.impressions;\n  if (d.clicks === 0) delete d.clicks;\n  if (!d.adsets || d.adsets.length === 0) delete d.adsets;\n  return d;\n});\n\nif (snapshots.length === 0) {\n  return [{ json: { _empty: true, _config: config } }];\n}\n\nreturn [\n  {\n    json: {\n      _tmxApiUrl: config._tmxApiUrl,\n      _tmxToken: config._tmxToken,\n      _offerId: config._offerId,\n      payload: { snapshots },\n    },\n  },\n];\n"
+      },
+      "id": "build-snapshots",
+      "name": "🔄 Montar snapshots",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [340, 320],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json._empty }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "has-snapshots",
+      "name": "Tem snapshots?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [560, 320]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json._tmxApiUrl }}/v1/offers/{{ $json._offerId }}/ingest",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "authorization",
+              "value": "=Bearer {{ $json._tmxToken }}"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "tmx-ingest",
+      "name": "📤 TMX HUB · Ingest",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [780, 240],
+      "retryOnFail": true,
+      "maxTries": 3
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $json;\nconst when = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });\nconsole.log('[' + when + '] ✅ TMX ingest', { ingested: r.ingested, dates: r.dates });\nreturn { json: { status: 'ok', when, ...r } };\n"
+      },
+      "id": "log-final",
+      "name": "✅ Log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 240]
+    }
+  ],
+  "connections": {
+    "⏰ A cada 2 horas": {
+      "main": [[{ "node": "⚙️ Config", "type": "main", "index": 0 }]]
+    },
+    "⚙️ Config": {
+      "main": [[{ "node": "🔐 UTMify · Auth", "type": "main", "index": 0 }]]
+    },
+    "🔐 UTMify · Auth": {
+      "main": [[{ "node": "📅 Quebrar em janelas diárias", "type": "main", "index": 0 }]]
+    },
+    "📅 Quebrar em janelas diárias": {
+      "main": [[{ "node": "📡 UTMify · Buscar dia", "type": "main", "index": 0 }]]
+    },
+    "📡 UTMify · Buscar dia": {
+      "main": [
+        [{ "node": "🔄 Montar snapshots", "type": "main", "index": 0 }],
+        [{ "node": "🔄 Montar snapshots", "type": "main", "index": 0 }]
+      ]
+    },
+    "🔄 Montar snapshots": {
+      "main": [[{ "node": "Tem snapshots?", "type": "main", "index": 0 }]]
+    },
+    "Tem snapshots?": {
+      "main": [[{ "node": "📤 TMX HUB · Ingest", "type": "main", "index": 0 }], []]
+    },
+    "📤 TMX HUB · Ingest": {
+      "main": [[{ "node": "✅ Log", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [{ "name": "tmx-hub" }]
+}

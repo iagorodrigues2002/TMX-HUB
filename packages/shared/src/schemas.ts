@@ -141,3 +141,38 @@ export const CreateFunnelJobRequestSchema = z
     max_pages: z.number().int().min(1).max(30).default(20),
   })
   .strict();
+
+export const CreateOfferRequestSchema = z
+  .object({
+    name: z.string().min(1).max(60),
+    dashboard_id: z.string().max(100).optional(),
+    description: z.string().max(500).optional(),
+  })
+  .strict();
+
+const AdsetSnapshotSchema = z.object({
+  name: z.string(),
+  spend: z.number().nonnegative().default(0),
+  sales: z.number().int().nonnegative().default(0),
+  revenue: z.number().nonnegative().default(0),
+  ic: z.number().int().nonnegative().default(0),
+  impressions: z.number().int().nonnegative().optional(),
+  clicks: z.number().int().nonnegative().optional(),
+});
+
+const DailySnapshotInputSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  spend: z.number().nonnegative().default(0),
+  sales: z.number().int().nonnegative().default(0),
+  revenue: z.number().nonnegative().default(0),
+  ic: z.number().int().nonnegative().default(0),
+  impressions: z.number().int().nonnegative().optional(),
+  clicks: z.number().int().nonnegative().optional(),
+  adsets: z.array(AdsetSnapshotSchema).max(500).optional(),
+});
+
+export const IngestSnapshotsRequestSchema = z
+  .object({
+    snapshots: z.array(DailySnapshotInputSchema).min(1).max(60),
+  })
+  .strict();

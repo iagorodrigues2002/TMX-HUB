@@ -465,6 +465,153 @@ interface AuthSessionWire {
   expires_at: string;
 }
 
+// ---- Offers / Dashboards ----
+
+export interface OfferView {
+  id: string;
+  name: string;
+  dashboardId?: string;
+  description?: string;
+  createdAt: string;
+}
+
+export interface MetricsView {
+  spend: number;
+  sales: number;
+  revenue: number;
+  ic: number;
+  cpa: number | null;
+  icCpa: number | null;
+  conversionRate: number | null;
+  roas: number | null;
+}
+
+export interface AdsetView {
+  name: string;
+  spend: number;
+  sales: number;
+  revenue: number;
+  ic: number;
+  impressions?: number;
+  clicks?: number;
+}
+
+export interface DailySnapshotView {
+  date: string;
+  spend: number;
+  sales: number;
+  revenue: number;
+  ic: number;
+  impressions?: number;
+  clicks?: number;
+  adsets?: AdsetView[];
+  metrics: MetricsView;
+  updatedAt: string;
+}
+
+export interface OfferSnapshotsView {
+  offer: OfferView;
+  from: string;
+  to: string;
+  snapshots: DailySnapshotView[];
+  totals: MetricsView;
+}
+
+export interface DashboardOfferEntry {
+  offer: OfferView;
+  totals: MetricsView;
+  snapshotsCount: number;
+}
+
+export interface DashboardSummary {
+  from: string;
+  to: string;
+  totals: MetricsView;
+  offers: DashboardOfferEntry[];
+}
+
+interface OfferWire {
+  id: string;
+  name: string;
+  dashboard_id?: string;
+  description?: string;
+  created_at: string;
+}
+
+interface OfferSnapshotsWire {
+  offer: OfferWire;
+  from: string;
+  to: string;
+  snapshots: Array<{
+    date: string;
+    spend: number;
+    sales: number;
+    revenue: number;
+    ic: number;
+    impressions?: number;
+    clicks?: number;
+    adsets?: AdsetView[];
+    metrics: MetricsView;
+    updated_at: string;
+  }>;
+  totals: MetricsView;
+}
+
+interface DashboardSummaryWire {
+  from: string;
+  to: string;
+  totals: MetricsView;
+  offers: Array<{
+    offer: OfferWire;
+    totals: MetricsView;
+    snapshots_count: number;
+  }>;
+}
+
+function fromOfferWire(w: OfferWire): OfferView {
+  return {
+    id: w.id,
+    name: w.name,
+    dashboardId: w.dashboard_id,
+    description: w.description,
+    createdAt: w.created_at,
+  };
+}
+
+function fromOfferSnapshotsWire(w: OfferSnapshotsWire): OfferSnapshotsView {
+  return {
+    offer: fromOfferWire(w.offer),
+    from: w.from,
+    to: w.to,
+    snapshots: w.snapshots.map((s) => ({
+      date: s.date,
+      spend: s.spend,
+      sales: s.sales,
+      revenue: s.revenue,
+      ic: s.ic,
+      impressions: s.impressions,
+      clicks: s.clicks,
+      adsets: s.adsets,
+      metrics: s.metrics,
+      updatedAt: s.updated_at,
+    })),
+    totals: w.totals,
+  };
+}
+
+function fromDashboardSummaryWire(w: DashboardSummaryWire): DashboardSummary {
+  return {
+    from: w.from,
+    to: w.to,
+    totals: w.totals,
+    offers: (w.offers ?? []).map((e) => ({
+      offer: fromOfferWire(e.offer),
+      totals: e.totals,
+      snapshotsCount: e.snapshots_count,
+    })),
+  };
+}
+
 // ---- public methods ----
 
 export const apiClient = {
@@ -529,6 +676,47 @@ export const apiClient = {
   async getFunnelJob(id: string, signal?: AbortSignal): Promise<FunnelJobView> {
     const wire = await request<FunnelJobWire>(`/v1/funnel-jobs/${id}`, { signal });
     return fromFunnelJobWire(wire);
+  },
+
+  // ---- Dashboards / Offers ----
+
+  async listOffers(): Promise<OfferView[]> {
+    const wire = await request<{ offers: OfferWire[] }>('/v1/offers');
+    return (wire.offers ?? []).map(fromOfferWire);
+  },
+
+  async createOffer(input: { name: string; dashboard_id?: string; description?: string }): Promise<OfferView> {
+    const wire = await request<OfferWire>('/v1/offers', { method: 'POST', body: input });
+    return fromOfferWire(wire);
+  },
+
+  async deleteOffer(id: string): Promise<void> {
+    await request<void>(`/v1/offers/${id}`, { method: 'DELETE' });
+  },
+
+  async getOfferSnapshots(
+    id: string,
+    range?: { from?: string; to?: string },
+  ): Promise<OfferSnapshotsView> {
+    const params = new URLSearchParams();
+    if (range?.from) params.set('from', range.from);
+    if (range?.to) params.set('to', range.to);
+    const qs = params.toString();
+    const wire = await request<OfferSnapshotsWire>(
+      `/v1/offers/${id}/snapshots${qs ? `?${qs}` : ''}`,
+    );
+    return fromOfferSnapshotsWire(wire);
+  },
+
+  async getDashboardSummary(range?: { from?: string; to?: string }): Promise<DashboardSummary> {
+    const params = new URLSearchParams();
+    if (range?.from) params.set('from', range.from);
+    if (range?.to) params.set('to', range.to);
+    const qs = params.toString();
+    const wire = await request<DashboardSummaryWire>(
+      `/v1/dashboard/summary${qs ? `?${qs}` : ''}`,
+    );
+    return fromDashboardSummaryWire(wire);
   },
 
   async pageDiff(input: {
