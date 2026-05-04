@@ -1,4 +1,4 @@
-import type { Browser, BrowserContext, Page, Request, Response } from 'playwright';
+import type { Browser, BrowserContext, Frame, Page, Request, Response } from 'playwright';
 import type { VslManifestKind } from '@page-cloner/shared';
 import { getBrowser } from '../fetch/browser-pool.js';
 
@@ -11,38 +11,53 @@ export interface DetectOptions {
   timezone?: string;
   /** Override user-agent. Default: realistic Chrome on Mac. */
   userAgent?: string;
-  /** Override viewport. Default 1366x768 (most common desktop). */
+  /** Override viewport. Default 1366x768. */
   viewport?: { width: number; height: number };
-  /** Spoof Referer/UTM as if the visitor clicked a Facebook ad. Default true. */
+  /**
+   * 'paid'  : add fbclid + Facebook referer (visit looks like FB ad click)
+   * 'organic': strip ad params (fbclid, gclid, utm_*) + no spoofed referer
+   * If omitted (or `true`), behaves as 'paid' for backward compat.
+   */
+  trafficMode?: 'paid' | 'organic';
+  /** @deprecated use trafficMode. true = paid, false = organic. */
   spoofAdClick?: boolean;
   /** Logger hook. */
   onLog?: (msg: string) => void;
 }
 
+export interface ObservedMedia {
+  url: string;
+  kind: VslManifestKind | 'segment' | 'unknown';
+  source: 'extension' | 'content-type' | 'body-sniff' | 'segment-inference';
+}
+
 export interface DetectResult {
   manifestUrl: string;
   manifestKind: VslManifestKind;
-  /** Page URL after any redirects (useful when the input was a funnel link). */
   finalPageUrl: string;
   /** Headers the manifest was fetched with — needed by ffmpeg for protected CDNs. */
   headers: Record<string, string>;
-  /** Other media URLs we observed (for debugging / fallback). */
-  observed: Array<{ url: string; kind: VslManifestKind }>;
+  observed: ObservedMedia[];
 }
 
-// Canonical realistic UA. Pinned to a recent stable Chrome on macOS — least
-// likely to be flagged as automation by generic cloakers.
 const DEFAULT_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
   '(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36';
 
-function classifyMedia(u: string): VslManifestKind | null {
+function classifyByExtension(u: string): VslManifestKind | 'segment' | null {
   // Strip query so foo.m3u8?token=... is still detected.
   const path = u.split('?')[0]?.toLowerCase() ?? u.toLowerCase();
   if (path.endsWith('.m3u8')) return 'hls';
   if (path.endsWith('.mpd')) return 'dash';
   if (path.endsWith('.mp4') || path.endsWith('.m4v')) return 'mp4';
-  // Some HLS variants come with explicit content-type rather than extension.
+  if (
+    path.endsWith('.ts') ||
+    path.endsWith('.m4s') ||
+    path.endsWith('.aac') ||
+    path.endsWith('.vtt')
+  ) {
+    return 'segment';
+  }
   return null;
 }
 
@@ -51,24 +66,28 @@ function classifyByContentType(ct: string | undefined): VslManifestKind | null {
   const c = ct.toLowerCase();
   if (c.includes('mpegurl') || c.includes('vnd.apple.mpegurl')) return 'hls';
   if (c.includes('dash+xml')) return 'dash';
-  // We intentionally do NOT classify mp4 by content-type — too many tracking
-  // pixels and previews come back as video/mp4 and would create false hits.
   return null;
 }
 
-function pickBest(observed: Array<{ url: string; kind: VslManifestKind }>) {
-  // Strong preference: HLS > DASH > MP4. HLS is what nearly every VSL player
-  // (VTURB, Panda, Vidalytics, etc.) uses for the actual asset.
-  const hls = observed.find((o) => o.kind === 'hls');
-  if (hls) return hls;
-  const dash = observed.find((o) => o.kind === 'dash');
-  if (dash) return dash;
-  return observed.find((o) => o.kind === 'mp4');
+function classifyByBody(body: string): VslManifestKind | null {
+  const head = body.slice(0, 1024);
+  if (head.startsWith('#EXTM3U')) return 'hls';
+  if (head.includes('<MPD ') || head.includes('<MPD\n') || head.includes('xmlns="urn:mpeg:dash:')) {
+    return 'dash';
+  }
+  return null;
+}
+
+function pickBest(observed: ObservedMedia[]): ObservedMedia | undefined {
+  // Strong preference: HLS > DASH > MP4. Segments are clues, not picks.
+  return (
+    observed.find((o) => o.kind === 'hls') ||
+    observed.find((o) => o.kind === 'dash') ||
+    observed.find((o) => o.kind === 'mp4')
+  );
 }
 
 async function humanize(page: Page, log: (s: string) => void): Promise<void> {
-  // Move the mouse in a few steps + small scrolls so behavior-based filters
-  // see something other than "page loaded, no interaction, leave".
   try {
     await page.mouse.move(120, 200, { steps: 8 });
     await page.waitForTimeout(350);
@@ -84,32 +103,52 @@ async function humanize(page: Page, log: (s: string) => void): Promise<void> {
   }
 }
 
-async function attemptVideoStart(page: Page, log: (s: string) => void): Promise<void> {
-  // Many VSL players gate the manifest behind a click on the player itself
-  // (autoplay+sound is blocked by browsers). Try to click the most common
-  // play-button selectors, falling back to clicking the center of the largest
-  // <video>/<iframe>/<div> element on the page.
-  try {
-    const candidates = [
-      '.vjs-big-play-button',
-      'button[aria-label*="play" i]',
-      'button[title*="play" i]',
-      '.smartplayer-poster',
-      '.true-play-button',
-      '.vsl-play-overlay',
-      '[data-testid="play-button"]',
-    ];
-    for (const sel of candidates) {
-      const el = await page.$(sel);
-      if (el) {
-        await el.click({ delay: 50 }).catch(() => undefined);
-        log(`clicked candidate: ${sel}`);
-        return;
-      }
+const PLAY_SELECTORS = [
+  '.vjs-big-play-button',
+  '.vjs-play-control',
+  'button[aria-label*="play" i]',
+  'button[title*="play" i]',
+  '[role="button"][aria-label*="play" i]',
+  '.smartplayer-poster',
+  '.true-play-button',
+  '.smartplayer-icon-play',
+  '.vsl-play-overlay',
+  '.play-button',
+  '.player-button',
+  '[data-testid="play-button"]',
+  // VTURB / converteai
+  '.true-play-svg',
+  // Wistia
+  '.w-big-play-button',
+  // Panda
+  '.panda-poster',
+  '.panda-button-play',
+  // JW
+  '.jw-display-icon-display',
+];
+
+async function clickPlayInFrame(frame: Frame, log: (s: string) => void): Promise<boolean> {
+  for (const sel of PLAY_SELECTORS) {
+    try {
+      const el = await frame.$(sel);
+      if (!el) continue;
+      await el.scrollIntoViewIfNeeded({ timeout: 2000 }).catch(() => undefined);
+      // force:true bypasses overlapping overlays (privacy banners, etc.)
+      await el.click({ delay: 80, force: true, timeout: 4000 }).catch(() => undefined);
+      log(`clicked candidate ${sel} in frame ${frame.url()}`);
+      return true;
+    } catch {
+      // try next
     }
-    // Fallback: click center of the largest visual rect (likely the player)
-    const box = await page.evaluate(() => {
-      const els = Array.from(document.querySelectorAll<HTMLElement>('video, iframe, [class*=player i], [id*=player i]'));
+  }
+  // Fallback: click center of the largest visual rect (likely the player)
+  try {
+    const box = await frame.evaluate(() => {
+      const els = Array.from(
+        document.querySelectorAll<HTMLElement>(
+          'video, [class*=player i], [id*=player i], [class*=poster i]',
+        ),
+      );
       let best: { x: number; y: number; w: number; h: number } | null = null;
       for (const el of els) {
         const r = el.getBoundingClientRect();
@@ -121,11 +160,31 @@ async function attemptVideoStart(page: Page, log: (s: string) => void): Promise<
       return best;
     });
     if (box) {
-      await page.mouse.click(box.x + box.w / 2, box.y + box.h / 2, { delay: 80 });
-      log(`clicked player rect at (${Math.round(box.x + box.w / 2)},${Math.round(box.y + box.h / 2)})`);
+      // For child frames, scroll/click via JS — we don't have absolute coords
+      // for cross-origin frames from the parent page's mouse.
+      await frame.evaluate(
+        ({ x, y }) => {
+          const target = document.elementFromPoint(x, y) as HTMLElement | null;
+          target?.click?.();
+        },
+        { x: box.x + box.w / 2, y: box.y + box.h / 2 },
+      );
+      log(`js-clicked center of ${box.w}x${box.h} player in frame ${frame.url()}`);
+      return true;
     }
   } catch (err) {
-    log(`attemptVideoStart skipped: ${(err as Error).message}`);
+    log(`fallback click failed in frame ${frame.url()}: ${(err as Error).message}`);
+  }
+  return false;
+}
+
+async function attemptVideoStart(page: Page, log: (s: string) => void): Promise<void> {
+  // Try to click play in EVERY frame (the VTURB-style player iframe is what
+  // matters in most VSL pages). We try the main frame first, then iframes.
+  const frames = page.frames();
+  log(`page has ${frames.length} frame(s)`);
+  for (const frame of frames) {
+    await clickPlayInFrame(frame, log);
   }
 }
 
@@ -140,22 +199,31 @@ export async function detectVideoManifest(
   const userAgent = opts.userAgent ?? DEFAULT_UA;
   const viewport = opts.viewport ?? { width: 1366, height: 768 };
 
-  // Spoofed query params + referer to look like a Facebook-ad click. Skipped
-  // if the URL already has fbclid (means the user is intentionally testing
-  // a real ad link).
+  // Resolve trafficMode (default: paid). spoofAdClick is the legacy boolean.
+  const trafficMode: 'paid' | 'organic' =
+    opts.trafficMode ?? (opts.spoofAdClick === false ? 'organic' : 'paid');
+
   let url = rawUrl;
-  if (opts.spoofAdClick !== false) {
-    try {
-      const u = new URL(rawUrl);
+  try {
+    const u = new URL(rawUrl);
+    if (trafficMode === 'paid') {
       if (!u.searchParams.has('fbclid')) {
         u.searchParams.set('fbclid', `IwAR0${Math.random().toString(36).slice(2, 18)}`);
       }
-      url = u.toString();
-    } catch {
-      // not a valid URL — let Playwright surface the navigation error
+    } else {
+      // organic: strip every known ad-attribution param
+      for (const p of ['fbclid', 'gclid', 'twclid', 'msclkid', 'ttclid', 'wbraid', 'gbraid', 'yclid']) {
+        u.searchParams.delete(p);
+      }
+      for (const p of [...u.searchParams.keys()]) {
+        if (p.startsWith('utm_')) u.searchParams.delete(p);
+      }
     }
+    url = u.toString();
+  } catch {
+    // not a valid URL — let Playwright surface the navigation error
   }
-  log(`url after spoof: ${url}`);
+  log(`url after trafficMode=${trafficMode}: ${url}`);
 
   const browser: Browser = await getBrowser();
   const ctx: BrowserContext = await browser.newContext({
@@ -169,18 +237,14 @@ export async function detectVideoManifest(
     permissions: [],
     extraHTTPHeaders: {
       'accept-language': `${locale},pt;q=0.9,en;q=0.8`,
-      // Helps with cloakers that reject empty Sec-CH-UA.
       'sec-ch-ua': '"Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"',
       'sec-ch-ua-mobile': '?0',
       'sec-ch-ua-platform': '"macOS"',
-      // Pretend we came from Facebook so the cloaker thinks we're paid traffic.
-      ...(opts.spoofAdClick !== false ? { referer: 'https://l.facebook.com/' } : {}),
+      ...(trafficMode === 'paid' ? { referer: 'https://l.facebook.com/' } : {}),
     },
     ignoreHTTPSErrors: true,
   });
 
-  // Final layer of fingerprint patching that playwright-extra-plugin-stealth
-  // doesn't already cover — most cloakers check these first.
   await ctx.addInitScript(() => {
     Object.defineProperty(navigator, 'webdriver', { get: () => false });
     Object.defineProperty(navigator, 'languages', { get: () => ['pt-BR', 'pt', 'en'] });
@@ -193,12 +257,25 @@ export async function detectVideoManifest(
     });
     Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 8 });
     Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
-    // window.chrome shim
     (window as unknown as { chrome: object }).chrome = { runtime: {} };
   });
 
-  const observed: Array<{ url: string; kind: VslManifestKind }> = [];
+  const observed: ObservedMedia[] = [];
   const headersByUrl = new Map<string, Record<string, string>>();
+  const seenUrls = new Set<string>();
+
+  const recordMedia = (
+    u: string,
+    kind: ObservedMedia['kind'],
+    source: ObservedMedia['source'],
+    headers?: Record<string, string>,
+  ) => {
+    if (seenUrls.has(u)) return;
+    seenUrls.add(u);
+    observed.push({ url: u, kind, source });
+    if (headers) headersByUrl.set(u, headers);
+    log(`observed [${kind} via ${source}]: ${u.slice(0, 200)}`);
+  };
 
   const page = await ctx.newPage();
   page.setDefaultTimeout(timeoutMs);
@@ -206,70 +283,212 @@ export async function detectVideoManifest(
 
   const onRequest = (req: Request) => {
     const u = req.url();
-    const k = classifyMedia(u);
+    const k = classifyByExtension(u);
     if (!k) return;
-    if (!observed.some((o) => o.url === u)) {
-      observed.push({ url: u, kind: k });
-      headersByUrl.set(u, req.headers());
-      log(`observed [${k}]: ${u}`);
-    }
+    recordMedia(u, k, 'extension', req.headers());
   };
-  const onResponse = (resp: Response) => {
+
+  const onResponse = async (resp: Response) => {
     const u = resp.url();
-    if (observed.some((o) => o.url === u)) return;
-    const k = classifyByContentType(resp.headers()['content-type']);
-    if (!k) return;
-    observed.push({ url: u, kind: k });
-    headersByUrl.set(u, resp.request().headers());
-    log(`observed via content-type [${k}]: ${u}`);
+    if (seenUrls.has(u)) return;
+
+    // 1) Content-type header
+    const ct = resp.headers()['content-type'];
+    const ctKind = classifyByContentType(ct);
+    if (ctKind) {
+      recordMedia(u, ctKind, 'content-type', resp.request().headers());
+      return;
+    }
+
+    // 2) Body sniff — only for small text-like responses to avoid pulling
+    // multi-MB payloads. Manifests are tiny (<1MB) and text/plain.
+    const len = Number.parseInt(resp.headers()['content-length'] ?? '', 10);
+    if (Number.isFinite(len) && len > 1024 * 1024) return; // skip > 1MB
+    if (ct && !ct.includes('text') && !ct.includes('application/octet-stream') && !ct.includes('json') && !ct.includes('xml')) {
+      return; // only sniff plausibly-text bodies
+    }
+    try {
+      const buf = await resp.body();
+      if (buf.length > 1024 * 1024) return;
+      const sniffed = classifyByBody(buf.toString('utf8'));
+      if (sniffed) {
+        recordMedia(u, sniffed, 'body-sniff', resp.request().headers());
+      }
+    } catch {
+      // body() can fail for redirects / aborted responses — ignore
+    }
   };
 
   page.on('request', onRequest);
-  page.on('response', onResponse);
+  page.on('response', (r) => {
+    void onResponse(r);
+  });
 
   let finalPageUrl = url;
   try {
     log(`navigating to ${url}`);
-    const nav = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
+    const nav = await page.goto(url, { waitUntil: 'load', timeout: timeoutMs });
     finalPageUrl = page.url();
     log(`landed on ${finalPageUrl} (status=${nav?.status() ?? 'n/a'})`);
 
-    // Quick check: did we already get a manifest before we even interacted?
-    const earlyHit = pickBest(observed);
-    if (!earlyHit) {
+    // Wait briefly for iframes to attach + start loading
+    await page.waitForTimeout(2_000);
+
+    if (!pickBest(observed)) {
       await humanize(page, log);
       await attemptVideoStart(page, log);
-      // Wait up to 25s after interaction for the manifest request to fire.
-      const deadline = Date.now() + 25_000;
+
+      // Wait up to 40s for a manifest. Many VSL players have intentional
+      // delays (analytics, "wait for first paint", etc.).
+      const deadline = Date.now() + 40_000;
       while (Date.now() < deadline) {
         if (pickBest(observed)) break;
         await page.waitForTimeout(500);
       }
+
+      // Last attempt: any new iframes that appeared after the click?
+      if (!pickBest(observed)) {
+        log('no manifest yet — re-clicking newly-attached frames');
+        await attemptVideoStart(page, log);
+        const deadline2 = Date.now() + 15_000;
+        while (Date.now() < deadline2) {
+          if (pickBest(observed)) break;
+          await page.waitForTimeout(500);
+        }
+      }
     }
 
-    // Last shot: wait for `networkidle` briefly so any deferred manifest gets
-    // a chance to load. Bounded so we don't hang on infinite analytics polls.
     if (!pickBest(observed)) {
       await page.waitForLoadState('networkidle', { timeout: 8_000 }).catch(() => undefined);
     }
   } finally {
     page.off('request', onRequest);
-    page.off('response', onResponse);
     await ctx.close().catch(() => undefined);
   }
 
   const best = pickBest(observed);
-  if (!best) {
-    throw Object.assign(new Error('No video manifest detected on the page.'), {
+  if (!best || (best.kind !== 'hls' && best.kind !== 'dash' && best.kind !== 'mp4')) {
+    // Build a diagnostic message that includes what we saw — even segments
+    // are useful clues for the user (they tell us a player did load).
+    const sample = observed.slice(0, 8).map((o) => `[${o.kind}] ${o.url.slice(0, 150)}`);
+    const detail =
+      sample.length > 0
+        ? `Observamos ${observed.length} URLs de mídia mas nenhum manifest. Amostra:\n${sample.join('\n')}`
+        : 'Nenhuma URL de mídia foi observada — o player pode não ter carregado.';
+    throw Object.assign(new Error(`No video manifest detected on the page. ${detail}`), {
       code: 'manifest_not_found',
+      observed,
     });
   }
 
   return {
     manifestUrl: best.url,
-    manifestKind: best.kind,
+    manifestKind: best.kind as VslManifestKind,
     finalPageUrl,
     headers: headersByUrl.get(best.url) ?? {},
     observed,
+  };
+}
+
+// ----------------------------------------------------------------------------
+// Cloaker-aware detection: run two probes (paid + organic) in parallel and
+// compare the manifests. If they differ, there's a cloaker (typical VSL
+// "white" + "black" setup where paid traffic gets the real video and direct
+// visits get a sanitized version).
+// ----------------------------------------------------------------------------
+
+export interface DetectCloakerResult {
+  /** True when paid and organic visits resolve to *different* manifests. */
+  cloakerDetected: boolean;
+  /** The paid-traffic manifest (i.e., what real ad clicks see). May be missing if that probe failed. */
+  black?: DetectResult;
+  /** The organic/clean manifest (i.e., what FB reviewers / bots see). May be missing if that probe failed. */
+  white?: DetectResult;
+  /** When both probes succeed but resolve to the same manifest, we expose it here. */
+  shared?: DetectResult;
+  /** First non-null error, for diagnostic purposes. */
+  errors: { paid?: string; organic?: string };
+}
+
+function manifestKey(r: DetectResult): string {
+  // Compare by URL without query (token/timestamps differ between fetches).
+  try {
+    const u = new URL(r.manifestUrl);
+    return `${u.origin}${u.pathname}`;
+  } catch {
+    return r.manifestUrl;
+  }
+}
+
+/**
+ * Detect both the paid-traffic ("black") and organic ("white") versions of
+ * a VSL. Both probes run in parallel — total wall time is bounded by the
+ * slowest one (usually ~30-60s on a healthy page).
+ */
+export async function detectBothManifests(
+  rawUrl: string,
+  opts: DetectOptions = {},
+): Promise<DetectCloakerResult> {
+  const log = opts.onLog ?? (() => undefined);
+  log('cloaker probe: launching paid + organic detections');
+
+  const [paidR, organicR] = await Promise.allSettled([
+    detectVideoManifest(rawUrl, { ...opts, trafficMode: 'paid' }),
+    detectVideoManifest(rawUrl, { ...opts, trafficMode: 'organic' }),
+  ]);
+
+  const black = paidR.status === 'fulfilled' ? paidR.value : undefined;
+  const white = organicR.status === 'fulfilled' ? organicR.value : undefined;
+  const errors: DetectCloakerResult['errors'] = {};
+  if (paidR.status === 'rejected') {
+    errors.paid =
+      paidR.reason instanceof Error ? paidR.reason.message : String(paidR.reason);
+  }
+  if (organicR.status === 'rejected') {
+    errors.organic =
+      organicR.reason instanceof Error ? organicR.reason.message : String(organicR.reason);
+  }
+
+  // Both probes failed — bubble up the paid error (most useful one).
+  if (!black && !white) {
+    throw Object.assign(new Error(errors.paid ?? errors.organic ?? 'Both detections failed.'), {
+      code: 'manifest_not_found',
+      errors,
+    });
+  }
+
+  // Only one side resolved → we can't tell if there's a cloaker. Treat as
+  // "no cloaker" with the side we got.
+  if (!black || !white) {
+    const only = black ?? white!;
+    log(`cloaker probe: only one side resolved (${black ? 'paid' : 'organic'})`);
+    return {
+      cloakerDetected: false,
+      shared: only,
+      ...(black ? { black } : {}),
+      ...(white ? { white } : {}),
+      errors,
+    };
+  }
+
+  const sameManifest = manifestKey(black) === manifestKey(white);
+  if (sameManifest) {
+    log(`cloaker probe: same manifest both sides — no cloaker`);
+    return {
+      cloakerDetected: false,
+      shared: black,
+      black,
+      white,
+      errors,
+    };
+  }
+  log(`cloaker probe: different manifests — CLOAKER DETECTED`);
+  log(`  black: ${black.manifestUrl}`);
+  log(`  white: ${white.manifestUrl}`);
+  return {
+    cloakerDetected: true,
+    black,
+    white,
+    errors,
   };
 }

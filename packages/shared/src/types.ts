@@ -149,12 +149,20 @@ export interface VslJob {
   url: string;
   status: VslJobStatus;
   progress: number;
+  /** Black variant (paid traffic). When no cloaker, this is the only manifest. */
   manifestUrl?: string;
   manifestKind?: VslManifestKind;
   bytes?: number;
   durationSec?: number;
   filename?: string;
   storageKey?: string;
+  /** True if the page returned a different manifest for organic vs paid traffic. */
+  cloakerDetected?: boolean;
+  /** White variant (organic traffic). Only present when cloakerDetected. */
+  whiteManifestUrl?: string;
+  whiteFilename?: string;
+  whiteStorageKey?: string;
+  whiteBytes?: number;
   expiresAt?: string;
   errorCode?: string;
   errorMessage?: string;
@@ -164,4 +172,10 @@ export interface VslJob {
 
 export interface CreateVslJobRequest {
   url: string;
+}
+
+export interface VslObservedMedia {
+  url: string;
+  kind: 'hls' | 'dash' | 'mp4' | 'segment' | 'unknown';
+  source: 'extension' | 'content-type' | 'body-sniff' | 'segment-inference';
 }

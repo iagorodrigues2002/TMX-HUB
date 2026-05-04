@@ -64,6 +64,10 @@ export class VslJobStore {
     return `vsl/${id}/output.mp4`;
   }
 
+  whiteVideoKey(id: string): string {
+    return `vsl/${id}/white.mp4`;
+  }
+
   private key(id: string): string {
     return `${VSL_HASH_PREFIX}${id}`;
   }
@@ -89,6 +93,11 @@ export class VslJobStore {
     if (meta.durationSec !== undefined) out.durationSec = String(meta.durationSec);
     if (meta.filename) out.filename = meta.filename;
     if (meta.storageKey) out.storageKey = meta.storageKey;
+    if (meta.cloakerDetected !== undefined) out.cloakerDetected = meta.cloakerDetected ? '1' : '0';
+    if (meta.whiteManifestUrl) out.whiteManifestUrl = meta.whiteManifestUrl;
+    if (meta.whiteFilename) out.whiteFilename = meta.whiteFilename;
+    if (meta.whiteStorageKey) out.whiteStorageKey = meta.whiteStorageKey;
+    if (meta.whiteBytes !== undefined) out.whiteBytes = String(meta.whiteBytes);
     if (meta.expiresAt) out.expiresAt = meta.expiresAt;
     if (meta.errorCode) out.errorCode = meta.errorCode;
     if (meta.errorMessage) out.errorMessage = meta.errorMessage;
@@ -110,6 +119,11 @@ export class VslJobStore {
     if (data.durationSec) meta.durationSec = Number.parseFloat(data.durationSec);
     if (data.filename) meta.filename = data.filename;
     if (data.storageKey) meta.storageKey = data.storageKey;
+    if (data.cloakerDetected !== undefined) meta.cloakerDetected = data.cloakerDetected === '1';
+    if (data.whiteManifestUrl) meta.whiteManifestUrl = data.whiteManifestUrl;
+    if (data.whiteFilename) meta.whiteFilename = data.whiteFilename;
+    if (data.whiteStorageKey) meta.whiteStorageKey = data.whiteStorageKey;
+    if (data.whiteBytes) meta.whiteBytes = Number.parseInt(data.whiteBytes, 10);
     if (data.expiresAt) meta.expiresAt = data.expiresAt;
     if (data.errorCode) meta.errorCode = data.errorCode;
     if (data.errorMessage) meta.errorMessage = data.errorMessage;

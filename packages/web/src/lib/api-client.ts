@@ -322,6 +322,12 @@ interface VslJobWire {
   duration_sec?: number;
   filename?: string;
   storage_key?: string;
+  cloaker_detected?: boolean;
+  white_manifest_url?: string;
+  white_filename?: string;
+  white_storage_key?: string;
+  white_bytes?: number;
+  white_download_url?: string;
   expires_at?: string;
   download_url?: string;
   error?: { code: string; message: string };
@@ -331,6 +337,7 @@ interface VslJobWire {
 
 export interface VslJobView extends VslJob {
   downloadUrl?: string;
+  whiteDownloadUrl?: string;
   error?: { code: string; message: string };
 }
 
@@ -346,10 +353,16 @@ function fromVslJobWire(w: VslJobWire): VslJobView {
     durationSec: w.duration_sec,
     filename: w.filename,
     storageKey: w.storage_key,
+    cloakerDetected: w.cloaker_detected,
+    whiteManifestUrl: w.white_manifest_url,
+    whiteFilename: w.white_filename,
+    whiteStorageKey: w.white_storage_key,
+    whiteBytes: w.white_bytes,
     expiresAt: w.expires_at,
     createdAt: w.created_at,
     updatedAt: w.updated_at,
     downloadUrl: w.download_url,
+    whiteDownloadUrl: w.white_download_url,
     error: w.error,
   };
 }

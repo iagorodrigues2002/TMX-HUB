@@ -2,7 +2,16 @@
 
 import Link from 'next/link';
 import { use } from 'react';
-import { ArrowLeft, CheckCircle2, Download, Loader2, Video, XCircle } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CheckCircle2,
+  Download,
+  Loader2,
+  ShieldCheck,
+  Video,
+  XCircle,
+} from 'lucide-react';
 import { HubShell } from '@/components/hub/hub-shell';
 import { Button } from '@/components/ui/button';
 import { useVslJob } from '@/hooks/use-vsl-job';
@@ -35,6 +44,73 @@ function formatDuration(s?: number): string {
   return `${m}m ${String(ss).padStart(2, '0')}s`;
 }
 
+interface VariantCardProps {
+  label: 'BLACK' | 'WHITE';
+  description: string;
+  manifestUrl?: string;
+  manifestKind?: string;
+  bytes?: number;
+  filename?: string;
+  downloadUrl?: string;
+  /** Whether to show the inline video preview (only for the variant that has it). */
+  showPreview?: boolean;
+}
+
+function VariantCard(props: VariantCardProps) {
+  const isBlack = props.label === 'BLACK';
+  const accent = isBlack
+    ? 'border-cyan-300/40 bg-cyan-300/[0.04]'
+    : 'border-emerald-300/30 bg-emerald-300/[0.03]';
+  const labelColor = isBlack ? 'text-cyan-300' : 'text-emerald-300';
+
+  return (
+    <div className={`rounded-md border ${accent} p-4 space-y-3`}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span
+            className={`rounded-sm border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.2em] ${labelColor} ${
+              isBlack ? 'border-cyan-300/50' : 'border-emerald-300/50'
+            }`}
+          >
+            {props.label}
+          </span>
+          <span className="text-[12px] text-white/60">{props.description}</span>
+        </div>
+        <span className="font-mono text-[10px] uppercase text-white/40">
+          {props.manifestKind ?? '—'}
+        </span>
+      </div>
+
+      {props.manifestUrl && (
+        <p className="break-all font-mono text-[11px] text-white/55">{props.manifestUrl}</p>
+      )}
+
+      {props.showPreview && props.downloadUrl && (
+        <video
+          controls
+          preload="metadata"
+          className="w-full rounded border border-white/[0.08] bg-black"
+          src={props.downloadUrl}
+        >
+          <track kind="captions" />
+        </video>
+      )}
+
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[11px] text-white/40">{formatBytes(props.bytes)}</span>
+        {props.downloadUrl && (
+          <Button asChild size="sm" variant={isBlack ? 'default' : 'outline'}>
+            <a href={props.downloadUrl} download={props.filename}>
+              <Download className="h-3.5 w-3.5" />
+              Baixar
+            </a>
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function VslJobPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const job = useVslJob(id);
@@ -42,7 +118,7 @@ export default function VslJobPage({ params }: { params: Promise<{ id: string }>
 
   return (
     <HubShell breadcrumb={['TOOLS', 'VSL', `JOB ${id.slice(-6).toUpperCase()}`]}>
-      <div className="mx-auto max-w-2xl">
+      <div className="mx-auto max-w-3xl">
         <div className="mb-6">
           <Button asChild variant="ghost" size="sm" className="-ml-2">
             <Link href="/tools/vsl" className="gap-1">
@@ -104,39 +180,97 @@ export default function VslJobPage({ params }: { params: Promise<{ id: string }>
             </div>
           )}
 
-          {/* Manifest detail */}
-          {data?.manifestUrl && (
+          {/* Cloaker banner — visible when ready */}
+          {data?.status === 'ready' && data.cloakerDetected !== undefined && (
+            <div
+              className={`flex items-start gap-3 rounded-md border p-4 ${
+                data.cloakerDetected
+                  ? 'border-amber-400/40 bg-amber-400/[0.05]'
+                  : 'border-emerald-400/30 bg-emerald-400/[0.04]'
+              }`}
+            >
+              {data.cloakerDetected ? (
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />
+              ) : (
+                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />
+              )}
+              <div className="flex-1">
+                <p
+                  className={`text-[13px] font-semibold ${
+                    data.cloakerDetected ? 'text-amber-200' : 'text-emerald-200'
+                  }`}
+                >
+                  {data.cloakerDetected
+                    ? 'Cloaker DETECTADO — duas versões diferentes'
+                    : 'Sem cloaker — versão única'}
+                </p>
+                <p className="mt-1 text-[12px] text-white/60">
+                  {data.cloakerDetected
+                    ? 'A página retorna manifests diferentes para tráfego pago (BLACK) e tráfego direto (WHITE). Baixamos as duas para você comparar.'
+                    : 'A mesma versão é servida tanto para tráfego pago quanto para visitas diretas — não há cloaker ativo.'}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Stats — always shown when ready */}
+          {data?.status === 'ready' && (
+            <dl className="grid grid-cols-2 gap-4 text-[13px]">
+              <div>
+                <dt className="hud-label">Duração</dt>
+                <dd className="mt-1 font-mono text-white/80">{formatDuration(data.durationSec)}</dd>
+              </div>
+              <div>
+                <dt className="hud-label">Tipo</dt>
+                <dd className="mt-1 font-mono uppercase text-white/80">
+                  {data.manifestKind ?? '—'}
+                </dd>
+              </div>
+            </dl>
+          )}
+
+          {/* Variants — black + white when cloaker, single when not */}
+          {data?.status === 'ready' && (
+            <div className="space-y-4">
+              <VariantCard
+                label="BLACK"
+                description={
+                  data.cloakerDetected
+                    ? 'Versão real, vista por tráfego pago (fbclid, utm_*)'
+                    : 'Único manifest detectado'
+                }
+                manifestUrl={data.manifestUrl}
+                manifestKind={data.manifestKind}
+                bytes={data.bytes}
+                filename={data.filename}
+                downloadUrl={data.downloadUrl}
+                showPreview
+              />
+              {data.cloakerDetected && data.whiteManifestUrl && (
+                <VariantCard
+                  label="WHITE"
+                  description="Versão limpa, vista por visitas orgânicas / FB reviewers"
+                  manifestUrl={data.whiteManifestUrl}
+                  manifestKind={data.manifestKind}
+                  bytes={data.whiteBytes}
+                  filename={data.whiteFilename}
+                  downloadUrl={data.whiteDownloadUrl}
+                  showPreview
+                />
+              )}
+            </div>
+          )}
+
+          {/* In-progress manifest hint */}
+          {data && data.status !== 'ready' && data.status !== 'failed' && data.manifestUrl && (
             <div className="rounded-md border border-white/[0.06] bg-black/20 p-4">
               <p className="hud-label mb-2">Manifest detectado</p>
               <p className="break-all font-mono text-[12px] text-white/70">{data.manifestUrl}</p>
               <p className="mt-2 text-[11px] uppercase tracking-[0.18em] text-white/40">
                 Tipo: {data.manifestKind ?? '—'}
+                {data.cloakerDetected && ' · cloaker detectado, baixando ambas versões'}
               </p>
             </div>
-          )}
-
-          {/* Stats */}
-          {data && (data.bytes || data.durationSec) && (
-            <dl className="grid grid-cols-2 gap-4 text-[13px]">
-              <div>
-                <dt className="hud-label">Tamanho</dt>
-                <dd className="mt-1 font-mono text-white/80">{formatBytes(data.bytes)}</dd>
-              </div>
-              <div>
-                <dt className="hud-label">Duração</dt>
-                <dd className="mt-1 font-mono text-white/80">{formatDuration(data.durationSec)}</dd>
-              </div>
-            </dl>
-          )}
-
-          {/* Download button */}
-          {data?.status === 'ready' && data.downloadUrl && (
-            <Button asChild size="lg" className="w-full">
-              <a href={data.downloadUrl} download={data.filename}>
-                <Download className="h-4 w-4" />
-                Baixar {data.filename ?? 'video.mp4'}
-              </a>
-            </Button>
           )}
 
           {/* Error */}
@@ -146,7 +280,7 @@ export default function VslJobPage({ params }: { params: Promise<{ id: string }>
               <p className="mt-1 text-red-200/80">{data.error.message}</p>
               <p className="mt-3 text-[11px] uppercase tracking-[0.18em] text-red-300/60">
                 {data.error.code === 'manifest_not_found'
-                  ? 'Não conseguimos encontrar o vídeo. O cloaker pode ter bloqueado, ou o player carrega o vídeo de forma incomum. Tente novamente — ou abra o /debug pra checar a API.'
+                  ? 'O player não carregou nenhum vídeo. Tente colar a URL completa, com os parâmetros do anúncio (fbclid, utm_*, gclid). Muitos players de VSL só servem o vídeo pra tráfego que parece pago.'
                   : data.error.code === 'download_timeout'
                     ? 'O download passou do tempo limite (10min). Vídeos muito longos ou conexões instáveis podem causar isso.'
                     : 'Veja o erro acima. Se persistir, verifique os logs do Railway.'}

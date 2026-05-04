@@ -72,7 +72,7 @@ export function Sidebar() {
       <div className="mt-auto pt-4">
         <div className="rounded-md border border-white/[0.06] bg-white/[0.02] p-3">
           <p className="hud-label">Build</p>
-          <p className="mt-1 font-mono text-[11px] text-white/55">v0.5.0</p>
+          <p className="mt-1 font-mono text-[11px] text-white/55">v0.6.0</p>
           <p className="mt-2 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-white/45">
             <span className="status-dot" aria-hidden /> ONLINE
           </p>

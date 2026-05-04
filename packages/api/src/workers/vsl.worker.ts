@@ -6,16 +6,24 @@ import { VSL_QUEUE_NAME, type VslJobData } from '../queues/index.js';
 import type { StorageService } from '../services/storage.js';
 import type { VslJobStore } from '../services/vsl-job-store.js';
 
+interface DetectResult {
+  manifestUrl: string;
+  manifestKind: 'hls' | 'dash' | 'mp4';
+  finalPageUrl: string;
+  headers: Record<string, string>;
+  observed: Array<{ url: string; kind: string; source: string }>;
+}
+
 interface CoreVslModule {
-  detectVideoManifest: (
+  detectBothManifests: (
     url: string,
     opts?: Record<string, unknown>,
   ) => Promise<{
-    manifestUrl: string;
-    manifestKind: 'hls' | 'dash' | 'mp4';
-    finalPageUrl: string;
-    headers: Record<string, string>;
-    observed: Array<{ url: string; kind: 'hls' | 'dash' | 'mp4' }>;
+    cloakerDetected: boolean;
+    black?: DetectResult;
+    white?: DetectResult;
+    shared?: DetectResult;
+    errors: { paid?: string; organic?: string };
   }>;
   downloadManifestToFile: (
     manifestUrl: string,
@@ -57,61 +65,122 @@ export function createVslWorker(args: {
       jobLog.info('starting vsl job');
 
       const core = await loadCore();
-      let downloadedPath: string | null = null;
+      const tempPaths: string[] = [];
 
       try {
         await jobStore.setStatus(jobId, 'analyzing', { progress: 5 });
 
-        const detection = await core.detectVideoManifest(url, {
+        // Run paid + organic probes in parallel to detect cloaker.
+        const probe = await core.detectBothManifests(url, {
           timeoutMs: 90_000,
           onLog: (msg: string) => jobLog.debug({ msg }, 'detect'),
         });
 
+        const black = probe.black ?? probe.shared;
+        const white = probe.white;
+        if (!black) {
+          throw Object.assign(new Error('No manifest detected for paid traffic.'), {
+            code: 'manifest_not_found',
+          });
+        }
+
         await jobStore.setStatus(jobId, 'extracting', {
           progress: 25,
-          manifestUrl: detection.manifestUrl,
-          manifestKind: detection.manifestKind,
+          manifestUrl: black.manifestUrl,
+          manifestKind: black.manifestKind,
+          cloakerDetected: probe.cloakerDetected,
+          ...(probe.cloakerDetected && white
+            ? { whiteManifestUrl: white.manifestUrl }
+            : {}),
         });
         jobLog.info(
-          { manifestKind: detection.manifestKind, manifestUrl: detection.manifestUrl },
-          'manifest detected',
+          {
+            manifestKind: black.manifestKind,
+            blackManifest: black.manifestUrl,
+            whiteManifest: white?.manifestUrl,
+            cloakerDetected: probe.cloakerDetected,
+          },
+          'manifest(s) detected',
         );
 
         await jobStore.setStatus(jobId, 'downloading', { progress: 40 });
 
-        const download = await core.downloadManifestToFile(
-          detection.manifestUrl,
-          detection.manifestKind,
-          {
-            timeoutMs: 10 * 60 * 1000,
-            maxBytes: 2 * 1024 * 1024 * 1024,
-            headers: detection.headers,
-            onLog: (line: string) => jobLog.debug({ line }, 'ffmpeg'),
-          },
+        // Download black (always) and white (only if cloaker detected) in parallel.
+        const downloadJobs: Array<Promise<{
+          variant: 'black' | 'white';
+          filePath: string;
+          bytes: number;
+          durationSec?: number;
+        }>> = [];
+
+        downloadJobs.push(
+          core
+            .downloadManifestToFile(black.manifestUrl, black.manifestKind, {
+              timeoutMs: 10 * 60 * 1000,
+              maxBytes: 2 * 1024 * 1024 * 1024,
+              headers: black.headers,
+              onLog: (line: string) => jobLog.debug({ line, variant: 'black' }, 'ffmpeg'),
+            })
+            .then((r) => ({ variant: 'black' as const, ...r })),
         );
-        downloadedPath = download.filePath;
+
+        if (probe.cloakerDetected && white) {
+          downloadJobs.push(
+            core
+              .downloadManifestToFile(white.manifestUrl, white.manifestKind, {
+                timeoutMs: 10 * 60 * 1000,
+                maxBytes: 2 * 1024 * 1024 * 1024,
+                headers: white.headers,
+                onLog: (line: string) => jobLog.debug({ line, variant: 'white' }, 'ffmpeg'),
+              })
+              .then((r) => ({ variant: 'white' as const, ...r })),
+          );
+        }
+
+        const results = await Promise.all(downloadJobs);
+        for (const r of results) tempPaths.push(r.filePath);
+
+        const blackResult = results.find((r) => r.variant === 'black')!;
+        const whiteResult = results.find((r) => r.variant === 'white');
 
         await jobStore.setStatus(jobId, 'uploading', {
           progress: 85,
-          bytes: download.bytes,
-          durationSec: download.durationSec,
+          bytes: blackResult.bytes,
+          durationSec: blackResult.durationSec,
+          ...(whiteResult ? { whiteBytes: whiteResult.bytes } : {}),
         });
 
-        const filename = `${slugFromUrl(url)}.mp4`;
-        const storageKey = jobStore.videoKey(jobId);
+        const slug = slugFromUrl(url);
+        const blackFilename = `${slug}.mp4`;
+        const blackKey = jobStore.videoKey(jobId);
+        const blackBody = await fs.readFile(blackResult.filePath);
+        await storage.put(blackKey, blackBody, { contentType: 'video/mp4' });
 
-        // Read once into memory and upload. Files up to 2GB; for true scale
-        // we'd switch to S3 multipart streaming, but this keeps the MVP simple.
-        const body = await fs.readFile(downloadedPath);
-        await storage.put(storageKey, body, { contentType: 'video/mp4' });
-
-        await jobStore.setStatus(jobId, 'ready', {
+        const patch: Parameters<typeof jobStore.setStatus>[2] = {
           progress: 100,
-          filename,
-          storageKey,
+          filename: blackFilename,
+          storageKey: blackKey,
           expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        });
-        jobLog.info({ bytes: download.bytes, durationSec: download.durationSec }, 'vsl ready');
+        };
+
+        if (whiteResult) {
+          const whiteFilename = `${slug}-white.mp4`;
+          const whiteKey = jobStore.whiteVideoKey(jobId);
+          const whiteBody = await fs.readFile(whiteResult.filePath);
+          await storage.put(whiteKey, whiteBody, { contentType: 'video/mp4' });
+          patch.whiteFilename = whiteFilename;
+          patch.whiteStorageKey = whiteKey;
+        }
+
+        await jobStore.setStatus(jobId, 'ready', patch);
+        jobLog.info(
+          {
+            blackBytes: blackResult.bytes,
+            whiteBytes: whiteResult?.bytes,
+            cloakerDetected: probe.cloakerDetected,
+          },
+          'vsl ready',
+        );
       } catch (err) {
         const code = (err as { code?: string })?.code ?? 'internal_error';
         const message = err instanceof Error ? err.message : String(err);
@@ -123,19 +192,18 @@ export function createVslWorker(args: {
         });
         throw err;
       } finally {
-        if (downloadedPath) {
-          await fs.unlink(downloadedPath).catch(() => undefined);
+        for (const p of tempPaths) {
+          await fs.unlink(p).catch(() => undefined);
         }
       }
     },
     {
       connection,
       concurrency: 1,
-      lockDuration: 15 * 60 * 1000, // bigger than ffmpeg timeout
+      lockDuration: 20 * 60 * 1000,
     },
   );
 
   worker.on('error', (err) => log.error({ err }, 'vsl worker error'));
   return worker;
 }
-

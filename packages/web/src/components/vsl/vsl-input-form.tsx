@@ -65,10 +65,18 @@ export function VslInputForm() {
             {urlError}
           </p>
         )}
-        <p className="text-[12px] text-white/40">
-          Funciona com VTURB, Panda Video, Vimeo, Wistia, JW Player, Hotmart Player, vidalytics e
-          qualquer player baseado em HLS/DASH/MP4.
-        </p>
+        <div className="space-y-1 text-[12px] text-white/40">
+          <p>
+            Funciona com VTURB, Panda Video, Vimeo, Wistia, JW Player, Hotmart Player, vidalytics e
+            qualquer player baseado em HLS/DASH/MP4.
+          </p>
+          <p className="text-cyan-300/70">
+            <strong>Dica:</strong> alguns players só carregam o vídeo quando vêem parâmetros de
+            tráfego pago. Cole a URL completa, com <code className="text-white/70">?fbclid=…</code>,{' '}
+            <code className="text-white/70">?utm_*</code> ou outros parâmetros que você usaria no
+            anúncio.
+          </p>
+        </div>
       </div>
 
       <Button type="submit" disabled={submitting} className="w-full" size="lg">

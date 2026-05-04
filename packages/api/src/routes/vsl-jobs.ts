@@ -24,13 +24,27 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!isValidUlid(id)) throw new BadRequestError('Invalid job id format.');
     const meta = await app.vslJobStore.get(id);
 
-    // Surface a presigned download URL only when ready.
+    // Surface presigned download URLs only when ready.
     let downloadUrl: string | undefined;
-    if (meta.status === 'ready' && meta.storageKey) {
-      downloadUrl = await app.storage.presignGet(meta.storageKey, 60 * 60, meta.filename);
+    let whiteDownloadUrl: string | undefined;
+    if (meta.status === 'ready') {
+      if (meta.storageKey) {
+        downloadUrl = await app.storage.presignGet(meta.storageKey, 60 * 60, meta.filename);
+      }
+      if (meta.whiteStorageKey) {
+        whiteDownloadUrl = await app.storage.presignGet(
+          meta.whiteStorageKey,
+          60 * 60,
+          meta.whiteFilename,
+        );
+      }
     }
 
-    return reply.send({ ...toWire(meta, app.storage), download_url: downloadUrl });
+    return reply.send({
+      ...toWire(meta, app.storage),
+      download_url: downloadUrl,
+      white_download_url: whiteDownloadUrl,
+    });
   });
 };
 
@@ -50,6 +64,11 @@ function toWire(meta: VslJobMetadata, _storage: StorageService): Record<string, 
     filename: meta.filename,
     storage_key: meta.storageKey,
     expires_at: meta.expiresAt,
+    cloaker_detected: meta.cloakerDetected,
+    white_manifest_url: meta.whiteManifestUrl,
+    white_filename: meta.whiteFilename,
+    white_storage_key: meta.whiteStorageKey,
+    white_bytes: meta.whiteBytes,
     error: meta.errorCode
       ? { code: meta.errorCode, message: meta.errorMessage ?? '' }
       : undefined,
