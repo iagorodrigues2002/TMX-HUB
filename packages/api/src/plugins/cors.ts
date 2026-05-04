@@ -3,13 +3,9 @@ import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   await app.register(cors, {
-    // Echo the request origin (works for any client). We log every preflight
-    // so we can spot a misconfigured origin in Railway logs immediately.
-    origin: (origin, cb) => {
-      app.log.info({ origin }, 'cors origin check');
-      // Allow same-origin / curl (no Origin header) and any browser origin.
-      cb(null, true);
-    },
+    // Echo any origin. We accept all clients (browser CORS already enforces
+    // the host model on the user side; the API itself is authenticated separately).
+    origin: true,
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
@@ -30,5 +26,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     ],
   });
 };
+
+// Make CORS apply globally (encapsulation off) so headers reach every route,
+// including those declared inside nested route prefixes like /v1/...
+(plugin as unknown as Record<symbol, boolean>)[Symbol.for('skip-override')] = true;
 
 export default plugin;
