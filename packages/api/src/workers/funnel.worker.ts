@@ -185,9 +185,22 @@ export function createFunnelWorker(args: {
           // Discover next steps if we have HTML and aren't at max depth.
           if (html && next.depth < meta.maxDepth) {
             const candidates = core.discoverNextSteps(html, pageEntry.finalUrl ?? norm);
-            // Keep top-scored candidates only; cap at 5 per page so a noisy
-            // landing page can't fill the whole budget.
-            const top = candidates.filter((c) => c.score >= 0.5).slice(0, 5);
+            jobLog.info(
+              {
+                page: norm,
+                candidates: candidates.length,
+                scores: candidates.slice(0, 10).map((c) => ({
+                  s: c.score,
+                  src: c.source,
+                  url: c.url,
+                })),
+              },
+              'discovered candidates',
+            );
+            // Looser threshold (0.4) + bigger fan-out (10/page). Trades a
+            // few false positives for better recall — a back-redirect or
+            // low-CTA-text "ENTRAR" button needs to make it through.
+            const top = candidates.filter((c) => c.score >= 0.4).slice(0, 10);
             for (const c of top) {
               const cnorm = c.url.replace(/#.*$/, '');
               if (visited.has(cnorm)) continue;

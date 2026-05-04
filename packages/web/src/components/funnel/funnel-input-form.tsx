@@ -13,7 +13,7 @@ export function FunnelInputForm() {
   const router = useRouter();
   const [url, setUrl] = useState('');
   const [maxDepth, setMaxDepth] = useState(4);
-  const [maxPages, setMaxPages] = useState(12);
+  const [maxPages, setMaxPages] = useState(20);
   const [submitting, setSubmitting] = useState(false);
 
   const validate = (u: string) => {

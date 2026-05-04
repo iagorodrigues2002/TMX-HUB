@@ -138,6 +138,6 @@ export const CreateFunnelJobRequestSchema = z
   .object({
     url: z.string().url(),
     max_depth: z.number().int().min(1).max(8).default(4),
-    max_pages: z.number().int().min(1).max(30).default(12),
+    max_pages: z.number().int().min(1).max(30).default(20),
   })
   .strict();
