@@ -1,6 +1,6 @@
 {
   "name": "@page-cloner/api",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "type": "module",
   "main": "./dist/server.js",
@@ -27,6 +27,9 @@
     "ioredis": "^5.4.1",
     "js-yaml": "^4.1.0",
     "pino": "^9.5.0",
+    "playwright": "^1.49.0",
+    "playwright-extra": "^4.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
     "ulid": "^2.3.0",
     "zod": "^3.23.8"
   },

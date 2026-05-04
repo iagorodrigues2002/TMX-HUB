@@ -35,13 +35,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     // Browser check: confirm playwright + chromium executable is present.
     // This is the most common deploy-time failure for the render worker.
     try {
-      // Dynamic import so the API can boot even if playwright isn't installed.
-      // playwright is a peerDep of @page-cloner/core, not a direct dep of api.
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-expect-error - playwright resolved at runtime from core's deps.
-      const playwrightMod = (await import('playwright')) as {
-        chromium: { executablePath: () => string };
-      };
+      const playwrightMod = await import('playwright');
       const exePath = playwrightMod.chromium.executablePath();
       const fs = await import('node:fs');
       if (fs.existsSync(exePath)) {
