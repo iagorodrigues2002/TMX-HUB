@@ -1,4 +1,4 @@
-import { Layers, Sparkles, Video } from 'lucide-react';
+import { BarChart3, Layers, Video } from 'lucide-react';
 import { HubShell } from '@/components/hub/hub-shell';
 import { ToolCard } from '@/components/hub/tool-card';
 
@@ -31,12 +31,10 @@ export default function ToolsIndexPage() {
             badge="Beta"
           />
           <ToolCard
-            icon={<Sparkles className="h-6 w-6" />}
-            title="Próxima ferramenta"
-            description="Em desenvolvimento. Slot reservado para o próximo módulo do hub."
-            href="#"
-            badge="Em breve"
-            disabled
+            icon={<BarChart3 className="h-6 w-6" />}
+            title="Upsell Analyzer"
+            description="Calcula taxas de aceite, rejeite e não-vista de funis de upsell. Funciona com Hotmart, Kiwify, Eduzz, Monetizze, Braip, Ticto e mais."
+            href="/tools/upsell-analyzer"
           />
         </div>
       </section>
