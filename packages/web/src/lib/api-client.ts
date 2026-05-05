@@ -1087,6 +1087,7 @@ export interface ShieldJobView {
   output?: { filename: string; bytes: number; downloadUrl?: string };
   transcript?: string;
   transcriptStatus?: ShieldVerifyStatusView;
+  transcriptError?: string;
   error?: string;
   createdAt: string;
   updatedAt: string;
@@ -1103,6 +1104,7 @@ interface ShieldJobWire {
   output?: { filename: string; bytes: number; download_url?: string };
   transcript?: string;
   transcript_status?: ShieldVerifyStatusView;
+  transcript_error?: string;
   error?: string;
   created_at: string;
   updated_at: string;
@@ -1126,6 +1128,7 @@ function fromShieldJobWire(w: ShieldJobWire): ShieldJobView {
       : undefined,
     transcript: w.transcript,
     transcriptStatus: w.transcript_status,
+    transcriptError: w.transcript_error,
     error: w.error,
     createdAt: w.created_at,
     updatedAt: w.updated_at,

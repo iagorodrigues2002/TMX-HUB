@@ -116,16 +116,27 @@ async function verifyWithAssemblyAi(filePath: string): Promise<string> {
     },
     body: buf,
   });
-  if (!upRes.ok) throw new Error(`AssemblyAI upload failed: ${upRes.status}`);
+  if (!upRes.ok) {
+    const detail = await upRes.text().catch(() => '');
+    throw new Error(`AssemblyAI upload failed: HTTP ${upRes.status} ${detail.slice(0, 200)}`);
+  }
   const upJson = (await upRes.json()) as { upload_url: string };
 
-  // 2. Request transcription.
+  // 2. Request transcription. Use language_detection so PT/EN/ES all funcionam.
   const txRes = await fetch('https://api.assemblyai.com/v2/transcript', {
     method: 'POST',
     headers: { authorization: apiKey, 'content-type': 'application/json' },
-    body: JSON.stringify({ audio_url: upJson.upload_url, language_code: 'pt' }),
+    body: JSON.stringify({
+      audio_url: upJson.upload_url,
+      language_detection: true,
+    }),
   });
-  if (!txRes.ok) throw new Error(`AssemblyAI transcript request failed: ${txRes.status}`);
+  if (!txRes.ok) {
+    const detail = await txRes.text().catch(() => '');
+    throw new Error(
+      `AssemblyAI transcript request failed: HTTP ${txRes.status} ${detail.slice(0, 200)}`,
+    );
+  }
   const txJson = (await txRes.json()) as { id: string };
 
   // 3. Poll until done.
@@ -213,6 +224,7 @@ export function createShieldWorker(args: {
         // If verification was requested, attempt AssemblyAI now.
         let transcript: string | undefined;
         let transcriptStatus: 'done' | 'failed' | 'skipped' = 'skipped';
+        let transcriptError: string | undefined;
         if (meta.verifyTranscript) {
           await jobStore.setStatus(jobId, 'verifying', {
             outputStorageKey: outKey,
@@ -229,6 +241,7 @@ export function createShieldWorker(args: {
             } catch (err) {
               jobLog.error({ err }, 'AssemblyAI verification failed');
               transcriptStatus = 'failed';
+              transcriptError = err instanceof Error ? err.message : String(err);
             }
           }
         }
@@ -239,6 +252,7 @@ export function createShieldWorker(args: {
           outputBytes: outBuf.length,
           ...(transcript ? { transcript } : {}),
           ...(meta.verifyTranscript ? { transcriptStatus } : {}),
+          ...(transcriptError ? { transcriptError } : {}),
         });
 
         jobLog.info(

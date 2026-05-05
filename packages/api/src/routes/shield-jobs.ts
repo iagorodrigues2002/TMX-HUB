@@ -33,6 +33,7 @@ function jobToWire(j: ShieldJob, downloadUrl?: string): Record<string, unknown> 
         : undefined,
     transcript: j.transcript,
     transcript_status: j.transcriptStatus,
+    transcript_error: j.transcriptError,
     error: j.errorMessage,
     created_at: j.createdAt,
     updated_at: j.updatedAt,

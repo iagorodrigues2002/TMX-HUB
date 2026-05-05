@@ -425,6 +425,8 @@ export interface ShieldJob {
   /** Optional transcript from AssemblyAI verification. */
   transcript?: string;
   transcriptStatus?: ShieldVerifyStatus;
+  /** Error from AssemblyAI when transcriptStatus === 'failed'. */
+  transcriptError?: string;
   /** Free-form error text when status === 'failed'. */
   errorMessage?: string;
   createdAt: string;

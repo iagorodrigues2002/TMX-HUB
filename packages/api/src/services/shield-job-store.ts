@@ -126,6 +126,7 @@ export class ShieldJobStore {
     if (j.outputBytes !== undefined) out.outputBytes = String(j.outputBytes);
     if (j.transcript) out.transcript = j.transcript;
     if (j.transcriptStatus) out.transcriptStatus = j.transcriptStatus;
+    if (j.transcriptError) out.transcriptError = j.transcriptError;
     if (j.errorMessage) out.errorMessage = j.errorMessage;
     return out;
   }
@@ -152,6 +153,7 @@ export class ShieldJobStore {
       ...(d.transcriptStatus
         ? { transcriptStatus: d.transcriptStatus as ShieldVerifyStatus }
         : {}),
+      ...(d.transcriptError ? { transcriptError: d.transcriptError } : {}),
       ...(d.errorMessage ? { errorMessage: d.errorMessage } : {}),
       createdAt: d.createdAt ?? '',
       updatedAt: d.updatedAt ?? '',

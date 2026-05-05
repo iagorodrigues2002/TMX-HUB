@@ -365,9 +365,19 @@ function ShieldJobStatus({ jobId }: { jobId: string }) {
               {data.transcriptStatus}
             </span>
           </p>
-          {data.transcript && (
+          {data.transcriptStatus === 'failed' && data.transcriptError && (
+            <pre className="max-h-[160px] overflow-auto whitespace-pre-wrap rounded-md border border-rose-300/30 bg-rose-300/[0.06] p-3 text-[12px] text-rose-100/85">
+              {data.transcriptError}
+            </pre>
+          )}
+          {data.transcriptStatus === 'skipped' && (
+            <p className="text-[11px] text-white/45">
+              ASSEMBLYAI_API_KEY não está configurada no servidor — verificação ignorada.
+            </p>
+          )}
+          {data.transcript !== undefined && (
             <pre className="max-h-[260px] overflow-auto whitespace-pre-wrap rounded-md border border-white/[0.08] bg-black/30 p-3 text-[12px] text-white/75">
-              {data.transcript || '(transcript vazio — ótimo sinal)'}
+              {data.transcript || '(transcript vazio — ótimo sinal!)'}
             </pre>
           )}
         </div>
