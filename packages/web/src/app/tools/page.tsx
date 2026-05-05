@@ -4,6 +4,7 @@ import {
   GitCompare,
   Layers,
   Network,
+  Shuffle,
   Video,
   Webhook,
 } from 'lucide-react';
@@ -63,6 +64,13 @@ export default function ToolsIndexPage() {
             title="Funnel Full Clone"
             description="Descobre o funil inteiro a partir do front (segue CTAs, upsells, downsells, thanks) e empacota tudo num ZIP organizado por etapa."
             href="/tools/funnel-clone"
+            badge="Novo"
+          />
+          <ToolCard
+            icon={<Shuffle className="h-6 w-6" />}
+            title="Cloaker URL Generator"
+            description="Gera lotes de URLs com parâmetros aleatorizados (token, ref, hex, UUID, sorteio de lista) pra alimentar campanhas com cloaker. Exporta como .txt."
+            href="/tools/cloaker-urls"
             badge="Novo"
           />
           <ToolCard
