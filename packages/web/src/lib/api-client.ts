@@ -937,6 +937,230 @@ export const apiClient = {
     const wire = await request<BuildJobWire>(`/v1/clones/${id}/builds/${buildId}`, { signal });
     return fromBuildJobWire(wire);
   },
+
+  // ---- Niches (Video Shield) ----
+  async listNiches(): Promise<NicheView[]> {
+    const wire = await request<{ niches: NicheWire[] }>('/v1/niches');
+    return (wire.niches ?? []).map(fromNicheWire);
+  },
+  async createNiche(input: { name: string; description?: string }): Promise<NicheView> {
+    const wire = await request<NicheWire>('/v1/niches', { method: 'POST', body: input });
+    return fromNicheWire(wire);
+  },
+  async updateNiche(
+    id: string,
+    patch: { name?: string; description?: string },
+  ): Promise<NicheView> {
+    const wire = await request<NicheWire>(`/v1/niches/${id}`, { method: 'PATCH', body: patch });
+    return fromNicheWire(wire);
+  },
+  async deleteNiche(id: string): Promise<void> {
+    await request<void>(`/v1/niches/${id}`, { method: 'DELETE' });
+  },
+  async addNicheWhite(
+    id: string,
+    file: File,
+    label?: string,
+    onProgress?: (pct: number) => void,
+  ): Promise<NicheView> {
+    const fd = new FormData();
+    fd.append('file', file);
+    if (label) fd.append('label', label);
+    const wire = await uploadMultipart<NicheWire>(`/v1/niches/${id}/whites`, fd, onProgress);
+    return fromNicheWire(wire);
+  },
+  async deleteNicheWhite(nicheId: string, whiteId: string): Promise<NicheView> {
+    const wire = await request<NicheWire>(
+      `/v1/niches/${nicheId}/whites/${whiteId}`,
+      { method: 'DELETE' },
+    );
+    return fromNicheWire(wire);
+  },
+
+  // ---- Shield jobs ----
+  async createShieldJob(
+    args: {
+      file: File;
+      nicheId: string;
+      whiteVolumeDb?: number;
+      compression?: ShieldCompressionMode;
+      verifyTranscript?: boolean;
+    },
+    onProgress?: (pct: number) => void,
+  ): Promise<ShieldJobView> {
+    const fd = new FormData();
+    fd.append('file', args.file);
+    fd.append('niche_id', args.nicheId);
+    if (args.whiteVolumeDb !== undefined) fd.append('white_volume_db', String(args.whiteVolumeDb));
+    if (args.compression) fd.append('compression', args.compression);
+    if (args.verifyTranscript) fd.append('verify_transcript', '1');
+    const wire = await uploadMultipart<ShieldJobWire>('/v1/shield-jobs', fd, onProgress);
+    return fromShieldJobWire(wire);
+  },
+  async getShieldJob(id: string, signal?: AbortSignal): Promise<ShieldJobView> {
+    const wire = await request<ShieldJobWire>(`/v1/shield-jobs/${id}`, { signal });
+    return fromShieldJobWire(wire);
+  },
+  async deleteShieldJob(id: string): Promise<void> {
+    await request<void>(`/v1/shield-jobs/${id}`, { method: 'DELETE' });
+  },
 };
+
+// ---- Shield / Niche types ----
+
+export interface NicheWhiteView {
+  id: string;
+  filename: string;
+  bytes: number;
+  label?: string;
+  createdAt: string;
+}
+
+export interface NicheView {
+  id: string;
+  name: string;
+  description?: string;
+  whites: NicheWhiteView[];
+  createdAt: string;
+  updatedAt?: string;
+}
+
+interface NicheWhiteWire {
+  id: string;
+  filename: string;
+  bytes: number;
+  label?: string;
+  created_at: string;
+}
+
+interface NicheWire {
+  id: string;
+  name: string;
+  description?: string;
+  whites: NicheWhiteWire[];
+  created_at: string;
+  updated_at?: string;
+}
+
+function fromNicheWhiteWire(w: NicheWhiteWire): NicheWhiteView {
+  return {
+    id: w.id,
+    filename: w.filename,
+    bytes: w.bytes,
+    label: w.label,
+    createdAt: w.created_at,
+  };
+}
+
+function fromNicheWire(w: NicheWire): NicheView {
+  return {
+    id: w.id,
+    name: w.name,
+    description: w.description,
+    whites: (w.whites ?? []).map(fromNicheWhiteWire),
+    createdAt: w.created_at,
+    updatedAt: w.updated_at,
+  };
+}
+
+export type ShieldCompressionMode = 'none' | 'lossless' | 'balanced' | 'small';
+export type ShieldJobStatusView =
+  | 'queued'
+  | 'processing'
+  | 'verifying'
+  | 'ready'
+  | 'failed';
+export type ShieldVerifyStatusView = 'pending' | 'done' | 'failed' | 'skipped';
+
+export interface ShieldJobView {
+  id: string;
+  status: ShieldJobStatusView;
+  niche: { id: string; name: string };
+  white: { id: string; label: string; volumeDb: number };
+  compression: ShieldCompressionMode;
+  verifyTranscript: boolean;
+  input: { filename: string; bytes: number };
+  output?: { filename: string; bytes: number; downloadUrl?: string };
+  transcript?: string;
+  transcriptStatus?: ShieldVerifyStatusView;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface ShieldJobWire {
+  id: string;
+  status: ShieldJobStatusView;
+  niche: { id: string; name: string };
+  white: { id: string; label: string; volume_db: number };
+  compression: ShieldCompressionMode;
+  verify_transcript: boolean;
+  input: { filename: string; bytes: number };
+  output?: { filename: string; bytes: number; download_url?: string };
+  transcript?: string;
+  transcript_status?: ShieldVerifyStatusView;
+  error?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+function fromShieldJobWire(w: ShieldJobWire): ShieldJobView {
+  return {
+    id: w.id,
+    status: w.status,
+    niche: w.niche,
+    white: { id: w.white.id, label: w.white.label, volumeDb: w.white.volume_db },
+    compression: w.compression,
+    verifyTranscript: w.verify_transcript,
+    input: w.input,
+    output: w.output
+      ? {
+          filename: w.output.filename,
+          bytes: w.output.bytes,
+          downloadUrl: w.output.download_url,
+        }
+      : undefined,
+    transcript: w.transcript,
+    transcriptStatus: w.transcript_status,
+    error: w.error,
+    createdAt: w.created_at,
+    updatedAt: w.updated_at,
+  };
+}
+
+/**
+ * XHR-based multipart upload — gives us progress events that fetch() can't.
+ * Used for video uploads (potentially up to 100MB).
+ */
+function uploadMultipart<T>(
+  path: string,
+  body: FormData,
+  onProgress?: (pct: number) => void,
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const baseUrl = env.NEXT_PUBLIC_API_URL;
+    xhr.open('POST', `${baseUrl}${path}`);
+    const token = authToken.get();
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.responseType = 'json';
+    if (onProgress) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+      };
+    }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(xhr.response as T);
+      } else {
+        const r = (xhr.response ?? {}) as { detail?: string; message?: string };
+        const msg = r.detail || r.message || `HTTP ${xhr.status}`;
+        reject(new ApiError(msg, xhr.status, r));
+      }
+    };
+    xhr.onerror = () => reject(new ApiError('Falha de rede no upload.', 0));
+    xhr.send(body);
+  });
+}
 
 export { ApiError };

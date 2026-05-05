@@ -4,6 +4,7 @@ import {
   GitCompare,
   Layers,
   Network,
+  Shield,
   Shuffle,
   Video,
   Webhook,
@@ -71,6 +72,13 @@ export default function ToolsIndexPage() {
             title="Cloaker URL Generator"
             description="Gera lotes de URLs com parâmetros aleatorizados (token, ref, hex, UUID, sorteio de lista) pra alimentar campanhas com cloaker. Exporta como .txt."
             href="/tools/cloaker-urls"
+            badge="Novo"
+          />
+          <ToolCard
+            icon={<Shield className="h-6 w-6" />}
+            title="Video Shield"
+            description="Phase cancel + white audio por nicho. Bots transcrevem só o white, humanos ouvem o original. Compressão opcional e verificação por AssemblyAI."
+            href="/tools/video-shield"
             badge="Novo"
           />
           <ToolCard

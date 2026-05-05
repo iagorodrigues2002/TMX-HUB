@@ -361,3 +361,89 @@ export interface UpdateOfferRequest {
   fronts?: OfferLink[];
   upsells?: OfferLink[];
 }
+
+// ---- Video Shield (cloaker) ----
+
+/**
+ * A "niche" is a category of white-audio scripts (e.g. "Saúde", "Finanças").
+ * Each niche owns one or more white audios; when a video is shielded, one
+ * of the niche's whites is randomly picked and mixed in.
+ */
+export interface NicheWhite {
+  id: string;
+  /** Original filename when uploaded. */
+  filename: string;
+  /** R2 storage key. */
+  storageKey: string;
+  /** Bytes of the audio file. */
+  bytes: number;
+  /** Optional human label (defaults to filename). */
+  label?: string;
+  createdAt: string;
+}
+
+export interface Niche {
+  id: string;
+  userId: string;
+  name: string;
+  description?: string;
+  whites: NicheWhite[];
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export type ShieldCompressionMode = 'none' | 'lossless' | 'balanced' | 'small';
+
+export type ShieldJobStatus = 'queued' | 'processing' | 'verifying' | 'ready' | 'failed';
+
+export type ShieldVerifyStatus = 'pending' | 'done' | 'failed' | 'skipped';
+
+export interface ShieldJob {
+  id: string;
+  userId: string;
+  /** Source video stored in R2 (input). */
+  inputStorageKey: string;
+  inputFilename: string;
+  inputBytes: number;
+  /** Niche selected for this job. */
+  nicheId: string;
+  nicheName: string;
+  /** White audio actually picked (random) for this job. */
+  whiteId: string;
+  whiteLabel: string;
+  /** White audio gain in dB (negative; e.g. -22). */
+  whiteVolumeDb: number;
+  /** Compression mode applied. */
+  compression: ShieldCompressionMode;
+  /** Whether to run AssemblyAI verification on the output. */
+  verifyTranscript: boolean;
+  status: ShieldJobStatus;
+  /** Output video storage key (only when ready). */
+  outputStorageKey?: string;
+  outputFilename?: string;
+  outputBytes?: number;
+  /** Optional transcript from AssemblyAI verification. */
+  transcript?: string;
+  transcriptStatus?: ShieldVerifyStatus;
+  /** Free-form error text when status === 'failed'. */
+  errorMessage?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateNicheRequest {
+  name: string;
+  description?: string;
+}
+
+export interface UpdateNicheRequest {
+  name?: string;
+  description?: string;
+}
+
+export interface CreateShieldJobRequest {
+  niche_id: string;
+  white_volume_db?: number;        // default -22
+  compression?: ShieldCompressionMode; // default 'none'
+  verify_transcript?: boolean;     // default false
+}

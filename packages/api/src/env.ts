@@ -46,6 +46,10 @@ const EnvSchema = z.object({
   // Accept any string so Railway template refs like "https://${{DOMAIN}}"
   // don't crash on startup if the variable isn't resolved yet.
   PUBLIC_BASE_URL: z.string().default('http://localhost:4000'),
+
+  // AssemblyAI — used by /v1/shield-jobs to verify the protected output is
+  // un-transcribable. Optional; if missing, verification is silently skipped.
+  ASSEMBLYAI_API_KEY: z.string().optional(),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

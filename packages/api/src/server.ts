@@ -4,6 +4,7 @@ import { logger } from './lib/logger.js';
 import authPlugin from './plugins/auth.js';
 import corsPlugin from './plugins/cors.js';
 import errorHandlerPlugin from './plugins/error-handler.js';
+import multipartPlugin from './plugins/multipart.js';
 import queuePlugin from './plugins/queue.js';
 import rateLimitPlugin from './plugins/rate-limit.js';
 import storagePlugin from './plugins/storage.js';
@@ -12,6 +13,7 @@ import routes from './routes/index.js';
 import { createBundleWorker } from './workers/bundle.worker.js';
 import { createFunnelWorker } from './workers/funnel.worker.js';
 import { createRenderWorker } from './workers/render.worker.js';
+import { createShieldWorker } from './workers/shield.worker.js';
 import { createVslWorker } from './workers/vsl.worker.js';
 
 // TODO(auth): Authentication is intentionally skipped for the MVP.
@@ -35,6 +37,7 @@ export async function buildApp() {
   await app.register(corsPlugin);
   await app.register(rateLimitPlugin);
   await app.register(errorHandlerPlugin);
+  await app.register(multipartPlugin);
   await app.register(swaggerPlugin);
   await app.register(routes);
 
@@ -68,6 +71,12 @@ async function main() {
     jobStore: app.funnelJobStore,
     storage: app.storage,
   });
+  const shieldWorker = createShieldWorker({
+    redisUrl: env.REDIS_URL,
+    jobStore: app.shieldJobStore,
+    nicheStore: app.nicheStore,
+    storage: app.storage,
+  });
 
   let shuttingDown = false;
   const shutdown = async (signal: string) => {
@@ -82,6 +91,7 @@ async function main() {
       await bundleWorker.close();
       await vslWorker.close();
       await funnelWorker.close();
+      await shieldWorker.close();
       app.log.info('shutdown complete');
       process.exit(0);
     } catch (err) {

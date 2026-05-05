@@ -8,9 +8,11 @@ import type {
   BundleJobData,
   FunnelJobData,
   RenderJobData,
+  ShieldJobData,
   VslJobData,
 } from '../queues/index.js';
 import { createRenderQueue } from '../queues/render.queue.js';
+import { createShieldQueue } from '../queues/shield.queue.js';
 import { createVslQueue } from '../queues/vsl.queue.js';
 import type { Redis } from 'ioredis';
 
@@ -21,6 +23,7 @@ declare module 'fastify' {
     bundleQueue: Queue<BundleJobData>;
     vslQueue: Queue<VslJobData>;
     funnelQueue: Queue<FunnelJobData>;
+    shieldQueue: Queue<ShieldJobData>;
   }
 }
 
@@ -45,18 +48,21 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   const bundleQueue = createBundleQueue(env.REDIS_URL);
   const vslQueue = createVslQueue(env.REDIS_URL);
   const funnelQueue = createFunnelQueue(env.REDIS_URL);
+  const shieldQueue = createShieldQueue(env.REDIS_URL);
 
   app.decorate('redis', redis);
   app.decorate('renderQueue', renderQueue);
   app.decorate('bundleQueue', bundleQueue);
   app.decorate('vslQueue', vslQueue);
   app.decorate('funnelQueue', funnelQueue);
+  app.decorate('shieldQueue', shieldQueue);
 
   app.addHook('onClose', async () => {
     await renderQueue.close();
     await bundleQueue.close();
     await vslQueue.close();
     await funnelQueue.close();
+    await shieldQueue.close();
     await redis.quit();
   });
 };

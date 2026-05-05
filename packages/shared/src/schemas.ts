@@ -213,3 +213,30 @@ export const IngestSnapshotsRequestSchema = z
     snapshots: z.array(DailySnapshotInputSchema).min(1).max(60),
   })
   .strict();
+
+// ---- Video Shield ----
+
+export const ShieldCompressionSchema = z.enum(['none', 'lossless', 'balanced', 'small']);
+
+export const CreateNicheRequestSchema = z
+  .object({
+    name: z.string().min(1).max(60),
+    description: z.string().max(500).optional(),
+  })
+  .strict();
+
+export const UpdateNicheRequestSchema = z
+  .object({
+    name: z.string().min(1).max(60).optional(),
+    description: z.string().max(500).optional(),
+  })
+  .strict();
+
+export const CreateShieldJobBodySchema = z
+  .object({
+    niche_id: z.string().min(1).max(64),
+    white_volume_db: z.number().min(-40).max(-5).optional(),
+    compression: ShieldCompressionSchema.optional(),
+    verify_transcript: z.boolean().optional(),
+  })
+  .strict();
