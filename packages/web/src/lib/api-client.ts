@@ -964,8 +964,10 @@ export const apiClient = {
     onProgress?: (pct: number) => void,
   ): Promise<NicheView> {
     const fd = new FormData();
-    fd.append('file', file);
+    // Fields BEFORE file — backend reads parts sequentially and stops at the
+    // file to stream it. Fields after the file would never be parsed.
     if (label) fd.append('label', label);
+    fd.append('file', file);
     const wire = await uploadMultipart<NicheWire>(`/v1/niches/${id}/whites`, fd, onProgress);
     return fromNicheWire(wire);
   },
@@ -989,11 +991,13 @@ export const apiClient = {
     onProgress?: (pct: number) => void,
   ): Promise<ShieldJobView> {
     const fd = new FormData();
-    fd.append('file', args.file);
+    // Fields MUST come before the file — backend stops iterating at the file
+    // part to stream it; later fields would never be parsed.
     fd.append('niche_id', args.nicheId);
     if (args.whiteVolumeDb !== undefined) fd.append('white_volume_db', String(args.whiteVolumeDb));
     if (args.compression) fd.append('compression', args.compression);
     if (args.verifyTranscript) fd.append('verify_transcript', '1');
+    fd.append('file', args.file);
     const wire = await uploadMultipart<ShieldJobWire>('/v1/shield-jobs', fd, onProgress);
     return fromShieldJobWire(wire);
   },
