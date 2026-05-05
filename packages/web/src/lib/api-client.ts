@@ -937,10 +937,6 @@ export const apiClient = {
     const wire = await request<BuildJobWire>(`/v1/clones/${id}/builds/${buildId}`, { signal });
     return fromBuildJobWire(wire);
   },
-
-  getDownloadUrl(id: string, buildId: string): string {
-    return `${env.NEXT_PUBLIC_API_URL}/v1/clones/${id}/builds/${buildId}/download`;
-  },
 };
 
 export { ApiError };

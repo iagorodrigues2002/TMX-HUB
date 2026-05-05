@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { Download, Hammer } from 'lucide-react';
 import { toast } from 'sonner';
 import type { BundleFormat } from '@page-cloner/shared';
-import { apiClient } from '@/lib/api-client';
 import { useBuildJob, useCreateBuild } from '@/hooks/use-build-job';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -116,6 +115,7 @@ export function BuildButton({ jobId, disabled }: BuildButtonProps) {
             jobId={jobId}
             buildId={activeBuildId}
             status={build.data?.status}
+            downloadUrl={build.data?.downloadUrl}
             errorMessage={build.data?.error?.message}
             onView={() => {
               setOpen(false);
@@ -144,11 +144,12 @@ interface BuildProgressProps {
   jobId: string;
   buildId: string;
   status: string | undefined;
+  downloadUrl?: string;
   errorMessage?: string;
   onView: () => void;
 }
 
-function BuildProgress({ jobId, buildId, status, errorMessage, onView }: BuildProgressProps) {
+function BuildProgress({ status, downloadUrl, errorMessage, onView }: BuildProgressProps) {
   if (status === 'failed') {
     return (
       <div className="rounded-md border border-rose-400/40 bg-rose-500/10 p-4 text-[13px]">
@@ -166,16 +167,16 @@ function BuildProgress({ jobId, buildId, status, errorMessage, onView }: BuildPr
           Pacote pronto
         </p>
         <div className="flex flex-wrap gap-2">
-          <Button asChild>
+          <Button asChild disabled={!downloadUrl}>
             <a
-              href={apiClient.getDownloadUrl(jobId, buildId)}
+              href={downloadUrl ?? '#'}
               className="gap-2"
               download
               target="_blank"
               rel="noreferrer"
             >
               <Download className="h-4 w-4" />
-              Baixar
+              {downloadUrl ? 'Baixar' : 'Carregando…'}
             </a>
           </Button>
           <Button variant="outline" onClick={onView}>
