@@ -1,6 +1,7 @@
 import {
   CreateOfferRequestSchema,
   IngestSnapshotsRequestSchema,
+  UpdateOfferRequestSchema,
   type DailySnapshot,
 } from '@page-cloner/shared';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
@@ -15,7 +16,11 @@ function offerToWire(o: Offer): Record<string, unknown> {
     name: o.name,
     dashboard_id: o.dashboardId,
     description: o.description,
+    status: o.status,
+    fronts: o.fronts ?? [],
+    upsells: o.upsells ?? [],
     created_at: o.createdAt,
+    updated_at: o.updatedAt,
   };
 }
 
@@ -65,8 +70,18 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       name: parsed.data.name,
       ...(parsed.data.dashboard_id ? { dashboardId: parsed.data.dashboard_id } : {}),
       ...(parsed.data.description ? { description: parsed.data.description } : {}),
+      ...(parsed.data.status ? { status: parsed.data.status } : {}),
     });
     return reply.code(201).send(offerToWire(offer));
+  });
+
+  // PATCH /v1/offers/:id — update name/status/links/etc
+  app.patch<{ Params: { id: string } }>('/offers/:id', async (req, reply) => {
+    if (!req.user) throw new BadRequestError('No user attached.');
+    const parsed = UpdateOfferRequestSchema.safeParse(req.body);
+    if (!parsed.success) throw zodToProblem(parsed.error, req.url);
+    const updated = await app.offerStore.update(req.params.id, req.user.sub, parsed.data);
+    return reply.send(offerToWire(updated));
   });
 
   // DELETE /v1/offers/:id

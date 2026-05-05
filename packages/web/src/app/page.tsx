@@ -139,10 +139,10 @@ export default function HubLandingPage() {
       <section className="mt-8">
         <div className="mb-3 flex items-baseline justify-between">
           <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">
-            Suas dashboards
+            Suas ofertas
           </h2>
           <Link
-            href="/dashboards"
+            href="/ofertas"
             className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-300 hover:text-cyan-200"
           >
             Gerenciar →
@@ -152,13 +152,13 @@ export default function HubLandingPage() {
         {summary && summary.offers.length === 0 ? (
           <div className="glass-card flex flex-col items-center gap-3 p-8 text-center">
             <p className="text-[13px] text-white/55">
-              Você ainda não tem nenhuma dashboard. Crie a primeira para começar a receber
-              métricas.
+              Você ainda não tem nenhuma oferta cadastrada. Crie a primeira para começar
+              a centralizar links e receber métricas.
             </p>
             <Button asChild size="sm">
-              <Link href="/dashboards">
+              <Link href="/ofertas">
                 <Plus className="h-3.5 w-3.5" />
-                Criar primeira dashboard
+                Criar primeira oferta
               </Link>
             </Button>
           </div>
@@ -167,7 +167,7 @@ export default function HubLandingPage() {
             {(summary?.offers ?? []).map((entry) => (
               <Link
                 key={entry.offer.id}
-                href={`/dashboards/${entry.offer.id}`}
+                href={`/ofertas/${entry.offer.id}`}
                 className="glass-card flex flex-col gap-3 p-4 transition hover:border-cyan-300/30"
               >
                 <div className="flex items-center justify-between gap-2">

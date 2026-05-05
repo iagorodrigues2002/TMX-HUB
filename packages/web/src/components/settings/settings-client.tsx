@@ -27,10 +27,8 @@ import {
 import { env } from '@/lib/env';
 import { cn } from '@/lib/utils';
 
-// UTMify expõe múltiplos dashboards por conta. Esse é o ID do PFL_ENG (oferta
-// principal de tráfego). Se rodar pra outra oferta, troque manualmente no node
-// Config do n8n — futuro: virar campo editável por oferta no TMX HUB.
-const UTMIFY_DASHBOARD_ID = '69f3b5692659d80c33debea2';
+// Fallback caso a oferta selecionada não tenha dashboardId — usa o do PFL_ENG.
+const UTMIFY_DASHBOARD_ID_FALLBACK = '69f3b5692659d80c33debea2';
 
 const LOCAL_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', 'host.docker.internal'];
 
@@ -155,6 +153,8 @@ export function SettingsClient() {
   const [selectedOfferId, setSelectedOfferId] = useState<string>('');
   const selectedOffer = offers.find((o) => o.id === selectedOfferId) ?? offers[0];
   const effectiveOfferId = selectedOffer?.id ?? '';
+  const utmifyDashboardId =
+    selectedOffer?.dashboardId?.trim() || UTMIFY_DASHBOARD_ID_FALLBACK;
   const ingestUrl = effectiveOfferId
     ? `${apiUrl}/v1/offers/${effectiveOfferId}/ingest`
     : '';
@@ -163,10 +163,10 @@ export function SettingsClient() {
     return [
       `TMX_API_URL = ${apiUrl}`,
       `TMX_TOKEN = ${token || '<faça login para gerar>'}`,
-      `OFFER_ID = ${effectiveOfferId || '<crie uma oferta em /dashboards>'}`,
-      `UTMIFY_DASHBOARD_ID = ${UTMIFY_DASHBOARD_ID}`,
+      `OFFER_ID = ${effectiveOfferId || '<crie uma oferta em /ofertas>'}`,
+      `UTMIFY_DASHBOARD_ID = ${utmifyDashboardId}`,
     ].join('\n');
-  }, [apiUrl, token, effectiveOfferId]);
+  }, [apiUrl, token, effectiveOfferId, utmifyDashboardId]);
 
   const everythingReady = !!apiUrl && !!token && !tokenExpired && !!effectiveOfferId;
 
@@ -271,8 +271,8 @@ export function SettingsClient() {
         ) : offers.length === 0 ? (
           <div className="rounded-md border border-white/[0.08] bg-white/[0.02] p-4 text-[13px] text-white/65">
             Você ainda não tem ofertas. Crie uma em{' '}
-            <a href="/dashboards" className="text-cyan-300 hover:text-cyan-200">
-              /dashboards
+            <a href="/ofertas" className="text-cyan-300 hover:text-cyan-200">
+              /ofertas
             </a>{' '}
             primeiro.
           </div>
@@ -341,10 +341,14 @@ export function SettingsClient() {
 
         <FieldRow
           label="UTMIFY_DASHBOARD_ID"
-          value={UTMIFY_DASHBOARD_ID}
+          value={utmifyDashboardId}
           copyLabel="UTMIFY_DASHBOARD_ID"
           mono
-          hint="ID fixo do seu dashboard na UTMify"
+          hint={
+            selectedOffer?.dashboardId
+              ? `Lido da oferta "${selectedOffer.name}"`
+              : 'Fallback — defina por oferta em /ofertas'
+          }
         />
 
         <div className="space-y-2">

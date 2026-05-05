@@ -1,30 +1,27 @@
 'use client';
 
-import Link from 'next/link';
-import { Download, LayoutDashboard } from 'lucide-react';
+import { Download, Target } from 'lucide-react';
 import { HubShell } from '@/components/hub/hub-shell';
-import { OfferList } from '@/components/dashboard/offer-list';
+import { OfferList } from '@/components/ofertas/offer-list';
 import { Button } from '@/components/ui/button';
 
 export const dynamic = 'force-dynamic';
 
-export default function DashboardsIndexPage() {
+export default function OfertasIndexPage() {
   return (
-    <HubShell breadcrumb={['DASHBOARDS']}>
+    <HubShell breadcrumb={['OFERTAS']}>
       <header className="mb-6 space-y-3">
         <div className="flex items-center gap-2">
-          <LayoutDashboard className="h-5 w-5 text-cyan-300" />
-          <p className="hud-label">Operator Console · Dashboards</p>
+          <Target className="h-5 w-5 text-cyan-300" />
+          <p className="hud-label">Operator Console · Ofertas</p>
         </div>
         <h1 className="text-3xl font-bold tracking-tight text-white">
-          Painéis das suas ofertas
+          Suas ofertas em produção
         </h1>
-        <p className="max-w-xl text-[14px] text-white/55">
-          Cada oferta tem sua própria dashboard com vendas, faturamento, gasto e métricas
-          calculadas. A home agrega tudo.{' '}
-          <Link href="/" className="text-cyan-300 hover:text-cyan-200">
-            Ver visão geral →
-          </Link>
+        <p className="max-w-2xl text-[14px] text-white/55">
+          Cada oferta centraliza nome, status, links de Front e Upsell (com páginas White
+          e Black) e métricas vindas da UTMify via n8n. Edite uma oferta pra adicionar
+          mais links a qualquer momento.
         </p>
       </header>
 
@@ -34,8 +31,7 @@ export default function DashboardsIndexPage() {
           <p className="max-w-2xl text-[13px] text-white/65">
             Workflow pronto pra importar no seu n8n. Faz auth na UTMify, busca os dados
             (janela diária pra contornar o timeout 524 da Cloudflare) e posta no endpoint{' '}
-            <code className="text-white/85">/v1/offers/:id/ingest</code>. Você só edita o node{' '}
-            <strong>⚙️ Config</strong> com sua URL, token TMX, offer ID e dashboardId UTMify.
+            <code className="text-white/85">/v1/offers/:id/ingest</code>.
           </p>
         </div>
         <Button asChild>

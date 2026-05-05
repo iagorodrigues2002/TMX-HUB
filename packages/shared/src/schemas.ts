@@ -142,11 +142,48 @@ export const CreateFunnelJobRequestSchema = z
   })
   .strict();
 
+export const OfferStatusSchema = z.enum([
+  'testando',
+  'validando',
+  'escala',
+  'pausado',
+  'morrendo',
+]);
+
+const optionalUrl = z
+  .string()
+  .trim()
+  .max(2000)
+  .refine(
+    (v) => v === '' || /^https?:\/\//i.test(v),
+    'URL deve começar com http:// ou https://',
+  )
+  .optional();
+
+export const OfferLinkSchema = z.object({
+  id: z.string().min(1).max(64),
+  label: z.string().max(60).optional(),
+  whiteUrl: optionalUrl,
+  blackUrl: optionalUrl,
+});
+
 export const CreateOfferRequestSchema = z
   .object({
     name: z.string().min(1).max(60),
     dashboard_id: z.string().max(100).optional(),
     description: z.string().max(500).optional(),
+    status: OfferStatusSchema.optional(),
+  })
+  .strict();
+
+export const UpdateOfferRequestSchema = z
+  .object({
+    name: z.string().min(1).max(60).optional(),
+    dashboard_id: z.string().max(100).optional(),
+    description: z.string().max(500).optional(),
+    status: OfferStatusSchema.optional(),
+    fronts: z.array(OfferLinkSchema).max(20).optional(),
+    upsells: z.array(OfferLinkSchema).max(20).optional(),
   })
   .strict();
 

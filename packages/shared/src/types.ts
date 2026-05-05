@@ -265,6 +265,21 @@ export interface ActivityEntry {
  * has its own daily snapshots aggregated from UTMify (or any source via
  * /v1/offers/:id/ingest). Rendered as a sub-dashboard.
  */
+/** Stages we track per offer in the DR pipeline. */
+export type OfferStatus = 'testando' | 'validando' | 'escala' | 'pausado' | 'morrendo';
+
+/**
+ * One link for an offer. Each slot has white (safe page shown to bots /
+ * platform reviewers) and black (real money page). Either can be empty.
+ */
+export interface OfferLink {
+  id: string;
+  /** Optional human label, e.g. "Front BR PT" or "Upsell Garantia". */
+  label?: string;
+  whiteUrl?: string;
+  blackUrl?: string;
+}
+
 export interface Offer {
   id: string;
   userId: string;
@@ -272,7 +287,13 @@ export interface Offer {
   /** UTMify dashboardId, kept for reference + auto-config in n8n. */
   dashboardId?: string;
   description?: string;
+  status: OfferStatus;
+  /** Front links (LP / VSL). At least one expected when active. */
+  fronts: OfferLink[];
+  /** Upsell links (post-checkout flow). */
+  upsells: OfferLink[];
   createdAt: string;
+  updatedAt?: string;
 }
 
 /**
@@ -329,4 +350,14 @@ export interface CreateOfferRequest {
   name: string;
   dashboard_id?: string;
   description?: string;
+  status?: OfferStatus;
+}
+
+export interface UpdateOfferRequest {
+  name?: string;
+  dashboard_id?: string;
+  description?: string;
+  status?: OfferStatus;
+  fronts?: OfferLink[];
+  upsells?: OfferLink[];
 }

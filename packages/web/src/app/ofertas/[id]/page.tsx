@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { use, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, LayoutDashboard, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Pencil, Target } from 'lucide-react';
 import { HubShell } from '@/components/hub/hub-shell';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +16,8 @@ import {
   formatPercent,
   formatRoas,
 } from '@/components/dashboard/kpi-cards';
+import { OfferCard } from '@/components/ofertas/offer-card';
+import { OfferEditDialog } from '@/components/ofertas/offer-edit-dialog';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,18 +38,29 @@ const PRESETS = [
   { label: '30d', from: () => nDaysAgoIso(29), to: () => todayIso() },
 ];
 
-export default function DashboardDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default function OfertaDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [from, setFrom] = useState(() => nDaysAgoIso(6));
   const [to, setTo] = useState(() => todayIso());
+  const [editing, setEditing] = useState(false);
 
-  const { data, isLoading, isFetching } = useQuery({
+  // Pull the offer (with links/status) from the offers list cache when possible.
+  const offerQuery = useQuery({
+    queryKey: ['offer-detail', id],
+    queryFn: async () => {
+      const all = await apiClient.listOffers();
+      return all.find((o) => o.id === id) ?? null;
+    },
+  });
+  const offer = offerQuery.data;
+
+  const snapshotsQuery = useQuery({
     queryKey: ['offer-snapshots', id, from, to],
     queryFn: () => apiClient.getOfferSnapshots(id, { from, to }),
     refetchOnWindowFocus: false,
   });
+  const data = snapshotsQuery.data;
 
-  // Aggregate adsets across the selected range so we can rank them in a table.
   const adsetTotals = useMemo(() => {
     if (!data) return [] as Array<{ name: string; spend: number; sales: number; revenue: number; ic: number }>;
     const map = new Map<string, { name: string; spend: number; sales: number; revenue: number; ic: number }>();
@@ -67,36 +80,53 @@ export default function DashboardDetailPage({ params }: { params: Promise<{ id: 
     return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
   }, [data]);
 
+  const offerName = offer?.name ?? data?.offer.name ?? id.slice(-6).toUpperCase();
+
   return (
-    <HubShell breadcrumb={['DASHBOARDS', data?.offer.name ?? id.slice(-6).toUpperCase()]}>
+    <HubShell breadcrumb={['OFERTAS', offerName]}>
       <div className="mb-6">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
-          <Link href="/dashboards" className="gap-1">
+          <Link href="/ofertas" className="gap-1">
             <ArrowLeft className="h-4 w-4" />
             <span className="text-[11px] font-semibold uppercase tracking-[0.18em]">
-              Todas as dashboards
+              Todas as ofertas
             </span>
           </Link>
         </Button>
       </div>
 
-      <header className="mb-6 space-y-2">
-        <div className="flex items-center gap-2">
-          <LayoutDashboard className="h-5 w-5 text-cyan-300" />
-          <p className="hud-label">Sub-dashboard</p>
+      <header className="mb-6 flex items-start justify-between gap-4">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Target className="h-5 w-5 text-cyan-300" />
+            <p className="hud-label">Oferta</p>
+          </div>
+          <h1 className="text-3xl font-bold tracking-tight text-white">{offerName}</h1>
+          {offer?.dashboardId && (
+            <p className="font-mono text-[11px] text-white/40">
+              utmify dashboardId: {offer.dashboardId}
+            </p>
+          )}
         </div>
-        <h1 className="text-3xl font-bold tracking-tight text-white">
-          {data?.offer.name ?? '...'}
-        </h1>
-        {data?.offer.dashboardId && (
-          <p className="font-mono text-[11px] text-white/40">
-            utmify dashboardId: {data.offer.dashboardId}
-          </p>
+        {offer && (
+          <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+            <Pencil className="h-3.5 w-3.5" />
+            Editar oferta
+          </Button>
         )}
       </header>
 
+      {/* Identidade + links da oferta (mesmo card da listagem, em destaque) */}
+      {offer && (
+        <section className="mb-6">
+          <OfferCard offer={offer} onEdit={() => setEditing(true)} onDelete={() => undefined} />
+        </section>
+      )}
+
+      <h2 className="mb-3 text-[16px] font-semibold text-white">Métricas</h2>
+
       {/* Filter */}
-      <div className="glass-card mb-6 flex flex-wrap items-end gap-3 p-4">
+      <div className="glass-card mb-4 flex flex-wrap items-end gap-3 p-4">
         <div className="flex flex-wrap gap-2">
           {PRESETS.map((p) => {
             const active = from === p.from() && to === p.to();
@@ -134,11 +164,13 @@ export default function DashboardDetailPage({ params }: { params: Promise<{ id: 
               className="h-9 w-[150px]"
             />
           </div>
-          {isFetching && <Loader2 className="mb-2 h-4 w-4 animate-spin text-cyan-300" />}
+          {snapshotsQuery.isFetching && (
+            <Loader2 className="mb-2 h-4 w-4 animate-spin text-cyan-300" />
+          )}
         </div>
       </div>
 
-      {isLoading ? (
+      {snapshotsQuery.isLoading ? (
         <div className="glass-card flex items-center justify-center p-12">
           <Loader2 className="h-5 w-5 animate-spin text-cyan-300" />
         </div>
@@ -148,10 +180,9 @@ export default function DashboardDetailPage({ params }: { params: Promise<{ id: 
         <div className="space-y-6">
           <KpiGrid metrics={data.totals} />
 
-          {/* Daily series */}
           <section className="glass-card overflow-hidden p-0">
             <header className="flex items-baseline justify-between border-b border-white/[0.06] px-4 py-3">
-              <h2 className="text-[14px] font-semibold text-white">Série diária</h2>
+              <h3 className="text-[14px] font-semibold text-white">Série diária</h3>
               <span className="hud-label">{data.snapshots.length} dia(s)</span>
             </header>
             {data.snapshots.length === 0 ? (
@@ -210,11 +241,10 @@ export default function DashboardDetailPage({ params }: { params: Promise<{ id: 
             )}
           </section>
 
-          {/* Adsets table (only if any snapshot brought adset data) */}
           {adsetTotals.length > 0 && (
             <section className="glass-card overflow-hidden p-0">
               <header className="flex items-baseline justify-between border-b border-white/[0.06] px-4 py-3">
-                <h2 className="text-[14px] font-semibold text-white">Adsets</h2>
+                <h3 className="text-[14px] font-semibold text-white">Adsets</h3>
                 <span className="hud-label">
                   {adsetTotals.length} no período · ranqueado por faturamento
                 </span>
@@ -268,6 +298,14 @@ export default function DashboardDetailPage({ params }: { params: Promise<{ id: 
             </section>
           )}
         </div>
+      )}
+
+      {offer && (
+        <OfferEditDialog
+          offer={offer}
+          open={editing}
+          onOpenChange={setEditing}
+        />
       )}
     </HubShell>
   );
