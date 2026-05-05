@@ -1005,6 +1005,10 @@ export const apiClient = {
     const wire = await request<ShieldJobWire>(`/v1/shield-jobs/${id}`, { signal });
     return fromShieldJobWire(wire);
   },
+  async listShieldJobs(): Promise<ShieldJobView[]> {
+    const wire = await request<{ jobs: ShieldJobWire[] }>('/v1/shield-jobs');
+    return (wire.jobs ?? []).map(fromShieldJobWire);
+  },
   async deleteShieldJob(id: string): Promise<void> {
     await request<void>(`/v1/shield-jobs/${id}`, { method: 'DELETE' });
   },

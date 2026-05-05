@@ -149,6 +149,25 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     return reply.code(202).send(jobToWire(job));
   });
 
+  // GET /v1/shield-jobs — list user's recent jobs (last 30d)
+  app.get('/shield-jobs', async (req, reply) => {
+    if (!req.user) throw new BadRequestError('No user attached.');
+    const jobs = await app.shieldJobStore.listByUser(req.user.sub);
+    // Generate presigned URLs for ready jobs (parallel).
+    const wired = await Promise.all(
+      jobs.map(async (j) => {
+        if (j.status === 'ready' && j.outputStorageKey) {
+          const url = await app.storage
+            .presignGet(j.outputStorageKey, 24 * 60 * 60, j.outputFilename)
+            .catch(() => undefined);
+          return jobToWire(j, url);
+        }
+        return jobToWire(j);
+      }),
+    );
+    return reply.send({ jobs: wired });
+  });
+
   // GET /v1/shield-jobs/:id
   app.get<{ Params: { id: string } }>('/shield-jobs/:id', async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');

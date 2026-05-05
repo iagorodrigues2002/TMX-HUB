@@ -5,6 +5,7 @@ import { Shield } from 'lucide-react';
 import { HubShell } from '@/components/hub/hub-shell';
 import { apiClient, type NicheView } from '@/lib/api-client';
 import { NicheManager } from '@/components/shield/niche-manager';
+import { ShieldJobsHistory } from '@/components/shield/shield-jobs-history';
 import { ShieldProcessor } from '@/components/shield/shield-processor';
 
 export const dynamic = 'force-dynamic';
@@ -44,6 +45,10 @@ export default function VideoShieldPage() {
 
         <section className="mb-10">
           <ShieldProcessor niches={niches} />
+        </section>
+
+        <section className="mb-10">
+          <ShieldJobsHistory />
         </section>
 
         <section className="mb-10">

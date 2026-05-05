@@ -8,6 +8,7 @@ import type {
 import { NotFoundError } from '../lib/problem.js';
 
 const SHIELD_PREFIX = 'shield:';
+const USER_SHIELD_PREFIX = 'user-shield:';
 
 export class ShieldJobStore {
   constructor(private readonly redis: Redis) {}
@@ -46,7 +47,39 @@ export class ShieldJobStore {
       updatedAt: now,
     };
     await this.write(job);
+    await this.redis.sadd(this.userKey(args.userId), args.id);
+    await this.redis.expire(this.userKey(args.userId), 30 * 24 * 60 * 60);
     return job;
+  }
+
+  async listByUser(userId: string): Promise<ShieldJob[]> {
+    const ids = await this.redis.smembers(this.userKey(userId));
+    if (ids.length === 0) return [];
+    const pipeline = this.redis.pipeline();
+    for (const id of ids) pipeline.hgetall(this.key(id));
+    const results = (await pipeline.exec()) ?? [];
+    const jobs: ShieldJob[] = [];
+    const stale: string[] = [];
+    for (let i = 0; i < results.length; i++) {
+      const entry = results[i];
+      if (!entry) continue;
+      const [, data] = entry;
+      if (!data || typeof data !== 'object') {
+        stale.push(ids[i]!);
+        continue;
+      }
+      const rec = data as Record<string, string>;
+      if (!rec.id) {
+        stale.push(ids[i]!);
+        continue;
+      }
+      jobs.push(this.deserialize(rec));
+    }
+    // Garbage-collect ids whose hashes already TTL'd out.
+    if (stale.length > 0) {
+      await this.redis.srem(this.userKey(userId), ...stale).catch(() => {});
+    }
+    return jobs.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
   }
 
   async get(id: string): Promise<ShieldJob> {
@@ -83,7 +116,11 @@ export class ShieldJobStore {
   }
 
   async delete(id: string): Promise<void> {
+    const job = await this.get(id).catch(() => null);
     await this.redis.del(this.key(id));
+    if (job) {
+      await this.redis.srem(this.userKey(job.userId), id).catch(() => {});
+    }
   }
 
   inputKey(id: string, ext: string): string {
@@ -95,6 +132,9 @@ export class ShieldJobStore {
 
   private key(id: string): string {
     return `${SHIELD_PREFIX}${id}`;
+  }
+  private userKey(userId: string): string {
+    return `${USER_SHIELD_PREFIX}${userId}`;
   }
 
   private async write(job: ShieldJob): Promise<void> {

@@ -9,6 +9,8 @@ import {
   FileVideo,
   Loader2,
   Shuffle,
+  Trash2,
+  Upload,
   XCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -36,6 +38,22 @@ const COMPRESSION_OPTIONS: Array<{ value: ShieldCompressionMode; label: string; 
   { value: 'small', label: 'Tamanho mínimo', hint: 'CRF 28 — perda visível em close inspect' },
 ];
 
+/** Maximum simultaneous uploads to keep network/UI sane. */
+const PARALLEL_UPLOADS = 3;
+
+interface UploadSlot {
+  id: string;             // local unique id
+  file: File;
+  status: 'pending' | 'uploading' | 'done' | 'failed';
+  progress: number;       // 0..100
+  jobId?: string;
+  error?: string;
+}
+
+function newSlotId(): string {
+  return `up_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
+}
+
 function formatBytes(b: number): string {
   if (b < 1024) return `${b} B`;
   if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
@@ -45,16 +63,15 @@ function formatBytes(b: number): string {
 
 export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
   const qc = useQueryClient();
-  const [file, setFile] = useState<File | null>(null);
+  const [slots, setSlots] = useState<UploadSlot[]>([]);
   const [nicheId, setNicheId] = useState<string>('');
   const [whiteVolumeDb, setWhiteVolumeDb] = useState(-22);
   const [compression, setCompression] = useState<ShieldCompressionMode>('none');
   const [verifyTranscript, setVerifyTranscript] = useState(false);
-  const [progress, setProgress] = useState<number | null>(null);
-  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Default niche selection: first one available with whites.
+  // Default niche selection: first one with whites.
   useEffect(() => {
     if (!nicheId && niches.length > 0) {
       const first = niches.find((n) => n.whites.length > 0) ?? niches[0];
@@ -63,68 +80,185 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
   }, [niches, nicheId]);
 
   const selectedNiche = niches.find((n) => n.id === nicheId);
+  const pendingCount = slots.filter((s) => s.status === 'pending').length;
+  const uploadingCount = slots.filter((s) => s.status === 'uploading').length;
+  const doneCount = slots.filter((s) => s.status === 'done').length;
+  const failedCount = slots.filter((s) => s.status === 'failed').length;
+  const activeJobIds = slots.filter((s) => s.jobId).map((s) => s.jobId!);
 
-  const createMut = useMutation({
-    mutationFn: () => {
-      if (!file) throw new Error('Selecione um vídeo primeiro.');
-      if (!nicheId) throw new Error('Selecione um nicho.');
-      setProgress(0);
-      return apiClient.createShieldJob(
-        { file, nicheId, whiteVolumeDb, compression, verifyTranscript },
-        (pct) => setProgress(pct),
-      );
-    },
-    onSuccess: (job) => {
-      setActiveJobId(job.id);
-      setProgress(null);
-      qc.invalidateQueries({ queryKey: ['shield-jobs'] });
-      toast.success('Upload concluído. Processando…');
-    },
-    onError: (err) => {
-      setProgress(null);
-      toast.error((err as Error).message);
-    },
-  });
-
-  const reset = () => {
-    setActiveJobId(null);
-    setFile(null);
+  const onAddFiles = (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+    const adds: UploadSlot[] = [];
+    for (const f of Array.from(fileList)) {
+      adds.push({
+        id: newSlotId(),
+        file: f,
+        status: 'pending',
+        progress: 0,
+      });
+    }
+    setSlots((s) => [...s, ...adds]);
     if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const removeSlot = (id: string) => {
+    setSlots((s) => s.filter((x) => x.id !== id));
+  };
+  const clearAll = () => {
+    setSlots([]);
+  };
+
+  const uploadOne = async (slot: UploadSlot): Promise<void> => {
+    setSlots((s) =>
+      s.map((x) => (x.id === slot.id ? { ...x, status: 'uploading', progress: 0 } : x)),
+    );
+    try {
+      const job = await apiClient.createShieldJob(
+        {
+          file: slot.file,
+          nicheId,
+          whiteVolumeDb,
+          compression,
+          verifyTranscript,
+        },
+        (pct) => {
+          setSlots((s) =>
+            s.map((x) => (x.id === slot.id ? { ...x, progress: pct } : x)),
+          );
+        },
+      );
+      setSlots((s) =>
+        s.map((x) =>
+          x.id === slot.id
+            ? { ...x, status: 'done', progress: 100, jobId: job.id }
+            : x,
+        ),
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setSlots((s) =>
+        s.map((x) => (x.id === slot.id ? { ...x, status: 'failed', error: msg } : x)),
+      );
+    }
+  };
+
+  const onSubmit = async () => {
+    const pending = slots.filter((s) => s.status === 'pending');
+    if (pending.length === 0) {
+      toast.error('Selecione pelo menos um vídeo.');
+      return;
+    }
+    if (!nicheId) {
+      toast.error('Selecione um nicho.');
+      return;
+    }
+    if (!selectedNiche || selectedNiche.whites.length === 0) {
+      toast.error('Esse nicho não tem áudios white.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      // Concurrency-limited upload pool.
+      const queue = [...pending];
+      const workers: Promise<void>[] = [];
+      const runNext = async (): Promise<void> => {
+        const next = queue.shift();
+        if (!next) return;
+        await uploadOne(next);
+        return runNext();
+      };
+      for (let i = 0; i < Math.min(PARALLEL_UPLOADS, queue.length); i++) {
+        workers.push(runNext());
+      }
+      await Promise.all(workers);
+      qc.invalidateQueries({ queryKey: ['shield-jobs-list'] });
+      toast.success('Uploads concluídos.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
     <div className="space-y-4">
       <div>
-        <p className="hud-label">Processar vídeo</p>
+        <p className="hud-label">Processar vídeos</p>
         <h2 className="mt-1 text-[16px] font-semibold text-white">
-          Aplicar Phase Cancel + White
+          Phase Cancel + White (envio em massa)
         </h2>
       </div>
 
       <div className="glass-card space-y-5 p-5">
-        {/* File picker */}
+        {/* File picker — multi */}
         <div className="space-y-2">
-          <Label className="hud-label">Vídeo (mp4, mov, avi, webm, mkv — até 100MB)</Label>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="video/*,audio/*"
-            disabled={createMut.isPending}
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className="block w-full text-[13px] text-white/75 file:mr-3 file:rounded file:border-0 file:bg-cyan-300/15 file:px-3 file:py-1.5 file:text-[11px] file:font-semibold file:uppercase file:tracking-[0.14em] file:text-cyan-200 hover:file:bg-cyan-300/25"
-          />
-          {file && (
-            <p className="text-[11px] text-white/55">
-              <FileVideo className="mr-1 inline h-3 w-3 text-cyan-300/70" />
-              {file.name} · {formatBytes(file.size)}
+          <Label className="hud-label">
+            Vídeos ({slots.length} selecionado{slots.length === 1 ? '' : 's'})
+          </Label>
+          <div
+            className="rounded-md border border-dashed border-white/[0.12] bg-white/[0.02] p-4 text-center"
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'copy';
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              onAddFiles(e.dataTransfer.files);
+            }}
+          >
+            <Upload className="mx-auto mb-2 h-5 w-5 text-cyan-300/70" />
+            <p className="text-[12px] text-white/65">
+              Arraste vídeos aqui, ou{' '}
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="text-cyan-300 hover:text-cyan-200"
+              >
+                clique pra selecionar
+              </button>
             </p>
+            <p className="mt-1 text-[10px] text-white/35">
+              Múltipla seleção · MP4/MOV/AVI/WEBM/MKV · até 100MB cada
+            </p>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="video/*,audio/*"
+              multiple
+              className="hidden"
+              onChange={(e) => onAddFiles(e.target.files)}
+              disabled={submitting}
+            />
+          </div>
+
+          {slots.length > 0 && (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between pt-1">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-white/40">
+                  {pendingCount} pendente · {uploadingCount} subindo · {doneCount} ok ·{' '}
+                  {failedCount} falha
+                </p>
+                <button
+                  type="button"
+                  onClick={clearAll}
+                  disabled={submitting}
+                  className="text-[10px] uppercase tracking-[0.14em] text-white/40 hover:text-rose-300 disabled:opacity-30"
+                >
+                  Limpar tudo
+                </button>
+              </div>
+              <ul className="max-h-[260px] space-y-1 overflow-y-auto rounded-md border border-white/[0.06] bg-black/15 p-2">
+                {slots.map((s) => (
+                  <SlotRow key={s.id} slot={s} onRemove={() => removeSlot(s.id)} />
+                ))}
+              </ul>
+            </div>
           )}
         </div>
 
-        {/* Niche selection */}
+        {/* Niche */}
         <div className="space-y-2">
           <Label className="hud-label">Nicho do white audio</Label>
-          <Select value={nicheId} onValueChange={setNicheId} disabled={createMut.isPending}>
+          <Select value={nicheId} onValueChange={setNicheId} disabled={submitting}>
             <SelectTrigger>
               <SelectValue placeholder="Escolha um nicho…" />
             </SelectTrigger>
@@ -142,10 +276,10 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
               Esse nicho ainda não tem áudios. Adicione pelo menos 1 na seção <strong>Nichos</strong>.
             </p>
           )}
-          {selectedNiche && selectedNiche.whites.length > 0 && (
+          {selectedNiche && selectedNiche.whites.length > 0 && slots.length > 1 && (
             <p className="text-[11px] text-white/40">
-              <Shuffle className="mr-1 inline h-3 w-3 text-cyan-300/70" />1 dos{' '}
-              {selectedNiche.whites.length} áudios será sorteado aleatoriamente no processamento.
+              <Shuffle className="mr-1 inline h-3 w-3 text-cyan-300/70" />
+              Cada vídeo do batch sorteia 1 dos {selectedNiche.whites.length} áudios independentemente.
             </p>
           )}
         </div>
@@ -163,21 +297,21 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
             step={1}
             value={whiteVolumeDb}
             onChange={(e) => setWhiteVolumeDb(Number(e.target.value))}
-            disabled={createMut.isPending}
+            disabled={submitting}
             className="w-full accent-cyan-400"
           />
           <p className="text-[10px] text-white/40">
-            Recomendado: -22 dB. Mais baixo = menos audível pra humano (mas o bot já transcreve igual).
+            Recomendado: -22 dB. Mais baixo = menos audível pra humano.
           </p>
         </div>
 
         {/* Compression */}
         <div className="space-y-2">
-          <Label className="hud-label">Compressão</Label>
+          <Label className="hud-label">Compressão (aplica em todos)</Label>
           <Select
             value={compression}
             onValueChange={(v) => setCompression(v as ShieldCompressionMode)}
-            disabled={createMut.isPending}
+            disabled={submitting}
           >
             <SelectTrigger>
               <SelectValue />
@@ -197,7 +331,7 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
           <Checkbox
             checked={verifyTranscript}
             onChange={(e) => setVerifyTranscript(e.target.checked)}
-            disabled={createMut.isPending}
+            disabled={submitting}
             className="mt-0.5"
           />
           <span>
@@ -205,46 +339,90 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
               Verificar com AssemblyAI (~$0.04/min)
             </span>
             <span className="block text-[11px] text-white/50">
-              Roda transcrição no resultado pra confirmar que IA só captura o white.
+              Roda transcrição em cada vídeo final pra confirmar que IA só captura o white.
             </span>
           </span>
         </label>
 
         <div className="flex justify-end gap-2 pt-2">
-          {activeJobId && (
-            <Button variant="outline" onClick={reset} disabled={createMut.isPending}>
-              Novo processamento
-            </Button>
-          )}
           <Button
-            onClick={() => createMut.mutate()}
+            onClick={onSubmit}
             disabled={
-              createMut.isPending ||
-              !file ||
+              submitting ||
+              pendingCount === 0 ||
               !selectedNiche ||
               selectedNiche.whites.length === 0
             }
           >
-            {createMut.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-            Processar
+            {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+            {submitting
+              ? 'Subindo…'
+              : pendingCount > 1
+                ? `Processar ${pendingCount} vídeos`
+                : 'Processar'}
           </Button>
         </div>
-
-        {progress !== null && (
-          <div>
-            <div className="h-1 overflow-hidden rounded-full bg-white/[0.08]">
-              <div
-                className="h-full bg-cyan-300/70 transition-all"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-            <p className="mt-1 text-[11px] text-white/50">Enviando… {progress}%</p>
-          </div>
-        )}
       </div>
 
-      {activeJobId && <ShieldJobStatus jobId={activeJobId} />}
+      {/* Active jobs (this session) */}
+      {activeJobIds.length > 0 && (
+        <div className="space-y-3">
+          <p className="hud-label">Em processamento ({activeJobIds.length})</p>
+          {activeJobIds.map((id) => (
+            <ShieldJobStatus key={id} jobId={id} />
+          ))}
+        </div>
+      )}
     </div>
+  );
+}
+
+function SlotRow({ slot, onRemove }: { slot: UploadSlot; onRemove: () => void }) {
+  const icon =
+    slot.status === 'done' ? (
+      <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-300" />
+    ) : slot.status === 'failed' ? (
+      <XCircle className="h-3 w-3 shrink-0 text-rose-300" />
+    ) : slot.status === 'uploading' ? (
+      <Loader2 className="h-3 w-3 shrink-0 animate-spin text-cyan-300" />
+    ) : (
+      <FileVideo className="h-3 w-3 shrink-0 text-white/45" />
+    );
+  return (
+    <li className="rounded px-2 py-1.5 hover:bg-white/[0.03]">
+      <div className="flex items-center gap-2 text-[12px]">
+        {icon}
+        <span className="flex-1 truncate text-white/85" title={slot.file.name}>
+          {slot.file.name}
+        </span>
+        <span className="shrink-0 font-mono text-[10px] text-white/40">
+          {formatBytes(slot.file.size)}
+        </span>
+        {slot.status === 'pending' && (
+          <button
+            type="button"
+            onClick={onRemove}
+            className="text-white/40 hover:text-rose-300"
+            title="Remover da fila"
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+      {slot.status === 'uploading' && (
+        <div className="ml-5 mt-1 h-0.5 overflow-hidden rounded-full bg-white/[0.08]">
+          <div
+            className="h-full bg-cyan-300/70 transition-all"
+            style={{ width: `${slot.progress}%` }}
+          />
+        </div>
+      )}
+      {slot.status === 'failed' && slot.error && (
+        <p className="ml-5 mt-1 truncate text-[10px] text-rose-300/85" title={slot.error}>
+          {slot.error}
+        </p>
+      )}
+    </li>
   );
 }
 
