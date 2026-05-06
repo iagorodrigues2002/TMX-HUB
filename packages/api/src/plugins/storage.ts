@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import { DigiAuditStore } from '../services/digi-audit-store.js';
 import { FunnelJobStore } from '../services/funnel-job-store.js';
 import { JobStore } from '../services/job-store.js';
 import { NicheStore } from '../services/niche-store.js';
@@ -18,6 +19,7 @@ declare module 'fastify' {
     snapshotStore: SnapshotStore;
     nicheStore: NicheStore;
     shieldJobStore: ShieldJobStore;
+    digiAuditStore: DigiAuditStore;
   }
 }
 
@@ -31,6 +33,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.decorate('snapshotStore', new SnapshotStore(app.redis));
   app.decorate('nicheStore', new NicheStore(app.redis));
   app.decorate('shieldJobStore', new ShieldJobStore(app.redis));
+  app.decorate('digiAuditStore', new DigiAuditStore(app.redis));
 
   app.addHook('onClose', async () => {
     await storage.close();

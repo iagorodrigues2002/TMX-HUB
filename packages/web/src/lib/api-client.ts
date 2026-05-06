@@ -1012,7 +1012,94 @@ export const apiClient = {
   async deleteShieldJob(id: string): Promise<void> {
     await request<void>(`/v1/shield-jobs/${id}`, { method: 'DELETE' });
   },
+
+  // ---- Digistore24 Audits ----
+  async listDigiAudits(): Promise<DigiAuditView[]> {
+    const wire = await request<{ audits: DigiAuditWire[] }>('/v1/digi-audits');
+    return (wire.audits ?? []).map(fromDigiAuditWire);
+  },
+  async createDigiAudit(input: { product_name: string; offer_id?: string }): Promise<DigiAuditView> {
+    const wire = await request<DigiAuditWire>('/v1/digi-audits', {
+      method: 'POST',
+      body: input,
+    });
+    return fromDigiAuditWire(wire);
+  },
+  async getDigiAudit(id: string, signal?: AbortSignal): Promise<DigiAuditView> {
+    const wire = await request<DigiAuditWire>(`/v1/digi-audits/${id}`, { signal });
+    return fromDigiAuditWire(wire);
+  },
+  async updateDigiAudit(
+    id: string,
+    patch: {
+      product_name?: string;
+      offer_id?: string;
+      status?: DigiAuditStatusView;
+      notes?: string;
+      items?: Record<string, DigiAuditItemView>;
+    },
+  ): Promise<DigiAuditView> {
+    const wire = await request<DigiAuditWire>(`/v1/digi-audits/${id}`, {
+      method: 'PATCH',
+      body: patch,
+    });
+    return fromDigiAuditWire(wire);
+  },
+  async deleteDigiAudit(id: string): Promise<void> {
+    await request<void>(`/v1/digi-audits/${id}`, { method: 'DELETE' });
+  },
 };
+
+// ---- Digistore24 Audit types ----
+
+export type DigiAuditStatusView =
+  | 'draft'
+  | 'in_review'
+  | 'approved'
+  | 'rejected'
+  | 'abandoned';
+export type DigiItemStateView = 'pending' | 'done' | 'na';
+
+export interface DigiAuditItemView {
+  state: DigiItemStateView;
+  notes?: string;
+  url?: string;
+}
+
+export interface DigiAuditView {
+  id: string;
+  productName: string;
+  offerId?: string;
+  status: DigiAuditStatusView;
+  items: Record<string, DigiAuditItemView>;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface DigiAuditWire {
+  id: string;
+  product_name: string;
+  offer_id?: string;
+  status: DigiAuditStatusView;
+  items: Record<string, DigiAuditItemView>;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+function fromDigiAuditWire(w: DigiAuditWire): DigiAuditView {
+  return {
+    id: w.id,
+    productName: w.product_name,
+    offerId: w.offer_id,
+    status: w.status,
+    items: w.items ?? {},
+    notes: w.notes,
+    createdAt: w.created_at,
+    updatedAt: w.updated_at,
+  };
+}
 
 // ---- Shield / Niche types ----
 

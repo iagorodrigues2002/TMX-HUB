@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  ClipboardCheck,
   FileAudio,
   GitCompare,
   Layers,
@@ -79,6 +80,13 @@ export default function ToolsIndexPage() {
             title="Video Shield"
             description="Phase cancel + white audio por nicho. Bots transcrevem só o white, humanos ouvem o original. Compressão opcional e verificação por AssemblyAI."
             href="/tools/video-shield"
+            badge="Novo"
+          />
+          <ToolCard
+            icon={<ClipboardCheck className="h-6 w-6" />}
+            title="Digi Approval"
+            description="Auditoria de cadastro de produto na Digistore24 (Blackzada + CloakUp). 12 seções, ~120 itens, ~50 críticos. Persiste por produto."
+            href="/tools/digi-approval"
             badge="Novo"
           />
           <ToolCard

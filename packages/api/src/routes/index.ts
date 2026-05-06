@@ -3,6 +3,7 @@ import activityRoutes from './activity.js';
 import authRoutes from './auth.js';
 import buildsRoutes from './builds.js';
 import clonesRoutes from './clones.js';
+import digiAuditsRoutes from './digi-audits.js';
 import formsRoutes from './forms.js';
 import funnelJobsRoutes from './funnel-jobs.js';
 import healthRoutes from './health.js';
@@ -46,6 +47,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         await protectedRoutes.register(offersRoutes);
         await protectedRoutes.register(nichesRoutes);
         await protectedRoutes.register(shieldJobsRoutes);
+        await protectedRoutes.register(digiAuditsRoutes);
       });
     },
     { prefix: '/v1' },

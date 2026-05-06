@@ -240,3 +240,38 @@ export const CreateShieldJobBodySchema = z
     verify_transcript: z.boolean().optional(),
   })
   .strict();
+
+// ---- Digistore24 Audit ----
+
+export const DigiAuditStatusSchema = z.enum([
+  'draft',
+  'in_review',
+  'approved',
+  'rejected',
+  'abandoned',
+]);
+
+export const DigiItemStateSchema = z.enum(['pending', 'done', 'na']);
+
+export const DigiAuditItemSchema = z.object({
+  state: DigiItemStateSchema,
+  notes: z.string().max(1000).optional(),
+  url: z.string().max(500).optional(),
+});
+
+export const CreateDigiAuditRequestSchema = z
+  .object({
+    product_name: z.string().min(1).max(80),
+    offer_id: z.string().max(64).optional(),
+  })
+  .strict();
+
+export const UpdateDigiAuditRequestSchema = z
+  .object({
+    product_name: z.string().min(1).max(80).optional(),
+    offer_id: z.string().max(64).optional(),
+    status: DigiAuditStatusSchema.optional(),
+    notes: z.string().max(5000).optional(),
+    items: z.record(z.string(), DigiAuditItemSchema).optional(),
+  })
+  .strict();
