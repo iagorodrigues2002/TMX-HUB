@@ -156,6 +156,12 @@ export function ShieldJobsHistory() {
           <h2 className="mt-1 text-[16px] font-semibold text-white">
             {jobs.length} job(s) recente(s)
           </h2>
+          {jobs.some((j) => j.status === 'ready') && (
+            <p className="mt-1 flex items-center gap-1.5 text-[11px] text-cyan-300/75">
+              <Package className="h-3 w-3" />
+              Marque os checkboxes abaixo pra baixar vários em um .zip (até 3GB).
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <FilterButton value="all" current={filter} onClick={setFilter} count={jobs.length} />

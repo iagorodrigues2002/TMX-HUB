@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Download,
+  FileArchive,
   FileVideo,
   Loader2,
   Shuffle,
@@ -13,6 +14,7 @@ import {
   Upload,
   XCircle,
 } from 'lucide-react';
+import JSZip from 'jszip';
 import { toast } from 'sonner';
 import {
   apiClient,
@@ -40,6 +42,58 @@ const COMPRESSION_OPTIONS: Array<{ value: ShieldCompressionMode; label: string; 
 
 /** Maximum simultaneous uploads to keep network/UI sane. */
 const PARALLEL_UPLOADS = 5;
+
+/** Extensões de vídeo/áudio aceitas dentro de um ZIP (case-insensitive). */
+const ALLOWED_MEDIA_EXT = new Set([
+  'mp4', 'mov', 'avi', 'webm', 'mkv',
+  'mp3', 'wav', 'm4a', 'aac',
+]);
+
+function isZipFile(file: File): boolean {
+  const ext = file.name.split('.').pop()?.toLowerCase();
+  return (
+    file.type === 'application/zip' ||
+    file.type === 'application/x-zip-compressed' ||
+    ext === 'zip'
+  );
+}
+
+function extOf(name: string): string {
+  return (name.split('.').pop() || '').toLowerCase();
+}
+
+/**
+ * Extrai vídeos/áudios de um ZIP no browser. Ignora pastas, arquivos ocultos
+ * (.DS_Store, __MACOSX/) e qualquer extensão fora da whitelist. Retorna File[]
+ * prontos pra entrar como slots normais.
+ */
+async function extractMediaFromZip(zipFile: File): Promise<File[]> {
+  const buf = await zipFile.arrayBuffer();
+  const zip = await JSZip.loadAsync(buf);
+  const out: File[] = [];
+  const entries = Object.values(zip.files);
+  for (const entry of entries) {
+    if (entry.dir) continue;
+    if (entry.name.startsWith('__MACOSX/')) continue;
+    const baseName = entry.name.split('/').pop() || entry.name;
+    if (!baseName || baseName.startsWith('.')) continue;
+    const ext = extOf(baseName);
+    if (!ALLOWED_MEDIA_EXT.has(ext)) continue;
+    const blob = await entry.async('blob');
+    const mime =
+      ext === 'mp4' || ext === 'm4a' ? 'video/mp4' :
+      ext === 'mov' ? 'video/quicktime' :
+      ext === 'avi' ? 'video/x-msvideo' :
+      ext === 'webm' ? 'video/webm' :
+      ext === 'mkv' ? 'video/x-matroska' :
+      ext === 'mp3' ? 'audio/mpeg' :
+      ext === 'wav' ? 'audio/wav' :
+      ext === 'aac' ? 'audio/aac' :
+      'application/octet-stream';
+    out.push(new File([blob], baseName, { type: mime }));
+  }
+  return out;
+}
 
 interface UploadSlot {
   id: string;             // local unique id
@@ -69,6 +123,7 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
   const [compression, setCompression] = useState<ShieldCompressionMode>('none');
   const [verifyTranscript, setVerifyTranscript] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [extractingZips, setExtractingZips] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Default niche selection: first one with whites.
@@ -86,19 +141,60 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
   const failedCount = slots.filter((s) => s.status === 'failed').length;
   const activeJobIds = slots.filter((s) => s.jobId).map((s) => s.jobId!);
 
-  const onAddFiles = (fileList: FileList | null) => {
+  const onAddFiles = async (fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return;
-    const adds: UploadSlot[] = [];
+    if (fileRef.current) fileRef.current.value = '';
+
+    const zipFiles: File[] = [];
+    const mediaFiles: File[] = [];
     for (const f of Array.from(fileList)) {
-      adds.push({
+      if (isZipFile(f)) zipFiles.push(f);
+      else mediaFiles.push(f);
+    }
+
+    // Adiciona vídeos/áudios diretos imediatamente.
+    if (mediaFiles.length > 0) {
+      const adds: UploadSlot[] = mediaFiles.map((f) => ({
         id: newSlotId(),
         file: f,
         status: 'pending',
         progress: 0,
-      });
+      }));
+      setSlots((s) => [...s, ...adds]);
     }
-    setSlots((s) => [...s, ...adds]);
-    if (fileRef.current) fileRef.current.value = '';
+
+    // Extrai ZIPs em paralelo (no browser). Cada vídeo/áudio dentro vira um slot.
+    if (zipFiles.length === 0) return;
+    setExtractingZips((n) => n + zipFiles.length);
+    try {
+      const results = await Promise.allSettled(
+        zipFiles.map(async (zip) => {
+          const extracted = await extractMediaFromZip(zip);
+          if (extracted.length === 0) {
+            toast.warning(`${zip.name}: sem vídeos/áudios reconhecidos.`);
+            return [] as File[];
+          }
+          toast.success(`${zip.name}: ${extracted.length} mídia(s) extraídas.`);
+          return extracted;
+        }),
+      );
+      const flat: File[] = [];
+      for (const r of results) {
+        if (r.status === 'fulfilled') flat.push(...r.value);
+        else toast.error(`Falha ao ler ZIP: ${(r.reason as Error)?.message ?? 'erro'}`);
+      }
+      if (flat.length > 0) {
+        const adds: UploadSlot[] = flat.map((f) => ({
+          id: newSlotId(),
+          file: f,
+          status: 'pending',
+          progress: 0,
+        }));
+        setSlots((s) => [...s, ...adds]);
+      }
+    } finally {
+      setExtractingZips((n) => Math.max(0, n - zipFiles.length));
+    }
   };
 
   const removeSlot = (id: string) => {
@@ -205,24 +301,38 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
               onAddFiles(e.dataTransfer.files);
             }}
           >
-            <Upload className="mx-auto mb-2 h-5 w-5 text-cyan-300/70" />
+            {extractingZips > 0 ? (
+              <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin text-cyan-300/70" />
+            ) : (
+              <Upload className="mx-auto mb-2 h-5 w-5 text-cyan-300/70" />
+            )}
             <p className="text-[12px] text-white/65">
-              Arraste vídeos aqui, ou{' '}
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                className="text-cyan-300 hover:text-cyan-200"
-              >
-                clique pra selecionar
-              </button>
+              {extractingZips > 0 ? (
+                <>Extraindo {extractingZips} ZIP(s)…</>
+              ) : (
+                <>
+                  Arraste vídeos ou ZIPs aqui, ou{' '}
+                  <button
+                    type="button"
+                    onClick={() => fileRef.current?.click()}
+                    className="text-cyan-300 hover:text-cyan-200"
+                  >
+                    clique pra selecionar
+                  </button>
+                </>
+              )}
             </p>
             <p className="mt-1 text-[10px] text-white/35">
               Múltipla seleção · MP4/MOV/AVI/WEBM/MKV · até 500MB cada
             </p>
+            <p className="mt-0.5 text-[10px] text-cyan-300/55">
+              <FileArchive className="mr-1 inline h-3 w-3" />
+              ZIPs com vídeos dentro são extraídos automaticamente
+            </p>
             <input
               ref={fileRef}
               type="file"
-              accept="video/*,audio/*"
+              accept="video/*,audio/*,.zip,application/zip,application/x-zip-compressed"
               multiple
               className="hidden"
               onChange={(e) => onAddFiles(e.target.files)}
