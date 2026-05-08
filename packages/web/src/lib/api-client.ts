@@ -465,6 +465,37 @@ interface AuthSessionWire {
   expires_at: string;
 }
 
+// ---- Invites ----
+
+export interface InviteView {
+  token: string;
+  email?: string;
+  name?: string;
+  createdAt: string;
+  expiresAt: string;
+  invitedBy?: string;
+}
+
+interface InviteWire {
+  token: string;
+  email?: string;
+  name?: string;
+  created_at: string;
+  expires_at: string;
+  invited_by?: string;
+}
+
+function fromInviteWire(w: InviteWire): InviteView {
+  return {
+    token: w.token,
+    email: w.email,
+    name: w.name,
+    createdAt: w.created_at,
+    expiresAt: w.expires_at,
+    invitedBy: w.invited_by,
+  };
+}
+
 // ---- Offers / Dashboards ----
 
 export type OfferStatus = 'testando' | 'validando' | 'escala' | 'pausado' | 'morrendo';
@@ -646,10 +677,20 @@ export const apiClient = {
     return { user: wire.user, token: wire.token };
   },
 
-  async register(email: string, name: string, password: string): Promise<{ user: AuthUser; token: string }> {
+  async register(
+    email: string,
+    name: string,
+    password: string,
+    inviteToken?: string,
+  ): Promise<{ user: AuthUser; token: string }> {
     const wire = await request<AuthSessionWire>('/v1/auth/register', {
       method: 'POST',
-      body: { email, name, password },
+      body: {
+        email,
+        name,
+        password,
+        ...(inviteToken ? { invite_token: inviteToken } : {}),
+      },
     });
     return { user: wire.user, token: wire.token };
   },
@@ -657,6 +698,64 @@ export const apiClient = {
   async me(): Promise<AuthUser> {
     const wire = await request<{ user: AuthUser }>('/v1/auth/me');
     return wire.user;
+  },
+
+  // ---- Invites (admin only) ----
+  async checkInvite(token: string): Promise<{
+    valid: boolean;
+    email?: string;
+    name?: string;
+    expiresAt?: string;
+    invitedBy?: string;
+    detail?: string;
+  }> {
+    try {
+      const wire = await request<{
+        valid: boolean;
+        email?: string;
+        name?: string;
+        expires_at?: string;
+        invited_by?: string;
+      }>(`/v1/auth/invites/${encodeURIComponent(token)}`);
+      return {
+        valid: wire.valid,
+        email: wire.email,
+        name: wire.name,
+        expiresAt: wire.expires_at,
+        invitedBy: wire.invited_by,
+      };
+    } catch (err) {
+      const e = err as ApiError;
+      if (e.status === 404) return { valid: false, detail: 'Convite inválido ou expirado.' };
+      throw err;
+    }
+  },
+
+  async listInvites(): Promise<InviteView[]> {
+    const wire = await request<{ invites: InviteWire[] }>('/v1/auth/invites');
+    return (wire.invites ?? []).map(fromInviteWire);
+  },
+
+  async createInvite(input: {
+    email?: string;
+    name?: string;
+    expiresInDays?: number;
+  }): Promise<InviteView> {
+    const wire = await request<InviteWire>('/v1/auth/invites', {
+      method: 'POST',
+      body: {
+        ...(input.email ? { email: input.email } : {}),
+        ...(input.name ? { name: input.name } : {}),
+        ...(input.expiresInDays ? { expires_in_days: input.expiresInDays } : {}),
+      },
+    });
+    return fromInviteWire(wire);
+  },
+
+  async revokeInvite(token: string): Promise<void> {
+    await request<void>(`/v1/auth/invites/${encodeURIComponent(token)}`, {
+      method: 'DELETE',
+    });
   },
 
   async listActivity(): Promise<Array<{

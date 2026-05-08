@@ -17,7 +17,12 @@ interface AuthState {
   /** True while we're checking the existing token at boot. */
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, name: string, password: string) => Promise<void>;
+  register: (
+    email: string,
+    name: string,
+    password: string,
+    inviteToken?: string,
+  ) => Promise<void>;
   logout: () => void;
   /** Force a refresh of the user from /auth/me. */
   refresh: () => Promise<void>;
@@ -62,8 +67,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const register = useCallback(
-    async (email: string, name: string, password: string) => {
-      const { user: u, token } = await apiClient.register(email, name, password);
+    async (email: string, name: string, password: string, inviteToken?: string) => {
+      const { user: u, token } = await apiClient.register(
+        email,
+        name,
+        password,
+        inviteToken,
+      );
       authToken.set(token);
       setUser(u);
     },
