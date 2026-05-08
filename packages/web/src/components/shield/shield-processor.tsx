@@ -124,7 +124,35 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
   const [verifyTranscript, setVerifyTranscript] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [extractingZips, setExtractingZips] = useState(0);
+  const [draggingOver, setDraggingOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Bloqueia o browser de "abrir" arquivos que caem fora do drop zone
+  // (default action seria navegar pro arquivo). Mantém a janela inteira como
+  // capture pra não perder o evento.
+  useEffect(() => {
+    const onWindowDragOver = (e: DragEvent) => {
+      if (e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files')) {
+        e.preventDefault();
+      }
+    };
+    const onWindowDrop = (e: DragEvent) => {
+      // Só previne se não é dentro do drop zone (ele já preventDefault dele).
+      if (
+        e.dataTransfer &&
+        Array.from(e.dataTransfer.types).includes('Files') &&
+        !(e.target as HTMLElement)?.closest?.('[data-shield-dropzone]')
+      ) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('dragover', onWindowDragOver);
+    window.addEventListener('drop', onWindowDrop);
+    return () => {
+      window.removeEventListener('dragover', onWindowDragOver);
+      window.removeEventListener('drop', onWindowDrop);
+    };
+  }, []);
 
   // Default niche selection: first one with whites.
   useEffect(() => {
@@ -333,14 +361,45 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
           <Label className="hud-label">
             Vídeos ({slots.length} selecionado{slots.length === 1 ? '' : 's'})
           </Label>
-          <div
-            className="rounded-md border border-dashed border-white/[0.12] bg-white/[0.02] p-4 text-center"
+          {/*
+            <label> envolvendo o <input> garante que clicar em qualquer parte
+            do drop zone abre o picker — sem depender de JS / refs.
+            data-shield-dropzone é o marker que o handler global checa.
+          */}
+          <label
+            data-shield-dropzone
+            className={`block cursor-pointer rounded-md border border-dashed p-6 text-center transition-colors ${
+              draggingOver
+                ? 'border-cyan-300/60 bg-cyan-300/[0.06]'
+                : 'border-white/[0.12] bg-white/[0.02] hover:bg-white/[0.04]'
+            }`}
+            onDragEnter={(e) => {
+              e.preventDefault();
+              setDraggingOver(true);
+            }}
             onDragOver={(e) => {
               e.preventDefault();
               e.dataTransfer.dropEffect = 'copy';
             }}
+            onDragLeave={(e) => {
+              // Só remove se realmente saiu do label (não filho)
+              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+              if (
+                e.clientX <= rect.left ||
+                e.clientX >= rect.right ||
+                e.clientY <= rect.top ||
+                e.clientY >= rect.bottom
+              ) {
+                setDraggingOver(false);
+              }
+            }}
             onDrop={(e) => {
               e.preventDefault();
+              setDraggingOver(false);
+              // eslint-disable-next-line no-console
+              console.log('[shield] DROP detectado', {
+                count: e.dataTransfer.files.length,
+              });
               onAddFiles(e.dataTransfer.files);
             }}
           >
@@ -349,26 +408,17 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
             ) : (
               <Upload className="mx-auto mb-2 h-5 w-5 text-cyan-300/70" />
             )}
-            <p className="text-[12px] text-white/65">
-              {extractingZips > 0 ? (
-                <>Extraindo {extractingZips} ZIP(s)…</>
-              ) : (
-                <>
-                  Arraste vídeos ou ZIPs aqui, ou{' '}
-                  <button
-                    type="button"
-                    onClick={() => fileRef.current?.click()}
-                    className="text-cyan-300 hover:text-cyan-200"
-                  >
-                    clique pra selecionar
-                  </button>
-                </>
-              )}
+            <p className="text-[13px] font-semibold text-white">
+              {extractingZips > 0
+                ? `Extraindo ${extractingZips} ZIP(s)…`
+                : draggingOver
+                  ? 'Solte aqui'
+                  : 'Clique pra selecionar ou arraste arquivos'}
             </p>
-            <p className="mt-1 text-[10px] text-white/35">
+            <p className="mt-1 text-[11px] text-white/55">
               Múltipla seleção · MP4/MOV/AVI/WEBM/MKV · até 500MB cada
             </p>
-            <p className="mt-0.5 text-[10px] text-cyan-300/55">
+            <p className="mt-0.5 text-[11px] text-cyan-300/70">
               <FileArchive className="mr-1 inline h-3 w-3" />
               ZIPs com vídeos dentro são extraídos automaticamente
             </p>
@@ -377,11 +427,17 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
               type="file"
               accept="video/*,audio/*,.zip,application/zip,application/x-zip-compressed"
               multiple
-              className="hidden"
-              onChange={(e) => onAddFiles(e.target.files)}
+              className="sr-only"
+              onChange={(e) => {
+                // eslint-disable-next-line no-console
+                console.log('[shield] PICKER selecionou', {
+                  count: e.target.files?.length ?? 0,
+                });
+                onAddFiles(e.target.files);
+              }}
               disabled={submitting}
             />
-          </div>
+          </label>
 
           {slots.length > 0 && (
             <div className="space-y-1">
