@@ -145,14 +145,41 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
     if (!fileList || fileList.length === 0) return;
     if (fileRef.current) fileRef.current.value = '';
 
+    const incoming = Array.from(fileList);
+    // eslint-disable-next-line no-console
+    console.log(
+      '[shield] onAddFiles recebeu',
+      incoming.map((f) => ({ name: f.name, type: f.type, size: f.size })),
+    );
+
     const zipFiles: File[] = [];
     const mediaFiles: File[] = [];
-    for (const f of Array.from(fileList)) {
-      if (isZipFile(f)) zipFiles.push(f);
-      else mediaFiles.push(f);
+    const rejected: { name: string; reason: string }[] = [];
+
+    for (const f of incoming) {
+      if (isZipFile(f)) {
+        zipFiles.push(f);
+        continue;
+      }
+      const mime = (f.type || '').toLowerCase();
+      const ext = extOf(f.name);
+      const isMediaByMime = mime.startsWith('video/') || mime.startsWith('audio/');
+      const isMediaByExt = ALLOWED_MEDIA_EXT.has(ext);
+      if (isMediaByMime || isMediaByExt) {
+        mediaFiles.push(f);
+      } else {
+        rejected.push({
+          name: f.name,
+          reason: `tipo "${mime || ext || 'desconhecido'}" não suportado`,
+        });
+      }
     }
 
-    // Adiciona vídeos/áudios diretos imediatamente.
+    // Aviso explícito pra cada arquivo ignorado.
+    for (const r of rejected) {
+      toast.warning(`Ignorado: ${r.name} — ${r.reason}`);
+    }
+
     if (mediaFiles.length > 0) {
       const adds: UploadSlot[] = mediaFiles.map((f) => ({
         id: newSlotId(),
@@ -161,27 +188,43 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
         progress: 0,
       }));
       setSlots((s) => [...s, ...adds]);
+      toast.info(
+        `${mediaFiles.length} arquivo(s) adicionado(s)${
+          zipFiles.length > 0 ? ' · extraindo ZIP(s)…' : ''
+        }`,
+      );
     }
 
-    // Extrai ZIPs em paralelo (no browser). Cada vídeo/áudio dentro vira um slot.
     if (zipFiles.length === 0) return;
+
     setExtractingZips((n) => n + zipFiles.length);
     try {
       const results = await Promise.allSettled(
         zipFiles.map(async (zip) => {
-          const extracted = await extractMediaFromZip(zip);
-          if (extracted.length === 0) {
-            toast.warning(`${zip.name}: sem vídeos/áudios reconhecidos.`);
-            return [] as File[];
+          // eslint-disable-next-line no-console
+          console.log('[shield] extraindo ZIP', { name: zip.name, size: zip.size });
+          try {
+            const extracted = await extractMediaFromZip(zip);
+            if (extracted.length === 0) {
+              toast.warning(
+                `${zip.name}: ZIP aberto mas sem vídeos/áudios reconhecidos.`,
+              );
+            } else {
+              toast.success(`${zip.name}: ${extracted.length} mídia(s) extraídas.`);
+            }
+            return extracted;
+          } catch (err) {
+            // eslint-disable-next-line no-console
+            console.error('[shield] erro extraindo ZIP', zip.name, err);
+            const msg = err instanceof Error ? err.message : String(err);
+            toast.error(`${zip.name}: erro ao abrir ZIP — ${msg}`);
+            throw err;
           }
-          toast.success(`${zip.name}: ${extracted.length} mídia(s) extraídas.`);
-          return extracted;
         }),
       );
       const flat: File[] = [];
       for (const r of results) {
         if (r.status === 'fulfilled') flat.push(...r.value);
-        else toast.error(`Falha ao ler ZIP: ${(r.reason as Error)?.message ?? 'erro'}`);
       }
       if (flat.length > 0) {
         const adds: UploadSlot[] = flat.map((f) => ({
