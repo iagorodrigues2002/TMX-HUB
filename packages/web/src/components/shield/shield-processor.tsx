@@ -186,9 +186,12 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
       toast.error('Nenhum arquivo recebido pelo handler.');
       return;
     }
-    if (fileRef.current) fileRef.current.value = '';
-
+    // CRÍTICO: copia os Files ANTES de mexer no input. fileList é a referência
+    // viva de input.files; reset do input.value zera essa coleção, então leitura
+    // depois do reset retorna []. Array.from copia as referências dos File pra
+    // um array novo que sobrevive ao reset.
     const incoming = Array.from(fileList);
+    if (fileRef.current) fileRef.current.value = '';
     for (const f of incoming) {
       debug(`recebido: name="${f.name}" type="${f.type || '<vazio>'}" size=${f.size}`);
     }
