@@ -170,7 +170,18 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
   const activeJobIds = slots.filter((s) => s.jobId).map((s) => s.jobId!);
 
   const onAddFiles = async (fileList: FileList | null) => {
-    if (!fileList || fileList.length === 0) return;
+    // DIAGNÓSTICO LOUD: se você não vê esse alert, o handler não está sendo
+    // chamado (= bundle antigo no cache do browser). TODO: remover depois.
+    if (typeof window !== 'undefined') {
+      // eslint-disable-next-line no-alert
+      window.alert(
+        `[shield-debug] onAddFiles disparado com ${fileList?.length ?? 0} arquivo(s).`,
+      );
+    }
+    if (!fileList || fileList.length === 0) {
+      toast.error('Nenhum arquivo recebido pelo handler.');
+      return;
+    }
     if (fileRef.current) fileRef.current.value = '';
 
     const incoming = Array.from(fileList);
@@ -353,6 +364,25 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
         <h2 className="mt-1 text-[16px] font-semibold text-white">
           Phase Cancel + White (envio em massa)
         </h2>
+      </div>
+
+      {/* DIAGNÓSTICO: confirma que o bundle novo está rodando. Se esse botão
+          existe e funciona, o React tree está atualizado. TODO: remover. */}
+      <div className="rounded-md border border-rose-300/30 bg-rose-300/[0.04] p-2 text-center">
+        <button
+          type="button"
+          onClick={() => {
+            // eslint-disable-next-line no-alert
+            window.alert(
+              `[shield-debug] BUNDLE OK · build ${
+                process.env.NEXT_PUBLIC_BUILD_ID ?? 'dev'
+              } · JSZip=${typeof JSZip}`,
+            );
+          }}
+          className="text-[11px] font-semibold uppercase tracking-[0.14em] text-rose-200 hover:text-rose-100"
+        >
+          🩺 Clique aqui pra confirmar bundle novo carregou
+        </button>
       </div>
 
       <div className="glass-card space-y-5 p-5">
