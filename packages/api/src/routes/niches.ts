@@ -122,31 +122,23 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       );
     }
 
-    const chunks: Buffer[] = [];
-    let total = 0;
-    for await (const chunk of filePart.file) {
-      total += chunk.length;
-      if (total > MAX_WHITE_BYTES) {
-        throw new BadRequestError(
-          `Arquivo excede o limite de ${MAX_WHITE_BYTES / (1024 * 1024)}MB para áudio white.`,
-        );
-      }
-      chunks.push(chunk);
-    }
-    if (filePart.file.truncated) {
-      throw new BadRequestError('Upload truncado pelo limite de tamanho.');
-    }
-    const buf = Buffer.concat(chunks);
-
     const whiteId = ulid();
     const ext = extFromMime(mime, (filePart.filename.split('.').pop() || 'mp3').toLowerCase());
     const storageKey = `niches/${req.user.sub}/${req.params.id}/whites/${whiteId}.${ext}`;
-    await app.storage.put(storageKey, buf, { contentType: mime });
+
+    const result = await app.storage.putStream(storageKey, filePart.file, {
+      contentType: mime,
+      maxBytes: MAX_WHITE_BYTES,
+    });
+    if (filePart.file.truncated) {
+      await app.storage.delete(storageKey).catch(() => {});
+      throw new BadRequestError('Upload truncado pelo limite de tamanho.');
+    }
 
     const { niche } = await app.nicheStore.addWhite(req.params.id, req.user.sub, {
       filename: filePart.filename,
       storageKey,
-      bytes: buf.length,
+      bytes: result.bytes,
       ...(label ? { label } : {}),
     });
     return reply.code(201).send(nicheToWire(niche));

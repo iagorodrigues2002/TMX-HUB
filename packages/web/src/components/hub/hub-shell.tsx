@@ -26,7 +26,12 @@ export function HubShell({ children, breadcrumb, topbarRight, fullBleed }: HubSh
   );
   return (
     <AuthGate>
-      <div className={fullBleed ? 'flex h-screen flex-col' : 'flex min-h-screen flex-col'}>
+      {/*
+        h-screen + overflow-hidden no pai trava o layout na viewport.
+        Sidebar fica fixa visualmente; só o <main> rola.
+        MicroFooter posicionado absoluto pra não consumir altura do main scroll.
+      */}
+      <div className="flex h-screen flex-col overflow-hidden">
         <Topbar breadcrumb={breadcrumb} right={right} />
         <div className="flex flex-1 overflow-hidden">
           <Sidebar />
@@ -35,10 +40,11 @@ export function HubShell({ children, breadcrumb, topbarRight, fullBleed }: HubSh
           ) : (
             <main className="flex-1 overflow-y-auto px-6 py-8 md:px-10 md:py-12">
               <div className="mx-auto w-full max-w-6xl">{children}</div>
+              <MicroFooter />
             </main>
           )}
         </div>
-        <MicroFooter />
+        {fullBleed && <MicroFooter />}
       </div>
     </AuthGate>
   );

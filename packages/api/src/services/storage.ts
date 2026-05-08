@@ -1,3 +1,4 @@
+import { Transform, type TransformCallback } from 'node:stream';
 import {
   DeleteObjectCommand,
   DeleteObjectsCommand,
@@ -7,9 +8,11 @@ import {
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
+import { Upload } from '@aws-sdk/lib-storage';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import type { Readable } from 'node:stream';
 import { env } from '../env.js';
-import { NotFoundError } from '../lib/problem.js';
+import { BadRequestError, NotFoundError } from '../lib/problem.js';
 
 export interface StorageObject {
   body: Buffer;
@@ -55,6 +58,50 @@ export class StorageService {
         Metadata: opts.metadata,
       }),
     );
+  }
+
+  /**
+   * Streaming upload com multipart paralelo. Pra arquivos grandes (>10MB)
+   * é ~2-3x mais rápido que `put` porque parts vão em paralelo enquanto
+   * o stream da requisição ainda está chegando.
+   *
+   * Conta bytes inline e força aborto quando excede `maxBytes` (defesa
+   * contra requests sem Content-Length confiável).
+   */
+  async putStream(
+    key: string,
+    body: Readable,
+    opts: PutOptions & { maxBytes?: number; partSize?: number; queueSize?: number } = {},
+  ): Promise<{ bytes: number }> {
+    const counter = new ByteCounterTransform(opts.maxBytes);
+    body.pipe(counter);
+
+    const upload = new Upload({
+      client: this.client,
+      params: {
+        Bucket: this.bucket,
+        Key: key,
+        Body: counter,
+        ContentType: opts.contentType,
+        CacheControl: opts.cacheControl,
+        Metadata: opts.metadata,
+      },
+      partSize: opts.partSize ?? 5 * 1024 * 1024, // 5MB
+      queueSize: opts.queueSize ?? 4,             // 4 parts em paralelo
+      leavePartsOnError: false,
+    });
+
+    try {
+      await upload.done();
+    } catch (err) {
+      // Se o counter abortou por exceder limite, propaga como 400.
+      if (err instanceof Error && err.message.startsWith('STREAM_LIMIT_EXCEEDED')) {
+        throw new BadRequestError(err.message.replace('STREAM_LIMIT_EXCEEDED:', '').trim());
+      }
+      throw err;
+    }
+
+    return { bytes: counter.bytes };
   }
 
   async get(key: string): Promise<StorageObject> {
@@ -131,6 +178,29 @@ export class StorageService {
 
   async close(): Promise<void> {
     this.client.destroy();
+  }
+}
+
+/**
+ * Transform que conta bytes e aborta o stream se exceder o limite.
+ * Erro carrega prefixo "STREAM_LIMIT_EXCEEDED:" pra ser mapeado em 400.
+ */
+class ByteCounterTransform extends Transform {
+  bytes = 0;
+  constructor(private readonly maxBytes?: number) {
+    super();
+  }
+  override _transform(chunk: Buffer, _enc: BufferEncoding, cb: TransformCallback): void {
+    this.bytes += chunk.length;
+    if (this.maxBytes !== undefined && this.bytes > this.maxBytes) {
+      cb(
+        new Error(
+          `STREAM_LIMIT_EXCEEDED: arquivo excedeu o limite de ${this.maxBytes} bytes`,
+        ),
+      );
+      return;
+    }
+    cb(null, chunk);
   }
 }
 

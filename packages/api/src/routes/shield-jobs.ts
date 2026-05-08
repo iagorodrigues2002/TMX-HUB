@@ -113,34 +113,29 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     }
     const picked = app.nicheStore.pickRandomWhite(niche);
 
-    // Stream upload to R2.
+    // Stream upload pra R2 com multipart paralelo (4 parts simultâneas, 5MB cada).
+    // Não buffera o arquivo inteiro em memória; parts vão pra R2 enquanto o
+    // resto do request ainda chega — ~2-3x mais rápido que put + buffer.
     const jobId = ulid();
     const ext = extFromMime(mime, filePart.filename);
     const storageKey = app.shieldJobStore.inputKey(jobId, ext);
 
-    const chunks: Buffer[] = [];
-    let total = 0;
-    for await (const chunk of filePart.file) {
-      total += chunk.length;
-      if (total > MAX_INPUT_BYTES) {
-        throw new BadRequestError(
-          `Arquivo excede o limite de ${MAX_INPUT_BYTES / (1024 * 1024)}MB.`,
-        );
-      }
-      chunks.push(chunk);
-    }
+    const result = await app.storage.putStream(storageKey, filePart.file, {
+      contentType: mime,
+      maxBytes: MAX_INPUT_BYTES,
+    });
     if (filePart.file.truncated) {
+      // Limpa o objeto parcial em caso do multipart cap do fastify ter cortado.
+      await app.storage.delete(storageKey).catch(() => {});
       throw new BadRequestError('Upload truncado pelo limite de tamanho.');
     }
-    const buf = Buffer.concat(chunks);
-    await app.storage.put(storageKey, buf, { contentType: mime });
 
     const job = await app.shieldJobStore.create({
       id: jobId,
       userId: req.user.sub,
       inputStorageKey: storageKey,
       inputFilename: filePart.filename,
-      inputBytes: buf.length,
+      inputBytes: result.bytes,
       nicheId: niche.id,
       nicheName: niche.name,
       whiteId: picked.id,

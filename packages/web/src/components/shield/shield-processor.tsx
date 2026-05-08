@@ -39,7 +39,7 @@ const COMPRESSION_OPTIONS: Array<{ value: ShieldCompressionMode; label: string; 
 ];
 
 /** Maximum simultaneous uploads to keep network/UI sane. */
-const PARALLEL_UPLOADS = 3;
+const PARALLEL_UPLOADS = 5;
 
 interface UploadSlot {
   id: string;             // local unique id
