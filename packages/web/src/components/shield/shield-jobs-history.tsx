@@ -17,6 +17,8 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 
 const MAX_BULK = 100;
+/** Cap total — ZIP vira blob na RAM do browser. Casa com cap server-side. */
+const MAX_BULK_BYTES = 3 * 1024 * 1024 * 1024; // 3GB
 
 function formatBytes(b?: number): string {
   if (!b) return '—';
@@ -109,10 +111,18 @@ export function ShieldJobsHistory() {
 
   const clearSelection = () => setSelected(new Set());
 
+  const exceedsBytesCap = totalBytesSelected > MAX_BULK_BYTES;
+
   const onBulkDownload = async () => {
     if (visibleSelected.length === 0) return;
     if (visibleSelected.length > MAX_BULK) {
       toast.error(`Limite de ${MAX_BULK} arquivos por download. Selecione menos.`);
+      return;
+    }
+    if (exceedsBytesCap) {
+      toast.error(
+        `Seleção tem ${(totalBytesSelected / 1024 / 1024 / 1024).toFixed(2)}GB. Máximo: 3GB por .zip.`,
+      );
       return;
     }
     setDownloading(true);
@@ -189,19 +199,40 @@ export function ShieldJobsHistory() {
 
       {/* Bulk action bar — aparece só quando há seleção válida */}
       {visibleSelected.length > 0 && (
-        <div className="glass-card flex items-center justify-between gap-3 border-cyan-300/30 p-3">
+        <div
+          className={`glass-card flex items-center justify-between gap-3 p-3 ${
+            exceedsBytesCap ? 'border-amber-300/40' : 'border-cyan-300/30'
+          }`}
+        >
           <div className="text-[13px] text-white/85">
-            <span className="font-semibold text-cyan-200">{visibleSelected.length}</span>{' '}
+            <span
+              className={`font-semibold ${exceedsBytesCap ? 'text-amber-200' : 'text-cyan-200'}`}
+            >
+              {visibleSelected.length}
+            </span>{' '}
             selecionado(s) ·{' '}
-            <span className="font-mono text-[11px] text-white/55">
+            <span
+              className={`font-mono text-[11px] ${
+                exceedsBytesCap ? 'text-amber-300' : 'text-white/55'
+              }`}
+            >
               {(totalBytesSelected / 1024 / 1024).toFixed(1)} MB
             </span>
+            {exceedsBytesCap && (
+              <span className="ml-2 text-[11px] text-amber-300/85">
+                · excede 3GB, desmarque alguns
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <Button size="sm" variant="ghost" onClick={clearSelection} disabled={downloading}>
               Limpar
             </Button>
-            <Button size="sm" onClick={onBulkDownload} disabled={downloading}>
+            <Button
+              size="sm"
+              onClick={onBulkDownload}
+              disabled={downloading || exceedsBytesCap}
+            >
               {downloading ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (

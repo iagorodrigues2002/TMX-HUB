@@ -18,7 +18,9 @@ const ALLOWED_VIDEO = new Set([
   'audio/aac', 'audio/mp4',
 ]);
 
-const MAX_INPUT_BYTES = 100 * 1024 * 1024; // 100MB
+const MAX_INPUT_BYTES = 500 * 1024 * 1024; // 500MB
+/** Cap total do bulk-download. ZIP é blob no browser — limita pra não estourar memória. */
+const MAX_BULK_ZIP_BYTES = 3 * 1024 * 1024 * 1024; // 3GB
 
 function jobToWire(j: ShieldJob, downloadUrl?: string): Record<string, unknown> {
   return {
@@ -189,6 +191,16 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       }),
     );
     if (jobs.length === 0) throw new BadRequestError('Nenhum job válido.');
+
+    // Cap total de bytes — o ZIP vira um blob na memória do browser; passar de 3GB
+    // estoura na maioria dos navegadores. Soma usa outputBytes salvo no job.
+    const totalBytes = jobs.reduce((acc, j) => acc + (j.outputBytes ?? 0), 0);
+    if (totalBytes > MAX_BULK_ZIP_BYTES) {
+      const totalGb = (totalBytes / 1024 / 1024 / 1024).toFixed(2);
+      throw new BadRequestError(
+        `Seleção tem ${totalGb}GB; limite de download em lote é 3GB. Divida em rodadas menores.`,
+      );
+    }
 
     const archive = archiver('zip', { zlib: { level: 6 } });
     const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');

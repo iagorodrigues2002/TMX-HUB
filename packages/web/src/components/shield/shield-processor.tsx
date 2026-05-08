@@ -217,7 +217,7 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
               </button>
             </p>
             <p className="mt-1 text-[10px] text-white/35">
-              Múltipla seleção · MP4/MOV/AVI/WEBM/MKV · até 100MB cada
+              Múltipla seleção · MP4/MOV/AVI/WEBM/MKV · até 500MB cada
             </p>
             <input
               ref={fileRef}
