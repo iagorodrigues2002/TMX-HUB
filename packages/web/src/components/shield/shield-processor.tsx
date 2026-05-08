@@ -125,17 +125,7 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
   const [submitting, setSubmitting] = useState(false);
   const [extractingZips, setExtractingZips] = useState(0);
   const [draggingOver, setDraggingOver] = useState(false);
-  const [debugLog, setDebugLog] = useState<string[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
-
-  const debug = (msg: string) => {
-    const ts = new Date().toLocaleTimeString('pt-BR') + '.' +
-      String(Date.now() % 1000).padStart(3, '0');
-    const line = `[${ts}] ${msg}`;
-    // eslint-disable-next-line no-console
-    console.log('[shield-debug]', line);
-    setDebugLog((l) => [...l, line].slice(-40));
-  };
 
   // Bloqueia o browser de "abrir" arquivos que caem fora do drop zone
   // (default action seria navegar pro arquivo). Mantém a janela inteira como
@@ -180,37 +170,25 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
   const activeJobIds = slots.filter((s) => s.jobId).map((s) => s.jobId!);
 
   const onAddFiles = async (fileList: FileList | null) => {
-    debug(`onAddFiles chamado com ${fileList?.length ?? 0} arquivo(s)`);
-    if (!fileList || fileList.length === 0) {
-      debug('FileList vazio/null — saindo');
-      toast.error('Nenhum arquivo recebido pelo handler.');
-      return;
-    }
+    if (!fileList || fileList.length === 0) return;
     // CRÍTICO: copia os Files ANTES de mexer no input. fileList é a referência
     // viva de input.files; reset do input.value zera essa coleção, então leitura
-    // depois do reset retorna []. Array.from copia as referências dos File pra
-    // um array novo que sobrevive ao reset.
+    // depois do reset retornaria []. Array.from copia as referências dos File
+    // pra um array novo que sobrevive ao reset.
     const incoming = Array.from(fileList);
     if (fileRef.current) fileRef.current.value = '';
-    for (const f of incoming) {
-      debug(`recebido: name="${f.name}" type="${f.type || '<vazio>'}" size=${f.size}`);
-    }
 
     const zipFiles: File[] = [];
     const mediaFiles: File[] = [];
     const rejected: { name: string; reason: string }[] = [];
 
     for (const f of incoming) {
-      const ext = extOf(f.name);
-      const mime = (f.type || '').toLowerCase();
-      const detected = isZipFile(f);
-      debug(
-        `classificando "${f.name}" — ext="${ext}" mime="${mime}" isZip=${detected}`,
-      );
-      if (detected) {
+      if (isZipFile(f)) {
         zipFiles.push(f);
         continue;
       }
+      const ext = extOf(f.name);
+      const mime = (f.type || '').toLowerCase();
       const isMediaByMime = mime.startsWith('video/') || mime.startsWith('audio/');
       const isMediaByExt = ALLOWED_MEDIA_EXT.has(ext);
       if (isMediaByMime || isMediaByExt) {
@@ -223,13 +201,8 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
       }
     }
 
-    debug(
-      `categorias: ${zipFiles.length} zip · ${mediaFiles.length} mídia · ${rejected.length} rejeitado`,
-    );
-
     for (const r of rejected) {
       toast.warning(`Ignorado: ${r.name} — ${r.reason}`);
-      debug(`REJEITADO: ${r.name} — ${r.reason}`);
     }
 
     if (mediaFiles.length > 0) {
@@ -247,26 +220,15 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
       );
     }
 
-    if (zipFiles.length === 0) {
-      debug('sem ZIPs pra extrair, fim');
-      return;
-    }
+    if (zipFiles.length === 0) return;
 
     setExtractingZips((n) => n + zipFiles.length);
-    debug(`começando extração de ${zipFiles.length} ZIP(s)`);
     try {
       const results = await Promise.allSettled(
         zipFiles.map(async (zip) => {
-          debug(`abrindo "${zip.name}" via JSZip.loadAsync...`);
           try {
-            const t0 = Date.now();
             const buf = await zip.arrayBuffer();
-            debug(
-              `"${zip.name}" arrayBuffer pronto (${(buf.byteLength / 1024 / 1024).toFixed(2)}MB) em ${Date.now() - t0}ms`,
-            );
             const z = await JSZip.loadAsync(buf);
-            const entryCount = Object.keys(z.files).length;
-            debug(`"${zip.name}" JSZip abriu — ${entryCount} entrada(s)`);
             const out: File[] = [];
             for (const entry of Object.values(z.files)) {
               if (entry.dir) continue;
@@ -274,11 +236,7 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
               const baseName = entry.name.split('/').pop() || entry.name;
               if (!baseName || baseName.startsWith('.')) continue;
               const ext = extOf(baseName);
-              if (!ALLOWED_MEDIA_EXT.has(ext)) {
-                debug(`  - skip "${entry.name}" ext="${ext}" não suportada`);
-                continue;
-              }
-              debug(`  + extraindo "${entry.name}"...`);
+              if (!ALLOWED_MEDIA_EXT.has(ext)) continue;
               const blob = await entry.async('blob');
               const mime =
                 ext === 'mp4' || ext === 'm4a' ? 'video/mp4' :
@@ -291,21 +249,17 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
                 ext === 'aac' ? 'audio/aac' :
                 'application/octet-stream';
               out.push(new File([blob], baseName, { type: mime }));
-              debug(`  ✓ "${baseName}" (${(blob.size / 1024 / 1024).toFixed(2)}MB)`);
             }
             if (out.length === 0) {
-              debug(`"${zip.name}" sem mídia reconhecida (${entryCount} entradas no total)`);
-              toast.warning(
-                `${zip.name}: ZIP aberto mas sem vídeos/áudios reconhecidos.`,
-              );
+              toast.warning(`${zip.name}: ZIP aberto mas sem vídeos/áudios reconhecidos.`);
             } else {
-              debug(`"${zip.name}" finalizado: ${out.length} mídia(s) extraídas`);
               toast.success(`${zip.name}: ${out.length} mídia(s) extraídas.`);
             }
             return out;
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            debug(`ERRO em "${zip.name}": ${msg}`);
+            // eslint-disable-next-line no-console
+            console.error('[shield] erro ao extrair ZIP', zip.name, err);
             toast.error(`${zip.name}: erro ao abrir ZIP — ${msg}`);
             throw err;
           }
@@ -315,7 +269,6 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
       for (const r of results) {
         if (r.status === 'fulfilled') flat.push(...r.value);
       }
-      debug(`total extraído: ${flat.length} arquivo(s)`);
       if (flat.length > 0) {
         const adds: UploadSlot[] = flat.map((f) => ({
           id: newSlotId(),
@@ -327,7 +280,6 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
       }
     } finally {
       setExtractingZips((n) => Math.max(0, n - zipFiles.length));
-      debug('extração concluída');
     }
   };
 
@@ -418,28 +370,6 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
         </h2>
       </div>
 
-      {/* Painel de debug visível — mostra cada etapa do upload em tempo real.
-          TODO: remover quando ZIP estiver funcionando. */}
-      {debugLog.length > 0 && (
-        <div className="rounded-md border border-rose-300/30 bg-black/40 p-2">
-          <div className="mb-1 flex items-center justify-between">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-rose-200">
-              🩺 Debug log ({debugLog.length})
-            </p>
-            <button
-              type="button"
-              onClick={() => setDebugLog([])}
-              className="text-[10px] uppercase tracking-[0.14em] text-white/40 hover:text-rose-300"
-            >
-              Limpar
-            </button>
-          </div>
-          <pre className="max-h-[200px] overflow-y-auto font-mono text-[10px] leading-tight text-white/75">
-            {debugLog.join('\n')}
-          </pre>
-        </div>
-      )}
-
       <div className="glass-card space-y-5 p-5">
         {/* File picker — multi */}
         <div className="space-y-2">
@@ -481,10 +411,6 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
             onDrop={(e) => {
               e.preventDefault();
               setDraggingOver(false);
-              // eslint-disable-next-line no-console
-              console.log('[shield] DROP detectado', {
-                count: e.dataTransfer.files.length,
-              });
               onAddFiles(e.dataTransfer.files);
             }}
           >
@@ -513,13 +439,7 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
               accept="video/*,audio/*,.zip,application/zip,application/x-zip-compressed"
               multiple
               className="sr-only"
-              onChange={(e) => {
-                // eslint-disable-next-line no-console
-                console.log('[shield] PICKER selecionou', {
-                  count: e.target.files?.length ?? 0,
-                });
-                onAddFiles(e.target.files);
-              }}
+              onChange={(e) => onAddFiles(e.target.files)}
               disabled={submitting}
             />
           </label>
