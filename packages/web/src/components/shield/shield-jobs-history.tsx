@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Download,
   Loader2,
+  Package,
   RefreshCw,
   Trash2,
   XCircle,
@@ -13,6 +14,9 @@ import {
 import { toast } from 'sonner';
 import { apiClient, type ShieldJobView } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+
+const MAX_BULK = 100;
 
 function formatBytes(b?: number): string {
   if (!b) return '—';
@@ -36,6 +40,8 @@ function formatDate(iso: string): string {
 export function ShieldJobsHistory() {
   const qc = useQueryClient();
   const [filter, setFilter] = useState<'all' | 'ready' | 'working' | 'failed'>('all');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [downloading, setDownloading] = useState(false);
 
   const { data, isLoading, refetch, isFetching } = useQuery<ShieldJobView[]>({
     queryKey: ['shield-jobs-list'],
@@ -60,6 +66,68 @@ export function ShieldJobsHistory() {
       (j) => j.status === 'queued' || j.status === 'processing' || j.status === 'verifying',
     );
   }, [jobs, filter]);
+
+  // IDs selecionados que existem na lista filtrada (limpa stale após refetch).
+  const visibleSelected = useMemo(
+    () => filtered.filter((j) => selected.has(j.id) && j.status === 'ready'),
+    [filtered, selected],
+  );
+
+  const readyInFiltered = useMemo(
+    () => filtered.filter((j) => j.status === 'ready'),
+    [filtered],
+  );
+
+  const totalBytesSelected = useMemo(
+    () => visibleSelected.reduce((acc, j) => acc + (j.output?.bytes ?? 0), 0),
+    [visibleSelected],
+  );
+
+  const allReadyChecked =
+    readyInFiltered.length > 0 && readyInFiltered.every((j) => selected.has(j.id));
+
+  const toggleOne = (id: string) => {
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAllReady = () => {
+    setSelected((s) => {
+      const next = new Set(s);
+      if (allReadyChecked) {
+        for (const j of readyInFiltered) next.delete(j.id);
+      } else {
+        for (const j of readyInFiltered) next.add(j.id);
+      }
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelected(new Set());
+
+  const onBulkDownload = async () => {
+    if (visibleSelected.length === 0) return;
+    if (visibleSelected.length > MAX_BULK) {
+      toast.error(`Limite de ${MAX_BULK} arquivos por download. Selecione menos.`);
+      return;
+    }
+    setDownloading(true);
+    try {
+      const ids = visibleSelected.map((j) => j.id);
+      const r = await apiClient.bulkDownloadShieldJobs(ids);
+      toast.success(
+        `${ids.length} arquivos baixados (${(r.bytes / 1024 / 1024).toFixed(1)} MB).`,
+      );
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const deleteMut = useMutation({
     mutationFn: (id: string) => apiClient.deleteShieldJob(id),
@@ -119,6 +187,32 @@ export function ShieldJobsHistory() {
         </div>
       </div>
 
+      {/* Bulk action bar — aparece só quando há seleção válida */}
+      {visibleSelected.length > 0 && (
+        <div className="glass-card flex items-center justify-between gap-3 border-cyan-300/30 p-3">
+          <div className="text-[13px] text-white/85">
+            <span className="font-semibold text-cyan-200">{visibleSelected.length}</span>{' '}
+            selecionado(s) ·{' '}
+            <span className="font-mono text-[11px] text-white/55">
+              {(totalBytesSelected / 1024 / 1024).toFixed(1)} MB
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="ghost" onClick={clearSelection} disabled={downloading}>
+              Limpar
+            </Button>
+            <Button size="sm" onClick={onBulkDownload} disabled={downloading}>
+              {downloading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Package className="h-3.5 w-3.5" />
+              )}
+              {downloading ? 'Empacotando…' : `Baixar .zip (${visibleSelected.length})`}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {isLoading ? (
         <div className="glass-card flex items-center justify-center p-8">
           <Loader2 className="h-5 w-5 animate-spin text-cyan-300" />
@@ -135,6 +229,20 @@ export function ShieldJobsHistory() {
             <table className="w-full text-[12px]">
               <thead className="bg-white/[0.03] text-left text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
                 <tr>
+                  <th className="w-8 px-3 py-2">
+                    <Checkbox
+                      checked={allReadyChecked}
+                      onChange={toggleAllReady}
+                      disabled={readyInFiltered.length === 0}
+                      title={
+                        readyInFiltered.length === 0
+                          ? 'Sem prontos pra selecionar'
+                          : allReadyChecked
+                            ? 'Desmarcar todos'
+                            : 'Marcar todos prontos'
+                      }
+                    />
+                  </th>
                   <th className="px-3 py-2">Status</th>
                   <th className="px-3 py-2">Arquivo</th>
                   <th className="px-3 py-2">Nicho · White</th>
@@ -149,6 +257,8 @@ export function ShieldJobsHistory() {
                   <JobRow
                     key={j.id}
                     job={j}
+                    selected={selected.has(j.id)}
+                    onToggle={() => toggleOne(j.id)}
                     onDelete={() => {
                       if (confirm(`Remover job "${j.input.filename}"?`)) deleteMut.mutate(j.id);
                     }}
@@ -192,16 +302,26 @@ function FilterButton({
   );
 }
 
-function JobRow({ job, onDelete }: { job: ShieldJobView; onDelete: () => void }) {
+function JobRow({
+  job,
+  selected,
+  onToggle,
+  onDelete,
+}: {
+  job: ShieldJobView;
+  selected: boolean;
+  onToggle: () => void;
+  onDelete: () => void;
+}) {
   const status = job.status;
-  const statusIcon =
-    status === 'ready' ? (
-      <CheckCircle2 className="h-3 w-3 text-emerald-300" />
-    ) : status === 'failed' ? (
-      <XCircle className="h-3 w-3 text-rose-300" />
-    ) : (
-      <Loader2 className="h-3 w-3 animate-spin text-cyan-300" />
-    );
+  const isReady = status === 'ready';
+  const statusIcon = isReady ? (
+    <CheckCircle2 className="h-3 w-3 text-emerald-300" />
+  ) : status === 'failed' ? (
+    <XCircle className="h-3 w-3 text-rose-300" />
+  ) : (
+    <Loader2 className="h-3 w-3 animate-spin text-cyan-300" />
+  );
   const statusText = {
     queued: 'Fila',
     processing: 'Processando',
@@ -213,11 +333,19 @@ function JobRow({ job, onDelete }: { job: ShieldJobView; onDelete: () => void })
   return (
     <tr className="border-t border-white/[0.04]">
       <td className="px-3 py-2">
+        <Checkbox
+          checked={selected}
+          onChange={onToggle}
+          disabled={!isReady}
+          title={isReady ? 'Selecionar pra download em lote' : 'Apenas jobs prontos'}
+        />
+      </td>
+      <td className="px-3 py-2">
         <span className="flex items-center gap-1.5">
           {statusIcon}
           <span
             className={
-              status === 'ready'
+              isReady
                 ? 'text-emerald-300'
                 : status === 'failed'
                   ? 'text-rose-300'
@@ -243,14 +371,14 @@ function JobRow({ job, onDelete }: { job: ShieldJobView; onDelete: () => void })
       <td className="px-3 py-2 text-white/45">{formatDate(job.createdAt)}</td>
       <td className="px-3 py-2 text-right">
         <div className="flex items-center justify-end gap-1">
-          {status === 'ready' && job.output?.downloadUrl && (
+          {isReady && job.output?.downloadUrl && (
             <Button asChild size="sm" variant="ghost">
               <a
                 href={job.output.downloadUrl}
                 download={job.output.filename}
                 target="_blank"
                 rel="noreferrer"
-                title="Baixar"
+                title="Baixar individual"
               >
                 <Download className="h-3.5 w-3.5" />
               </a>

@@ -1,9 +1,15 @@
+import archiver from 'archiver';
 import { ulid } from 'ulid';
 import { CreateShieldJobBodySchema } from '@page-cloner/shared';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import { z } from 'zod';
 import { isValidUlid } from '../lib/ids.js';
-import { BadRequestError, zodToProblem } from '../lib/problem.js';
+import { BadRequestError, NotFoundError, zodToProblem } from '../lib/problem.js';
 import type { ShieldJob } from '@page-cloner/shared';
+
+const BulkDownloadBodySchema = z
+  .object({ ids: z.array(z.string().min(1)).min(1).max(100) })
+  .strict();
 
 const ALLOWED_VIDEO = new Set([
   'video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm', 'video/x-matroska',
@@ -166,6 +172,65 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       }),
     );
     return reply.send({ jobs: wired });
+  });
+
+  // POST /v1/shield-jobs/bulk-download — stream zip with selected ready outputs
+  app.post('/shield-jobs/bulk-download', async (req, reply) => {
+    if (!req.user) throw new BadRequestError('No user attached.');
+    const parsed = BulkDownloadBodySchema.safeParse(req.body);
+    if (!parsed.success) throw zodToProblem(parsed.error, req.url);
+    const userId = req.user.sub;
+
+    // Validar todos pertencem ao user e estão ready, em paralelo.
+    const jobs = await Promise.all(
+      parsed.data.ids.map(async (id) => {
+        const j = await app.shieldJobStore.assertOwner(id, userId);
+        if (j.status !== 'ready' || !j.outputStorageKey) {
+          throw new BadRequestError(
+            `Job ${id} não está pronto (status: ${j.status}).`,
+          );
+        }
+        return j;
+      }),
+    );
+    if (jobs.length === 0) throw new BadRequestError('Nenhum job válido.');
+
+    const archive = archiver('zip', { zlib: { level: 6 } });
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    const zipName = `shield-batch-${stamp}.zip`;
+
+    reply.raw.writeHead(200, {
+      'content-type': 'application/zip',
+      'content-disposition': `attachment; filename="${zipName}"`,
+      'cache-control': 'no-store',
+    });
+    archive.on('error', (err) => {
+      app.log.error({ err }, 'shield bulk-download archiver error');
+      try {
+        reply.raw.destroy(err);
+      } catch {}
+    });
+    archive.pipe(reply.raw);
+
+    // Append each output as it arrives. Dedup nomes em caso de colisão.
+    const used = new Map<string, number>();
+    for (const j of jobs) {
+      const obj = await app.storage.get(j.outputStorageKey!).catch((e) => {
+        throw new NotFoundError(`Falha ao ler output do job ${j.id}: ${(e as Error).message}`);
+      });
+      let name = j.outputFilename || `${j.id}.mp4`;
+      const count = used.get(name) ?? 0;
+      if (count > 0) {
+        const dot = name.lastIndexOf('.');
+        const base = dot > 0 ? name.slice(0, dot) : name;
+        const ext = dot > 0 ? name.slice(dot) : '';
+        name = `${base} (${count})${ext}`;
+      }
+      used.set(j.outputFilename || `${j.id}.mp4`, count + 1);
+      archive.append(obj.body, { name });
+    }
+    await archive.finalize();
+    return reply;
   });
 
   // GET /v1/shield-jobs/:id

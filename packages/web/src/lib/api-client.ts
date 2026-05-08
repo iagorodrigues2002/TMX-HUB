@@ -1012,6 +1012,45 @@ export const apiClient = {
   async deleteShieldJob(id: string): Promise<void> {
     await request<void>(`/v1/shield-jobs/${id}`, { method: 'DELETE' });
   },
+  /**
+   * Baixa um zip com os outputs dos jobs selecionados. Streama do servidor pra
+   * blob no browser e dispara download. Limite atual: 100 jobs / chamada.
+   */
+  async bulkDownloadShieldJobs(ids: string[]): Promise<{ filename: string; bytes: number }> {
+    const baseUrl = env.NEXT_PUBLIC_API_URL;
+    const token = authToken.get();
+    const headers: Record<string, string> = { 'content-type': 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(`${baseUrl}/v1/shield-jobs/bulk-download`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ ids }),
+    });
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`;
+      try {
+        const j = await res.json();
+        msg = (j as { detail?: string; message?: string }).detail
+          ?? (j as { message?: string }).message
+          ?? msg;
+      } catch {}
+      throw new ApiError(msg, res.status);
+    }
+    const blob = await res.blob();
+    // Tira nome do header Content-Disposition.
+    const cd = res.headers.get('content-disposition') || '';
+    const m = cd.match(/filename="([^"]+)"/);
+    const filename = m?.[1] ?? `shield-batch-${new Date().toISOString().slice(0, 10)}.zip`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    return { filename, bytes: blob.size };
+  },
 
   // ---- Digistore24 Audits ----
   async listDigiAudits(): Promise<DigiAuditView[]> {

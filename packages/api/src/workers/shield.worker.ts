@@ -44,19 +44,22 @@ function buildFilterComplex(whiteVolumeDb: number): string {
 }
 
 function videoCompressionArgs(mode: FfmpegArgs['compression']): string[] {
+  // Presets escolhidos pra velocidade: 'veryfast' é ~3x mais rápido que 'medium'
+  // com aumento de tamanho típico de 5-10% só. Pra ads de 30-90s isso é irrelevante.
+  // 'fast' fica entre os dois quando precisamos qualidade extra (lossless).
   switch (mode) {
     case 'none':
       // Stream-copy video — fastest, no quality loss, but file size unchanged.
       return ['-c:v', 'copy'];
     case 'lossless':
-      // Visually lossless — re-encode but keeps quality very high.
-      return ['-c:v', 'libx264', '-preset', 'slow', '-crf', '18', '-pix_fmt', 'yuv420p'];
+      // Visually lossless — preset 'fast' (era 'slow') reduz tempo ~5x mantendo CRF 18.
+      return ['-c:v', 'libx264', '-preset', 'fast', '-crf', '18', '-pix_fmt', 'yuv420p'];
     case 'balanced':
-      // Standard ad-quality target — typically 30-50% of source size.
-      return ['-c:v', 'libx264', '-preset', 'medium', '-crf', '23', '-pix_fmt', 'yuv420p'];
+      // Standard ad-quality — preset 'veryfast' (era 'medium') reduz tempo ~3x.
+      return ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p'];
     case 'small':
-      // Aggressive — for size-constrained delivery; quality drop visible on close inspection.
-      return ['-c:v', 'libx264', '-preset', 'medium', '-crf', '28', '-pix_fmt', 'yuv420p'];
+      // Aggressive size — preset 'veryfast' (era 'medium').
+      return ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '28', '-pix_fmt', 'yuv420p'];
   }
 }
 
@@ -269,7 +272,9 @@ export function createShieldWorker(args: {
         await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
       }
     },
-    { connection, concurrency: 1 },
+    // Concurrency 3: cada ffmpeg usa ~1 core e ~300MB RAM. Em Railway 8vCPU/8GB
+    // sobra folga. Triplica throughput em batches.
+    { connection, concurrency: 3 },
   );
 
   worker.on('error', (err) => log.error({ err }, 'shield worker error'));
