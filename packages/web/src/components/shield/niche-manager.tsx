@@ -173,7 +173,7 @@ export function NicheManager({
                         Cancelar
                       </Button>
                     </>
-                  ) : (
+                  ) : n.canModify ? (
                     <>
                       <Button
                         size="sm"
@@ -204,6 +204,13 @@ export function NicheManager({
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </>
+                  ) : (
+                    <span
+                      className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/30"
+                      title="Apenas o criador ou admin podem modificar"
+                    >
+                      compartilhado
+                    </span>
                   )}
                 </div>
                 {open && (
@@ -264,53 +271,60 @@ function NicheWhitesList({ niche }: { niche: NicheView }) {
 
   return (
     <div className="space-y-3">
-      {/* Upload form */}
-      <div className="rounded-md border border-dashed border-white/[0.12] bg-white/[0.02] p-3">
-        <div className="grid gap-2 md:grid-cols-[1fr_180px_auto] md:items-end">
-          <div className="space-y-1">
-            <Label className="text-[10px] uppercase tracking-[0.14em] text-white/45">
-              Arquivo de áudio
-            </Label>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="audio/*"
-              disabled={uploadMut.isPending}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) uploadMut.mutate(f);
-              }}
-              className="block w-full text-[12px] text-white/75 file:mr-3 file:rounded file:border-0 file:bg-cyan-300/15 file:px-3 file:py-1 file:text-[11px] file:font-semibold file:uppercase file:tracking-[0.14em] file:text-cyan-200 hover:file:bg-cyan-300/25"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-[10px] uppercase tracking-[0.14em] text-white/45">
-              Label (opcional)
-            </Label>
-            <Input
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              placeholder='ex. "Hábitos saudáveis"'
-              className="h-9"
-              disabled={uploadMut.isPending}
-            />
-          </div>
-          <p className="text-[10px] text-white/40 md:pb-2">
-            Até 20MB · mp3, wav, m4a, ogg
-          </p>
-        </div>
-        {progress !== null && (
-          <div className="mt-2">
-            <div className="h-1 overflow-hidden rounded-full bg-white/[0.08]">
-              <div
-                className="h-full bg-cyan-300/70 transition-all"
-                style={{ width: `${progress}%` }}
+      {/* Upload form — só pra quem pode modificar */}
+      {niche.canModify ? (
+        <div className="rounded-md border border-dashed border-white/[0.12] bg-white/[0.02] p-3">
+          <div className="grid gap-2 md:grid-cols-[1fr_180px_auto] md:items-end">
+            <div className="space-y-1">
+              <Label className="text-[10px] uppercase tracking-[0.14em] text-white/45">
+                Arquivo de áudio
+              </Label>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="audio/*"
+                disabled={uploadMut.isPending}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) uploadMut.mutate(f);
+                }}
+                className="block w-full text-[12px] text-white/75 file:mr-3 file:rounded file:border-0 file:bg-cyan-300/15 file:px-3 file:py-1 file:text-[11px] file:font-semibold file:uppercase file:tracking-[0.14em] file:text-cyan-200 hover:file:bg-cyan-300/25"
               />
             </div>
-            <p className="mt-1 text-[10px] text-white/50">Enviando… {progress}%</p>
+            <div className="space-y-1">
+              <Label className="text-[10px] uppercase tracking-[0.14em] text-white/45">
+                Label (opcional)
+              </Label>
+              <Input
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                placeholder='ex. "Hábitos saudáveis"'
+                className="h-9"
+                disabled={uploadMut.isPending}
+              />
+            </div>
+            <p className="text-[10px] text-white/40 md:pb-2">
+              Até 20MB · mp3, wav, m4a, ogg
+            </p>
           </div>
-        )}
-      </div>
+          {progress !== null && (
+            <div className="mt-2">
+              <div className="h-1 overflow-hidden rounded-full bg-white/[0.08]">
+                <div
+                  className="h-full bg-cyan-300/70 transition-all"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              <p className="mt-1 text-[10px] text-white/50">Enviando… {progress}%</p>
+            </div>
+          )}
+        </div>
+      ) : (
+        <p className="rounded-md border border-white/[0.06] bg-black/15 px-3 py-2 text-[11px] text-white/45">
+          Esse nicho foi criado por outro membro. Você pode usá-lo no processamento,
+          mas só o criador (ou um admin) pode adicionar/remover áudios.
+        </p>
+      )}
 
       {/* List of whites */}
       {niche.whites.length === 0 ? (
@@ -320,7 +334,12 @@ function NicheWhitesList({ niche }: { niche: NicheView }) {
       ) : (
         <ul className="space-y-1">
           {niche.whites.map((w) => (
-            <WhiteRow key={w.id} white={w} onRemove={() => removeMut.mutate(w.id)} />
+            <WhiteRow
+              key={w.id}
+              white={w}
+              canModify={niche.canModify}
+              onRemove={() => removeMut.mutate(w.id)}
+            />
           ))}
         </ul>
       )}
@@ -330,9 +349,11 @@ function NicheWhitesList({ niche }: { niche: NicheView }) {
 
 function WhiteRow({
   white,
+  canModify,
   onRemove,
 }: {
   white: NicheWhiteView;
+  canModify: boolean;
   onRemove: () => void;
 }) {
   return (
@@ -344,16 +365,18 @@ function WhiteRow({
       <span className="shrink-0 font-mono text-[10px] text-white/40">
         {formatBytes(white.bytes)}
       </span>
-      <button
-        type="button"
-        onClick={() => {
-          if (confirm(`Remover áudio "${white.label || white.filename}"?`)) onRemove();
-        }}
-        className="text-white/40 hover:text-rose-300"
-        title="Remover"
-      >
-        <Trash2 className="h-3 w-3" />
-      </button>
+      {canModify && (
+        <button
+          type="button"
+          onClick={() => {
+            if (confirm(`Remover áudio "${white.label || white.filename}"?`)) onRemove();
+          }}
+          className="text-white/40 hover:text-rose-300"
+          title="Remover"
+        >
+          <Trash2 className="h-3 w-3" />
+        </button>
+      )}
     </li>
   );
 }

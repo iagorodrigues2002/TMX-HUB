@@ -106,8 +106,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     });
     if (!parsedBody.success) throw zodToProblem(parsedBody.error, req.url);
 
-    // Validate niche + pick a random white.
-    const niche = await app.nicheStore.assertOwner(parsedBody.data.niche_id, req.user.sub);
+    // Niches são globais — qualquer usuário autenticado pode USAR.
+    // Só validamos que o niche existe e tem ao menos 1 white.
+    const niche = await app.nicheStore.get(parsedBody.data.niche_id);
     if (niche.whites.length === 0) {
       throw new BadRequestError(
         `Nicho "${niche.name}" não tem nenhum áudio white cadastrado. Adicione pelo menos um.`,

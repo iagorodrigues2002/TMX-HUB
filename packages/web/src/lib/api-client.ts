@@ -1256,6 +1256,10 @@ export interface NicheView {
   whites: NicheWhiteView[];
   createdAt: string;
   updatedAt?: string;
+  /** userId do criador. Útil pra mostrar "criado por…" no UI. */
+  createdBy?: string;
+  /** Servidor calcula: true se o usuário logado é admin OU criou o nicho. */
+  canModify: boolean;
 }
 
 interface NicheWhiteWire {
@@ -1273,6 +1277,8 @@ interface NicheWire {
   whites: NicheWhiteWire[];
   created_at: string;
   updated_at?: string;
+  created_by?: string;
+  can_modify?: boolean;
 }
 
 function fromNicheWhiteWire(w: NicheWhiteWire): NicheWhiteView {
@@ -1293,6 +1299,9 @@ function fromNicheWire(w: NicheWire): NicheView {
     whites: (w.whites ?? []).map(fromNicheWhiteWire),
     createdAt: w.created_at,
     updatedAt: w.updated_at,
+    createdBy: w.created_by,
+    // Default true por defensividade — backend antigo (sem o campo) trata como modificável.
+    canModify: w.can_modify ?? true,
   };
 }
 

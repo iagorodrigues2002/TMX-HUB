@@ -38,6 +38,17 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.decorate('digiAuditStore', new DigiAuditStore(app.redis));
   app.decorate('inviteStore', new InviteStore(app.redis));
 
+  // Migração one-shot: nichos antigos viviam em user-niches:{userId}.
+  // Agora todos compartilham niches:global. Flag em Redis previne re-execução.
+  app.nicheStore
+    .migrateToGlobalOnce()
+    .then((r) => {
+      if (!r.alreadyDone) {
+        app.log.info({ migrated: r.migrated }, 'niches: migrated to global set');
+      }
+    })
+    .catch((err) => app.log.warn({ err }, 'niches: migration failed (non-fatal)'));
+
   app.addHook('onClose', async () => {
     await storage.close();
   });

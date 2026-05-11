@@ -16,7 +16,11 @@ const ALLOWED_AUDIO = new Set([
 
 const MAX_WHITE_BYTES = 20 * 1024 * 1024; // 20 MB per white audio
 
-function nicheToWire(n: Niche): Record<string, unknown> {
+function nicheToWire(
+  n: Niche,
+  ctx: { userId: string; isAdmin: boolean },
+): Record<string, unknown> {
+  const canModify = ctx.isAdmin || n.userId === ctx.userId;
   return {
     id: n.id,
     name: n.name,
@@ -24,6 +28,8 @@ function nicheToWire(n: Niche): Record<string, unknown> {
     whites: n.whites.map(whiteToWire),
     created_at: n.createdAt,
     updated_at: n.updatedAt,
+    created_by: n.userId,
+    can_modify: canModify,
   };
 }
 
@@ -47,14 +53,15 @@ function extFromMime(mime: string, fallback: string): string {
 }
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
-  // GET /v1/niches — list user's niches
+  // GET /v1/niches — lista TODOS os nichos da instância (compartilhado).
   app.get('/niches', async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');
-    const niches = await app.nicheStore.listByUser(req.user.sub);
-    return reply.send({ niches: niches.map(nicheToWire) });
+    const ctx = { userId: req.user.sub, isAdmin: req.user.role === 'admin' };
+    const niches = await app.nicheStore.listAll();
+    return reply.send({ niches: niches.map((n) => nicheToWire(n, ctx)) });
   });
 
-  // POST /v1/niches — create
+  // POST /v1/niches — qualquer usuário autenticado pode criar.
   app.post('/niches', async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');
     const parsed = CreateNicheRequestSchema.safeParse(req.body);
@@ -64,37 +71,45 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       name: parsed.data.name,
       ...(parsed.data.description ? { description: parsed.data.description } : {}),
     });
-    return reply.code(201).send(nicheToWire(niche));
+    const ctx = { userId: req.user.sub, isAdmin: req.user.role === 'admin' };
+    return reply.code(201).send(nicheToWire(niche, ctx));
   });
 
-  // PATCH /v1/niches/:id
+  // PATCH /v1/niches/:id — admin OU criador.
   app.patch<{ Params: { id: string } }>('/niches/:id', async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');
     const parsed = UpdateNicheRequestSchema.safeParse(req.body);
     if (!parsed.success) throw zodToProblem(parsed.error, req.url);
-    const updated = await app.nicheStore.update(req.params.id, req.user.sub, parsed.data);
-    return reply.send(nicheToWire(updated));
+    const isAdmin = req.user.role === 'admin';
+    const updated = await app.nicheStore.update(
+      req.params.id,
+      req.user.sub,
+      isAdmin,
+      parsed.data,
+    );
+    return reply.send(nicheToWire(updated, { userId: req.user.sub, isAdmin }));
   });
 
-  // DELETE /v1/niches/:id — also wipes any uploaded white objects in R2.
+  // DELETE /v1/niches/:id — admin OU criador. Limpa whites no R2.
   app.delete<{ Params: { id: string } }>('/niches/:id', async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');
-    const niche = await app.nicheStore.delete(req.params.id, req.user.sub);
+    const isAdmin = req.user.role === 'admin';
+    const niche = await app.nicheStore.delete(req.params.id, req.user.sub, isAdmin);
     for (const w of niche.whites) {
       await app.storage.delete(w.storageKey).catch(() => undefined);
     }
     return reply.code(204).send();
   });
 
-  // POST /v1/niches/:id/whites — upload a single audio file (multipart/form-data, field "file").
-  // Optional form field "label" sets a friendly name.
+  // POST /v1/niches/:id/whites — admin OU criador adiciona white audio.
   app.post<{ Params: { id: string } }>('/niches/:id/whites', async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');
     if (!req.isMultipart()) {
       throw new BadRequestError('Send the audio as multipart/form-data with field "file".');
     }
-    // Owner check up-front so we don't waste time streaming the upload.
-    await app.nicheStore.assertOwner(req.params.id, req.user.sub);
+    const isAdmin = req.user.role === 'admin';
+    // Permission check up-front — não streamamos upload se não pode modificar.
+    await app.nicheStore.assertCanModify(req.params.id, req.user.sub, isAdmin);
 
     let label: string | undefined;
     let filePart: import('@fastify/multipart').MultipartFile | undefined;
@@ -108,7 +123,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       }
       if (part.type === 'file' && part.fieldname === 'file') {
         filePart = part;
-        break; // we'll consume the stream below
+        break;
       }
     }
 
@@ -124,6 +139,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
     const whiteId = ulid();
     const ext = extFromMime(mime, (filePart.filename.split('.').pop() || 'mp3').toLowerCase());
+    // Path mantém o uploader (não o criador do niche) só pra rastreio de uso.
     const storageKey = `niches/${req.user.sub}/${req.params.id}/whites/${whiteId}.${ext}`;
 
     const result = await app.storage.putStream(storageKey, filePart.file, {
@@ -135,26 +151,36 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       throw new BadRequestError('Upload truncado pelo limite de tamanho.');
     }
 
-    const { niche } = await app.nicheStore.addWhite(req.params.id, req.user.sub, {
+    const { niche } = await app.nicheStore.addWhite(req.params.id, req.user.sub, isAdmin, {
       filename: filePart.filename,
       storageKey,
       bytes: result.bytes,
       ...(label ? { label } : {}),
     });
-    return reply.code(201).send(nicheToWire(niche));
+    return reply.code(201).send(nicheToWire(niche, { userId: req.user.sub, isAdmin }));
   });
 
-  // DELETE /v1/niches/:id/whites/:whiteId
+  // DELETE /v1/niches/:id/whites/:whiteId — admin OU criador.
   app.delete<{ Params: { id: string; whiteId: string } }>(
     '/niches/:id/whites/:whiteId',
     async (req, reply) => {
       if (!req.user) throw new BadRequestError('No user attached.');
-      const niche = await app.nicheStore.assertOwner(req.params.id, req.user.sub);
+      const isAdmin = req.user.role === 'admin';
+      const niche = await app.nicheStore.assertCanModify(
+        req.params.id,
+        req.user.sub,
+        isAdmin,
+      );
       const white = niche.whites.find((w) => w.id === req.params.whiteId);
       if (!white) throw new NotFoundError(`White não encontrado: ${req.params.whiteId}`);
       await app.storage.delete(white.storageKey).catch(() => undefined);
-      const next = await app.nicheStore.removeWhite(req.params.id, req.user.sub, req.params.whiteId);
-      return reply.send(nicheToWire(next));
+      const next = await app.nicheStore.removeWhite(
+        req.params.id,
+        req.user.sub,
+        isAdmin,
+        req.params.whiteId,
+      );
+      return reply.send(nicheToWire(next, { userId: req.user.sub, isAdmin }));
     },
   );
 };

@@ -1,10 +1,18 @@
 import type { Redis } from 'ioredis';
 import { ulid } from 'ulid';
 import type { Niche, NicheWhite } from '@page-cloner/shared';
-import { ConflictError, NotFoundError } from '../lib/problem.js';
+import { ConflictError, HttpProblem, NotFoundError } from '../lib/problem.js';
 
 const NICHE_PREFIX = 'niche:';
-const USER_NICHES_PREFIX = 'user-niches:';
+const NICHES_GLOBAL = 'niches:global';        // SET com todos os IDs ativos
+const USER_NICHES_PREFIX = 'user-niches:';    // legado — kept p/ migração idempotente
+const MIGRATION_FLAG = 'niches:migration:global-v1';
+
+class ForbiddenError extends HttpProblem {
+  constructor(detail = 'Operação não permitida.') {
+    super({ status: 403, title: 'Forbidden', detail, code: 'forbidden' });
+  }
+}
 
 export class NicheStore {
   constructor(private readonly redis: Redis) {}
@@ -14,7 +22,8 @@ export class NicheStore {
     name: string;
     description?: string;
   }): Promise<Niche> {
-    const existing = await this.listByUser(args.userId);
+    // Conflito é avaliado contra TODOS os nichos (global), não só os do user.
+    const existing = await this.listAll();
     if (existing.some((n) => n.name.toLowerCase() === args.name.trim().toLowerCase())) {
       throw new ConflictError(`Já existe um nicho chamado "${args.name}".`);
     }
@@ -29,6 +38,9 @@ export class NicheStore {
     await this.redis
       .multi()
       .hset(this.key(niche.id), this.serialize(niche))
+      .sadd(NICHES_GLOBAL, niche.id)
+      // Mantém o índice por user pra ainda saber a autoria via SISMEMBER
+      // (não precisa pra leitura — o campo userId já carrega isso).
       .sadd(this.userKey(args.userId), niche.id)
       .exec();
     return niche;
@@ -37,12 +49,13 @@ export class NicheStore {
   async update(
     id: string,
     userId: string,
+    isAdmin: boolean,
     patch: { name?: string; description?: string },
   ): Promise<Niche> {
-    const current = await this.assertOwner(id, userId);
+    const current = await this.assertCanModify(id, userId, isAdmin);
 
     if (patch.name && patch.name.trim().toLowerCase() !== current.name.toLowerCase()) {
-      const all = await this.listByUser(userId);
+      const all = await this.listAll();
       if (
         all.some((n) => n.id !== id && n.name.toLowerCase() === patch.name!.trim().toLowerCase())
       ) {
@@ -70,9 +83,10 @@ export class NicheStore {
   async addWhite(
     nicheId: string,
     userId: string,
+    isAdmin: boolean,
     args: { filename: string; storageKey: string; bytes: number; label?: string },
   ): Promise<{ niche: Niche; white: NicheWhite }> {
-    const current = await this.assertOwner(nicheId, userId);
+    const current = await this.assertCanModify(nicheId, userId, isAdmin);
     const white: NicheWhite = {
       id: ulid(),
       filename: args.filename,
@@ -94,8 +108,13 @@ export class NicheStore {
     return { niche: next, white };
   }
 
-  async removeWhite(nicheId: string, userId: string, whiteId: string): Promise<Niche> {
-    const current = await this.assertOwner(nicheId, userId);
+  async removeWhite(
+    nicheId: string,
+    userId: string,
+    isAdmin: boolean,
+    whiteId: string,
+  ): Promise<Niche> {
+    const current = await this.assertCanModify(nicheId, userId, isAdmin);
     const next: Niche = {
       ...current,
       whites: current.whites.filter((w) => w.id !== whiteId),
@@ -117,36 +136,67 @@ export class NicheStore {
     return this.deserialize(data);
   }
 
-  async listByUser(userId: string): Promise<Niche[]> {
-    const ids = await this.redis.smembers(this.userKey(userId));
+  /**
+   * Lista TODOS os nichos da instância (são compartilhados entre usuários).
+   * Limpa do índice global os que não existem mais (TTL/falhas).
+   */
+  async listAll(): Promise<Niche[]> {
+    const ids = await this.redis.smembers(NICHES_GLOBAL);
     if (ids.length === 0) return [];
     const pipeline = this.redis.pipeline();
     for (const id of ids) pipeline.hgetall(this.key(id));
     const results = (await pipeline.exec()) ?? [];
     const out: Niche[] = [];
-    for (const [, data] of results) {
-      if (!data || typeof data !== 'object') continue;
+    const stale: string[] = [];
+    for (let i = 0; i < results.length; i++) {
+      const entry = results[i];
+      if (!entry) continue;
+      const [, data] = entry;
+      if (!data || typeof data !== 'object' || Object.keys(data as object).length === 0) {
+        stale.push(ids[i]!);
+        continue;
+      }
       const rec = data as Record<string, string>;
-      if (!rec.id) continue;
+      if (!rec.id) {
+        stale.push(ids[i]!);
+        continue;
+      }
       out.push(this.deserialize(rec));
+    }
+    if (stale.length > 0) {
+      await this.redis.srem(NICHES_GLOBAL, ...stale).catch(() => {});
     }
     return out.sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  async delete(id: string, userId: string): Promise<Niche> {
-    const niche = await this.assertOwner(id, userId);
+  async delete(id: string, userId: string, isAdmin: boolean): Promise<Niche> {
+    const niche = await this.assertCanModify(id, userId, isAdmin);
     await this.redis
       .multi()
       .del(this.key(id))
-      .srem(this.userKey(userId), id)
+      .srem(NICHES_GLOBAL, id)
+      .srem(this.userKey(niche.userId), id)
       .exec();
     return niche;
   }
 
-  async assertOwner(id: string, userId: string): Promise<Niche> {
+  /**
+   * Admin pode tudo. Usuário comum só pode modificar nichos que ele criou.
+   * Throw 403 caso contrário.
+   */
+  async assertCanModify(id: string, userId: string, isAdmin: boolean): Promise<Niche> {
     const n = await this.get(id);
-    if (n.userId !== userId) throw new NotFoundError(`Nicho não encontrado: ${id}`);
+    if (!isAdmin && n.userId !== userId) {
+      throw new ForbiddenError(
+        'Apenas o criador do nicho ou um admin podem modificá-lo.',
+      );
+    }
     return n;
+  }
+
+  /** Retorna se o usuário pode modificar o nicho (sem throw). */
+  canModify(niche: Niche, userId: string, isAdmin: boolean): boolean {
+    return isAdmin || niche.userId === userId;
   }
 
   /** Returns a random white from the niche. Throws if none. */
@@ -156,6 +206,39 @@ export class NicheStore {
     }
     const idx = Math.floor(Math.random() * niche.whites.length);
     return niche.whites[idx]!;
+  }
+
+  /**
+   * Migração idempotente: pega todos os IDs em `user-niches:*` (modelo antigo
+   * per-user) e adiciona ao set global `niches:global`. Marca flag pra não
+   * rodar de novo. Pode ser chamado N vezes sem efeito colateral.
+   */
+  async migrateToGlobalOnce(): Promise<{ migrated: number; alreadyDone: boolean }> {
+    const done = await this.redis.get(MIGRATION_FLAG);
+    if (done) return { migrated: 0, alreadyDone: true };
+
+    let cursor = '0';
+    let migrated = 0;
+    do {
+      const [next, keys] = await this.redis.scan(
+        cursor,
+        'MATCH',
+        `${USER_NICHES_PREFIX}*`,
+        'COUNT',
+        100,
+      );
+      cursor = next;
+      for (const key of keys) {
+        const ids = await this.redis.smembers(key);
+        if (ids.length > 0) {
+          await this.redis.sadd(NICHES_GLOBAL, ...ids);
+          migrated += ids.length;
+        }
+      }
+    } while (cursor !== '0');
+
+    await this.redis.set(MIGRATION_FLAG, new Date().toISOString());
+    return { migrated, alreadyDone: false };
   }
 
   private key(id: string): string {
