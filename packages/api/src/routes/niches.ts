@@ -14,6 +14,29 @@ const ALLOWED_AUDIO = new Set([
   'audio/ogg', 'audio/webm',
 ]);
 
+const ALLOWED_AUDIO_EXT = new Set(['mp3', 'wav', 'm4a', 'aac', 'ogg', 'webm']);
+
+/**
+ * Resolve mime efetivo do áudio. Browser frequentemente entrega mime
+ * vazio quando o file vem de drag-drop ou de extração ZIP. Cai pra
+ * detecção por extensão quando mime declarado não bate.
+ */
+function resolveAudioMime(declared: string, filename: string): string | null {
+  const mime = (declared || '').toLowerCase();
+  if (ALLOWED_AUDIO.has(mime)) return mime;
+  const ext = (filename.split('.').pop() || '').toLowerCase();
+  if (!ALLOWED_AUDIO_EXT.has(ext)) return null;
+  switch (ext) {
+    case 'mp3': return 'audio/mpeg';
+    case 'wav': return 'audio/wav';
+    case 'm4a': return 'audio/m4a';
+    case 'aac': return 'audio/aac';
+    case 'ogg': return 'audio/ogg';
+    case 'webm': return 'audio/webm';
+    default: return null;
+  }
+}
+
 const MAX_WHITE_BYTES = 20 * 1024 * 1024; // 20 MB per white audio
 
 function nicheToWire(
@@ -130,10 +153,19 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!filePart) {
       throw new BadRequestError('Missing "file" field in upload.');
     }
-    const mime = (filePart.mimetype || '').toLowerCase();
-    if (!ALLOWED_AUDIO.has(mime)) {
+    const declaredMime = (filePart.mimetype || '').toLowerCase();
+    const mime = resolveAudioMime(declaredMime, filePart.filename);
+    if (!mime) {
+      req.log.warn(
+        {
+          filename: filePart.filename,
+          declaredMime,
+        },
+        'niches: mime/ext de áudio não reconhecido',
+      );
       throw new BadRequestError(
-        `Tipo de áudio não suportado: ${mime || 'desconhecido'}. Use mp3, wav, m4a, ogg ou webm.`,
+        `Tipo de áudio não suportado pra "${filePart.filename}" (mime="${declaredMime || 'vazio'}"). ` +
+          'Use mp3, wav, m4a, aac, ogg ou webm.',
       );
     }
 

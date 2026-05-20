@@ -18,6 +18,36 @@ const ALLOWED_VIDEO = new Set([
   'audio/aac', 'audio/mp4',
 ]);
 
+const ALLOWED_EXT = new Set([
+  'mp4', 'mov', 'avi', 'webm', 'mkv',
+  'mp3', 'wav', 'm4a', 'aac',
+]);
+
+/**
+ * Resolve o MIME efetivo do arquivo. Browser/SO frequentemente entrega
+ * mime vazio em drag-drop ou em alguns MP4s do macOS. Quando o mime
+ * declarado falha na whitelist, cai pra detecção por extensão.
+ * Retorna `null` se nem mime nem extensão são reconhecidos.
+ */
+function resolveMime(declared: string, filename: string): string | null {
+  const mime = (declared || '').toLowerCase();
+  if (ALLOWED_VIDEO.has(mime)) return mime;
+  const ext = (filename.split('.').pop() || '').toLowerCase();
+  if (!ALLOWED_EXT.has(ext)) return null;
+  switch (ext) {
+    case 'mp4': return 'video/mp4';
+    case 'mov': return 'video/quicktime';
+    case 'avi': return 'video/x-msvideo';
+    case 'webm': return 'video/webm';
+    case 'mkv': return 'video/x-matroska';
+    case 'mp3': return 'audio/mpeg';
+    case 'wav': return 'audio/wav';
+    case 'm4a': return 'audio/m4a';
+    case 'aac': return 'audio/aac';
+    default: return null;
+  }
+}
+
 const MAX_INPUT_BYTES = 500 * 1024 * 1024; // 500MB
 /** Cap total do bulk-download. ZIP é blob no browser — limita pra não estourar memória. */
 const MAX_BULK_ZIP_BYTES = 3 * 1024 * 1024 * 1024; // 3GB
@@ -90,9 +120,20 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     }
     if (!filePart) throw new BadRequestError('Missing "file" field.');
 
-    const mime = (filePart.mimetype || '').toLowerCase();
-    if (!ALLOWED_VIDEO.has(mime)) {
-      throw new BadRequestError(`Tipo não suportado: ${mime}. Aceitos: mp4, mov, avi, webm, mkv, mp3, wav, m4a.`);
+    const declaredMime = (filePart.mimetype || '').toLowerCase();
+    const mime = resolveMime(declaredMime, filePart.filename);
+    if (!mime) {
+      req.log.warn(
+        {
+          filename: filePart.filename,
+          declaredMime,
+        },
+        'shield-jobs: mime/ext não reconhecido',
+      );
+      throw new BadRequestError(
+        `Tipo não suportado pra "${filePart.filename}" (mime="${declaredMime || 'vazio'}"). ` +
+          'Aceitos: mp4, mov, avi, webm, mkv, mp3, wav, m4a, aac.',
+      );
     }
 
     // Parse + validate body fields.
