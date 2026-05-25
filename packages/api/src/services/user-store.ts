@@ -92,6 +92,88 @@ export class UserStore {
     return count;
   }
 
+  /** Conta admins ativos. Usado pra impedir self-demote/delete do último. */
+  async countAdmins(): Promise<number> {
+    const users = await this.listAll();
+    return users.filter((u) => u.role === 'admin').length;
+  }
+
+  /** Lista todos os usuários. SCAN em batches de 100 — OK pra dezenas de users. */
+  async listAll(): Promise<UserRecord[]> {
+    const out: UserRecord[] = [];
+    let cursor = '0';
+    do {
+      const [next, keys] = await this.redis.scan(
+        cursor,
+        'MATCH',
+        `${USER_BY_ID_PREFIX}*`,
+        'COUNT',
+        '100',
+      );
+      cursor = next;
+      if (keys.length === 0) continue;
+      const pipe = this.redis.pipeline();
+      for (const k of keys) pipe.hgetall(k);
+      const results = (await pipe.exec()) ?? [];
+      for (const entry of results) {
+        if (!entry) continue;
+        const [, data] = entry;
+        if (!data || typeof data !== 'object') continue;
+        const rec = data as Record<string, string>;
+        if (!rec.id) continue;
+        out.push(this.deserialize(rec));
+      }
+    } while (cursor !== '0');
+    return out.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  }
+
+  /**
+   * Atualiza campos editáveis (name, role, allowedTools). Email é imutável.
+   * Quando role muda admin → user, valida via countAdmins externamente.
+   */
+  async update(
+    id: string,
+    patch: {
+      name?: string;
+      role?: 'admin' | 'user';
+      /** undefined = não muda. null = limpa (acesso total). array = sobrescreve. */
+      allowedTools?: ToolKey[] | null;
+    },
+  ): Promise<UserRecord> {
+    const current = await this.getById(id);
+    const next: UserRecord = {
+      ...current,
+      ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
+      ...(patch.role !== undefined ? { role: patch.role } : {}),
+    };
+    if (patch.allowedTools === null) {
+      delete next.allowedTools;
+    } else if (patch.allowedTools !== undefined) {
+      next.allowedTools = patch.allowedTools;
+    }
+    // Re-grava a hash inteira pra que campos removidos sumam.
+    await this.redis
+      .multi()
+      .del(idKey(id))
+      .hset(idKey(id), this.serialize(next))
+      .exec();
+    return next;
+  }
+
+  /**
+   * Apaga usuário (hash + índice por email). Caller responsável por validar
+   * que não é o último admin / não é o próprio user logado.
+   */
+  async delete(id: string): Promise<void> {
+    const rec = await this.maybeGetById(id);
+    if (!rec) return;
+    await this.redis
+      .multi()
+      .del(idKey(id))
+      .del(emailKey(rec.email))
+      .exec();
+  }
+
   toPublic(rec: UserRecord): User {
     return {
       id: rec.id,

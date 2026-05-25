@@ -16,6 +16,7 @@ import offersRoutes from './offers.js';
 import pageDiffRoutes from './page-diff.js';
 import previewRoutes from './preview.js';
 import shieldJobsRoutes from './shield-jobs.js';
+import usersRoutes from './users.js';
 import vslJobsRoutes from './vsl-jobs.js';
 import webhookTestRoutes from './webhook-test.js';
 
@@ -96,6 +97,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         await protectedRoutes.register(nichesRoutes);
         await protectedRoutes.register(shieldJobsRoutes);
         await protectedRoutes.register(digiAuditsRoutes);
+        await protectedRoutes.register(usersRoutes);
       });
     },
     { prefix: '/v1' },

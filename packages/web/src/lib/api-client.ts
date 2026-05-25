@@ -802,6 +802,63 @@ export const apiClient = {
     });
   },
 
+  // ---- Users (admin only) ----
+  async listUsers(): Promise<AuthUser[]> {
+    const wire = await request<{
+      users: Array<{
+        id: string;
+        email: string;
+        name: string;
+        role: 'admin' | 'user';
+        allowed_tools?: ToolKey[];
+        created_at: string;
+      }>;
+    }>('/v1/users');
+    return (wire.users ?? []).map((u) => ({
+      id: u.id,
+      email: u.email,
+      name: u.name,
+      role: u.role,
+      allowedTools: u.allowed_tools,
+      createdAt: u.created_at,
+    }));
+  },
+
+  async updateUser(
+    id: string,
+    patch: {
+      name?: string;
+      role?: 'admin' | 'user';
+      /** undefined = não muda. null = limpa (acesso total). array = sobrescreve. */
+      allowedTools?: ToolKey[] | null;
+    },
+  ): Promise<AuthUser> {
+    const body: Record<string, unknown> = {};
+    if (patch.name !== undefined) body.name = patch.name;
+    if (patch.role !== undefined) body.role = patch.role;
+    if (patch.allowedTools !== undefined) body.allowed_tools = patch.allowedTools;
+    const wire = await request<{
+      id: string;
+      email: string;
+      name: string;
+      role: 'admin' | 'user';
+      allowed_tools?: ToolKey[];
+      created_at: string;
+    }>(`/v1/users/${id}`, { method: 'PATCH', body });
+    return {
+      id: wire.id,
+      email: wire.email,
+      name: wire.name,
+      role: wire.role,
+      allowedTools: wire.allowed_tools,
+      createdAt: wire.created_at,
+    };
+  },
+
+  async deleteUser(id: string): Promise<void> {
+    await request<void>(`/v1/users/${id}`, { method: 'DELETE' });
+  },
+
   async listActivity(): Promise<Array<{
     kind: 'clone' | 'vsl' | 'funnel' | 'inspect' | 'webhook' | 'page-diff';
     id: string;

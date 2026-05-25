@@ -27,6 +27,7 @@ import {
 import { env } from '@/lib/env';
 import { cn } from '@/lib/utils';
 import { InvitesSection } from './invites-section';
+import { UsersSection } from './users-section';
 
 // Fallback caso a oferta selecionada não tenha dashboardId — usa o do PFL_ENG.
 const UTMIFY_DASHBOARD_ID_FALLBACK = '69f3b5692659d80c33debea2';
@@ -394,6 +395,8 @@ export function SettingsClient() {
           </p>
         </div>
       </section>
+
+      <UsersSection />
 
       <InvitesSection />
     </div>
