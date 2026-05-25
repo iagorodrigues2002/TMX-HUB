@@ -1,10 +1,12 @@
 import { Webhook } from 'lucide-react';
+import { ToolGuard } from '@/components/auth/tool-guard';
 import { HubShell } from '@/components/hub/hub-shell';
 import { WebhookTester } from '@/components/webhook/webhook-tester';
 
 export default function WebhookTesterPage() {
   return (
     <HubShell breadcrumb={['TOOLS', 'WEBHOOK TESTER']}>
+      <ToolGuard tool="webhook-tester">
       <div className="mx-auto max-w-4xl">
         <header className="mb-8 space-y-3 text-center">
           <div
@@ -33,6 +35,7 @@ export default function WebhookTesterPage() {
           v0.8 ACTIVE · CHAMADA SERVER-SIDE (sem CORS) · HMAC GERADO NO BROWSER
         </p>
       </div>
+      </ToolGuard>
     </HubShell>
   );
 }

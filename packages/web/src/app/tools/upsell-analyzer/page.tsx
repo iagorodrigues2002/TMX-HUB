@@ -1,10 +1,12 @@
 import { BarChart3 } from 'lucide-react';
+import { ToolGuard } from '@/components/auth/tool-guard';
 import { HubShell } from '@/components/hub/hub-shell';
 import { UpsellAnalyzer } from '@/components/upsell/upsell-analyzer';
 
 export default function UpsellAnalyzerPage() {
   return (
     <HubShell breadcrumb={['TOOLS', 'UPSELL ANALYZER']}>
+      <ToolGuard tool="upsell-analyzer">
       <div className="mx-auto max-w-4xl">
         <header className="mb-8 space-y-3 text-center">
           <div
@@ -32,6 +34,7 @@ export default function UpsellAnalyzerPage() {
           v0.7 ACTIVE · CLIENT-SIDE ONLY · NO BACKEND
         </p>
       </div>
+      </ToolGuard>
     </HubShell>
   );
 }

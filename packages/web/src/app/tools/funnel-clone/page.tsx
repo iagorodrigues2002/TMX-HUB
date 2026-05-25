@@ -1,10 +1,12 @@
 import { Network } from 'lucide-react';
+import { ToolGuard } from '@/components/auth/tool-guard';
 import { HubShell } from '@/components/hub/hub-shell';
 import { FunnelInputForm } from '@/components/funnel/funnel-input-form';
 
 export default function FunnelClonePage() {
   return (
     <HubShell breadcrumb={['TOOLS', 'FUNNEL CLONE']}>
+      <ToolGuard tool="funnel-clone">
       <div className="mx-auto max-w-2xl">
         <header className="mb-8 space-y-3 text-center">
           <div
@@ -34,6 +36,7 @@ export default function FunnelClonePage() {
           v0.8 ACTIVE · BFS · APENAS MESMO DOMÍNIO
         </p>
       </div>
+      </ToolGuard>
     </HubShell>
   );
 }

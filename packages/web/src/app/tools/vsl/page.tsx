@@ -1,10 +1,12 @@
 import { Video } from 'lucide-react';
+import { ToolGuard } from '@/components/auth/tool-guard';
 import { HubShell } from '@/components/hub/hub-shell';
 import { VslInputForm } from '@/components/vsl/vsl-input-form';
 
 export default function VslPage() {
   return (
     <HubShell breadcrumb={['TOOLS', 'VSL DOWNLOADER']}>
+      <ToolGuard tool="vsl">
       <div className="mx-auto max-w-2xl">
         <header className="mb-8 space-y-3 text-center">
           <div
@@ -34,6 +36,7 @@ export default function VslPage() {
           v0.5 ACTIVE · USE APENAS EM CONTEÚDO QUE VOCÊ POSSUI · SEM PROXY
         </p>
       </div>
+      </ToolGuard>
     </HubShell>
   );
 }

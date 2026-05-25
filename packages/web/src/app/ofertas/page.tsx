@@ -1,6 +1,7 @@
 'use client';
 
 import { Download, Target } from 'lucide-react';
+import { ToolGuard } from '@/components/auth/tool-guard';
 import { HubShell } from '@/components/hub/hub-shell';
 import { OfferList } from '@/components/ofertas/offer-list';
 import { Button } from '@/components/ui/button';
@@ -10,6 +11,7 @@ export const dynamic = 'force-dynamic';
 export default function OfertasIndexPage() {
   return (
     <HubShell breadcrumb={['OFERTAS']}>
+      <ToolGuard tool="ofertas">
       <header className="mb-6 space-y-3">
         <div className="flex items-center gap-2">
           <Target className="h-5 w-5 text-cyan-300" />
@@ -43,6 +45,7 @@ export default function OfertasIndexPage() {
       </section>
 
       <OfferList />
+      </ToolGuard>
     </HubShell>
   );
 }

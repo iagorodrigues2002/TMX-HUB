@@ -1,4 +1,5 @@
 import { ClipboardCheck } from 'lucide-react';
+import { ToolGuard } from '@/components/auth/tool-guard';
 import { HubShell } from '@/components/hub/hub-shell';
 import { AuditList } from '@/components/digi/audit-list';
 
@@ -7,6 +8,7 @@ export const dynamic = 'force-dynamic';
 export default function DigiApprovalIndexPage() {
   return (
     <HubShell breadcrumb={['TOOLS', 'DIGI APPROVAL']}>
+      <ToolGuard tool="digi-approval">
       <div className="mx-auto max-w-6xl">
         <header className="mb-8 space-y-3 text-center">
           <div
@@ -35,6 +37,7 @@ export default function DigiApprovalIndexPage() {
           v0.1 · base: digistore24-expertise + checklist Blackzada + CloakUp
         </p>
       </div>
+      </ToolGuard>
     </HubShell>
   );
 }

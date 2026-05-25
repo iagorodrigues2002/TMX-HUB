@@ -1,10 +1,12 @@
 import { Layers } from 'lucide-react';
+import { ToolGuard } from '@/components/auth/tool-guard';
 import { HubShell } from '@/components/hub/hub-shell';
 import { UrlInputForm } from '@/components/url-input-form';
 
 export default function ClonerPage() {
   return (
     <HubShell breadcrumb={['TOOLS', 'CLONER']}>
+      <ToolGuard tool="cloner">
       <div className="mx-auto max-w-2xl">
         <header className="mb-8 space-y-3 text-center">
           <div
@@ -33,6 +35,7 @@ export default function ClonerPage() {
           v0.1 ACTIVE · APENAS URLs PÚBLICAS · SCRIPTS REMOVIDOS AUTOMATICAMENTE
         </p>
       </div>
+      </ToolGuard>
     </HubShell>
   );
 }

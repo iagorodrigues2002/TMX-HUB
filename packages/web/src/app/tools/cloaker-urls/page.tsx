@@ -1,10 +1,12 @@
 import { Shuffle } from 'lucide-react';
+import { ToolGuard } from '@/components/auth/tool-guard';
 import { HubShell } from '@/components/hub/hub-shell';
 import { CloakerGenerator } from '@/components/cloaker/cloaker-generator';
 
 export default function CloakerUrlsPage() {
   return (
     <HubShell breadcrumb={['TOOLS', 'CLOAKER URLS']}>
+      <ToolGuard tool="cloaker-urls">
       <div className="mx-auto max-w-4xl">
         <header className="mb-8 space-y-3 text-center">
           <div
@@ -33,6 +35,7 @@ export default function CloakerUrlsPage() {
           v0.1 · 100% client-side · randomness via crypto.getRandomValues
         </p>
       </div>
+      </ToolGuard>
     </HubShell>
   );
 }

@@ -1,10 +1,12 @@
 import { GitCompare } from 'lucide-react';
+import { ToolGuard } from '@/components/auth/tool-guard';
 import { HubShell } from '@/components/hub/hub-shell';
 import { PageDiff } from '@/components/diff/page-diff';
 
 export default function PageDiffPage() {
   return (
     <HubShell breadcrumb={['TOOLS', 'PAGE DIFF']}>
+      <ToolGuard tool="page-diff">
       <div className="mx-auto max-w-4xl">
         <header className="mb-8 space-y-3 text-center">
           <div
@@ -33,6 +35,7 @@ export default function PageDiffPage() {
           v0.8 ACTIVE · LCS LINE-LEVEL DIFF · FETCH SERVER-SIDE
         </p>
       </div>
+      </ToolGuard>
     </HubShell>
   );
 }

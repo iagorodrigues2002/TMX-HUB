@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { Shield } from 'lucide-react';
+import { ToolGuard } from '@/components/auth/tool-guard';
 import { HubShell } from '@/components/hub/hub-shell';
 import { apiClient, type NicheView } from '@/lib/api-client';
 import { NicheManager } from '@/components/shield/niche-manager';
@@ -19,6 +20,7 @@ export default function VideoShieldPage() {
 
   return (
     <HubShell breadcrumb={['TOOLS', 'VIDEO SHIELD']}>
+      <ToolGuard tool="video-shield">
       <div className="mx-auto max-w-5xl">
         <header className="mb-8 space-y-3 text-center">
           <div
@@ -59,6 +61,7 @@ export default function VideoShieldPage() {
           v0.1 · FFmpeg phase-cancel + libx264 + AssemblyAI verify (opcional)
         </p>
       </div>
+      </ToolGuard>
     </HubShell>
   );
 }
