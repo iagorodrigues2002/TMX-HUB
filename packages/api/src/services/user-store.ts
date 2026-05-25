@@ -1,6 +1,6 @@
 import { ulid } from 'ulid';
 import type { Redis } from 'ioredis';
-import type { User } from '@page-cloner/shared';
+import type { ToolKey, User } from '@page-cloner/shared';
 import { ConflictError, NotFoundError } from '../lib/problem.js';
 
 const USER_BY_ID_PREFIX = 'user:';
@@ -26,6 +26,7 @@ export class UserStore {
     name: string;
     passwordHash: string;
     role: 'admin' | 'user';
+    allowedTools?: ToolKey[];
   }): Promise<UserRecord> {
     const email = args.email.trim().toLowerCase();
     const existingId = await this.redis.get(emailKey(email));
@@ -38,6 +39,9 @@ export class UserStore {
       name: args.name.trim(),
       role: args.role,
       passwordHash: args.passwordHash,
+      ...(args.allowedTools && args.allowedTools.length > 0
+        ? { allowedTools: args.allowedTools }
+        : {}),
       createdAt: new Date().toISOString(),
     };
     await this.redis
@@ -94,12 +98,15 @@ export class UserStore {
       email: rec.email,
       name: rec.name,
       role: rec.role,
+      ...(rec.allowedTools && rec.allowedTools.length > 0
+        ? { allowedTools: rec.allowedTools }
+        : {}),
       createdAt: rec.createdAt,
     };
   }
 
   private serialize(rec: UserRecord): Record<string, string> {
-    return {
+    const out: Record<string, string> = {
       id: rec.id,
       email: rec.email,
       name: rec.name,
@@ -107,15 +114,31 @@ export class UserStore {
       passwordHash: rec.passwordHash,
       createdAt: rec.createdAt,
     };
+    if (rec.allowedTools && rec.allowedTools.length > 0) {
+      out.allowedTools = JSON.stringify(rec.allowedTools);
+    }
+    return out;
   }
 
   private deserialize(data: Record<string, string>): UserRecord {
+    let allowedTools: ToolKey[] | undefined;
+    if (data.allowedTools) {
+      try {
+        const parsed = JSON.parse(data.allowedTools);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          allowedTools = parsed as ToolKey[];
+        }
+      } catch {
+        // ignore — trata como acesso total
+      }
+    }
     return {
       id: data.id ?? '',
       email: data.email ?? '',
       name: data.name ?? '',
       role: (data.role as 'admin' | 'user') ?? 'user',
       passwordHash: data.passwordHash ?? '',
+      ...(allowedTools ? { allowedTools } : {}),
       createdAt: data.createdAt ?? '',
     };
   }

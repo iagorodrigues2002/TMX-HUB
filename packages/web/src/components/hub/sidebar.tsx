@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Home, ScrollText, Settings, Target, User, Wrench } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { ToolKey } from '@/lib/api-client';
+import { useAuth } from '@/lib/auth-context';
 
 interface NavItem {
   label: string;
@@ -11,19 +13,31 @@ interface NavItem {
   icon: typeof Home;
   /** When true, the item is rendered but not clickable (placeholder). */
   disabled?: boolean;
+  /** Quando definido, item só aparece se user tem essa tool no allowedTools. */
+  requiresTool?: ToolKey;
 }
 
 const NAV: NavItem[] = [
   { label: 'Home', href: '/', icon: Home },
-  { label: 'Ofertas', href: '/ofertas', icon: Target },
+  { label: 'Ofertas', href: '/ofertas', icon: Target, requiresTool: 'ofertas' },
   { label: 'Tools', href: '/tools', icon: Wrench },
-  { label: 'Logs', href: '/logs', icon: ScrollText },
+  { label: 'Logs', href: '/logs', icon: ScrollText, requiresTool: 'logs' },
   { label: 'Configurações', href: '/settings', icon: Settings },
   { label: 'Conta', href: '#', icon: User, disabled: true },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { user } = useAuth();
+  const restricted =
+    user && user.role !== 'admin' && (user.allowedTools?.length ?? 0) > 0;
+  const allowed = user?.allowedTools ?? [];
+
+  const visibleNav = NAV.filter((item) => {
+    if (!item.requiresTool) return true;
+    if (!restricted) return true;
+    return allowed.includes(item.requiresTool);
+  });
 
   return (
     <aside
@@ -32,7 +46,7 @@ export function Sidebar() {
     >
       <p className="hud-label px-3 pb-2">Menu</p>
       <nav className="flex flex-col gap-1">
-        {NAV.map((item) => {
+        {visibleNav.map((item) => {
           const Icon = item.icon;
           const isActive =
             !item.disabled &&

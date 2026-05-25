@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, Loader2, Mail, Plus, Trash2, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
-import { apiClient, type InviteView } from '@/lib/api-client';
+import { apiClient, type InviteView, type ToolKey } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -39,12 +39,42 @@ function copyText(text: string, label: string): void {
   );
 }
 
+type AccessScope = 'full' | 'video-shield' | 'custom';
+
+const SCOPE_LABEL: Record<AccessScope, string> = {
+  full: 'Completo (todas as ferramentas)',
+  'video-shield': 'Apenas Video Shield',
+  custom: 'Personalizado…',
+};
+
+const CUSTOM_TOOL_OPTIONS: { key: ToolKey; label: string }[] = [
+  { key: 'video-shield', label: 'Video Shield' },
+  { key: 'cloner', label: 'Page Cloner' },
+  { key: 'cloaker-urls', label: 'Cloaker URL Generator' },
+  { key: 'page-diff', label: 'Page Diff' },
+  { key: 'funnel-clone', label: 'Funnel Full Clone' },
+  { key: 'upsell-analyzer', label: 'Upsell Analyzer' },
+  { key: 'webhook-tester', label: 'Webhook Tester' },
+  { key: 'vsl', label: 'VSL Downloader' },
+  { key: 'digi-approval', label: 'Digi Approval' },
+  { key: 'ofertas', label: 'Ofertas' },
+  { key: 'logs', label: 'Logs' },
+];
+
+function scopeToAllowedTools(scope: AccessScope, custom: ToolKey[]): ToolKey[] | undefined {
+  if (scope === 'full') return undefined;
+  if (scope === 'video-shield') return ['video-shield'];
+  return custom.length > 0 ? custom : ['video-shield'];
+}
+
 export function InvitesSection() {
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [days, setDays] = useState(7);
+  const [scope, setScope] = useState<AccessScope>('full');
+  const [customTools, setCustomTools] = useState<ToolKey[]>(['video-shield']);
 
   const { data, isLoading, error } = useQuery<InviteView[]>({
     queryKey: ['invites'],
@@ -53,18 +83,23 @@ export function InvitesSection() {
   });
 
   const createMut = useMutation({
-    mutationFn: () =>
-      apiClient.createInvite({
+    mutationFn: () => {
+      const allowedTools = scopeToAllowedTools(scope, customTools);
+      return apiClient.createInvite({
         ...(email.trim() ? { email: email.trim() } : {}),
         ...(name.trim() ? { name: name.trim() } : {}),
         expiresInDays: days,
-      }),
+        ...(allowedTools ? { allowedTools } : {}),
+      });
+    },
     onSuccess: (invite) => {
       qc.invalidateQueries({ queryKey: ['invites'] });
       setShowForm(false);
       setEmail('');
       setName('');
       setDays(7);
+      setScope('full');
+      setCustomTools(['video-shield']);
       const url = inviteUrl(invite.token);
       copyText(url, 'Link de convite');
       toast.success('Convite criado e link copiado.');
@@ -142,6 +177,58 @@ export function InvitesSection() {
               />
             </div>
           </div>
+          <div className="space-y-1">
+            <Label className="hud-label">Acesso</Label>
+            <select
+              value={scope}
+              onChange={(e) => setScope(e.target.value as AccessScope)}
+              disabled={createMut.isPending}
+              className="h-10 w-full rounded-md border border-white/[0.10] bg-black/30 px-3 text-[13px] text-white focus:border-cyan-300/40 focus:outline-none"
+            >
+              {(Object.keys(SCOPE_LABEL) as AccessScope[]).map((k) => (
+                <option key={k} value={k}>
+                  {SCOPE_LABEL[k]}
+                </option>
+              ))}
+            </select>
+            {scope === 'video-shield' && (
+              <p className="text-[10px] text-cyan-300/65">
+                Membro só verá e usará o Video Shield. Restante do hub fica oculto.
+              </p>
+            )}
+            {scope === 'custom' && (
+              <div className="mt-2 rounded-md border border-white/[0.06] bg-black/15 p-3">
+                <p className="mb-2 text-[10px] uppercase tracking-[0.14em] text-white/45">
+                  Selecione as ferramentas liberadas
+                </p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {CUSTOM_TOOL_OPTIONS.map((t) => {
+                    const checked = customTools.includes(t.key);
+                    return (
+                      <label
+                        key={t.key}
+                        className="flex items-center gap-1.5 rounded px-1.5 py-1 text-[12px] text-white/80 hover:bg-white/[0.04]"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            setCustomTools((prev) =>
+                              e.target.checked
+                                ? Array.from(new Set([...prev, t.key]))
+                                : prev.filter((x) => x !== t.key),
+                            );
+                          }}
+                          disabled={createMut.isPending}
+                        />
+                        {t.label}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
           <div className="flex items-end justify-between gap-3">
             <div className="space-y-1">
               <Label className="hud-label">Validade (dias)</Label>
@@ -166,7 +253,7 @@ export function InvitesSection() {
           </div>
           <p className="text-[10px] text-white/40">
             Email/Nome só pré-preenchem o formulário do convidado — o link funciona pra
-            qualquer pessoa que receber.
+            qualquer pessoa que receber. Acesso é aplicado ao registrar.
           </p>
         </form>
       )}
@@ -226,6 +313,13 @@ function InviteRow({
             >
               expira em {remaining}d
             </span>
+            {invite.allowedTools && invite.allowedTools.length > 0 && (
+              <span className="rounded-full border border-cyan-300/30 bg-cyan-300/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-200">
+                {invite.allowedTools.length === 1
+                  ? invite.allowedTools[0]
+                  : `${invite.allowedTools.length} tools`}
+              </span>
+            )}
           </div>
           {invite.name && invite.email && (
             <p className="text-[11px] text-white/55">{invite.name}</p>

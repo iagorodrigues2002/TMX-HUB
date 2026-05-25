@@ -451,16 +451,50 @@ function fromFunnelJobWire(w: FunnelJobWire): FunnelJobView {
 
 // ---- Auth ----
 
+/**
+ * Tools/áreas que podem aparecer em `allowedTools`. Quando ausente/vazio,
+ * acesso é total. Admin sempre bypassa.
+ */
+export type ToolKey =
+  | 'cloner'
+  | 'cloaker-urls'
+  | 'video-shield'
+  | 'page-diff'
+  | 'funnel-clone'
+  | 'upsell-analyzer'
+  | 'webhook-tester'
+  | 'vsl'
+  | 'digi-approval'
+  | 'ofertas'
+  | 'logs';
+
 export interface AuthUser {
   id: string;
   email: string;
   name: string;
   role: 'admin' | 'user';
+  allowedTools?: ToolKey[];
   createdAt: string;
 }
 
+/** Helper central de checagem de acesso a uma tool. */
+export function canAccessTool(user: AuthUser | null, tool: ToolKey): boolean {
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  const list = user.allowedTools;
+  if (!list || list.length === 0) return true;
+  return list.includes(tool);
+}
+
 interface AuthSessionWire {
-  user: { id: string; email: string; name: string; role: 'admin' | 'user'; createdAt: string };
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    role: 'admin' | 'user';
+    allowedTools?: ToolKey[];
+    createdAt: string;
+  };
   token: string;
   expires_at: string;
 }
@@ -474,6 +508,7 @@ export interface InviteView {
   createdAt: string;
   expiresAt: string;
   invitedBy?: string;
+  allowedTools?: ToolKey[];
 }
 
 interface InviteWire {
@@ -483,6 +518,7 @@ interface InviteWire {
   created_at: string;
   expires_at: string;
   invited_by?: string;
+  allowed_tools?: ToolKey[];
 }
 
 function fromInviteWire(w: InviteWire): InviteView {
@@ -493,6 +529,7 @@ function fromInviteWire(w: InviteWire): InviteView {
     createdAt: w.created_at,
     expiresAt: w.expires_at,
     invitedBy: w.invited_by,
+    allowedTools: w.allowed_tools,
   };
 }
 
@@ -707,6 +744,7 @@ export const apiClient = {
     name?: string;
     expiresAt?: string;
     invitedBy?: string;
+    allowedTools?: ToolKey[];
     detail?: string;
   }> {
     try {
@@ -716,6 +754,7 @@ export const apiClient = {
         name?: string;
         expires_at?: string;
         invited_by?: string;
+        allowed_tools?: ToolKey[];
       }>(`/v1/auth/invites/${encodeURIComponent(token)}`);
       return {
         valid: wire.valid,
@@ -723,6 +762,7 @@ export const apiClient = {
         name: wire.name,
         expiresAt: wire.expires_at,
         invitedBy: wire.invited_by,
+        allowedTools: wire.allowed_tools,
       };
     } catch (err) {
       const e = err as ApiError;
@@ -740,6 +780,7 @@ export const apiClient = {
     email?: string;
     name?: string;
     expiresInDays?: number;
+    allowedTools?: ToolKey[];
   }): Promise<InviteView> {
     const wire = await request<InviteWire>('/v1/auth/invites', {
       method: 'POST',
@@ -747,6 +788,9 @@ export const apiClient = {
         ...(input.email ? { email: input.email } : {}),
         ...(input.name ? { name: input.name } : {}),
         ...(input.expiresInDays ? { expires_in_days: input.expiresInDays } : {}),
+        ...(input.allowedTools && input.allowedTools.length > 0
+          ? { allowed_tools: input.allowedTools }
+          : {}),
       },
     });
     return fromInviteWire(wire);

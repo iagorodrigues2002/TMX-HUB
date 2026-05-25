@@ -1,5 +1,6 @@
 import type { Redis } from 'ioredis';
 import { ulid } from 'ulid';
+import type { ToolKey } from '@page-cloner/shared';
 import { NotFoundError } from '../lib/problem.js';
 
 const INVITE_PREFIX = 'invite:';
@@ -19,6 +20,11 @@ export interface Invite {
   createdByName?: string;
   createdAt: string;        // ISO
   expiresAt: string;        // ISO
+  /**
+   * Quando definido, o user criado por esse convite terá `allowedTools`
+   * setado pra esse mesmo array (acesso restrito). Vazio/undefined = acesso completo.
+   */
+  allowedTools?: ToolKey[];
 }
 
 export class InviteStore {
@@ -30,6 +36,7 @@ export class InviteStore {
     email?: string;
     name?: string;
     expiresInSec: number;
+    allowedTools?: ToolKey[];
   }): Promise<Invite> {
     const now = Date.now();
     const token = ulid();
@@ -41,6 +48,9 @@ export class InviteStore {
       ...(args.createdByName ? { createdByName: args.createdByName } : {}),
       createdAt: new Date(now).toISOString(),
       expiresAt: new Date(now + args.expiresInSec * 1000).toISOString(),
+      ...(args.allowedTools && args.allowedTools.length > 0
+        ? { allowedTools: args.allowedTools }
+        : {}),
     };
     await this.redis
       .multi()
@@ -115,10 +125,24 @@ export class InviteStore {
     if (i.email) out.email = i.email;
     if (i.name) out.name = i.name;
     if (i.createdByName) out.createdByName = i.createdByName;
+    if (i.allowedTools && i.allowedTools.length > 0) {
+      out.allowedTools = JSON.stringify(i.allowedTools);
+    }
     return out;
   }
 
   private deserialize(d: Record<string, string>): Invite {
+    let allowedTools: ToolKey[] | undefined;
+    if (d.allowedTools) {
+      try {
+        const parsed = JSON.parse(d.allowedTools);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          allowedTools = parsed as ToolKey[];
+        }
+      } catch {
+        // ignore
+      }
+    }
     return {
       token: d.token ?? '',
       ...(d.email ? { email: d.email } : {}),
@@ -127,6 +151,7 @@ export class InviteStore {
       ...(d.createdByName ? { createdByName: d.createdByName } : {}),
       createdAt: d.createdAt ?? '',
       expiresAt: d.expiresAt ?? '',
+      ...(allowedTools ? { allowedTools } : {}),
     };
   }
 }

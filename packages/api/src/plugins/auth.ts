@@ -65,10 +65,17 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!token) throw new UnauthorizedError();
     const payload = verifyJwt(token, env.JWT_SECRET);
     if (!payload) throw new UnauthorizedError('Token expirado ou inválido.');
-    // Make sure the user still exists.
+    // Make sure the user still exists. Sobrescreve role/tools com o fresh do
+    // store pra refletir mudanças de permissão sem precisar de relogin.
     const user = await userStore.maybeGetById(payload.sub);
     if (!user) throw new UnauthorizedError('Usuário não encontrado.');
-    req.user = payload;
+    req.user = {
+      ...payload,
+      role: user.role,
+      ...(user.allowedTools && user.allowedTools.length > 0
+        ? { tools: user.allowedTools }
+        : { tools: undefined }),
+    };
   };
 
   app.decorate('requireAuth', requireAuth);

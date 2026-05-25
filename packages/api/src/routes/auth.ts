@@ -1,9 +1,12 @@
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { ALL_TOOL_KEYS, type ToolKey } from '@page-cloner/shared';
 import { env } from '../env.js';
 import { signJwt } from '../lib/jwt.js';
 import { hashPassword, verifyPassword } from '../lib/password.js';
 import { BadRequestError, HttpProblem, zodToProblem } from '../lib/problem.js';
+
+const ToolKeySchema = z.enum(ALL_TOOL_KEYS as [ToolKey, ...ToolKey[]]);
 
 const LoginSchema = z
   .object({
@@ -32,6 +35,11 @@ const CreateInviteSchema = z
     name: z.string().min(1).max(100).optional(),
     /** Validade em dias. Default: 7. Mínimo 1, máximo 30. */
     expires_in_days: z.number().int().min(1).max(30).optional(),
+    /**
+     * Quando presente, o usuário criado terá acesso restrito apenas a essas
+     * ferramentas. Ausente/array vazio = acesso completo (legado).
+     */
+    allowed_tools: z.array(ToolKeySchema).min(1).max(20).optional(),
   })
   .strict();
 
@@ -63,7 +71,14 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const ok = await verifyPassword(password, user.passwordHash);
     if (!ok) throw new InvalidCredentialsError();
     const { token, payload } = signJwt(
-      { sub: user.id, email: user.email, role: user.role },
+      {
+        sub: user.id,
+        email: user.email,
+        role: user.role,
+        ...(user.allowedTools && user.allowedTools.length > 0
+          ? { tools: user.allowedTools }
+          : {}),
+      },
       env.JWT_SECRET,
     );
     return reply.send({
@@ -90,6 +105,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const isFirstRun = userCount === 0;
     let creatingAdmin = false;
     let consumedInvite = false;
+    let scopedTools: ToolKey[] | undefined;
 
     if (isFirstRun) {
       // Anybody can claim the first slot, and they become admin.
@@ -101,6 +117,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         throw new ForbiddenError('Convite inválido ou expirado.');
       }
       consumedInvite = true;
+      // Convite com escopo restrito → user nasce com allowedTools.
+      if (invite.allowedTools && invite.allowedTools.length > 0) {
+        scopedTools = invite.allowedTools;
+      }
     } else if (!env.ALLOW_REGISTRATION) {
       // Tier 3: must be authenticated admin.
       try {
@@ -122,12 +142,18 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       name,
       passwordHash,
       role: creatingAdmin ? 'admin' : 'user',
+      ...(scopedTools ? { allowedTools: scopedTools } : {}),
     });
     if (consumedInvite && inviteToken) {
       await app.inviteStore.consume(inviteToken).catch(() => {});
     }
     const { token, payload } = signJwt(
-      { sub: created.id, email: created.email, role: created.role },
+      {
+        sub: created.id,
+        email: created.email,
+        role: created.role,
+        ...(scopedTools ? { tools: scopedTools } : {}),
+      },
       env.JWT_SECRET,
     );
     return reply.code(201).send({
@@ -155,6 +181,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         name: invite.name,
         expires_at: invite.expiresAt,
         invited_by: invite.createdByName,
+        allowed_tools: invite.allowedTools,
       });
     },
   );
@@ -177,6 +204,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         ...(parsed.data.email ? { email: parsed.data.email } : {}),
         ...(parsed.data.name ? { name: parsed.data.name } : {}),
         expiresInSec: days * 24 * 60 * 60,
+        ...(parsed.data.allowed_tools && parsed.data.allowed_tools.length > 0
+          ? { allowedTools: parsed.data.allowed_tools }
+          : {}),
       });
       return reply.code(201).send({
         token: invite.token,
@@ -185,6 +215,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         created_at: invite.createdAt,
         expires_at: invite.expiresAt,
         invited_by: invite.createdByName,
+        allowed_tools: invite.allowedTools,
       });
     },
   );
@@ -206,6 +237,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           created_at: i.createdAt,
           expires_at: i.expiresAt,
           invited_by: i.createdByName,
+          allowed_tools: i.allowedTools,
         })),
       });
     },

@@ -1,3 +1,5 @@
+'use client';
+
 import {
   BarChart3,
   ClipboardCheck,
@@ -12,8 +14,158 @@ import {
 } from 'lucide-react';
 import { HubShell } from '@/components/hub/hub-shell';
 import { ToolCard } from '@/components/hub/tool-card';
+import type { ToolKey } from '@/lib/api-client';
+import { useAuth } from '@/lib/auth-context';
+
+interface ToolEntry {
+  tool?: ToolKey;
+  card: React.ReactNode;
+}
 
 export default function ToolsIndexPage() {
+  const { user } = useAuth();
+  const restricted =
+    user && user.role !== 'admin' && (user.allowedTools?.length ?? 0) > 0;
+  const allowed = user?.allowedTools ?? [];
+
+  const all: ToolEntry[] = [
+    {
+      tool: 'cloner',
+      card: (
+        <ToolCard
+          key="cloner"
+          icon={<Layers className="h-6 w-6" />}
+          title="Page Cloner"
+          description="Clone qualquer página, remove scripts, substitui checkout e empacota como HTML ou ZIP."
+          href="/tools/cloner"
+        />
+      ),
+    },
+    {
+      tool: 'vsl',
+      card: (
+        <ToolCard
+          key="vsl"
+          icon={<Video className="h-6 w-6" />}
+          title="VSL Downloader"
+          description="Detecta o vídeo de VSLs em VTURB, Panda, Vimeo, Wistia, Hotmart e outros players, e baixa como MP4."
+          href="/tools/vsl"
+          badge="Beta"
+        />
+      ),
+    },
+    {
+      tool: 'upsell-analyzer',
+      card: (
+        <ToolCard
+          key="upsell-analyzer"
+          icon={<BarChart3 className="h-6 w-6" />}
+          title="Upsell Analyzer"
+          description="Calcula taxas de aceite, rejeite e não-vista de funis de upsell. Funciona com Hotmart, Kiwify, Eduzz, Monetizze, Braip, Ticto e mais."
+          href="/tools/upsell-analyzer"
+        />
+      ),
+    },
+    {
+      tool: 'webhook-tester',
+      card: (
+        <ToolCard
+          key="webhook-tester"
+          icon={<Webhook className="h-6 w-6" />}
+          title="Webhook Tester"
+          description="Simula webhooks de Hotmart, Kiwify, Eduzz, Stripe e outros. Edita o payload, dispara e vê a resposta — sem precisar fazer venda real."
+          href="/tools/webhook-tester"
+          badge="Novo"
+        />
+      ),
+    },
+    {
+      tool: 'page-diff',
+      card: (
+        <ToolCard
+          key="page-diff"
+          icon={<GitCompare className="h-6 w-6" />}
+          title="Page Diff"
+          description="Compara duas URLs e mostra exatamente o que mudou no texto visível. Útil pra monitorar competidores ou validar mudanças no próprio funil."
+          href="/tools/page-diff"
+          badge="Novo"
+        />
+      ),
+    },
+    {
+      tool: 'funnel-clone',
+      card: (
+        <ToolCard
+          key="funnel-clone"
+          icon={<Network className="h-6 w-6" />}
+          title="Funnel Full Clone"
+          description="Descobre o funil inteiro a partir do front (segue CTAs, upsells, downsells, thanks) e empacota tudo num ZIP organizado por etapa."
+          href="/tools/funnel-clone"
+          badge="Novo"
+        />
+      ),
+    },
+    {
+      tool: 'cloaker-urls',
+      card: (
+        <ToolCard
+          key="cloaker-urls"
+          icon={<Shuffle className="h-6 w-6" />}
+          title="Cloaker URL Generator"
+          description="Gera lotes de URLs com parâmetros aleatorizados (token, ref, hex, UUID, sorteio de lista) pra alimentar campanhas com cloaker. Exporta como .txt."
+          href="/tools/cloaker-urls"
+          badge="Novo"
+        />
+      ),
+    },
+    {
+      tool: 'video-shield',
+      card: (
+        <ToolCard
+          key="video-shield"
+          icon={<Shield className="h-6 w-6" />}
+          title="Video Shield"
+          description="Phase cancel + white audio por nicho. Bots transcrevem só o white, humanos ouvem o original. Compressão opcional e verificação por AssemblyAI."
+          href="/tools/video-shield"
+          badge="Novo"
+        />
+      ),
+    },
+    {
+      tool: 'digi-approval',
+      card: (
+        <ToolCard
+          key="digi-approval"
+          icon={<ClipboardCheck className="h-6 w-6" />}
+          title="Digi Approval"
+          description="Auditoria de cadastro de produto na Digistore24 (Blackzada + CloakUp). 12 seções, ~120 itens, ~50 críticos. Persiste por produto."
+          href="/tools/digi-approval"
+          badge="Novo"
+        />
+      ),
+    },
+    {
+      // Sempre visível (placeholder, disabled).
+      card: (
+        <ToolCard
+          key="vsl-transcriber"
+          icon={<FileAudio className="h-6 w-6" />}
+          title="VSL Transcriber"
+          description="Transcreve a VSL com timestamps e identifica seções (gancho, prova, oferta, escassez, CTA) — em cima do MP4 baixado pelo VSL Downloader."
+          href="#"
+          badge="Em breve"
+          disabled
+        />
+      ),
+    },
+  ];
+
+  const visible = all.filter((entry) => {
+    if (!entry.tool) return !restricted; // placeholders só pra acesso total
+    if (!restricted) return true;
+    return allowed.includes(entry.tool);
+  });
+
   return (
     <HubShell breadcrumb={['TOOLS']}>
       <header className="space-y-3">
@@ -22,81 +174,15 @@ export default function ToolsIndexPage() {
           Ferramentas disponíveis
         </h1>
         <p className="max-w-xl text-[14px] text-white/55">
-          Selecione uma ferramenta abaixo para abrir. Novos módulos aparecem aqui conforme são liberados.
+          {restricted
+            ? 'Sua conta tem acesso restrito. Apenas as ferramentas abaixo estão liberadas.'
+            : 'Selecione uma ferramenta abaixo para abrir. Novos módulos aparecem aqui conforme são liberados.'}
         </p>
       </header>
 
       <section className="mt-10">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <ToolCard
-            icon={<Layers className="h-6 w-6" />}
-            title="Page Cloner"
-            description="Clone qualquer página, remove scripts, substitui checkout e empacota como HTML ou ZIP."
-            href="/tools/cloner"
-          />
-          <ToolCard
-            icon={<Video className="h-6 w-6" />}
-            title="VSL Downloader"
-            description="Detecta o vídeo de VSLs em VTURB, Panda, Vimeo, Wistia, Hotmart e outros players, e baixa como MP4."
-            href="/tools/vsl"
-            badge="Beta"
-          />
-          <ToolCard
-            icon={<BarChart3 className="h-6 w-6" />}
-            title="Upsell Analyzer"
-            description="Calcula taxas de aceite, rejeite e não-vista de funis de upsell. Funciona com Hotmart, Kiwify, Eduzz, Monetizze, Braip, Ticto e mais."
-            href="/tools/upsell-analyzer"
-          />
-          <ToolCard
-            icon={<Webhook className="h-6 w-6" />}
-            title="Webhook Tester"
-            description="Simula webhooks de Hotmart, Kiwify, Eduzz, Stripe e outros. Edita o payload, dispara e vê a resposta — sem precisar fazer venda real."
-            href="/tools/webhook-tester"
-            badge="Novo"
-          />
-          <ToolCard
-            icon={<GitCompare className="h-6 w-6" />}
-            title="Page Diff"
-            description="Compara duas URLs e mostra exatamente o que mudou no texto visível. Útil pra monitorar competidores ou validar mudanças no próprio funil."
-            href="/tools/page-diff"
-            badge="Novo"
-          />
-          <ToolCard
-            icon={<Network className="h-6 w-6" />}
-            title="Funnel Full Clone"
-            description="Descobre o funil inteiro a partir do front (segue CTAs, upsells, downsells, thanks) e empacota tudo num ZIP organizado por etapa."
-            href="/tools/funnel-clone"
-            badge="Novo"
-          />
-          <ToolCard
-            icon={<Shuffle className="h-6 w-6" />}
-            title="Cloaker URL Generator"
-            description="Gera lotes de URLs com parâmetros aleatorizados (token, ref, hex, UUID, sorteio de lista) pra alimentar campanhas com cloaker. Exporta como .txt."
-            href="/tools/cloaker-urls"
-            badge="Novo"
-          />
-          <ToolCard
-            icon={<Shield className="h-6 w-6" />}
-            title="Video Shield"
-            description="Phase cancel + white audio por nicho. Bots transcrevem só o white, humanos ouvem o original. Compressão opcional e verificação por AssemblyAI."
-            href="/tools/video-shield"
-            badge="Novo"
-          />
-          <ToolCard
-            icon={<ClipboardCheck className="h-6 w-6" />}
-            title="Digi Approval"
-            description="Auditoria de cadastro de produto na Digistore24 (Blackzada + CloakUp). 12 seções, ~120 itens, ~50 críticos. Persiste por produto."
-            href="/tools/digi-approval"
-            badge="Novo"
-          />
-          <ToolCard
-            icon={<FileAudio className="h-6 w-6" />}
-            title="VSL Transcriber"
-            description="Transcreve a VSL com timestamps e identifica seções (gancho, prova, oferta, escassez, CTA) — em cima do MP4 baixado pelo VSL Downloader."
-            href="#"
-            badge="Em breve"
-            disabled
-          />
+          {visible.map((e) => e.card)}
         </div>
       </section>
 

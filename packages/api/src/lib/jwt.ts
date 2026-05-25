@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import type { ToolKey } from '@page-cloner/shared';
 
 /**
  * Tiny HS256 JWT impl — avoids the `jsonwebtoken` dep. Good enough for our
@@ -19,6 +20,11 @@ export interface JwtPayload {
   sub: string; // user id
   email: string;
   role: 'admin' | 'user';
+  /**
+   * Lista de tools/áreas permitidas. Ausente ou vazio = acesso completo.
+   * Admin sempre bypassa (rota ignora esse campo quando role === 'admin').
+   */
+  tools?: ToolKey[];
   iat: number;
   exp: number;
 }
