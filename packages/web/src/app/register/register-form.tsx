@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Loader2, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
@@ -12,15 +12,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 /**
- * Form do registro. Componente client separado da page porque
- * `useSearchParams` exige Suspense boundary no Next 15 — a page virou
- * um RSC que envolve este form em <Suspense>.
+ * Form do registro. Lê `?invite=` de `window.location.search` num useEffect
+ * ao invés de useSearchParams — no Next 15.5 essa hook mesmo dentro de
+ * Suspense + dynamic='force-dynamic' ainda quebra o prerender do build
+ * ('should be wrapped in a suspense boundary' após Suspense correto).
+ * URLSearchParams direto elimina a issue e é 100% client-side.
  */
 export function RegisterForm() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const inviteToken = searchParams.get('invite') || undefined;
   const { register } = useAuth();
+  const [inviteToken, setInviteToken] = useState<string | undefined>();
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
@@ -30,7 +31,17 @@ export function RegisterForm() {
     | { kind: 'checking' }
     | { kind: 'valid'; email?: string; name?: string; expiresAt?: string; invitedBy?: string }
     | { kind: 'invalid'; detail: string }
-  >(inviteToken ? { kind: 'checking' } : { kind: 'idle' });
+  >({ kind: 'idle' });
+
+  // Lê ?invite= uma vez no mount. Executa apenas no client, então é seguro.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const token = new URLSearchParams(window.location.search).get('invite');
+    if (token) {
+      setInviteToken(token);
+      setInviteState({ kind: 'checking' });
+    }
+  }, []);
 
   useEffect(() => {
     if (!inviteToken) return;
