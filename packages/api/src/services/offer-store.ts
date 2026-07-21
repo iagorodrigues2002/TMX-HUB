@@ -198,6 +198,13 @@ export class OfferStore {
     await tx.exec();
   }
 
+  async setCurrency(id: string, currency: string): Promise<void> {
+    await this.redis.hset(this.key(id), {
+      currency: currency.toUpperCase(),
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
   /** Verify the offer exists AND belongs to the given user. Throws otherwise. */
   async assertOwner(id: string, userId: string): Promise<Offer> {
     const offer = await this.get(id);
@@ -249,6 +256,7 @@ export class OfferStore {
     };
     if (offer.companyName) out.companyName = offer.companyName;
     if (offer.dashboardId) out.dashboardId = offer.dashboardId;
+    if (offer.currency) out.currency = offer.currency;
     if (offer.description) out.description = offer.description;
     if (offer.utmifyConfigured) out.utmifyConfigured = 'true';
     if (offer.utmifyLoginHint) out.utmifyLoginHint = offer.utmifyLoginHint;
@@ -267,6 +275,7 @@ export class OfferStore {
       name: data.name ?? '',
       ...(data.companyName ? { companyName: data.companyName } : {}),
       ...(data.dashboardId ? { dashboardId: data.dashboardId } : {}),
+      ...(data.currency ? { currency: data.currency } : {}),
       ...(data.description ? { description: data.description } : {}),
       ...(data.utmifyConfigured === 'true' ? { utmifyConfigured: true } : {}),
       ...(data.utmifyLoginHint ? { utmifyLoginHint: data.utmifyLoginHint } : {}),

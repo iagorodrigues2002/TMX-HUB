@@ -1,6 +1,6 @@
 'use client';
 
-import { Kpi, formatBRL, formatRoas } from '@/components/dashboard/kpi-cards';
+import { Kpi, formatCurrency, formatRoas } from '@/components/dashboard/kpi-cards';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -141,27 +141,14 @@ export function OfferList() {
           </div>
         ) : (
           <>
-            <div className="grid gap-3 md:grid-cols-3">
-              <Kpi
-                label="Investimento geral"
-                value={formatBRL(summary.totals.spend)}
-                icon={<Wallet className="h-4 w-4" />}
-                tone="spend"
-              />
-              <Kpi
-                label="Faturamento geral"
-                value={formatBRL(summary.totals.revenue)}
-                icon={<Receipt className="h-4 w-4" />}
-                tone="positive"
-              />
-              <Kpi
-                label="ROAS geral"
-                value={formatRoas(summary.totals.roas)}
-                icon={<TrendingUp className="h-4 w-4" />}
-                tone={
-                  summary.totals.roas !== null && summary.totals.roas >= 1 ? 'positive' : 'warn'
-                }
-              />
+            <div className="space-y-3">
+              {summary.currencyTotals.map(({ currency, totals }) => (
+                <div key={currency} className="grid gap-3 md:grid-cols-3">
+                  <Kpi label={`Investimento geral · ${currency}`} value={formatCurrency(totals.spend, currency)} icon={<Wallet className="h-4 w-4" />} tone="spend" />
+                  <Kpi label={`Faturamento geral · ${currency}`} value={formatCurrency(totals.revenue, currency)} icon={<Receipt className="h-4 w-4" />} tone="positive" />
+                  <Kpi label={`ROAS geral · ${currency}`} value={formatRoas(totals.roas)} icon={<TrendingUp className="h-4 w-4" />} tone={totals.roas !== null && totals.roas >= 1 ? 'positive' : 'warn'} />
+                </div>
+              ))}
             </div>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {summary.offers.map((entry) => (
@@ -186,13 +173,13 @@ export function OfferList() {
                     <div>
                       <dt className="hud-label">Investido</dt>
                       <dd className="mt-1 font-mono text-[12px] text-amber-300">
-                        {formatBRL(entry.totals.spend)}
+                        {formatCurrency(entry.totals.spend, entry.offer.currency)}
                       </dd>
                     </div>
                     <div>
                       <dt className="hud-label">Faturamento</dt>
                       <dd className="mt-1 font-mono text-[12px] text-emerald-300">
-                        {formatBRL(entry.totals.revenue)}
+                        {formatCurrency(entry.totals.revenue, entry.offer.currency)}
                       </dd>
                     </div>
                     <div>

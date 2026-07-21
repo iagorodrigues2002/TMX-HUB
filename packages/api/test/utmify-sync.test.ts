@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { toSnapshot } from '../src/services/utmify-sync.js';
+import { detectCurrency, toSnapshot } from '../src/services/utmify-sync.js';
 
 describe('UTMify ad-level snapshot', () => {
   it('sums attribution metrics but deduplicates repeated delivery metrics', () => {
@@ -48,5 +48,11 @@ describe('UTMify ad-level snapshot', () => {
     expect(snapshot.spend).toBe(9.9);
     expect(snapshot.revenue).toBe(0);
     expect(snapshot.ads?.[0]?.revenue).toBe(0);
+  });
+
+  it('detects the dashboard currency in nested UTMify metadata or result fields', () => {
+    expect(detectCurrency({ dashboard: { currency: 'usd' }, results: [] })).toBe('USD');
+    expect(detectCurrency({ results: [{ name: 'AD1', currencyCode: 'BRL' }] })).toBe('BRL');
+    expect(detectCurrency({ results: [{ name: 'AD1' }] })).toBeUndefined();
   });
 });

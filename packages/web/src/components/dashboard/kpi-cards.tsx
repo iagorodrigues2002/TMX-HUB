@@ -13,13 +13,20 @@ import {
 } from 'lucide-react';
 import type { MetricsView } from '@/lib/api-client';
 
-export function formatBRL(n: number | null | undefined): string {
+export function formatCurrency(
+  n: number | null | undefined,
+  currency = 'BRL',
+): string {
   if (n === null || n === undefined || !Number.isFinite(n)) return '—';
   return n.toLocaleString('pt-BR', {
     style: 'currency',
-    currency: 'BRL',
+    currency,
     maximumFractionDigits: 2,
   });
+}
+
+export function formatBRL(n: number | null | undefined): string {
+  return formatCurrency(n, 'BRL');
 }
 
 export function formatInt(n: number | null | undefined): string {
@@ -75,7 +82,7 @@ export function Kpi({ label, value, hint, icon, tone = 'default' }: KpiProps) {
   );
 }
 
-export function KpiGrid({ metrics }: { metrics: MetricsView }) {
+export function KpiGrid({ metrics, currency = 'BRL' }: { metrics: MetricsView; currency?: string }) {
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
       <Kpi
@@ -86,13 +93,13 @@ export function KpiGrid({ metrics }: { metrics: MetricsView }) {
       />
       <Kpi
         label="Faturamento"
-        value={formatBRL(metrics.revenue)}
+        value={formatCurrency(metrics.revenue, currency)}
         icon={<Receipt className="h-4 w-4" />}
         tone="positive"
       />
       <Kpi
         label="Investido"
-        value={formatBRL(metrics.spend)}
+        value={formatCurrency(metrics.spend, currency)}
         icon={<Wallet className="h-4 w-4" />}
         tone="spend"
       />
@@ -104,13 +111,13 @@ export function KpiGrid({ metrics }: { metrics: MetricsView }) {
       />
       <Kpi
         label="CPA"
-        value={formatBRL(metrics.cpa)}
+        value={formatCurrency(metrics.cpa, currency)}
         icon={<Target className="h-4 w-4" />}
         hint="Custo por venda"
       />
       <Kpi
         label="CPA IC"
-        value={formatBRL(metrics.icCpa)}
+        value={formatCurrency(metrics.icCpa, currency)}
         icon={<CircleDollarSign className="h-4 w-4" />}
         hint="Custo por checkout iniciado"
       />

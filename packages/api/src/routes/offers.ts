@@ -16,6 +16,7 @@ function offerToWire(o: Offer): Record<string, unknown> {
     name: o.name,
     company_name: o.companyName,
     dashboard_id: o.dashboardId,
+    currency: o.currency ?? 'BRL',
     utmify_configured: Boolean(o.utmifyConfigured),
     utmify_login_hint: o.utmifyLoginHint,
     sync_status: o.syncStatus ?? 'idle',
@@ -217,6 +218,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       let sales = 0;
       let revenue = 0;
       let ic = 0;
+      const byCurrency = new Map<string, { spend: number; sales: number; revenue: number; ic: number }>();
       for (const offer of offers) {
         const snaps = await app.snapshotStore.listRange(offer.id, range.from, range.to);
         const totals = app.snapshotStore.aggregate(snaps);
@@ -224,6 +226,13 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         sales += totals.sales;
         revenue += totals.revenue;
         ic += totals.ic;
+        const currency = offer.currency ?? 'BRL';
+        const currencyTotals = byCurrency.get(currency) ?? { spend: 0, sales: 0, revenue: 0, ic: 0 };
+        currencyTotals.spend += totals.spend;
+        currencyTotals.sales += totals.sales;
+        currencyTotals.revenue += totals.revenue;
+        currencyTotals.ic += totals.ic;
+        byCurrency.set(currency, currencyTotals);
         perOffer.push({
           offer: offerToWire(offer),
           totals,
@@ -234,6 +243,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         from: range.from,
         to: range.to,
         totals: computeMetrics({ spend, sales, revenue, ic }),
+        currency_totals: [...byCurrency.entries()].map(([currency, values]) => ({
+          currency,
+          totals: computeMetrics(values),
+        })),
         offers: perOffer,
       });
     },
