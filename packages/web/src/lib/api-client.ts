@@ -619,6 +619,25 @@ export interface DashboardSummary {
   offers: DashboardOfferEntry[];
 }
 
+export interface IntradayWindowView {
+  index: number;
+  label: string;
+  startHour: number;
+  endHour: number;
+  available: boolean;
+  partial: boolean;
+  samples: number;
+  metrics: MetricsView;
+}
+
+export interface IntradaySummaryView {
+  date: string;
+  updatedAt?: string;
+  overall: MetricsView;
+  currentWindowIndex: number;
+  windows: IntradayWindowView[];
+}
+
 interface OfferWire {
   id: string;
   name: string;
@@ -1040,6 +1059,10 @@ export const apiClient = {
     accountFields: Array<Record<string, string | number | boolean>>;
   }> {
     return request(`/v1/offers/${id}/utmify-capabilities`);
+  },
+
+  async getOfferIntraday(id: string): Promise<IntradaySummaryView> {
+    return request(`/v1/offers/${id}/intraday`);
   },
 
   async getOfferSnapshots(
