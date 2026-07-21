@@ -1,12 +1,16 @@
-import { ulid } from 'ulid';
 import { CreateMediaJobBodySchema, type MediaJob } from '@page-cloner/shared';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import { ulid } from 'ulid';
 import { BadRequestError, zodToProblem } from '../lib/problem.js';
 
 const MAX_INPUT_BYTES = 500 * 1024 * 1024;
 const MIME_BY_EXT: Record<string, string> = {
-  mp4: 'video/mp4', mov: 'video/quicktime', avi: 'video/x-msvideo',
-  webm: 'video/webm', mkv: 'video/x-matroska', m4v: 'video/x-m4v',
+  mp4: 'video/mp4',
+  mov: 'video/quicktime',
+  avi: 'video/x-msvideo',
+  webm: 'video/webm',
+  mkv: 'video/x-matroska',
+  m4v: 'video/x-m4v',
 };
 
 function bool(value: string | undefined): boolean | undefined {
@@ -16,34 +20,59 @@ function bool(value: string | undefined): boolean | undefined {
 
 function toWire(job: MediaJob, downloadUrl?: string): Record<string, unknown> {
   return {
-    id: job.id, status: job.status,
+    id: job.id,
+    status: job.status,
     input: { filename: job.inputFilename, bytes: job.inputBytes },
     options: {
-      compression: job.compression, aspect_ratio: job.aspectRatio,
-      strip_metadata: job.stripMetadata, normalize_audio: job.normalizeAudio,
-      extension_mode: job.extensionMode, target_seconds: job.targetSeconds,
+      compression: job.compression,
+      aspect_ratio: job.aspectRatio,
+      strip_metadata: job.stripMetadata,
+      normalize_audio: job.normalizeAudio,
+      extension_mode: job.extensionMode,
+      target_seconds: job.targetSeconds,
+      phase_cancel: job.phaseCancel,
+      niche: job.nicheId ? { id: job.nicheId, name: job.nicheName } : undefined,
+      white: job.whiteId
+        ? { id: job.whiteId, label: job.whiteLabel, volume_db: job.whiteVolumeDb }
+        : undefined,
+      verify_transcript: job.verifyTranscript,
     },
-    output: job.outputFilename ? {
-      filename: job.outputFilename, bytes: job.outputBytes, download_url: downloadUrl,
-    } : undefined,
-    error: job.errorMessage, created_at: job.createdAt, updated_at: job.updatedAt,
+    output: job.outputFilename
+      ? {
+          filename: job.outputFilename,
+          bytes: job.outputBytes,
+          download_url: downloadUrl,
+        }
+      : undefined,
+    transcript: job.transcript,
+    transcript_status: job.transcriptStatus,
+    transcript_error: job.transcriptError,
+    error: job.errorMessage,
+    created_at: job.createdAt,
+    updated_at: job.updatedAt,
   };
 }
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.post('/media-jobs', async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');
-    if (!req.isMultipart()) throw new BadRequestError('Envie multipart/form-data com o campo file.');
+    if (!req.isMultipart())
+      throw new BadRequestError('Envie multipart/form-data com o campo file.');
     const fields: Record<string, string> = {};
     let filePart: import('@fastify/multipart').MultipartFile | undefined;
     for await (const part of req.parts()) {
-      if (part.type === 'field' && typeof part.value === 'string') fields[part.fieldname] = part.value;
-      if (part.type === 'file' && part.fieldname === 'file') { filePart = part; break; }
+      if (part.type === 'field' && typeof part.value === 'string')
+        fields[part.fieldname] = part.value;
+      if (part.type === 'file' && part.fieldname === 'file') {
+        filePart = part;
+        break;
+      }
     }
     if (!filePart) throw new BadRequestError('Campo "file" ausente.');
     const ext = (filePart.filename.split('.').pop() || '').toLowerCase();
     const contentType = MIME_BY_EXT[ext];
-    if (!contentType) throw new BadRequestError('Formato não suportado. Use MP4, MOV, AVI, WEBM, MKV ou M4V.');
+    if (!contentType)
+      throw new BadRequestError('Formato não suportado. Use MP4, MOV, AVI, WEBM, MKV ou M4V.');
 
     const parsed = CreateMediaJobBodySchema.safeParse({
       ...(fields.compression ? { compression: fields.compression } : {}),
@@ -52,25 +81,63 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       ...(fields.normalize_audio ? { normalize_audio: bool(fields.normalize_audio) } : {}),
       ...(fields.extension_mode ? { extension_mode: fields.extension_mode } : {}),
       ...(fields.target_seconds ? { target_seconds: Number(fields.target_seconds) } : {}),
+      ...(fields.phase_cancel ? { phase_cancel: bool(fields.phase_cancel) } : {}),
+      ...(fields.niche_id ? { niche_id: fields.niche_id } : {}),
+      ...(fields.white_volume_db ? { white_volume_db: Number(fields.white_volume_db) } : {}),
+      ...(fields.verify_transcript ? { verify_transcript: bool(fields.verify_transcript) } : {}),
     });
     if (!parsed.success) throw zodToProblem(parsed.error, req.url);
+
+    let phaseConfig:
+      | {
+          nicheId: string;
+          nicheName: string;
+          whiteId: string;
+          whiteLabel: string;
+          whiteVolumeDb: number;
+        }
+      | undefined;
+    if (parsed.data.phase_cancel && parsed.data.niche_id) {
+      const niche = await app.nicheStore.get(parsed.data.niche_id);
+      if (niche.whites.length === 0) {
+        throw new BadRequestError(`Nicho "${niche.name}" não tem áudio white cadastrado.`);
+      }
+      const white = app.nicheStore.pickRandomWhite(niche);
+      phaseConfig = {
+        nicheId: niche.id,
+        nicheName: niche.name,
+        whiteId: white.id,
+        whiteLabel: white.label || white.filename,
+        whiteVolumeDb: parsed.data.white_volume_db ?? -22,
+      };
+    }
 
     const id = ulid();
     const storageKey = app.mediaJobStore.inputKey(id, ext);
     const upload = await app.storage.putStream(storageKey, filePart.file, {
-      contentType, maxBytes: MAX_INPUT_BYTES,
+      contentType,
+      maxBytes: MAX_INPUT_BYTES,
     });
     const now = new Date().toISOString();
     const job = await app.mediaJobStore.create({
-      id, userId: req.user.sub, inputStorageKey: storageKey,
-      inputFilename: filePart.filename, inputBytes: upload.bytes,
+      id,
+      userId: req.user.sub,
+      inputStorageKey: storageKey,
+      inputFilename: filePart.filename,
+      inputBytes: upload.bytes,
       compression: parsed.data.compression ?? 'balanced',
       aspectRatio: parsed.data.aspect_ratio ?? 'original',
       stripMetadata: parsed.data.strip_metadata ?? true,
       normalizeAudio: parsed.data.normalize_audio ?? true,
       extensionMode: parsed.data.extension_mode ?? 'none',
       ...(parsed.data.target_seconds ? { targetSeconds: parsed.data.target_seconds } : {}),
-      status: 'queued', createdAt: now, updatedAt: now,
+      phaseCancel: parsed.data.phase_cancel ?? false,
+      ...(phaseConfig ?? {}),
+      verifyTranscript:
+        (parsed.data.phase_cancel ?? false) && (parsed.data.verify_transcript ?? false),
+      status: 'queued',
+      createdAt: now,
+      updatedAt: now,
     });
     await app.mediaQueue.add('process-media', { jobId: id }, { jobId: id });
     return reply.code(202).send(toWire(job));
@@ -79,12 +146,18 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get('/media-jobs', async (req) => {
     if (!req.user) throw new BadRequestError('No user attached.');
     const jobs = await app.mediaJobStore.listByUser(req.user.sub);
-    return { jobs: await Promise.all(jobs.map(async (job) => {
-      const url = job.outputStorageKey
-        ? await app.storage.presignGet(job.outputStorageKey, 24 * 60 * 60, job.outputFilename).catch(() => undefined)
-        : undefined;
-      return toWire(job, url);
-    })) };
+    return {
+      jobs: await Promise.all(
+        jobs.map(async (job) => {
+          const url = job.outputStorageKey
+            ? await app.storage
+                .presignGet(job.outputStorageKey, 24 * 60 * 60, job.outputFilename)
+                .catch(() => undefined)
+            : undefined;
+          return toWire(job, url);
+        }),
+      ),
+    };
   });
 
   app.get<{ Params: { id: string } }>('/media-jobs/:id', async (req) => {

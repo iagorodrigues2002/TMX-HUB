@@ -142,22 +142,13 @@ export const CreateFunnelJobRequestSchema = z
   })
   .strict();
 
-export const OfferStatusSchema = z.enum([
-  'testando',
-  'validando',
-  'escala',
-  'pausado',
-  'morrendo',
-]);
+export const OfferStatusSchema = z.enum(['testando', 'validando', 'escala', 'pausado', 'morrendo']);
 
 const optionalUrl = z
   .string()
   .trim()
   .max(2000)
-  .refine(
-    (v) => v === '' || /^https?:\/\//i.test(v),
-    'URL deve começar com http:// ou https://',
-  )
+  .refine((v) => v === '' || /^https?:\/\//i.test(v), 'URL deve começar com http:// ou https://')
   .optional();
 
 export const OfferLinkSchema = z.object({
@@ -255,13 +246,28 @@ export const CreateMediaJobBodySchema = z
     normalize_audio: z.boolean().optional(),
     extension_mode: MediaExtensionModeSchema.optional(),
     target_seconds: z.number().int().min(1).max(3600).optional(),
+    phase_cancel: z.boolean().optional(),
+    niche_id: z.string().min(1).max(64).optional(),
+    white_volume_db: z.number().min(-40).max(-5).optional(),
+    verify_transcript: z.boolean().optional(),
   })
   .superRefine((value, ctx) => {
-    if (value.extension_mode !== undefined && value.extension_mode !== 'none' && !value.target_seconds) {
+    if (
+      value.extension_mode !== undefined &&
+      value.extension_mode !== 'none' &&
+      !value.target_seconds
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['target_seconds'],
         message: 'target_seconds é obrigatório quando a extensão está ativa.',
+      });
+    }
+    if (value.phase_cancel && !value.niche_id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['niche_id'],
+        message: 'niche_id é obrigatório quando Phase Cancel está ativo.',
       });
     }
   });

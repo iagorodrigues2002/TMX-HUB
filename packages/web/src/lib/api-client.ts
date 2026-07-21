@@ -1334,6 +1334,12 @@ export const apiClient = {
     fd.append('normalize_audio', args.normalizeAudio ? '1' : '0');
     fd.append('extension_mode', args.extensionMode);
     if (args.targetSeconds) fd.append('target_seconds', String(args.targetSeconds));
+    fd.append('phase_cancel', args.phaseCancel ? '1' : '0');
+    if (args.phaseCancel && args.nicheId) fd.append('niche_id', args.nicheId);
+    if (args.phaseCancel && args.whiteVolumeDb !== undefined) {
+      fd.append('white_volume_db', String(args.whiteVolumeDb));
+    }
+    if (args.phaseCancel && args.verifyTranscript) fd.append('verify_transcript', '1');
     fd.append('file', args.file);
     return uploadMultipart<MediaJobView>('/v1/media-jobs', fd, onProgress);
   },
@@ -1533,11 +1539,15 @@ export interface CreateMediaJobInput {
   normalizeAudio: boolean;
   extensionMode: MediaExtensionMode;
   targetSeconds?: number;
+  phaseCancel: boolean;
+  nicheId?: string;
+  whiteVolumeDb?: number;
+  verifyTranscript?: boolean;
 }
 
 export interface MediaJobView {
   id: string;
-  status: 'queued' | 'processing' | 'ready' | 'failed';
+  status: 'queued' | 'processing' | 'verifying' | 'ready' | 'failed';
   input: { filename: string; bytes: number };
   options: {
     compression: MediaCompressionMode;
@@ -1546,8 +1556,15 @@ export interface MediaJobView {
     normalize_audio: boolean;
     extension_mode: MediaExtensionMode;
     target_seconds?: number;
+    phase_cancel: boolean;
+    niche?: { id: string; name?: string };
+    white?: { id: string; label?: string; volume_db?: number };
+    verify_transcript: boolean;
   };
   output?: { filename: string; bytes?: number; download_url?: string };
+  transcript?: string;
+  transcript_status?: ShieldVerifyStatusView;
+  transcript_error?: string;
   error?: string;
   created_at: string;
   updated_at: string;

@@ -322,7 +322,7 @@ export interface OfferLink {
 export interface Offer {
   id: string;
   userId: string;
-  name: string;          // ex. "PFL_ENG"
+  name: string; // ex. "PFL_ENG"
   /** UTMify dashboardId, kept for reference + auto-config in n8n. */
   dashboardId?: string;
   description?: string;
@@ -355,11 +355,11 @@ export interface AdsetSnapshot {
  */
 export interface DailySnapshot {
   offerId: string;
-  date: string;          // YYYY-MM-DD
-  spend: number;         // BRL
-  sales: number;         // count
-  revenue: number;       // BRL
-  ic: number;            // initiate checkout count
+  date: string; // YYYY-MM-DD
+  spend: number; // BRL
+  sales: number; // count
+  revenue: number; // BRL
+  ic: number; // initiate checkout count
   impressions?: number;
   clicks?: number;
   adsets?: AdsetSnapshot[];
@@ -484,9 +484,9 @@ export interface UpdateNicheRequest {
 
 export interface CreateShieldJobRequest {
   niche_id: string;
-  white_volume_db?: number;        // default -22
+  white_volume_db?: number; // default -22
   compression?: ShieldCompressionMode; // default 'none'
-  verify_transcript?: boolean;     // default false
+  verify_transcript?: boolean; // default false
 }
 
 // ---- Creative Studio ----
@@ -494,7 +494,7 @@ export interface CreateShieldJobRequest {
 export type MediaCompressionMode = 'none' | 'balanced' | 'small';
 export type MediaAspectRatio = 'original' | '9:16' | '4:5' | '1:1';
 export type MediaExtensionMode = 'none' | 'loop' | 'freeze';
-export type MediaJobStatus = 'queued' | 'processing' | 'ready' | 'failed';
+export type MediaJobStatus = 'queued' | 'processing' | 'verifying' | 'ready' | 'failed';
 
 export interface MediaJob {
   id: string;
@@ -508,10 +508,20 @@ export interface MediaJob {
   normalizeAudio: boolean;
   extensionMode: MediaExtensionMode;
   targetSeconds?: number;
+  phaseCancel: boolean;
+  nicheId?: string;
+  nicheName?: string;
+  whiteId?: string;
+  whiteLabel?: string;
+  whiteVolumeDb?: number;
+  verifyTranscript: boolean;
   status: MediaJobStatus;
   outputStorageKey?: string;
   outputFilename?: string;
   outputBytes?: number;
+  transcript?: string;
+  transcriptStatus?: ShieldVerifyStatus;
+  transcriptError?: string;
   errorMessage?: string;
   createdAt: string;
   updatedAt: string;
@@ -524,16 +534,15 @@ export interface CreateMediaJobRequest {
   normalize_audio?: boolean;
   extension_mode?: MediaExtensionMode;
   target_seconds?: number;
+  phase_cancel?: boolean;
+  niche_id?: string;
+  white_volume_db?: number;
+  verify_transcript?: boolean;
 }
 
 // ---- Digistore24 Approval Audit ----
 
-export type DigiAuditStatus =
-  | 'draft'
-  | 'in_review'
-  | 'approved'
-  | 'rejected'
-  | 'abandoned';
+export type DigiAuditStatus = 'draft' | 'in_review' | 'approved' | 'rejected' | 'abandoned';
 
 export type DigiItemState = 'pending' | 'done' | 'na';
 
