@@ -141,7 +141,7 @@ export class UtmifySyncService {
     const resultKeys = [...new Set(results.flatMap((item) => Object.keys(item)))].sort();
     const accountFields = results.slice(0, 50).flatMap((item) => {
       const fields = Object.entries(item).filter(([key, value]) => {
-        return /account|conta|status/i.test(key) && ['string', 'number', 'boolean'].includes(typeof value);
+        return /account|conta/i.test(key) && ['string', 'number', 'boolean'].includes(typeof value);
       });
       return fields.length ? [Object.fromEntries(fields) as Record<string, string | number | boolean>] : [];
     });
