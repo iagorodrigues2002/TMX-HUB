@@ -109,7 +109,7 @@ async function authenticate(login: string, password: string): Promise<string> {
   const token = auth?.token ?? payload?.token ?? payload?.access_token;
   if (typeof token !== 'string' || !token)
     throw new Error('A UTMify não retornou um token válido.');
-  return token;
+  return token.replace(/^Bearer\s+/i, '').trim();
 }
 
 async function fetchAds(token: string, dashboardId: string, date: string): Promise<UtmifyResult[]> {
@@ -136,7 +136,15 @@ async function fetchAds(token: string, dashboardId: string, date: string): Promi
     signal: AbortSignal.timeout(45_000),
   });
   const payload = (await response.json().catch(() => null)) as Record<string, unknown> | null;
-  if (!response.ok) throw new Error(`Consulta UTMify falhou (${response.status}).`);
+  if (!response.ok) {
+    const detail = errorDetail(payload);
+    if (response.status === 401 || response.status === 403) {
+      throw new Error(
+        `A UTMify autenticou o login, mas recusou o acesso à dashboard ${dashboardId} (${response.status}). Confirme se esse ID pertence à mesma conta.${detail ? ` Detalhe: ${detail}` : ''}`,
+      );
+    }
+    throw new Error(`Consulta UTMify falhou (${response.status})${detail ? `: ${detail}` : '.'}`);
+  }
   return Array.isArray(payload?.results) ? (payload.results as UtmifyResult[]) : [];
 }
 
@@ -200,4 +208,13 @@ function buildDays(count: number): string[] {
 function number(value: unknown): number {
   const parsed = typeof value === 'number' ? value : Number.parseFloat(String(value ?? '0'));
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function errorDetail(payload: Record<string, unknown> | null): string {
+  if (!payload) return '';
+  for (const key of ['message', 'error', 'detail']) {
+    const value = payload[key];
+    if (typeof value === 'string' && value.trim()) return value.trim().slice(0, 200);
+  }
+  return '';
 }

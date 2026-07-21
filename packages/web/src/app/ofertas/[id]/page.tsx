@@ -318,7 +318,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
             </header>
             {data.snapshots.length === 0 ? (
               <div className="p-8 text-center text-[13px] text-white/45">
-                Nenhum snapshot ingerido nesse período. Configure o n8n adapter pra começar.
+                Nenhum dado sincronizado nesse período. Verifique a conexão UTMify da oferta.
               </div>
             ) : (
               <div className="overflow-x-auto">
