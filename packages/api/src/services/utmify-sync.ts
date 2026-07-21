@@ -2,6 +2,7 @@ import type { AdSnapshot, DailySnapshot, Offer } from '@page-cloner/shared';
 import type { Redis } from 'ioredis';
 import type { OfferStore } from './offer-store.js';
 import type { SnapshotStore } from './snapshot-store.js';
+import type { IntradayStore } from './intraday-store.js';
 
 const AUTH_URL = 'https://server.utmify.com.br/users/auth';
 const SEARCH_URL = 'https://server.utmify.com.br/orders/search-objects';
@@ -35,6 +36,7 @@ export class UtmifySyncService {
     private readonly redis: Redis,
     private readonly offerStore: OfferStore,
     private readonly snapshotStore: SnapshotStore,
+    private readonly intradayStore: IntradayStore,
     private readonly log: {
       info: (obj: unknown, msg?: string) => void;
       warn: (obj: unknown, msg?: string) => void;
@@ -88,6 +90,7 @@ export class UtmifySyncService {
           const snapshot = toSnapshot(offer.id, date, results);
           ads += snapshot.ads?.length ?? 0;
           await this.snapshotStore.upsert(snapshot);
+          await this.intradayStore.capture(offer.id, snapshot);
           syncedDays += 1;
         } catch (error) {
           failures.push({

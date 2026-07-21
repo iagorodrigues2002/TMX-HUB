@@ -121,6 +121,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!req.user) throw new BadRequestError('No user attached.');
     await app.offerStore.assertOwner(req.params.id, req.user.sub);
     await app.snapshotStore.deleteAllForOffer(req.params.id);
+    await app.intradayStore.deleteAllForOffer(req.params.id);
     await app.offerStore.delete(req.params.id, req.user.sub);
     return reply.code(204).send();
   });
@@ -192,6 +193,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!req.user) throw new BadRequestError('No user attached.');
     const offer = await app.offerStore.assertOwner(req.params.id, req.user.sub);
     return reply.send(await app.utmifySync.inspectCapabilities(offer));
+  });
+
+  app.get<{ Params: { id: string } }>('/offers/:id/intraday', async (req, reply) => {
+    if (!req.user) throw new BadRequestError('No user attached.');
+    const offer = await app.offerStore.assertOwner(req.params.id, req.user.sub);
+    return reply.send(await app.intradayStore.summary(offer.id));
   });
 
   // GET /v1/dashboard/summary?from=&to= — cross-offer aggregation for the home

@@ -3,6 +3,7 @@ import { env } from '../env.js';
 import { DigiAuditStore } from '../services/digi-audit-store.js';
 import { FunnelJobStore } from '../services/funnel-job-store.js';
 import { InviteStore } from '../services/invite-store.js';
+import { IntradayStore } from '../services/intraday-store.js';
 import { JobStore } from '../services/job-store.js';
 import { MediaJobStore } from '../services/media-job-store.js';
 import { NicheStore } from '../services/niche-store.js';
@@ -21,6 +22,7 @@ declare module 'fastify' {
     funnelJobStore: FunnelJobStore;
     offerStore: OfferStore;
     snapshotStore: SnapshotStore;
+    intradayStore: IntradayStore;
     nicheStore: NicheStore;
     shieldJobStore: ShieldJobStore;
     mediaJobStore: MediaJobStore;
@@ -38,6 +40,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.decorate('funnelJobStore', new FunnelJobStore(app.redis));
   app.decorate('offerStore', new OfferStore(app.redis, env.JWT_SECRET));
   app.decorate('snapshotStore', new SnapshotStore(app.redis));
+  app.decorate('intradayStore', new IntradayStore(app.redis));
   app.decorate('nicheStore', new NicheStore(app.redis));
   app.decorate('shieldJobStore', new ShieldJobStore(app.redis));
   app.decorate('mediaJobStore', new MediaJobStore(app.redis));
@@ -45,7 +48,13 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.decorate('inviteStore', new InviteStore(app.redis));
   app.decorate(
     'utmifySync',
-    new UtmifySyncService(app.redis, app.offerStore, app.snapshotStore, app.log),
+    new UtmifySyncService(
+      app.redis,
+      app.offerStore,
+      app.snapshotStore,
+      app.intradayStore,
+      app.log,
+    ),
   );
 
   // Migração one-shot: nichos antigos viviam em user-niches:{userId}.

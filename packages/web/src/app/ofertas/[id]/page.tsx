@@ -13,9 +13,9 @@ import { OfferEditDialog } from '@/components/ofertas/offer-edit-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { apiClient } from '@/lib/api-client';
+import { apiClient, type MetricsView } from '@/lib/api-client';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Loader2, Pencil, Search, Target } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Clock3, Loader2, Pencil, Search, Target } from 'lucide-react';
 import Link from 'next/link';
 import { use, useMemo, useState } from 'react';
 
@@ -38,12 +38,55 @@ const PRESETS = [
   { label: '30d', from: () => nDaysAgoIso(29), to: () => todayIso() },
 ];
 
+function WindowMetrics({ metrics }: { metrics: MetricsView }) {
+  return (
+    <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
+      <div>
+        <dt className="hud-label">Investido</dt>
+        <dd className="mt-1 font-mono text-[15px] text-amber-300">{formatBRL(metrics.spend)}</dd>
+      </div>
+      <div>
+        <dt className="hud-label">Vendas</dt>
+        <dd className="mt-1 font-mono text-[15px] text-emerald-300">{formatInt(metrics.sales)}</dd>
+      </div>
+      <div>
+        <dt className="hud-label">CPA</dt>
+        <dd className="mt-1 font-mono text-[15px] text-white/85">{formatBRL(metrics.cpa)}</dd>
+      </div>
+      <div>
+        <dt className="hud-label">IC</dt>
+        <dd className="mt-1 font-mono text-[15px] text-cyan-300">{formatInt(metrics.ic)}</dd>
+      </div>
+      <div>
+        <dt className="hud-label">Faturamento</dt>
+        <dd className="mt-1 font-mono text-[15px] text-emerald-300">{formatBRL(metrics.revenue)}</dd>
+      </div>
+      <div>
+        <dt className="hud-label">CPA IC</dt>
+        <dd className="mt-1 font-mono text-[15px] text-white/85">{formatBRL(metrics.icCpa)}</dd>
+      </div>
+      <div>
+        <dt className="hud-label">Conv. IC</dt>
+        <dd className="mt-1 font-mono text-[15px] text-white/85">
+          {formatPercent(metrics.conversionRate)}
+        </dd>
+      </div>
+      <div>
+        <dt className="hud-label">ROAS</dt>
+        <dd className="mt-1 font-mono text-[15px] text-cyan-300">{formatRoas(metrics.roas)}</dd>
+      </div>
+    </dl>
+  );
+}
+
 export default function OfertaDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [from, setFrom] = useState(() => nDaysAgoIso(6));
   const [to, setTo] = useState(() => todayIso());
   const [editing, setEditing] = useState(false);
   const [adSearch, setAdSearch] = useState('');
+  const [compareLeft, setCompareLeft] = useState('');
+  const [compareRight, setCompareRight] = useState('');
 
   // Pull the offer (with links/status) from the offers list cache when possible.
   const offerQuery = useQuery({
@@ -69,6 +112,15 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
     refetchOnWindowFocus: false,
   });
   const data = snapshotsQuery.data;
+
+  const intradayQuery = useQuery({
+    queryKey: ['offer-intraday', id],
+    queryFn: () => apiClient.getOfferIntraday(id),
+    enabled: Boolean(offer?.utmifyConfigured),
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: false,
+  });
+  const intraday = intradayQuery.data;
 
   const adsetTotals = useMemo(() => {
     if (!data)
@@ -145,6 +197,18 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
   }, [data, adSearch]);
 
   const offerName = offer?.name ?? data?.offer.name ?? id.slice(-6).toUpperCase();
+  const availableWindows = intraday?.windows.filter((window) => window.available) ?? [];
+  const defaultLeft = availableWindows.at(-2)?.index ?? availableWindows.at(-1)?.index;
+  const defaultRight = availableWindows.at(-1)?.index;
+  const leftWindow = intraday?.windows.find(
+    (window) => window.index === (compareLeft ? Number(compareLeft) : defaultLeft),
+  );
+  const rightWindow = intraday?.windows.find(
+    (window) => window.index === (compareRight ? Number(compareRight) : defaultRight),
+  );
+  const currentWindow = intraday?.windows.find(
+    (window) => window.index === intraday.currentWindowIndex,
+  );
 
   return (
     <HubShell breadcrumb={['OFERTAS', offerName]}>
@@ -188,18 +252,21 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
       )}
 
       {offer?.utmifyConfigured && (
-        <section className="glass-card mb-6 p-4">
-          <div className="flex items-center justify-between gap-3">
+        <details className="glass-card group mb-6 overflow-hidden p-0">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 [&::-webkit-details-marker]:hidden">
             <div>
               <p className="hud-label">Conta de anúncios via UTMify</p>
               <p className="mt-1 text-[12px] text-white/55">
-                Campos disponíveis na resposta real em nível de anúncio.
+                {capabilitiesQuery.data?.accountFields.length ?? 0} conta(s) identificada(s) · clique para abrir
               </p>
             </div>
-            {capabilitiesQuery.isFetching && (
+            {capabilitiesQuery.isFetching ? (
               <Loader2 className="h-4 w-4 animate-spin text-cyan-300" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-white/45 transition-transform group-open:rotate-180" />
             )}
-          </div>
+          </summary>
+          <div className="border-t border-white/[0.06] px-4 pb-4">
           {capabilitiesQuery.data?.accountFields.length ? (
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               {capabilitiesQuery.data.accountFields.map((account, index) => (
@@ -238,7 +305,8 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
               Não foi possível inspecionar os campos da conta agora.
             </p>
           ) : null}
-        </section>
+          </div>
+        </details>
       )}
 
       <h2 className="mb-3 text-[16px] font-semibold text-white">Métricas</h2>
@@ -492,6 +560,139 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
           )}
         </div>
       )}
+
+      <section className="mt-8 space-y-4 border-t border-cyan-300/10 pt-8">
+        <header className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <Clock3 className="h-4 w-4 text-cyan-300" />
+              <h2 className="text-[16px] font-semibold text-white">Janelas intradiárias</h2>
+            </div>
+            <p className="mt-1 text-[12px] text-white/45">
+              Checkpoints a cada 30 minutos · janelas fixas de 2 horas · somente de hoje em diante
+            </p>
+          </div>
+          {intraday?.updatedAt && (
+            <span className="hud-label">
+              Atualizado {new Date(intraday.updatedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+        </header>
+
+        {intradayQuery.isLoading ? (
+          <div className="glass-card flex items-center justify-center p-10">
+            <Loader2 className="h-5 w-5 animate-spin text-cyan-300" />
+          </div>
+        ) : !intraday ? (
+          <div className="glass-card p-6 text-[13px] text-white/45">
+            A coleta intradiária começará na próxima sincronização UTMify.
+          </div>
+        ) : (
+          <>
+            <div className="grid gap-4 xl:grid-cols-2">
+              <article className="glass-card p-4">
+                <p className="hud-label">Janela geral de hoje</p>
+                <p className="mt-1 text-[12px] text-white/45">Acumulado desde 00h</p>
+                <WindowMetrics metrics={intraday.overall} />
+              </article>
+              <article className="glass-card border-cyan-300/15 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="hud-label">Janela atual</p>
+                    <p className="mt-1 text-[12px] text-white/45">
+                      {currentWindow?.label ?? 'Aguardando checkpoint'}
+                    </p>
+                  </div>
+                  {currentWindow?.partial && (
+                    <span className="rounded-full border border-amber-300/20 px-2 py-1 text-[9px] uppercase tracking-[0.12em] text-amber-200">
+                      Parcial
+                    </span>
+                  )}
+                </div>
+                {currentWindow?.available ? (
+                  <WindowMetrics metrics={currentWindow.metrics} />
+                ) : (
+                  <p className="mt-5 text-[12px] text-white/45">
+                    É necessário um checkpoint anterior ao início da janela para calcular a diferença.
+                  </p>
+                )}
+              </article>
+            </div>
+
+            <div className="glass-card overflow-hidden p-0">
+              <header className="border-b border-white/[0.06] px-4 py-3">
+                <h3 className="text-[14px] font-semibold text-white">Janelas de 2 horas</h3>
+                <p className="mt-1 text-[11px] text-white/40">
+                  Cada valor representa somente o que aconteceu dentro daquela faixa.
+                </p>
+              </header>
+              <div className="grid gap-px bg-white/[0.04] sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {intraday.windows.map((window) => (
+                  <article key={window.index} className="bg-[#07151b] p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-mono text-[13px] font-semibold text-white/85">{window.label}</p>
+                      <span className="text-[9px] uppercase tracking-[0.12em] text-white/30">
+                        {window.samples} coleta(s)
+                      </span>
+                    </div>
+                    {window.available ? (
+                      <dl className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+                        <div><dt className="text-white/35">Investido</dt><dd className="font-mono text-amber-300">{formatBRL(window.metrics.spend)}</dd></div>
+                        <div><dt className="text-white/35">Vendas</dt><dd className="font-mono text-emerald-300">{formatInt(window.metrics.sales)}</dd></div>
+                        <div><dt className="text-white/35">CPA</dt><dd className="font-mono text-white/75">{formatBRL(window.metrics.cpa)}</dd></div>
+                        <div><dt className="text-white/35">IC</dt><dd className="font-mono text-cyan-300">{formatInt(window.metrics.ic)}</dd></div>
+                        <div><dt className="text-white/35">CPA IC</dt><dd className="font-mono text-white/75">{formatBRL(window.metrics.icCpa)}</dd></div>
+                        <div><dt className="text-white/35">ROAS</dt><dd className="font-mono text-cyan-300">{formatRoas(window.metrics.roas)}</dd></div>
+                      </dl>
+                    ) : (
+                      <p className="mt-3 text-[11px] text-white/30">
+                        {window.partial ? 'Coleta iniciada no meio desta janela.' : 'Sem dados coletados.'}
+                      </p>
+                    )}
+                  </article>
+                ))}
+              </div>
+            </div>
+
+            <div className="glass-card p-4">
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="mr-auto">
+                  <h3 className="text-[14px] font-semibold text-white">Comparar janelas</h3>
+                  <p className="mt-1 text-[11px] text-white/40">Selecione duas faixas já calculadas.</p>
+                </div>
+                <Label className="space-y-1">
+                  <span className="hud-label">Janela A</span>
+                  <select value={compareLeft} onChange={(event) => setCompareLeft(event.target.value)} className="block h-9 rounded-md border border-white/10 bg-[#0b1b22] px-3 text-[12px] text-white">
+                    <option value="">Anterior disponível</option>
+                    {availableWindows.map((window) => <option key={window.index} value={window.index}>{window.label}</option>)}
+                  </select>
+                </Label>
+                <Label className="space-y-1">
+                  <span className="hud-label">Janela B</span>
+                  <select value={compareRight} onChange={(event) => setCompareRight(event.target.value)} className="block h-9 rounded-md border border-white/10 bg-[#0b1b22] px-3 text-[12px] text-white">
+                    <option value="">Mais recente disponível</option>
+                    {availableWindows.map((window) => <option key={window.index} value={window.index}>{window.label}</option>)}
+                  </select>
+                </Label>
+              </div>
+              {leftWindow?.available && rightWindow?.available ? (
+                <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                  {[leftWindow, rightWindow].map((window) => (
+                    <article key={window.index} className="rounded-xl border border-white/[0.06] bg-black/10 p-4">
+                      <p className="font-mono text-[13px] font-semibold text-cyan-200">{window.label}</p>
+                      <WindowMetrics metrics={window.metrics} />
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-4 text-[12px] text-white/40">
+                  A comparação ficará disponível após duas janelas completas.
+                </p>
+              )}
+            </div>
+          </>
+        )}
+      </section>
 
       {offer && <OfferEditDialog offer={offer} open={editing} onOpenChange={setEditing} />}
     </HubShell>
