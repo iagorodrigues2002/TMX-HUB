@@ -1,6 +1,6 @@
 'use client';
 
-import { KpiGrid, formatBRL, formatInt, formatRoas } from '@/components/dashboard/kpi-cards';
+import { KpiGrid, formatCurrency, formatInt, formatRoas } from '@/components/dashboard/kpi-cards';
 import { HubShell } from '@/components/hub/hub-shell';
 import { ToolCard } from '@/components/hub/tool-card';
 import { Button } from '@/components/ui/button';
@@ -131,7 +131,14 @@ export default function HubLandingPage() {
                 <Loader2 className="h-5 w-5 animate-spin text-cyan-300" />
               </div>
             ) : (
-              <KpiGrid metrics={summary.totals} />
+              <div className="space-y-4">
+                {summary.currencyTotals.map(({ currency, totals }) => (
+                  <div key={currency}>
+                    <p className="hud-label mb-2">Resumo em {currency}</p>
+                    <KpiGrid metrics={totals} currency={currency} />
+                  </div>
+                ))}
+              </div>
             )}
           </section>
 
@@ -186,13 +193,13 @@ export default function HubLandingPage() {
                       <div>
                         <dt className="hud-label">Faturamento</dt>
                         <dd className="mt-0.5 font-mono text-emerald-300">
-                          {formatBRL(entry.totals.revenue)}
+                          {formatCurrency(entry.totals.revenue, entry.offer.currency)}
                         </dd>
                       </div>
                       <div>
                         <dt className="hud-label">Investido</dt>
                         <dd className="mt-0.5 font-mono text-amber-300">
-                          {formatBRL(entry.totals.spend)}
+                          {formatCurrency(entry.totals.spend, entry.offer.currency)}
                         </dd>
                       </div>
                       <div>

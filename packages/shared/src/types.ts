@@ -314,6 +314,8 @@ export interface Offer {
   companyName?: string;
   /** UTMify dashboardId, kept for reference + auto-config in n8n. */
   dashboardId?: string;
+  /** ISO 4217 currency detected from the UTMify dashboard payload. */
+  currency?: string;
   /** Whether server-side UTMify credentials are configured (credentials are never exposed). */
   utmifyConfigured?: boolean;
   utmifyLoginHint?: string;
@@ -353,9 +355,9 @@ export interface AdSnapshot extends AdsetSnapshot {
 export interface DailySnapshot {
   offerId: string;
   date: string; // YYYY-MM-DD
-  spend: number; // BRL
+  spend: number; // Dashboard currency
   sales: number; // count
-  revenue: number; // BRL
+  revenue: number; // Dashboard currency
   ic: number; // initiate checkout count
   impressions?: number;
   clicks?: number;

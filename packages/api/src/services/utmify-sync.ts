@@ -21,6 +21,11 @@ interface UtmifyResult {
   videoViews3Seconds?: unknown;
 }
 
+interface UtmifySearchResponse {
+  results: UtmifyResult[];
+  currency?: string;
+}
+
 export interface SyncResult {
   offerId: string;
   syncedDays: number;
@@ -83,11 +88,13 @@ export class UtmifySyncService {
       const days = buildDays(full || !offer.lastSyncAt ? 30 : 2);
       let ads = 0;
       let syncedDays = 0;
+      let detectedCurrency: string | undefined;
       const failures: Array<{ date: string; message: string }> = [];
       for (const date of days) {
         try {
-          const results = await fetchAds(token, offer.dashboardId, date);
-          const snapshot = toSnapshot(offer.id, date, results);
+          const response = await fetchAds(token, offer.dashboardId, date);
+          detectedCurrency ??= response.currency;
+          const snapshot = toSnapshot(offer.id, date, response.results);
           ads += snapshot.ads?.length ?? 0;
           await this.snapshotStore.upsert(snapshot);
           await this.intradayStore.capture(offer.id, snapshot);
@@ -101,6 +108,9 @@ export class UtmifySyncService {
       }
       if (syncedDays === 0) {
         throw new Error(failures[0]?.message ?? 'Nenhuma janela foi sincronizada.');
+      }
+      if (detectedCurrency && detectedCurrency !== offer.currency) {
+        await this.offerStore.setCurrency(offer.id, detectedCurrency);
       }
       const at = new Date().toISOString();
       const warning = failures.length
@@ -133,6 +143,7 @@ export class UtmifySyncService {
   async inspectCapabilities(offer: Offer): Promise<{
     resultKeys: string[];
     accountFields: Array<Record<string, string | number | boolean>>;
+    currency?: string;
   }> {
     if (!offer.dashboardId) throw new Error('Dashboard ID da UTMify não configurado.');
     const credentials = await this.offerStore.getUtmifyCredentials(offer.id);
@@ -140,7 +151,8 @@ export class UtmifySyncService {
     const token = await authenticate(credentials.login, credentials.password);
     const yesterday = new Date();
     yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-    const results = await fetchAds(token, offer.dashboardId, yesterday.toISOString().slice(0, 10));
+    const response = await fetchAds(token, offer.dashboardId, yesterday.toISOString().slice(0, 10));
+    const results = response.results;
     const resultKeys = [...new Set(results.flatMap((item) => Object.keys(item)))].sort();
     const accountFields = results.slice(0, 200).flatMap((item) => {
       const fields = Object.entries(item).filter(([key, value]) => {
@@ -149,7 +161,7 @@ export class UtmifySyncService {
       return fields.length ? [Object.fromEntries(fields) as Record<string, string | number | boolean>] : [];
     });
     const uniqueAccounts = [...new Map(accountFields.map((fields) => [JSON.stringify(fields), fields])).values()];
-    return { resultKeys, accountFields: uniqueAccounts.slice(0, 25) };
+    return { resultKeys, accountFields: uniqueAccounts.slice(0, 25), currency: response.currency };
   }
 }
 
@@ -167,7 +179,7 @@ async function authenticate(login: string, password: string): Promise<string> {
   return token.replace(/^Bearer\s+/i, '').trim();
 }
 
-async function fetchAds(token: string, dashboardId: string, date: string): Promise<UtmifyResult[]> {
+async function fetchAds(token: string, dashboardId: string, date: string): Promise<UtmifySearchResponse> {
   const from = new Date(`${date}T00:00:00.000Z`);
   const to = new Date(from);
   to.setUTCDate(to.getUTCDate() + 1);
@@ -200,7 +212,37 @@ async function fetchAds(token: string, dashboardId: string, date: string): Promi
     }
     throw new Error(`Consulta UTMify falhou (${response.status})${detail ? `: ${detail}` : '.'}`);
   }
-  return Array.isArray(payload?.results) ? (payload.results as UtmifyResult[]) : [];
+  const currency = detectCurrency(payload);
+  return {
+    results: Array.isArray(payload?.results) ? (payload.results as UtmifyResult[]) : [],
+    ...(currency ? { currency } : {}),
+  };
+}
+
+export function detectCurrency(payload: unknown): string | undefined {
+  const validCodes = new Set(['BRL', 'USD', 'EUR', 'GBP', 'CAD', 'AUD', 'MXN', 'COP', 'ARS', 'CLP', 'PEN', 'PYG', 'UYU']);
+  const visit = (value: unknown, depth: number): string | undefined => {
+    if (depth > 6 || value === null || typeof value !== 'object') return undefined;
+    if (Array.isArray(value)) {
+      for (const item of value.slice(0, 20)) {
+        const found = visit(item, depth + 1);
+        if (found) return found;
+      }
+      return undefined;
+    }
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+      if (/currency|moeda/i.test(key) && typeof item === 'string') {
+        const code = item.trim().toUpperCase();
+        if (validCodes.has(code)) return code;
+      }
+    }
+    for (const item of Object.values(value as Record<string, unknown>)) {
+      const found = visit(item, depth + 1);
+      if (found) return found;
+    }
+    return undefined;
+  };
+  return visit(payload, 0);
 }
 
 export function toSnapshot(offerId: string, date: string, results: UtmifyResult[]): DailySnapshot {

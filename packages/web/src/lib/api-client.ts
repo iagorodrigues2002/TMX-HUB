@@ -547,6 +547,7 @@ export interface OfferView {
   name: string;
   companyName?: string;
   dashboardId?: string;
+  currency: string;
   utmifyConfigured: boolean;
   utmifyLoginHint?: string;
   syncStatus: 'idle' | 'syncing' | 'success' | 'partial' | 'error';
@@ -616,6 +617,7 @@ export interface DashboardSummary {
   from: string;
   to: string;
   totals: MetricsView;
+  currencyTotals: Array<{ currency: string; totals: MetricsView }>;
   offers: DashboardOfferEntry[];
 }
 
@@ -651,6 +653,7 @@ interface OfferWire {
   name: string;
   company_name?: string;
   dashboard_id?: string;
+  currency?: string;
   utmify_configured?: boolean;
   utmify_login_hint?: string;
   sync_status?: 'idle' | 'syncing' | 'success' | 'partial' | 'error';
@@ -686,6 +689,7 @@ interface DashboardSummaryWire {
   from: string;
   to: string;
   totals: MetricsView;
+  currency_totals?: Array<{ currency: string; totals: MetricsView }>;
   offers: Array<{
     offer: OfferWire;
     totals: MetricsView;
@@ -699,6 +703,7 @@ function fromOfferWire(w: OfferWire): OfferView {
     name: w.name,
     companyName: w.company_name,
     dashboardId: w.dashboard_id,
+    currency: w.currency ?? 'BRL',
     utmifyConfigured: Boolean(w.utmify_configured),
     utmifyLoginHint: w.utmify_login_hint,
     syncStatus: w.sync_status ?? 'idle',
@@ -738,6 +743,7 @@ function fromDashboardSummaryWire(w: DashboardSummaryWire): DashboardSummary {
     from: w.from,
     to: w.to,
     totals: w.totals,
+    currencyTotals: w.currency_totals ?? [{ currency: 'BRL', totals: w.totals }],
     offers: (w.offers ?? []).map((e) => ({
       offer: fromOfferWire(e.offer),
       totals: e.totals,
@@ -1065,6 +1071,7 @@ export const apiClient = {
   async getUtmifyCapabilities(id: string): Promise<{
     resultKeys: string[];
     accountFields: Array<Record<string, string | number | boolean>>;
+    currency?: string;
   }> {
     return request(`/v1/offers/${id}/utmify-capabilities`);
   },

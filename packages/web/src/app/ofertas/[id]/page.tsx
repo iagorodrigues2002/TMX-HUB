@@ -2,7 +2,7 @@
 
 import {
   KpiGrid,
-  formatBRL,
+  formatCurrency,
   formatInt,
   formatPercent,
   formatRoas,
@@ -13,7 +13,7 @@ import { OfferEditDialog } from '@/components/ofertas/offer-edit-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { apiClient, type MetricsView } from '@/lib/api-client';
+import { apiClient, type IntradayAdView, type MetricsView } from '@/lib/api-client';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ChevronDown, Clock3, Loader2, Pencil, Search, Target } from 'lucide-react';
 import Link from 'next/link';
@@ -38,12 +38,12 @@ const PRESETS = [
   { label: '30d', from: () => nDaysAgoIso(29), to: () => todayIso() },
 ];
 
-function WindowMetrics({ metrics }: { metrics: MetricsView }) {
+function WindowMetrics({ metrics, currency }: { metrics: MetricsView; currency: string }) {
   return (
     <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
       <div>
         <dt className="hud-label">Investido</dt>
-        <dd className="mt-1 font-mono text-[15px] text-amber-300">{formatBRL(metrics.spend)}</dd>
+        <dd className="mt-1 font-mono text-[15px] text-amber-300">{formatCurrency(metrics.spend, currency)}</dd>
       </div>
       <div>
         <dt className="hud-label">Vendas</dt>
@@ -51,7 +51,7 @@ function WindowMetrics({ metrics }: { metrics: MetricsView }) {
       </div>
       <div>
         <dt className="hud-label">CPA</dt>
-        <dd className="mt-1 font-mono text-[15px] text-white/85">{formatBRL(metrics.cpa)}</dd>
+        <dd className="mt-1 font-mono text-[15px] text-white/85">{formatCurrency(metrics.cpa, currency)}</dd>
       </div>
       <div>
         <dt className="hud-label">IC</dt>
@@ -59,11 +59,11 @@ function WindowMetrics({ metrics }: { metrics: MetricsView }) {
       </div>
       <div>
         <dt className="hud-label">Faturamento</dt>
-        <dd className="mt-1 font-mono text-[15px] text-emerald-300">{formatBRL(metrics.revenue)}</dd>
+        <dd className="mt-1 font-mono text-[15px] text-emerald-300">{formatCurrency(metrics.revenue, currency)}</dd>
       </div>
       <div>
         <dt className="hud-label">CPA IC</dt>
-        <dd className="mt-1 font-mono text-[15px] text-white/85">{formatBRL(metrics.icCpa)}</dd>
+        <dd className="mt-1 font-mono text-[15px] text-white/85">{formatCurrency(metrics.icCpa, currency)}</dd>
       </div>
       <div>
         <dt className="hud-label">Conv. IC</dt>
@@ -90,6 +90,8 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
   const [intradayMode, setIntradayMode] = useState<'overview' | 'ads'>('overview');
   const [intradayAdWindow, setIntradayAdWindow] = useState('overall');
   const [intradayAdSearch, setIntradayAdSearch] = useState('');
+  const [adCompareLeft, setAdCompareLeft] = useState('');
+  const [adCompareRight, setAdCompareRight] = useState('');
 
   // Pull the offer (with links/status) from the offers list cache when possible.
   const offerQuery = useQuery({
@@ -200,6 +202,8 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
   }, [data, adSearch]);
 
   const offerName = offer?.name ?? data?.offer.name ?? id.slice(-6).toUpperCase();
+  const currency = offer?.currency ?? data?.offer.currency ?? 'BRL';
+  const money = (value: number | null | undefined) => formatCurrency(value, currency);
   const availableWindows = intraday?.windows.filter((window) => window.available) ?? [];
   const defaultLeft = availableWindows.at(-2)?.index ?? availableWindows.at(-1)?.index;
   const defaultRight = availableWindows.at(-1)?.index;
@@ -222,6 +226,27 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
   const filteredIntradayAds = intradayAds.filter(
     (ad) => !intradayAdQuery || ad.name.toLocaleLowerCase('pt-BR').includes(intradayAdQuery),
   );
+  const availableAdWindows = intraday?.windows.filter((window) => window.adsAvailable) ?? [];
+  const defaultAdLeft = availableAdWindows.at(-2)?.index;
+  const defaultAdRight = availableAdWindows.at(-1)?.index;
+  const leftAdWindow = intraday?.windows.find(
+    (window) => window.index === (adCompareLeft ? Number(adCompareLeft) : defaultAdLeft),
+  );
+  const rightAdWindow = intraday?.windows.find(
+    (window) => window.index === (adCompareRight ? Number(adCompareRight) : defaultAdRight),
+  );
+  const comparedAds = useMemo(() => {
+    const byName = new Map<string, { name: string; left?: IntradayAdView; right?: IntradayAdView }>();
+    for (const ad of leftAdWindow?.ads ?? []) byName.set(ad.name, { name: ad.name, left: ad });
+    for (const ad of rightAdWindow?.ads ?? []) {
+      const row = byName.get(ad.name) ?? { name: ad.name };
+      row.right = ad;
+      byName.set(ad.name, row);
+    }
+    return [...byName.values()]
+      .filter((row) => !intradayAdQuery || row.name.toLocaleLowerCase('pt-BR').includes(intradayAdQuery))
+      .sort((a, b) => (b.right?.revenue ?? 0) - (a.right?.revenue ?? 0));
+  }, [leftAdWindow, rightAdWindow, intradayAdQuery]);
 
   return (
     <HubShell breadcrumb={['OFERTAS', offerName]}>
@@ -245,7 +270,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
           <h1 className="text-3xl font-bold tracking-tight text-white">{offerName}</h1>
           {offer?.dashboardId && (
             <p className="font-mono text-[11px] text-white/40">
-              utmify dashboardId: {offer.dashboardId}
+              utmify dashboardId: {offer.dashboardId} · moeda: {currency}
             </p>
           )}
         </div>
@@ -377,7 +402,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
         <p className="text-[13px] text-white/45">Sem dados.</p>
       ) : (
         <div className="space-y-6">
-          <KpiGrid metrics={data.totals} />
+          <KpiGrid metrics={data.totals} currency={currency} />
 
           <section className="glass-card overflow-hidden p-0">
             <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3">
@@ -428,16 +453,16 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                             {ad.name}
                           </td>
                           <td className="px-3 py-2 text-right font-mono text-amber-300">
-                            {formatBRL(ad.spend)}
+                            {money(ad.spend)}
                           </td>
                           <td className="px-3 py-2 text-right font-mono text-emerald-300">
-                            {formatBRL(ad.revenue)}
+                            {money(ad.revenue)}
                           </td>
                           <td className="px-3 py-2 text-right font-mono text-white/75">
                             {formatInt(ad.sales)}
                           </td>
                           <td className="px-3 py-2 text-right font-mono text-white/75">
-                            {formatBRL(cpa)}
+                            {money(cpa)}
                           </td>
                           <td className="px-3 py-2 text-right font-mono text-cyan-300">
                             {formatRoas(roas)}
@@ -487,19 +512,19 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                           {formatInt(s.sales)}
                         </td>
                         <td className="px-3 py-2 text-right font-mono text-emerald-300">
-                          {formatBRL(s.revenue)}
+                          {money(s.revenue)}
                         </td>
                         <td className="px-3 py-2 text-right font-mono text-amber-300">
-                          {formatBRL(s.spend)}
+                          {money(s.spend)}
                         </td>
                         <td className="px-3 py-2 text-right font-mono text-white/75">
                           {formatInt(s.ic)}
                         </td>
                         <td className="px-3 py-2 text-right font-mono text-white/75">
-                          {formatBRL(s.metrics.cpa)}
+                          {money(s.metrics.cpa)}
                         </td>
                         <td className="px-3 py-2 text-right font-mono text-white/75">
-                          {formatBRL(s.metrics.icCpa)}
+                          {money(s.metrics.icCpa)}
                         </td>
                         <td className="px-3 py-2 text-right font-mono text-white/75">
                           {formatPercent(s.metrics.conversionRate)}
@@ -549,16 +574,16 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                             {formatInt(a.sales)}
                           </td>
                           <td className="px-3 py-2 text-right font-mono text-emerald-300">
-                            {formatBRL(a.revenue)}
+                            {money(a.revenue)}
                           </td>
                           <td className="px-3 py-2 text-right font-mono text-amber-300">
-                            {formatBRL(a.spend)}
+                            {money(a.spend)}
                           </td>
                           <td className="px-3 py-2 text-right font-mono text-white/75">
                             {formatInt(a.ic)}
                           </td>
                           <td className="px-3 py-2 text-right font-mono text-white/75">
-                            {formatBRL(cpa)}
+                            {money(cpa)}
                           </td>
                           <td className="px-3 py-2 text-right font-mono text-cyan-300">
                             {formatRoas(roas)}
@@ -623,7 +648,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
               <article className="glass-card p-4">
                 <p className="hud-label">Janela geral de hoje</p>
                 <p className="mt-1 text-[12px] text-white/45">Acumulado desde 00h</p>
-                <WindowMetrics metrics={intraday.overall} />
+                <WindowMetrics metrics={intraday.overall} currency={currency} />
               </article>
               <article className="glass-card border-cyan-300/15 p-4">
                 <div className="flex items-start justify-between gap-3">
@@ -640,7 +665,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                   )}
                 </div>
                 {currentWindow?.available ? (
-                  <WindowMetrics metrics={currentWindow.metrics} />
+                  <WindowMetrics metrics={currentWindow.metrics} currency={currency} />
                 ) : (
                   <p className="mt-5 text-[12px] text-white/45">
                     É necessário um checkpoint anterior ao início da janela para calcular a diferença.
@@ -667,11 +692,11 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                     </div>
                     {window.available ? (
                       <dl className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
-                        <div><dt className="text-white/35">Investido</dt><dd className="font-mono text-amber-300">{formatBRL(window.metrics.spend)}</dd></div>
+                        <div><dt className="text-white/35">Investido</dt><dd className="font-mono text-amber-300">{money(window.metrics.spend)}</dd></div>
                         <div><dt className="text-white/35">Vendas</dt><dd className="font-mono text-emerald-300">{formatInt(window.metrics.sales)}</dd></div>
-                        <div><dt className="text-white/35">CPA</dt><dd className="font-mono text-white/75">{formatBRL(window.metrics.cpa)}</dd></div>
+                        <div><dt className="text-white/35">CPA</dt><dd className="font-mono text-white/75">{money(window.metrics.cpa)}</dd></div>
                         <div><dt className="text-white/35">IC</dt><dd className="font-mono text-cyan-300">{formatInt(window.metrics.ic)}</dd></div>
-                        <div><dt className="text-white/35">CPA IC</dt><dd className="font-mono text-white/75">{formatBRL(window.metrics.icCpa)}</dd></div>
+                        <div><dt className="text-white/35">CPA IC</dt><dd className="font-mono text-white/75">{money(window.metrics.icCpa)}</dd></div>
                         <div><dt className="text-white/35">ROAS</dt><dd className="font-mono text-cyan-300">{formatRoas(window.metrics.roas)}</dd></div>
                       </dl>
                     ) : (
@@ -710,7 +735,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                   {[leftWindow, rightWindow].map((window) => (
                     <article key={window.index} className="rounded-xl border border-white/[0.06] bg-black/10 p-4">
                       <p className="font-mono text-[13px] font-semibold text-cyan-200">{window.label}</p>
-                      <WindowMetrics metrics={window.metrics} />
+                      <WindowMetrics metrics={window.metrics} currency={currency} />
                     </article>
                   ))}
                 </div>
@@ -782,12 +807,12 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                     {filteredIntradayAds.map((ad) => (
                       <tr key={ad.name} className="border-t border-white/[0.05] hover:bg-cyan-300/[0.025]">
                         <td className="max-w-[360px] truncate px-4 py-3 font-medium text-white/85" title={ad.name}>{ad.name}</td>
-                        <td className="px-3 py-3 text-right font-mono text-amber-300">{formatBRL(ad.spend)}</td>
-                        <td className="px-3 py-3 text-right font-mono text-emerald-300">{formatBRL(ad.revenue)}</td>
+                        <td className="px-3 py-3 text-right font-mono text-amber-300">{money(ad.spend)}</td>
+                        <td className="px-3 py-3 text-right font-mono text-emerald-300">{money(ad.revenue)}</td>
                         <td className="px-3 py-3 text-right font-mono text-emerald-300">{formatInt(ad.sales)}</td>
-                        <td className="px-3 py-3 text-right font-mono text-white/75">{formatBRL(ad.cpa)}</td>
+                        <td className="px-3 py-3 text-right font-mono text-white/75">{money(ad.cpa)}</td>
                         <td className="px-3 py-3 text-right font-mono text-cyan-300">{formatInt(ad.ic)}</td>
-                        <td className="px-3 py-3 text-right font-mono text-white/75">{formatBRL(ad.icCpa)}</td>
+                        <td className="px-3 py-3 text-right font-mono text-white/75">{money(ad.icCpa)}</td>
                         <td className="px-4 py-3 text-right font-mono text-cyan-300">{formatRoas(ad.roas)}</td>
                       </tr>
                     ))}
@@ -801,6 +826,77 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                   : 'Aguardando checkpoints com dados de anúncios para esta janela.'}
               </div>
             )}
+
+            <section className="border-t border-cyan-300/10">
+              <header className="flex flex-wrap items-end gap-3 px-4 py-4">
+                <div className="mr-auto">
+                  <h3 className="text-[14px] font-semibold text-white">Comparar janelas por anúncio</h3>
+                  <p className="mt-1 text-[11px] text-white/40">
+                    Compare o mesmo anúncio em duas faixas de 2 horas.
+                  </p>
+                </div>
+                <Label className="space-y-1">
+                  <span className="hud-label">Janela A</span>
+                  <select
+                    value={adCompareLeft}
+                    onChange={(event) => setAdCompareLeft(event.target.value)}
+                    className="block h-9 min-w-[150px] rounded-md border border-white/10 bg-[#0b1b22] px-3 text-[12px] text-white"
+                  >
+                    <option value="">Anterior disponível</option>
+                    {availableAdWindows.map((window) => <option key={window.index} value={window.index}>{window.label}</option>)}
+                  </select>
+                </Label>
+                <Label className="space-y-1">
+                  <span className="hud-label">Janela B</span>
+                  <select
+                    value={adCompareRight}
+                    onChange={(event) => setAdCompareRight(event.target.value)}
+                    className="block h-9 min-w-[150px] rounded-md border border-white/10 bg-[#0b1b22] px-3 text-[12px] text-white"
+                  >
+                    <option value="">Mais recente disponível</option>
+                    {availableAdWindows.map((window) => <option key={window.index} value={window.index}>{window.label}</option>)}
+                  </select>
+                </Label>
+              </header>
+
+              {leftAdWindow?.adsAvailable && rightAdWindow?.adsAvailable ? (
+                <div className="overflow-x-auto border-t border-white/[0.05]">
+                  <table className="w-full text-[11px]">
+                    <thead className="bg-white/[0.03] text-[9px] font-semibold uppercase tracking-[0.14em] text-white/50">
+                      <tr>
+                        <th rowSpan={2} className="px-4 py-3 text-left">Anúncio</th>
+                        <th colSpan={4} className="border-l border-white/[0.05] px-3 py-2 text-center text-cyan-200">{leftAdWindow.label}</th>
+                        <th colSpan={4} className="border-l border-white/[0.05] px-3 py-2 text-center text-emerald-200">{rightAdWindow.label}</th>
+                      </tr>
+                      <tr>
+                        {['Invest.', 'Vendas', 'CPA', 'ROAS', 'Invest.', 'Vendas', 'CPA', 'ROAS'].map((label, index) => (
+                          <th key={`${label}-${index}`} className="border-l border-white/[0.05] px-3 py-2 text-right">{label}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {comparedAds.map((row) => (
+                        <tr key={row.name} className="border-t border-white/[0.05]">
+                          <td className="max-w-[300px] truncate px-4 py-3 font-medium text-white/85" title={row.name}>{row.name}</td>
+                          <td className="border-l border-white/[0.05] px-3 py-3 text-right font-mono text-amber-300">{money(row.left?.spend)}</td>
+                          <td className="px-3 py-3 text-right font-mono text-white/75">{formatInt(row.left?.sales)}</td>
+                          <td className="px-3 py-3 text-right font-mono text-white/75">{money(row.left?.cpa)}</td>
+                          <td className="px-3 py-3 text-right font-mono text-cyan-300">{formatRoas(row.left?.roas)}</td>
+                          <td className="border-l border-white/[0.05] px-3 py-3 text-right font-mono text-amber-300">{money(row.right?.spend)}</td>
+                          <td className="px-3 py-3 text-right font-mono text-white/75">{formatInt(row.right?.sales)}</td>
+                          <td className="px-3 py-3 text-right font-mono text-white/75">{money(row.right?.cpa)}</td>
+                          <td className="px-3 py-3 text-right font-mono text-emerald-300">{formatRoas(row.right?.roas)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="border-t border-white/[0.05] px-4 py-8 text-center text-[12px] text-white/40">
+                  A compara��o por an�ncio ficar� dispon�vel ap�s duas janelas com checkpoints de an�ncios.
+                </p>
+              )}
+            </section>
           </div>
         )}
       </section>
