@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { toSnapshot } from '../src/services/utmify-sync.js';
 
 describe('UTMify ad-level snapshot', () => {
-  it('converts cents and aggregates duplicate ad names', () => {
+  it('sums attribution metrics but deduplicates repeated delivery metrics', () => {
     const snapshot = toSnapshot('offer-1', '2026-07-21', [
       {
         name: 'AD1-H1-L3_blindado',
@@ -26,16 +26,16 @@ describe('UTMify ad-level snapshot', () => {
       },
     ]);
 
-    expect(snapshot.spend).toBe(15);
+    expect(snapshot.spend).toBe(12.5);
     expect(snapshot.revenue).toBe(40);
     expect(snapshot.sales).toBe(3);
     expect(snapshot.ads).toHaveLength(1);
     expect(snapshot.ads?.[0]).toMatchObject({
       name: 'AD1-H1-L3_blindado',
-      spend: 15,
+      spend: 12.5,
       revenue: 40,
       sales: 3,
-      ic: 6,
+      ic: 4,
       ctr: 0.1,
       hookRate: 0.3,
     });

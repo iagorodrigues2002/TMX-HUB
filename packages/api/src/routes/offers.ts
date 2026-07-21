@@ -184,6 +184,14 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     return reply.send(result);
   });
 
+  // GET /v1/offers/:id/utmify-capabilities — inspect the real response schema
+  // without returning credentials, tokens, or the complete ads payload.
+  app.get<{ Params: { id: string } }>('/offers/:id/utmify-capabilities', async (req, reply) => {
+    if (!req.user) throw new BadRequestError('No user attached.');
+    const offer = await app.offerStore.assertOwner(req.params.id, req.user.sub);
+    return reply.send(await app.utmifySync.inspectCapabilities(offer));
+  });
+
   // GET /v1/dashboard/summary?from=&to= — cross-offer aggregation for the home
   app.get<{ Querystring: { from?: string; to?: string } }>(
     '/dashboard/summary',
