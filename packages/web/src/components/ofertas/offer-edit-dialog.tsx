@@ -157,7 +157,7 @@ export function OfferEditDialog({ offer, open, onOpenChange }: Props) {
                 />
               </Field>
             </div>
-            {offer.syncStatus === 'error' && (
+            {(offer.syncStatus === 'error' || offer.syncStatus === 'partial') && (
               <p className="rounded-md border border-red-300/20 bg-red-300/[0.04] p-3 text-[12px] text-red-200">
                 {offer.lastSyncError}
               </p>

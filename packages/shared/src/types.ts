@@ -317,7 +317,7 @@ export interface Offer {
   /** Whether server-side UTMify credentials are configured (credentials are never exposed). */
   utmifyConfigured?: boolean;
   utmifyLoginHint?: string;
-  syncStatus?: 'idle' | 'syncing' | 'success' | 'error';
+  syncStatus?: 'idle' | 'syncing' | 'success' | 'partial' | 'error';
   lastSyncAt?: string;
   lastSyncError?: string;
   description?: string;

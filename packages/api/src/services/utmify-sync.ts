@@ -23,6 +23,7 @@ export interface SyncResult {
   offerId: string;
   syncedDays: number;
   ads: number;
+  failedDays?: number;
   skipped?: boolean;
 }
 
@@ -78,16 +79,44 @@ export class UtmifySyncService {
       const token = await authenticate(credentials.login, credentials.password);
       const days = buildDays(full || !offer.lastSyncAt ? 30 : 2);
       let ads = 0;
+      let syncedDays = 0;
+      const failures: Array<{ date: string; message: string }> = [];
       for (const date of days) {
-        const results = await fetchAds(token, offer.dashboardId, date);
-        const snapshot = toSnapshot(offer.id, date, results);
-        ads += snapshot.ads?.length ?? 0;
-        await this.snapshotStore.upsert(snapshot);
+        try {
+          const results = await fetchAds(token, offer.dashboardId, date);
+          const snapshot = toSnapshot(offer.id, date, results);
+          ads += snapshot.ads?.length ?? 0;
+          await this.snapshotStore.upsert(snapshot);
+          syncedDays += 1;
+        } catch (error) {
+          failures.push({
+            date,
+            message: error instanceof Error ? error.message : 'Falha desconhecida.',
+          });
+        }
+      }
+      if (syncedDays === 0) {
+        throw new Error(failures[0]?.message ?? 'Nenhuma janela foi sincronizada.');
       }
       const at = new Date().toISOString();
-      await this.offerStore.setSyncState(offer.id, { status: 'success', at });
-      this.log.info({ offerId: offer.id, days: days.length, ads }, 'utmify offer synced');
-      return { offerId: offer.id, syncedDays: days.length, ads };
+      const warning = failures.length
+        ? `${failures.length} de ${days.length} dias falharam. Primeiro erro em ${failures[0]?.date}: ${failures[0]?.message}`
+        : undefined;
+      await this.offerStore.setSyncState(offer.id, {
+        status: failures.length ? 'partial' : 'success',
+        at,
+        ...(warning ? { error: warning } : {}),
+      });
+      this.log.info(
+        { offerId: offer.id, days: syncedDays, failedDays: failures.length, ads },
+        'utmify offer synced',
+      );
+      return {
+        offerId: offer.id,
+        syncedDays,
+        ads,
+        ...(failures.length ? { failedDays: failures.length } : {}),
+      };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Falha desconhecida na UTMify.';
       await this.offerStore.setSyncState(offer.id, { status: 'error', error: message });
@@ -216,5 +245,9 @@ function errorDetail(payload: Record<string, unknown> | null): string {
     const value = payload[key];
     if (typeof value === 'string' && value.trim()) return value.trim().slice(0, 200);
   }
-  return '';
+  try {
+    return JSON.stringify(payload).slice(0, 300);
+  } catch {
+    return '';
+  }
 }

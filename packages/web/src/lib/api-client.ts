@@ -549,7 +549,7 @@ export interface OfferView {
   dashboardId?: string;
   utmifyConfigured: boolean;
   utmifyLoginHint?: string;
-  syncStatus: 'idle' | 'syncing' | 'success' | 'error';
+  syncStatus: 'idle' | 'syncing' | 'success' | 'partial' | 'error';
   lastSyncAt?: string;
   lastSyncError?: string;
   description?: string;
@@ -626,7 +626,7 @@ interface OfferWire {
   dashboard_id?: string;
   utmify_configured?: boolean;
   utmify_login_hint?: string;
-  sync_status?: 'idle' | 'syncing' | 'success' | 'error';
+  sync_status?: 'idle' | 'syncing' | 'success' | 'partial' | 'error';
   last_sync_at?: string;
   last_sync_error?: string;
   description?: string;
@@ -1025,9 +1025,13 @@ export const apiClient = {
     await request<void>(`/v1/offers/${id}`, { method: 'DELETE' });
   },
 
-  async syncOffer(
-    id: string,
-  ): Promise<{ offerId: string; syncedDays: number; ads: number; skipped?: boolean }> {
+  async syncOffer(id: string): Promise<{
+    offerId: string;
+    syncedDays: number;
+    ads: number;
+    failedDays?: number;
+    skipped?: boolean;
+  }> {
     return request(`/v1/offers/${id}/sync`, { method: 'POST' });
   },
 

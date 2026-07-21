@@ -97,7 +97,7 @@ export function OfferList() {
       toast.success(
         result.skipped
           ? 'A sincronização já estava em andamento.'
-          : `${result.ads} ads atualizados.`,
+          : `${result.ads} ads atualizados${result.failedDays ? ` · ${result.failedDays} dia(s) com erro` : ''}.`,
       );
     },
     onError: (error) => toast.error((error as Error).message),
@@ -349,6 +349,9 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function syncLabel(offer: OfferView): string {
   if (offer.syncStatus === 'syncing') return 'Sincronizando agora…';
+  if (offer.syncStatus === 'partial') {
+    return `Parcial: ${offer.lastSyncError ?? 'alguns dias falharam'}`;
+  }
   if (offer.syncStatus === 'error') return `Erro: ${offer.lastSyncError ?? 'verifique a conexão'}`;
   if (offer.lastSyncAt) return `Atualizado ${new Date(offer.lastSyncAt).toLocaleString('pt-BR')}`;
   return offer.utmifyConfigured ? 'Aguardando primeira sincronização' : 'UTMify não conectada';

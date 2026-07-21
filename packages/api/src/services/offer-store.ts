@@ -184,7 +184,11 @@ export class OfferStore {
 
   async setSyncState(
     id: string,
-    state: { status: 'idle' | 'syncing' | 'success' | 'error'; at?: string; error?: string },
+    state: {
+      status: 'idle' | 'syncing' | 'success' | 'partial' | 'error';
+      at?: string;
+      error?: string;
+    },
   ): Promise<void> {
     const values: Record<string, string> = { syncStatus: state.status };
     if (state.at) values.lastSyncAt = state.at;
@@ -269,6 +273,7 @@ export class OfferStore {
       ...(data.syncStatus === 'idle' ||
       data.syncStatus === 'syncing' ||
       data.syncStatus === 'success' ||
+      data.syncStatus === 'partial' ||
       data.syncStatus === 'error'
         ? { syncStatus: data.syncStatus }
         : {}),
