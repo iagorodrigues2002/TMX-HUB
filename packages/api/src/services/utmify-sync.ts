@@ -26,6 +26,11 @@ interface UtmifySearchResponse {
   currency?: string;
 }
 
+interface UtmifyAuthSession {
+  token: string;
+  payload: Record<string, unknown>;
+}
+
 export interface SyncResult {
   offerId: string;
   syncedDays: number;
@@ -84,15 +89,15 @@ export class UtmifySyncService {
 
     await this.offerStore.setSyncState(offer.id, { status: 'syncing' });
     try {
-      const token = await authenticate(credentials.login, credentials.password);
+      const session = await authenticate(credentials.login, credentials.password);
       const days = buildDays(full || !offer.lastSyncAt ? 30 : 2);
       let ads = 0;
       let syncedDays = 0;
-      let detectedCurrency: string | undefined;
+      let detectedCurrency = detectDashboardCurrency(session.payload, offer.dashboardId);
       const failures: Array<{ date: string; message: string }> = [];
       for (const date of days) {
         try {
-          const response = await fetchAds(token, offer.dashboardId, date);
+          const response = await fetchAds(session.token, offer.dashboardId, date);
           detectedCurrency ??= response.currency;
           const snapshot = toSnapshot(offer.id, date, response.results);
           ads += snapshot.ads?.length ?? 0;
@@ -148,10 +153,10 @@ export class UtmifySyncService {
     if (!offer.dashboardId) throw new Error('Dashboard ID da UTMify não configurado.');
     const credentials = await this.offerStore.getUtmifyCredentials(offer.id);
     if (!credentials) throw new Error('Credenciais da UTMify não configuradas.');
-    const token = await authenticate(credentials.login, credentials.password);
+    const session = await authenticate(credentials.login, credentials.password);
     const yesterday = new Date();
     yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-    const response = await fetchAds(token, offer.dashboardId, yesterday.toISOString().slice(0, 10));
+    const response = await fetchAds(session.token, offer.dashboardId, yesterday.toISOString().slice(0, 10));
     const results = response.results;
     const resultKeys = [...new Set(results.flatMap((item) => Object.keys(item)))].sort();
     const accountFields = results.slice(0, 200).flatMap((item) => {
@@ -161,11 +166,15 @@ export class UtmifySyncService {
       return fields.length ? [Object.fromEntries(fields) as Record<string, string | number | boolean>] : [];
     });
     const uniqueAccounts = [...new Map(accountFields.map((fields) => [JSON.stringify(fields), fields])).values()];
-    return { resultKeys, accountFields: uniqueAccounts.slice(0, 25), currency: response.currency };
+    return {
+      resultKeys,
+      accountFields: uniqueAccounts.slice(0, 25),
+      currency: detectDashboardCurrency(session.payload, offer.dashboardId) ?? response.currency,
+    };
   }
 }
 
-async function authenticate(login: string, password: string): Promise<string> {
+async function authenticate(login: string, password: string): Promise<UtmifyAuthSession> {
   const response = await fetch(AUTH_URL, {
     headers: { authorization: `Basic ${Buffer.from(`${login}:${password}`).toString('base64')}` },
     signal: AbortSignal.timeout(20_000),
@@ -176,7 +185,37 @@ async function authenticate(login: string, password: string): Promise<string> {
   const token = auth?.token ?? payload?.token ?? payload?.access_token;
   if (typeof token !== 'string' || !token)
     throw new Error('A UTMify não retornou um token válido.');
-  return token.replace(/^Bearer\s+/i, '').trim();
+  return {
+    token: token.replace(/^Bearer\s+/i, '').trim(),
+    payload: payload ?? {},
+  };
+}
+
+export function detectDashboardCurrency(
+  payload: unknown,
+  dashboardId: string,
+): string | undefined {
+  const visit = (value: unknown, depth: number): string | undefined => {
+    if (depth > 8 || value === null || typeof value !== 'object') return undefined;
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const found = visit(item, depth + 1);
+        if (found) return found;
+      }
+      return undefined;
+    }
+    const record = value as Record<string, unknown>;
+    const id = record.id ?? record._id ?? record.dashboardId;
+    if (String(id ?? '') === dashboardId) {
+      return detectCurrency(record);
+    }
+    for (const child of Object.values(record)) {
+      const found = visit(child, depth + 1);
+      if (found) return found;
+    }
+    return undefined;
+  };
+  return visit(payload, 0);
 }
 
 async function fetchAds(token: string, dashboardId: string, date: string): Promise<UtmifySearchResponse> {
