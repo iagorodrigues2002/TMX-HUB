@@ -27,21 +27,21 @@ import webhookTestRoutes from './webhook-test.js';
  * Quando user tem `tools` definido no JWT e o tool da rota não está nele,
  * retornamos 403. Admin sempre bypassa.
  */
-const TOOL_PATH_MAP: Array<{ prefix: string; tool: ToolKey }> = [
-  { prefix: '/v1/niches', tool: 'video-shield' },
-  { prefix: '/v1/shield-jobs', tool: 'video-shield' },
-  { prefix: '/v1/media-jobs', tool: 'creative-studio' },
-  { prefix: '/v1/clones', tool: 'cloner' },
-  { prefix: '/v1/forms', tool: 'cloner' },
-  { prefix: '/v1/links', tool: 'cloner' },
-  { prefix: '/v1/inspect', tool: 'cloner' },
-  { prefix: '/v1/vsl-jobs', tool: 'vsl' },
-  { prefix: '/v1/funnel-jobs', tool: 'funnel-clone' },
-  { prefix: '/v1/page-diff', tool: 'page-diff' },
-  { prefix: '/v1/webhook-test', tool: 'webhook-tester' },
-  { prefix: '/v1/digi-audits', tool: 'digi-approval' },
-  { prefix: '/v1/offers', tool: 'ofertas' },
-  { prefix: '/v1/dashboard', tool: 'ofertas' },
+const TOOL_PATH_MAP: Array<{ prefix: string; tools: ToolKey[] }> = [
+  { prefix: '/v1/niches', tools: ['video-shield', 'creative-studio'] },
+  { prefix: '/v1/shield-jobs', tools: ['video-shield', 'creative-studio'] },
+  { prefix: '/v1/media-jobs', tools: ['video-shield', 'creative-studio'] },
+  { prefix: '/v1/clones', tools: ['cloner'] },
+  { prefix: '/v1/forms', tools: ['cloner'] },
+  { prefix: '/v1/links', tools: ['cloner'] },
+  { prefix: '/v1/inspect', tools: ['cloner'] },
+  { prefix: '/v1/vsl-jobs', tools: ['vsl'] },
+  { prefix: '/v1/funnel-jobs', tools: ['funnel-clone'] },
+  { prefix: '/v1/page-diff', tools: ['page-diff'] },
+  { prefix: '/v1/webhook-test', tools: ['webhook-tester'] },
+  { prefix: '/v1/digi-audits', tools: ['digi-approval'] },
+  { prefix: '/v1/offers', tools: ['ofertas'] },
+  { prefix: '/v1/dashboard', tools: ['ofertas'] },
 ];
 
 class ToolForbiddenError extends HttpProblem {
@@ -75,14 +75,14 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         // Gating por ferramenta: depois da auth, checa allowedTools do user
         // contra o prefixo da rota. Admin/users sem tools bypassam.
         protectedRoutes.addHook('preHandler', async (req) => {
-          if (!req.user) return;                       // requireAuth já tratou
-          if (req.user.role === 'admin') return;       // admin = todas
+          if (!req.user) return; // requireAuth já tratou
+          if (req.user.role === 'admin') return; // admin = todas
           const tools = req.user.tools;
-          if (!tools || tools.length === 0) return;    // acesso completo
+          if (!tools || tools.length === 0) return; // acesso completo
           const match = TOOL_PATH_MAP.find((m) => req.url.startsWith(m.prefix));
-          if (!match) return;                          // rota não restrita
-          if (!tools.includes(match.tool)) {
-            throw new ToolForbiddenError(match.tool);
+          if (!match) return; // rota não restrita
+          if (!match.tools.some((tool) => tools.includes(tool))) {
+            throw new ToolForbiddenError(match.tools[0]!);
           }
         });
         await protectedRoutes.register(activityRoutes);

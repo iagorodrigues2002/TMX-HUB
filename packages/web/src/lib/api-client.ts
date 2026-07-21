@@ -484,6 +484,9 @@ export function canAccessTool(user: AuthUser | null, tool: ToolKey): boolean {
   if (user.role === 'admin') return true;
   const list = user.allowedTools;
   if (!list || list.length === 0) return true;
+  if (tool === 'video-shield' || tool === 'creative-studio') {
+    return list.includes('video-shield') || list.includes('creative-studio');
+  }
   return list.includes(tool);
 }
 
@@ -860,13 +863,15 @@ export const apiClient = {
     await request<void>(`/v1/users/${id}`, { method: 'DELETE' });
   },
 
-  async listActivity(): Promise<Array<{
-    kind: 'clone' | 'vsl' | 'funnel' | 'inspect' | 'webhook' | 'page-diff';
-    id: string;
-    label: string;
-    status: string;
-    createdAt: string;
-  }>> {
+  async listActivity(): Promise<
+    Array<{
+      kind: 'clone' | 'vsl' | 'funnel' | 'inspect' | 'webhook' | 'page-diff';
+      id: string;
+      label: string;
+      status: string;
+      createdAt: string;
+    }>
+  > {
     const wire = await request<{
       entries: Array<{
         kind: 'clone' | 'vsl' | 'funnel' | 'inspect' | 'webhook' | 'page-diff';
@@ -955,9 +960,7 @@ export const apiClient = {
     if (range?.from) params.set('from', range.from);
     if (range?.to) params.set('to', range.to);
     const qs = params.toString();
-    const wire = await request<DashboardSummaryWire>(
-      `/v1/dashboard/summary${qs ? `?${qs}` : ''}`,
-    );
+    const wire = await request<DashboardSummaryWire>(`/v1/dashboard/summary${qs ? `?${qs}` : ''}`);
     return fromDashboardSummaryWire(wire);
   },
 
@@ -1173,10 +1176,9 @@ export const apiClient = {
     return fromNicheWire(wire);
   },
   async deleteNicheWhite(nicheId: string, whiteId: string): Promise<NicheView> {
-    const wire = await request<NicheWire>(
-      `/v1/niches/${nicheId}/whites/${whiteId}`,
-      { method: 'DELETE' },
-    );
+    const wire = await request<NicheWire>(`/v1/niches/${nicheId}/whites/${whiteId}`, {
+      method: 'DELETE',
+    });
     return fromNicheWire(wire);
   },
 
@@ -1231,9 +1233,10 @@ export const apiClient = {
       let msg = `HTTP ${res.status}`;
       try {
         const j = await res.json();
-        msg = (j as { detail?: string; message?: string }).detail
-          ?? (j as { message?: string }).message
-          ?? msg;
+        msg =
+          (j as { detail?: string; message?: string }).detail ??
+          (j as { message?: string }).message ??
+          msg;
       } catch {}
       throw new ApiError(msg, res.status);
     }
@@ -1284,7 +1287,10 @@ export const apiClient = {
     const wire = await request<{ audits: DigiAuditWire[] }>('/v1/digi-audits');
     return (wire.audits ?? []).map(fromDigiAuditWire);
   },
-  async createDigiAudit(input: { product_name: string; offer_id?: string }): Promise<DigiAuditView> {
+  async createDigiAudit(input: {
+    product_name: string;
+    offer_id?: string;
+  }): Promise<DigiAuditView> {
     const wire = await request<DigiAuditWire>('/v1/digi-audits', {
       method: 'POST',
       body: input,
@@ -1318,12 +1324,7 @@ export const apiClient = {
 
 // ---- Digistore24 Audit types ----
 
-export type DigiAuditStatusView =
-  | 'draft'
-  | 'in_review'
-  | 'approved'
-  | 'rejected'
-  | 'abandoned';
+export type DigiAuditStatusView = 'draft' | 'in_review' | 'approved' | 'rejected' | 'abandoned';
 export type DigiItemStateView = 'pending' | 'done' | 'na';
 
 export interface DigiAuditItemView {
@@ -1434,12 +1435,7 @@ function fromNicheWire(w: NicheWire): NicheView {
 }
 
 export type ShieldCompressionMode = 'none' | 'lossless' | 'balanced' | 'small';
-export type ShieldJobStatusView =
-  | 'queued'
-  | 'processing'
-  | 'verifying'
-  | 'ready'
-  | 'failed';
+export type ShieldJobStatusView = 'queued' | 'processing' | 'verifying' | 'ready' | 'failed';
 export type ShieldVerifyStatusView = 'pending' | 'done' | 'failed' | 'skipped';
 
 export interface ShieldJobView {
