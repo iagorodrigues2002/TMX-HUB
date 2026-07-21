@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Download, Loader2, Trash2, Upload } from 'lucide-react';
+import { AudioLines, Download, Gauge, Loader2, Maximize2, Repeat2, ShieldCheck, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   apiClient,
@@ -12,6 +12,26 @@ import {
 } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+const compressionOptions = [
+  { value: 'none', label: 'Qualidade máxima', description: 'Mantém o máximo de detalhes' },
+  { value: 'balanced', label: 'Equilibrada', description: 'Boa qualidade com tamanho reduzido' },
+  { value: 'small', label: 'Arquivo menor', description: 'Prioriza velocidade e economia' },
+] as const;
+
+const aspectRatioOptions = [
+  { value: 'original', label: 'Original', description: 'Preserva o formato do vídeo' },
+  { value: '9:16', label: '9:16 · Stories/Reels', description: 'Vertical para telas de celular' },
+  { value: '4:5', label: '4:5 · Feed', description: 'Vertical para publicações no feed' },
+  { value: '1:1', label: '1:1 · Quadrado', description: 'Formato quadrado universal' },
+] as const;
+
+const extensionOptions = [
+  { value: 'none', label: 'Não estender', description: 'Mantém a duração original' },
+  { value: 'loop', label: 'Repetir em loop', description: 'Repete até a duração escolhida' },
+  { value: 'freeze', label: 'Congelar frame final', description: 'Segura a última imagem' },
+] as const;
 
 export function CreativeStudio() {
   const qc = useQueryClient();
@@ -60,21 +80,24 @@ export function CreativeStudio() {
         </label>
 
         <div className="grid gap-4 md:grid-cols-3">
-          <Field label="Compressão">
-            <select value={compression} onChange={(e) => setCompression(e.target.value as MediaCompressionMode)} className="input w-full">
-              <option value="none">Qualidade máxima</option><option value="balanced">Equilibrada</option><option value="small">Arquivo menor</option>
-            </select>
-          </Field>
-          <Field label="Proporção">
-            <select value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value as MediaAspectRatio)} className="input w-full">
-              <option value="original">Original</option><option value="9:16">9:16 Stories/Reels</option><option value="4:5">4:5 Feed</option><option value="1:1">1:1 Quadrado</option>
-            </select>
-          </Field>
-          <Field label="Extensão">
-            <select value={extensionMode} onChange={(e) => setExtensionMode(e.target.value as MediaExtensionMode)} className="input w-full">
-              <option value="none">Não estender</option><option value="loop">Loop até a duração</option><option value="freeze">Congelar frame final</option>
-            </select>
-          </Field>
+          <OptionField icon={Gauge} label="Compressão" description={compressionOptions.find((option) => option.value === compression)?.description}>
+            <Select value={compression} onValueChange={(value) => setCompression(value as MediaCompressionMode)}>
+              <SelectTrigger aria-label="Compressão do vídeo"><SelectValue /></SelectTrigger>
+              <SelectContent>{compressionOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
+            </Select>
+          </OptionField>
+          <OptionField icon={Maximize2} label="Proporção" description={aspectRatioOptions.find((option) => option.value === aspectRatio)?.description}>
+            <Select value={aspectRatio} onValueChange={(value) => setAspectRatio(value as MediaAspectRatio)}>
+              <SelectTrigger aria-label="Proporção do vídeo"><SelectValue /></SelectTrigger>
+              <SelectContent>{aspectRatioOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
+            </Select>
+          </OptionField>
+          <OptionField icon={Repeat2} label="Extensão" description={extensionOptions.find((option) => option.value === extensionMode)?.description}>
+            <Select value={extensionMode} onValueChange={(value) => setExtensionMode(value as MediaExtensionMode)}>
+              <SelectTrigger aria-label="Extensão da duração"><SelectValue /></SelectTrigger>
+              <SelectContent>{extensionOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
+            </Select>
+          </OptionField>
         </div>
 
         {extensionMode !== 'none' && (
@@ -83,9 +106,9 @@ export function CreativeStudio() {
           </Field>
         )}
 
-        <div className="flex flex-wrap gap-5 text-sm text-white/70">
-          <label className="flex items-center gap-2"><Checkbox checked={stripMetadata} onChange={(e) => setStripMetadata(e.target.checked)} /> Remover metadados</label>
-          <label className="flex items-center gap-2"><Checkbox checked={normalizeAudio} onChange={(e) => setNormalizeAudio(e.target.checked)} /> Normalizar áudio</label>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <ToggleCard icon={ShieldCheck} title="Remover metadados" description="Limpa informações internas do arquivo" checked={stripMetadata} onChange={setStripMetadata} />
+          <ToggleCard icon={AudioLines} title="Normalizar áudio" description="Equilibra o volume para reprodução" checked={normalizeAudio} onChange={setNormalizeAudio} />
         </div>
 
         <Button onClick={() => create.mutate()} disabled={!file || create.isPending}>
@@ -111,4 +134,26 @@ export function CreativeStudio() {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <label className="space-y-2"><span className="hud-label block">{label}</span>{children}</label>;
+}
+
+function OptionField({ icon: Icon, label, description, children }: { icon: typeof Gauge; label: string; description?: string; children: React.ReactNode }) {
+  return (
+    <div className="group rounded-xl border border-white/[0.08] bg-white/[0.025] p-3.5 transition-all hover:border-cyan-300/20 hover:bg-cyan-300/[0.025] focus-within:border-cyan-300/30 focus-within:ring-2 focus-within:ring-cyan-300/[0.08]">
+      <div className="mb-3 flex items-center gap-2.5">
+        <span className="grid h-8 w-8 place-items-center rounded-lg border border-cyan-300/10 bg-cyan-300/[0.06] text-cyan-300"><Icon className="h-4 w-4" /></span>
+        <div className="min-w-0"><span className="hud-label block">{label}</span><p className="truncate text-[11px] text-white/40">{description}</p></div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ToggleCard({ icon: Icon, title, description, checked, onChange }: { icon: typeof ShieldCheck; title: string; description: string; checked: boolean; onChange: (checked: boolean) => void }) {
+  return (
+    <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.025] p-3.5 transition-all hover:border-cyan-300/20 hover:bg-cyan-300/[0.035]">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white/[0.04] text-white/55"><Icon className="h-4 w-4" /></span>
+      <span className="min-w-0 flex-1"><span className="block text-sm font-medium text-white/85">{title}</span><span className="block text-xs text-white/40">{description}</span></span>
+      <Checkbox checked={checked} onChange={(event) => onChange(event.target.checked)} />
+    </label>
+  );
 }

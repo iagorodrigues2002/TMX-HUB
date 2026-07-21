@@ -69,7 +69,8 @@ const SelectContent = React.forwardRef<
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        'relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-md border border-white/[0.08] bg-[#0A1A24]/95 text-white shadow-card backdrop-blur-xl',
+        'relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-xl border border-cyan-200/[0.12] bg-[#07151e]/95 text-white shadow-2xl shadow-black/50 backdrop-blur-2xl',
+        'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
         position === 'popper' &&
           'data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1',
         className,
@@ -82,7 +83,7 @@ const SelectContent = React.forwardRef<
         className={cn(
           'p-1',
           position === 'popper' &&
-            'h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]',
+            'w-full min-w-[var(--radix-select-trigger-width)]',
         )}
       >
         {children}
@@ -115,8 +116,8 @@ const SelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      'relative flex w-full cursor-default select-none items-center rounded-sm py-2 pl-3 pr-8 text-[13px] text-white/80 outline-none transition-colors',
-      'focus:bg-cyan-300/10 focus:text-white data-[state=checked]:text-white',
+      'relative flex w-full cursor-pointer select-none items-center rounded-lg py-2.5 pl-3 pr-9 text-[13px] text-white/70 outline-none transition-all',
+      'focus:bg-cyan-300/[0.10] focus:text-white data-[state=checked]:bg-cyan-300/[0.06] data-[state=checked]:text-white',
       'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
       className,
     )}
