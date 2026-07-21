@@ -295,23 +295,18 @@ export function toSnapshot(offerId: string, date: string, results: UtmifyResult[
       impressions: 0,
       clicks: 0,
     };
-    // The ad-level endpoint can repeat delivery metrics when the same ad is
-    // split into multiple attribution/product rows. Revenue and orders are
-    // additive, but summing delivery fields multiplies spend and traffic.
-    current.spend = Math.max(current.spend, number(item.spend) / 100);
+    // Different ads can share the same visible name. Keep one row in the UI,
+    // but accumulate every result returned by UTMify, as its dashboard does.
+    current.spend += number(item.spend) / 100;
     current.sales += Math.max(0, Math.round(number(item.approvedOrdersCount)));
     current.revenue += number(item.revenue) / 100;
-    current.ic = Math.max(current.ic, Math.max(0, Math.round(number(item.initiateCheckout))));
-    current.impressions = Math.max(
-      current.impressions ?? 0,
-      Math.max(0, Math.round(number(item.impressions))),
-    );
-    current.clicks = Math.max(
-      current.clicks ?? 0,
-      Math.max(0, Math.round(number(item.inlineLinkClicks))),
-    );
+    current.ic += Math.max(0, Math.round(number(item.initiateCheckout)));
+    current.impressions =
+      (current.impressions ?? 0) + Math.max(0, Math.round(number(item.impressions)));
+    current.clicks =
+      (current.clicks ?? 0) + Math.max(0, Math.round(number(item.inlineLinkClicks)));
     const views = Math.max(0, number(item.videoViews3Seconds));
-    current.hookRate = Math.max(current.hookRate ?? 0, views);
+    current.hookRate = (current.hookRate ?? 0) + views;
     byName.set(name, current);
   }
   const ads = [...byName.values()].map((ad) => ({
