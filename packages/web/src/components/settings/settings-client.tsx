@@ -1,6 +1,17 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { type OfferView, apiClient, authToken } from '@/lib/api-client';
+import { useAuth } from '@/lib/auth-context';
+import { env } from '@/lib/env';
+import { cn } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle,
@@ -14,18 +25,9 @@ import {
   ShieldCheck,
   Workflow,
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { apiClient, authToken, type OfferView } from '@/lib/api-client';
-import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { env } from '@/lib/env';
-import { cn } from '@/lib/utils';
 import { InvitesSection } from './invites-section';
 import { UsersSection } from './users-section';
 
@@ -87,16 +89,7 @@ interface FieldRowProps {
   ok?: string;
 }
 
-function FieldRow({
-  label,
-  value,
-  copyValue,
-  copyLabel,
-  mono,
-  hint,
-  warning,
-  ok,
-}: FieldRowProps) {
+function FieldRow({ label, value, copyValue, copyLabel, mono, hint, warning, ok }: FieldRowProps) {
   const realValue = copyValue ?? value;
   return (
     <div className="space-y-1.5">
@@ -141,6 +134,12 @@ function FieldRow({
 }
 
 export function SettingsClient() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+  const isAdmin = user?.role === 'admin';
+  useEffect(() => {
+    if (!loading && user && !isAdmin) router.replace('/tools');
+  }, [isAdmin, loading, router, user]);
   const apiUrl = env.NEXT_PUBLIC_API_URL;
   const apiIsLocal = isLocalUrl(apiUrl);
   const token = authToken.get() ?? '';
@@ -150,16 +149,14 @@ export function SettingsClient() {
   const { data: offers = [], isLoading: offersLoading } = useQuery<OfferView[]>({
     queryKey: ['offers'],
     queryFn: () => apiClient.listOffers(),
+    enabled: isAdmin,
   });
 
   const [selectedOfferId, setSelectedOfferId] = useState<string>('');
   const selectedOffer = offers.find((o) => o.id === selectedOfferId) ?? offers[0];
   const effectiveOfferId = selectedOffer?.id ?? '';
-  const utmifyDashboardId =
-    selectedOffer?.dashboardId?.trim() || UTMIFY_DASHBOARD_ID_FALLBACK;
-  const ingestUrl = effectiveOfferId
-    ? `${apiUrl}/v1/offers/${effectiveOfferId}/ingest`
-    : '';
+  const utmifyDashboardId = selectedOffer?.dashboardId?.trim() || UTMIFY_DASHBOARD_ID_FALLBACK;
+  const ingestUrl = effectiveOfferId ? `${apiUrl}/v1/offers/${effectiveOfferId}/ingest` : '';
 
   const fullConfigBlock = useMemo(() => {
     return [
@@ -172,6 +169,8 @@ export function SettingsClient() {
 
   const everythingReady = !!apiUrl && !!token && !tokenExpired && !!effectiveOfferId;
 
+  if (loading || !isAdmin) return null;
+
   return (
     <div className="space-y-8">
       <header className="space-y-3">
@@ -179,13 +178,10 @@ export function SettingsClient() {
           <SettingsIcon className="h-5 w-5 text-cyan-300" />
           <p className="hud-label">Operator Console · Configurações</p>
         </div>
-        <h1 className="text-3xl font-bold tracking-tight text-white">
-          Integração & Credenciais
-        </h1>
+        <h1 className="text-3xl font-bold tracking-tight text-white">Integração & Credenciais</h1>
         <p className="max-w-2xl text-[14px] text-white/55">
-          Tudo que você precisa pra plugar o n8n (ou qualquer outro serviço externo) na
-          API do TMX HUB. Os valores abaixo são puxados em tempo real do seu ambiente
-          atual.
+          Tudo que você precisa pra plugar o n8n (ou qualquer outro serviço externo) na API do TMX
+          HUB. Os valores abaixo são puxados em tempo real do seu ambiente atual.
         </p>
       </header>
 
@@ -228,9 +224,7 @@ export function SettingsClient() {
           mono
           hint="Lido de NEXT_PUBLIC_API_URL"
           warning={
-            apiIsLocal
-              ? 'URL local — não acessível do n8n remoto. Veja o aviso acima.'
-              : undefined
+            apiIsLocal ? 'URL local — não acessível do n8n remoto. Veja o aviso acima.' : undefined
           }
           ok={!apiIsLocal ? 'URL pública detectada — pronto pra n8n remoto.' : undefined}
         />
@@ -242,9 +236,7 @@ export function SettingsClient() {
           copyLabel="TMX_TOKEN"
           mono
           hint={
-            tokenExp
-              ? `Expira em ${tokenExp.toLocaleString('pt-BR')}`
-              : 'Token de sessão (JWT)'
+            tokenExp ? `Expira em ${tokenExp.toLocaleString('pt-BR')}` : 'Token de sessão (JWT)'
           }
           warning={
             !token
@@ -253,11 +245,7 @@ export function SettingsClient() {
                 ? 'Token expirado — faça login novamente.'
                 : undefined
           }
-          ok={
-            token && !tokenExpired
-              ? 'Sessão válida.'
-              : undefined
-          }
+          ok={token && !tokenExpired ? 'Sessão válida.' : undefined}
         />
       </section>
 
@@ -282,10 +270,7 @@ export function SettingsClient() {
           <div className="space-y-4">
             <div className="space-y-1.5">
               <p className="hud-label">Selecionar oferta</p>
-              <Select
-                value={effectiveOfferId}
-                onValueChange={(v) => setSelectedOfferId(v)}
-              >
+              <Select value={effectiveOfferId} onValueChange={(v) => setSelectedOfferId(v)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Escolha uma oferta…" />
                 </SelectTrigger>
@@ -320,10 +305,7 @@ export function SettingsClient() {
 
         <div className="grid gap-3 md:grid-cols-2">
           <Button asChild variant="default">
-            <a
-              href="/tmx-utmify-ingest.n8n.json"
-              download="tmx-utmify-ingest.n8n.json"
-            >
+            <a href="/tmx-utmify-ingest.n8n.json" download="tmx-utmify-ingest.n8n.json">
               <Download className="h-4 w-4" />
               Baixar workflow.json
             </a>
@@ -335,9 +317,7 @@ export function SettingsClient() {
             disabled={!everythingReady}
           >
             <Copy className="h-4 w-4" />
-            {everythingReady
-              ? 'Copiar todas as 4 variáveis'
-              : 'Falta preencher acima'}
+            {everythingReady ? 'Copiar todas as 4 variáveis' : 'Falta preencher acima'}
           </Button>
         </div>
 
@@ -366,18 +346,20 @@ export function SettingsClient() {
             Como aplicar no n8n
           </p>
           <ol className="list-decimal space-y-1 pl-5">
-            <li>Importe o <code>tmx-utmify-ingest.n8n.json</code> no seu n8n.</li>
             <li>
-              Crie a credencial <strong>HTTP Basic Auth</strong> da UTMify (login + senha
-              do seu UTMify).
+              Importe o <code>tmx-utmify-ingest.n8n.json</code> no seu n8n.
             </li>
             <li>
-              Abra o node <strong>⚙️ Config</strong> e crie 4 fields (Add Field) com os
-              nomes e valores do bloco acima.
+              Crie a credencial <strong>HTTP Basic Auth</strong> da UTMify (login + senha do seu
+              UTMify).
             </li>
             <li>
-              Clique em <strong>Execute step</strong> no Config — o output deve mostrar as
-              4 variáveis. Depois rode o workflow inteiro pra validar.
+              Abra o node <strong>⚙️ Config</strong> e crie 4 fields (Add Field) com os nomes e
+              valores do bloco acima.
+            </li>
+            <li>
+              Clique em <strong>Execute step</strong> no Config — o output deve mostrar as 4
+              variáveis. Depois rode o workflow inteiro pra validar.
             </li>
           </ol>
         </div>
@@ -388,10 +370,9 @@ export function SettingsClient() {
         <div className="space-y-1 text-white/65">
           <p className="font-medium text-white/85">Sobre o token</p>
           <p>
-            O <code>TMX_TOKEN</code> mostrado é o JWT da sua sessão atual no navegador.
-            Ele expira — quando expirar, faça login de novo e atualize a variável no n8n.
-            Pra produção a longo prazo, considere criar um <em>service token</em> sem
-            expiração no backend.
+            O <code>TMX_TOKEN</code> mostrado é o JWT da sua sessão atual no navegador. Ele expira —
+            quando expirar, faça login de novo e atualize a variável no n8n. Pra produção a longo
+            prazo, considere criar um <em>service token</em> sem expiração no backend.
           </p>
         </div>
       </section>

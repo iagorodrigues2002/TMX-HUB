@@ -50,13 +50,10 @@ const SCOPE_LABEL: Record<AccessScope, string> = {
 const CUSTOM_TOOL_OPTIONS: { key: ToolKey; label: string }[] = [
   { key: 'video-shield', label: 'Video Studio' },
   { key: 'cloner', label: 'Page Cloner' },
-  { key: 'cloaker-urls', label: 'Cloaker URL Generator' },
-  { key: 'page-diff', label: 'Page Diff' },
   { key: 'funnel-clone', label: 'Funnel Full Clone' },
   { key: 'upsell-analyzer', label: 'Upsell Analyzer' },
   { key: 'webhook-tester', label: 'Webhook Tester' },
   { key: 'vsl', label: 'VSL Downloader' },
-  { key: 'digi-approval', label: 'Digi Approval' },
   { key: 'ofertas', label: 'Ofertas' },
   { key: 'logs', label: 'Logs' },
 ];
