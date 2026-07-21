@@ -628,12 +628,20 @@ export interface IntradayWindowView {
   partial: boolean;
   samples: number;
   metrics: MetricsView;
+  adsAvailable: boolean;
+  adsPartial: boolean;
+  ads: IntradayAdView[];
+}
+
+export interface IntradayAdView extends MetricsView {
+  name: string;
 }
 
 export interface IntradaySummaryView {
   date: string;
   updatedAt?: string;
   overall: MetricsView;
+  overallAds: IntradayAdView[];
   currentWindowIndex: number;
   windows: IntradayWindowView[];
 }

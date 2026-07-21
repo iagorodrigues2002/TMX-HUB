@@ -87,6 +87,9 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
   const [adSearch, setAdSearch] = useState('');
   const [compareLeft, setCompareLeft] = useState('');
   const [compareRight, setCompareRight] = useState('');
+  const [intradayMode, setIntradayMode] = useState<'overview' | 'ads'>('overview');
+  const [intradayAdWindow, setIntradayAdWindow] = useState('overall');
+  const [intradayAdSearch, setIntradayAdSearch] = useState('');
 
   // Pull the offer (with links/status) from the offers list cache when possible.
   const offerQuery = useQuery({
@@ -208,6 +211,16 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
   );
   const currentWindow = intraday?.windows.find(
     (window) => window.index === intraday.currentWindowIndex,
+  );
+  const selectedAdWindow = intradayAdWindow === 'overall'
+    ? undefined
+    : intraday?.windows.find((window) => window.index === Number(intradayAdWindow));
+  const intradayAds = intradayAdWindow === 'overall'
+    ? (intraday?.overallAds ?? [])
+    : (selectedAdWindow?.ads ?? []);
+  const intradayAdQuery = intradayAdSearch.trim().toLocaleLowerCase('pt-BR');
+  const filteredIntradayAds = intradayAds.filter(
+    (ad) => !intradayAdQuery || ad.name.toLocaleLowerCase('pt-BR').includes(intradayAdQuery),
   );
 
   return (
@@ -579,6 +592,23 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
           )}
         </header>
 
+        <div className="inline-flex w-fit rounded-lg border border-white/10 bg-black/15 p-1">
+          <button
+            type="button"
+            onClick={() => setIntradayMode('overview')}
+            className={`rounded-md px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] transition ${intradayMode === 'overview' ? 'bg-cyan-300/15 text-cyan-200' : 'text-white/45 hover:text-white/75'}`}
+          >
+            Visão geral
+          </button>
+          <button
+            type="button"
+            onClick={() => setIntradayMode('ads')}
+            className={`rounded-md px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] transition ${intradayMode === 'ads' ? 'bg-cyan-300/15 text-cyan-200' : 'text-white/45 hover:text-white/75'}`}
+          >
+            Por anúncios
+          </button>
+        </div>
+
         {intradayQuery.isLoading ? (
           <div className="glass-card flex items-center justify-center p-10">
             <Loader2 className="h-5 w-5 animate-spin text-cyan-300" />
@@ -587,7 +617,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
           <div className="glass-card p-6 text-[13px] text-white/45">
             A coleta intradiária começará na próxima sincronização UTMify.
           </div>
-        ) : (
+        ) : intradayMode === 'overview' ? (
           <>
             <div className="grid gap-4 xl:grid-cols-2">
               <article className="glass-card p-4">
@@ -691,6 +721,87 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
               )}
             </div>
           </>
+        ) : (
+          <div className="glass-card overflow-hidden p-0">
+            <header className="flex flex-wrap items-end gap-3 border-b border-white/[0.06] px-4 py-4">
+              <div className="mr-auto">
+                <h3 className="text-[14px] font-semibold text-white">Desempenho por anúncio</h3>
+                <p className="mt-1 text-[11px] text-white/40">
+                  Anúncios com o mesmo nome são agrupados em uma única linha.
+                </p>
+              </div>
+              <Label className="space-y-1">
+                <span className="hud-label">Janela</span>
+                <select
+                  value={intradayAdWindow}
+                  onChange={(event) => setIntradayAdWindow(event.target.value)}
+                  className="block h-10 min-w-[190px] rounded-md border border-white/10 bg-[#0b1b22] px-3 text-[12px] text-white"
+                >
+                  <option value="overall">Acumulado do dia</option>
+                  {intraday.windows.map((window) => (
+                    <option key={window.index} value={window.index} disabled={!window.adsAvailable}>
+                      {window.label}{window.adsAvailable ? '' : ' · aguardando dados'}
+                    </option>
+                  ))}
+                </select>
+              </Label>
+              <Label className="relative min-w-[240px] space-y-1">
+                <span className="hud-label">Buscar anúncio</span>
+                <Search className="absolute bottom-3 left-3 h-3.5 w-3.5 text-white/35" />
+                <Input
+                  value={intradayAdSearch}
+                  onChange={(event) => setIntradayAdSearch(event.target.value)}
+                  placeholder="Digite o nome..."
+                  className="h-10 pl-9"
+                />
+              </Label>
+            </header>
+
+            {selectedAdWindow?.adsPartial && (
+              <div className="border-b border-amber-300/10 bg-amber-300/[0.04] px-4 py-3 text-[11px] text-amber-100/70">
+                Janela parcial: o cálculo começa no primeiro checkpoint com anúncios disponível nesta faixa.
+              </div>
+            )}
+
+            {filteredIntradayAds.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-[12px]">
+                  <thead className="bg-white/[0.03] text-left text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
+                    <tr>
+                      <th className="px-4 py-3">Anúncio</th>
+                      <th className="px-3 py-3 text-right">Investido</th>
+                      <th className="px-3 py-3 text-right">Faturamento</th>
+                      <th className="px-3 py-3 text-right">Vendas</th>
+                      <th className="px-3 py-3 text-right">CPA</th>
+                      <th className="px-3 py-3 text-right">IC</th>
+                      <th className="px-3 py-3 text-right">CPA IC</th>
+                      <th className="px-4 py-3 text-right">ROAS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredIntradayAds.map((ad) => (
+                      <tr key={ad.name} className="border-t border-white/[0.05] hover:bg-cyan-300/[0.025]">
+                        <td className="max-w-[360px] truncate px-4 py-3 font-medium text-white/85" title={ad.name}>{ad.name}</td>
+                        <td className="px-3 py-3 text-right font-mono text-amber-300">{formatBRL(ad.spend)}</td>
+                        <td className="px-3 py-3 text-right font-mono text-emerald-300">{formatBRL(ad.revenue)}</td>
+                        <td className="px-3 py-3 text-right font-mono text-emerald-300">{formatInt(ad.sales)}</td>
+                        <td className="px-3 py-3 text-right font-mono text-white/75">{formatBRL(ad.cpa)}</td>
+                        <td className="px-3 py-3 text-right font-mono text-cyan-300">{formatInt(ad.ic)}</td>
+                        <td className="px-3 py-3 text-right font-mono text-white/75">{formatBRL(ad.icCpa)}</td>
+                        <td className="px-4 py-3 text-right font-mono text-cyan-300">{formatRoas(ad.roas)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="px-4 py-12 text-center text-[12px] text-white/40">
+                {intradayAdSearch.trim()
+                  ? 'Nenhum anúncio encontrado nesta janela.'
+                  : 'Aguardando checkpoints com dados de anúncios para esta janela.'}
+              </div>
+            )}
+          </div>
         )}
       </section>
 
