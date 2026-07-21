@@ -8,7 +8,7 @@ import {
 } from '../src/services/utmify-sync.js';
 
 describe('UTMify ad-level snapshot', () => {
-  it('sums attribution metrics but deduplicates repeated delivery metrics', () => {
+  it('groups equal ad names while summing every UTMify result', () => {
     const snapshot = toSnapshot('offer-1', '2026-07-21', [
       {
         name: 'AD1-H1-L3_blindado',
@@ -32,16 +32,16 @@ describe('UTMify ad-level snapshot', () => {
       },
     ]);
 
-    expect(snapshot.spend).toBe(12.5);
+    expect(snapshot.spend).toBe(15);
     expect(snapshot.revenue).toBe(40);
     expect(snapshot.sales).toBe(3);
     expect(snapshot.ads).toHaveLength(1);
     expect(snapshot.ads?.[0]).toMatchObject({
       name: 'AD1-H1-L3_blindado',
-      spend: 12.5,
+      spend: 15,
       revenue: 40,
       sales: 3,
-      ic: 4,
+      ic: 6,
       ctr: 0.1,
       hookRate: 0.3,
     });
