@@ -205,7 +205,11 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
               {Object.entries(capabilitiesQuery.data.accountFields[0] ?? {}).map(([key, value]) => (
                 <div key={key} className="rounded-lg border border-white/[0.06] bg-black/10 px-3 py-2">
                   <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-white/35">
-                    {key}
+                    {key === 'accountId'
+                      ? 'ID da conta'
+                      : key === 'accountStatus'
+                        ? 'Status da conta'
+                        : key}
                   </p>
                   <p className="mt-1 truncate font-mono text-[12px] text-white/80">{String(value)}</p>
                 </div>

@@ -180,7 +180,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.post<{ Params: { id: string } }>('/offers/:id/sync', async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');
     const offer = await app.offerStore.assertOwner(req.params.id, req.user.sub);
-    const result = await app.utmifySync.syncOffer(offer);
+    // A sync acionada pelo operador reconstrói todo o histórico recente. A
+    // rotina automática continua incremental para não sobrecarregar a UTMify.
+    const result = await app.utmifySync.syncOffer(offer, true);
     return reply.send(result);
   });
 
