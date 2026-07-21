@@ -43,12 +43,12 @@ type AccessScope = 'full' | 'video-shield' | 'custom';
 
 const SCOPE_LABEL: Record<AccessScope, string> = {
   full: 'Completo (todas as ferramentas)',
-  'video-shield': 'Apenas Video Shield',
+  'video-shield': 'Apenas Video Studio',
   custom: 'Personalizado…',
 };
 
 const CUSTOM_TOOL_OPTIONS: { key: ToolKey; label: string }[] = [
-  { key: 'video-shield', label: 'Video Shield' },
+  { key: 'video-shield', label: 'Video Studio' },
   { key: 'cloner', label: 'Page Cloner' },
   { key: 'cloaker-urls', label: 'Cloaker URL Generator' },
   { key: 'page-diff', label: 'Page Diff' },
@@ -144,8 +144,8 @@ export function InvitesSection() {
       </div>
 
       <p className="text-[12px] text-white/55">
-        Gere um link único de registro pra adicionar um membro. O link expira após o
-        prazo escolhido e é destruído quando usado.
+        Gere um link único de registro pra adicionar um membro. O link expira após o prazo escolhido
+        e é destruído quando usado.
       </p>
 
       {showForm && (
@@ -193,7 +193,7 @@ export function InvitesSection() {
             </select>
             {scope === 'video-shield' && (
               <p className="text-[10px] text-cyan-300/65">
-                Membro só verá e usará o Video Shield. Restante do hub fica oculto.
+                Membro verá e usará Video Shield + Creative Studio. O restante do hub fica oculto.
               </p>
             )}
             {scope === 'custom' && (
@@ -252,8 +252,8 @@ export function InvitesSection() {
             </Button>
           </div>
           <p className="text-[10px] text-white/40">
-            Email/Nome só pré-preenchem o formulário do convidado — o link funciona pra
-            qualquer pessoa que receber. Acesso é aplicado ao registrar.
+            Email/Nome só pré-preenchem o formulário do convidado — o link funciona pra qualquer
+            pessoa que receber. Acesso é aplicado ao registrar.
           </p>
         </form>
       )}

@@ -10,7 +10,6 @@ import {
   Shield,
   Shuffle,
   Video,
-  Clapperboard,
   Webhook,
 } from 'lucide-react';
 import { HubShell } from '@/components/hub/hub-shell';
@@ -25,8 +24,7 @@ interface ToolEntry {
 
 export default function ToolsIndexPage() {
   const { user } = useAuth();
-  const restricted =
-    user && user.role !== 'admin' && (user.allowedTools?.length ?? 0) > 0;
+  const restricted = user && user.role !== 'admin' && (user.allowedTools?.length ?? 0) > 0;
   const allowed = user?.allowedTools ?? [];
 
   const all: ToolEntry[] = [
@@ -120,26 +118,13 @@ export default function ToolsIndexPage() {
       ),
     },
     {
-      tool: 'creative-studio',
-      card: (
-        <ToolCard
-          key="creative-studio"
-          icon={<Clapperboard className="h-6 w-6" />}
-          title="Creative Studio"
-          description="Comprime, normaliza, converte proporções e estende vídeos para campanhas e redes sociais."
-          href="/tools/creative-studio"
-          badge="Novo"
-        />
-      ),
-    },
-    {
       tool: 'video-shield',
       card: (
         <ToolCard
           key="video-shield"
           icon={<Shield className="h-6 w-6" />}
-          title="Video Shield"
-          description="Phase cancel + white audio por nicho. Bots transcrevem só o white, humanos ouvem o original. Compressão opcional e verificação por AssemblyAI."
+          title="Video Studio"
+          description="Proteja, comprima, normalize, redimensione e estenda criativos em uma única central de processamento."
           href="/tools/video-shield"
           badge="Novo"
         />
@@ -177,7 +162,9 @@ export default function ToolsIndexPage() {
   const visible = all.filter((entry) => {
     if (!entry.tool) return !restricted; // placeholders só pra acesso total
     if (!restricted) return true;
-    return allowed.includes(entry.tool);
+    return entry.tool === 'video-shield'
+      ? allowed.includes('video-shield') || allowed.includes('creative-studio')
+      : allowed.includes(entry.tool);
   });
 
   return (

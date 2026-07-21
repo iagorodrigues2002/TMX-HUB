@@ -2,16 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Crown,
-  Loader2,
-  Pencil,
-  Save,
-  Shield,
-  Trash2,
-  Users as UsersIcon,
-  X,
-} from 'lucide-react';
+import { Crown, Loader2, Pencil, Save, Shield, Trash2, Users as UsersIcon, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient, type AuthUser, type ToolKey } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
@@ -20,7 +11,7 @@ import { Button } from '@/components/ui/button';
 type AccessScope = 'full' | 'video-shield' | 'custom';
 
 const CUSTOM_TOOL_OPTIONS: { key: ToolKey; label: string }[] = [
-  { key: 'video-shield', label: 'Video Shield' },
+  { key: 'video-shield', label: 'Video Studio' },
   { key: 'cloner', label: 'Page Cloner' },
   { key: 'cloaker-urls', label: 'Cloaker URL Generator' },
   { key: 'page-diff', label: 'Page Diff' },
@@ -35,7 +26,7 @@ const CUSTOM_TOOL_OPTIONS: { key: ToolKey; label: string }[] = [
 
 const SCOPE_LABEL: Record<AccessScope, string> = {
   full: 'Completo (todas as ferramentas)',
-  'video-shield': 'Apenas Video Shield',
+  'video-shield': 'Apenas Video Studio',
   custom: 'Personalizado…',
 };
 
@@ -56,16 +47,13 @@ function detectScope(user: AuthUser): AccessScope {
   if (!user.allowedTools || user.allowedTools.length === 0) return 'full';
   if (
     user.allowedTools.length === 1 &&
-    user.allowedTools[0] === 'video-shield'
+    (user.allowedTools[0] === 'video-shield' || user.allowedTools[0] === 'creative-studio')
   )
     return 'video-shield';
   return 'custom';
 }
 
-function scopeToAllowedTools(
-  scope: AccessScope,
-  custom: ToolKey[],
-): ToolKey[] | null {
+function scopeToAllowedTools(scope: AccessScope, custom: ToolKey[]): ToolKey[] | null {
   if (scope === 'full') return null;
   if (scope === 'video-shield') return ['video-shield'];
   return custom.length > 0 ? custom : null;
@@ -128,9 +116,7 @@ export function UsersSection() {
     setEditRole(u.role);
     const scope = detectScope(u);
     setEditScope(scope);
-    setEditCustomTools(
-      scope === 'custom' ? (u.allowedTools ?? []) : ['video-shield'],
-    );
+    setEditCustomTools(scope === 'custom' ? (u.allowedTools ?? []) : ['video-shield']);
   };
 
   const saveEdit = (u: AuthUser) => {
@@ -151,14 +137,12 @@ export function UsersSection() {
           <UsersIcon className="h-4 w-4 text-cyan-300" />
           <p className="hud-label">Usuários</p>
         </div>
-        <span className="text-[11px] text-white/40">
-          {users.length} cadastrado(s)
-        </span>
+        <span className="text-[11px] text-white/40">{users.length} cadastrado(s)</span>
       </div>
 
       <p className="text-[12px] text-white/55">
-        Gerencie quem tem acesso ao hub e a quais ferramentas. Admins enxergam
-        tudo; users restritos só veem o que estiver liberado.
+        Gerencie quem tem acesso ao hub e a quais ferramentas. Admins enxergam tudo; users restritos
+        só veem o que estiver liberado.
       </p>
 
       {isLoading ? (
@@ -176,16 +160,11 @@ export function UsersSection() {
             const isEditing = editingId === u.id;
             const currentScope = detectScope(u);
             return (
-              <li
-                key={u.id}
-                className="rounded-md border border-white/[0.06] bg-black/15 p-3"
-              >
+              <li key={u.id} className="rounded-md border border-white/[0.06] bg-black/15 p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1 space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-[13px] font-semibold text-white">
-                        {u.name}
-                      </p>
+                      <p className="text-[13px] font-semibold text-white">{u.name}</p>
                       {isMe && (
                         <span className="rounded-full border border-white/[0.10] bg-white/[0.04] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/55">
                           você
@@ -207,7 +186,7 @@ export function UsersSection() {
                           {currentScope === 'full'
                             ? 'acesso completo'
                             : currentScope === 'video-shield'
-                              ? 'apenas video shield'
+                              ? 'apenas video studio'
                               : `${u.allowedTools?.length ?? 0} tools`}
                         </span>
                       )}
@@ -219,11 +198,7 @@ export function UsersSection() {
                   </div>
                   {!isEditing && (
                     <div className="flex shrink-0 flex-col gap-1">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => startEdit(u)}
-                      >
+                      <Button size="sm" variant="outline" onClick={() => startEdit(u)}>
                         <Pencil className="h-3 w-3" />
                         Editar acesso
                       </Button>
@@ -232,11 +207,7 @@ export function UsersSection() {
                           size="sm"
                           variant="ghost"
                           onClick={() => {
-                            if (
-                              confirm(
-                                `Remover o usuário ${u.email}? Isso é irreversível.`,
-                              )
-                            )
+                            if (confirm(`Remover o usuário ${u.email}? Isso é irreversível.`))
                               deleteMut.mutate(u.id);
                           }}
                         >
@@ -288,19 +259,15 @@ export function UsersSection() {
                         <p className="hud-label mb-1">Acesso</p>
                         <select
                           value={editScope}
-                          onChange={(e) =>
-                            setEditScope(e.target.value as AccessScope)
-                          }
+                          onChange={(e) => setEditScope(e.target.value as AccessScope)}
                           disabled={updateMut.isPending}
                           className="h-9 w-full rounded-md border border-white/[0.10] bg-black/30 px-3 text-[12px] text-white focus:border-cyan-300/40 focus:outline-none"
                         >
-                          {(Object.keys(SCOPE_LABEL) as AccessScope[]).map(
-                            (k) => (
-                              <option key={k} value={k}>
-                                {SCOPE_LABEL[k]}
-                              </option>
-                            ),
-                          )}
+                          {(Object.keys(SCOPE_LABEL) as AccessScope[]).map((k) => (
+                            <option key={k} value={k}>
+                              {SCOPE_LABEL[k]}
+                            </option>
+                          ))}
                         </select>
 
                         {editScope === 'custom' && (
@@ -322,9 +289,7 @@ export function UsersSection() {
                                       onChange={(e) => {
                                         setEditCustomTools((prev) =>
                                           e.target.checked
-                                            ? Array.from(
-                                                new Set([...prev, t.key]),
-                                              )
+                                            ? Array.from(new Set([...prev, t.key]))
                                             : prev.filter((x) => x !== t.key),
                                         );
                                       }}
@@ -342,8 +307,7 @@ export function UsersSection() {
 
                     {editRole === 'admin' && (
                       <p className="text-[11px] text-amber-200/85">
-                        Admins têm acesso completo automaticamente — escopo é
-                        ignorado.
+                        Admins têm acesso completo automaticamente — escopo é ignorado.
                       </p>
                     )}
 
@@ -357,11 +321,7 @@ export function UsersSection() {
                         <X className="h-3 w-3" />
                         Cancelar
                       </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => saveEdit(u)}
-                        disabled={updateMut.isPending}
-                      >
+                      <Button size="sm" onClick={() => saveEdit(u)} disabled={updateMut.isPending}>
                         {updateMut.isPending ? (
                           <Loader2 className="h-3 w-3 animate-spin" />
                         ) : (
