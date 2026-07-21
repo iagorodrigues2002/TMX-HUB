@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { detectCurrency, toSnapshot } from '../src/services/utmify-sync.js';
+import {
+  detectCurrency,
+  detectDashboardCurrency,
+  toSnapshot,
+} from '../src/services/utmify-sync.js';
 
 describe('UTMify ad-level snapshot', () => {
   it('sums attribution metrics but deduplicates repeated delivery metrics', () => {
@@ -54,5 +58,20 @@ describe('UTMify ad-level snapshot', () => {
     expect(detectCurrency({ dashboard: { currency: 'usd' }, results: [] })).toBe('USD');
     expect(detectCurrency({ results: [{ name: 'AD1', currencyCode: 'BRL' }] })).toBe('BRL');
     expect(detectCurrency({ results: [{ name: 'AD1' }] })).toBeUndefined();
+  });
+
+  it('selects the currency from the exact dashboard returned by UTMify auth', () => {
+    const payload = {
+      auth: {
+        user: {
+          dashboards: [
+            { id: 'dash-br', name: 'Brasil', currency: 'BRL' },
+            { id: 'dash-us', name: 'GEX', currency: 'USD' },
+          ],
+        },
+      },
+    };
+    expect(detectDashboardCurrency(payload, 'dash-us')).toBe('USD');
+    expect(detectDashboardCurrency(payload, 'missing')).toBeUndefined();
   });
 });

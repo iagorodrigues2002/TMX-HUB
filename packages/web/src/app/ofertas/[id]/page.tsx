@@ -893,7 +893,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                 </div>
               ) : (
                 <p className="border-t border-white/[0.05] px-4 py-8 text-center text-[12px] text-white/40">
-                  A compara��o por an�ncio ficar� dispon�vel ap�s duas janelas com checkpoints de an�ncios.
+                  A comparação por anúncio ficará disponível após duas janelas com checkpoints de anúncios.
                 </p>
               )}
             </section>
