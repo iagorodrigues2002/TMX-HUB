@@ -1,4 +1,4 @@
-import type { DailySnapshot, SnapshotMetrics } from '@page-cloner/shared';
+import type { AdSnapshot, DailySnapshot, SnapshotMetrics } from '@page-cloner/shared';
 import type { Redis } from 'ioredis';
 import { computeMetrics } from './snapshot-store.js';
 
@@ -12,6 +12,11 @@ export interface IntradayCheckpoint {
   sales: number;
   revenue: number;
   ic: number;
+  ads?: AdSnapshot[];
+}
+
+export interface IntradayAdMetrics extends SnapshotMetrics {
+  name: string;
 }
 
 export interface IntradayWindow {
@@ -23,12 +28,16 @@ export interface IntradayWindow {
   partial: boolean;
   samples: number;
   metrics: SnapshotMetrics;
+  adsAvailable: boolean;
+  adsPartial: boolean;
+  ads: IntradayAdMetrics[];
 }
 
 export interface IntradaySummary {
   date: string;
   updatedAt?: string;
   overall: SnapshotMetrics;
+  overallAds: IntradayAdMetrics[];
   currentWindowIndex: number;
   windows: IntradayWindow[];
 }
@@ -67,6 +76,41 @@ function delta(current: IntradayCheckpoint, baseline: IntradayCheckpoint): Snaps
   });
 }
 
+function groupedAds(ads: AdSnapshot[] | undefined): Map<string, AdSnapshot> {
+  const grouped = new Map<string, AdSnapshot>();
+  for (const ad of ads ?? []) {
+    const name = ad.name.trim();
+    if (!name) continue;
+    const current = grouped.get(name) ?? { name, spend: 0, sales: 0, revenue: 0, ic: 0 };
+    current.spend += ad.spend;
+    current.sales += ad.sales;
+    current.revenue += ad.revenue;
+    current.ic += ad.ic;
+    grouped.set(name, current);
+  }
+  return grouped;
+}
+
+function adMetrics(current: IntradayCheckpoint, baseline?: IntradayCheckpoint): IntradayAdMetrics[] {
+  const currentAds = groupedAds(current.ads);
+  const baselineAds = groupedAds(baseline?.ads);
+  return [...currentAds.values()]
+    .map((ad) => {
+      const previous = baselineAds.get(ad.name);
+      return {
+        name: ad.name,
+        ...computeMetrics({
+          spend: Math.max(0, ad.spend - (previous?.spend ?? 0)),
+          sales: Math.max(0, ad.sales - (previous?.sales ?? 0)),
+          revenue: Math.max(0, ad.revenue - (previous?.revenue ?? 0)),
+          ic: Math.max(0, ad.ic - (previous?.ic ?? 0)),
+        }),
+      };
+    })
+    .filter((ad) => ad.spend > 0 || ad.sales > 0 || ad.revenue > 0 || ad.ic > 0)
+    .sort((a, b) => b.revenue - a.revenue || b.spend - a.spend);
+}
+
 export function buildIntradaySummary(
   date: string,
   checkpoints: IntradayCheckpoint[],
@@ -84,6 +128,7 @@ export function buildIntradaySummary(
         ic: latest.ic,
       })
     : zeroMetrics();
+  const overallAds = latest ? adMetrics(latest) : [];
 
   const windows = Array.from({ length: 12 }, (_, index): IntradayWindow => {
     const startHour = index * 2;
@@ -98,6 +143,14 @@ export function buildIntradaySummary(
     });
     const last = samples.at(-1);
     const available = Boolean(last && baseline);
+    const previousWithAds = [...ordered].reverse().find((sample) => {
+      const local = saoPauloParts(new Date(sample.capturedAt));
+      return local.date === date && Math.floor(local.hour / 2) < index && sample.ads?.length;
+    });
+    const samplesWithAds = samples.filter((sample) => sample.ads?.length);
+    const partialAdBaseline = samplesWithAds.length > 1 ? samplesWithAds[0] : undefined;
+    const adBaseline = previousWithAds ?? partialAdBaseline;
+    const adsAvailable = Boolean(last?.ads?.length && adBaseline && adBaseline !== last);
     return {
       index,
       label: `${String(startHour).padStart(2, '0')}h–${String(endHour).padStart(2, '0')}h`,
@@ -107,6 +160,9 @@ export function buildIntradaySummary(
       partial: Boolean(last) && !baseline,
       samples: samples.length,
       metrics: last && baseline ? delta(last, baseline) : zeroMetrics(),
+      adsAvailable,
+      adsPartial: adsAvailable && !previousWithAds,
+      ads: last && adBaseline ? adMetrics(last, adBaseline) : [],
     };
   });
 
@@ -114,6 +170,7 @@ export function buildIntradaySummary(
     date,
     ...(latest ? { updatedAt: latest.capturedAt } : {}),
     overall,
+    overallAds,
     currentWindowIndex,
     windows,
   };
@@ -131,6 +188,7 @@ export class IntradayStore {
       sales: snapshot.sales,
       revenue: snapshot.revenue,
       ic: snapshot.ic,
+      ads: snapshot.ads,
     };
     const redisKey = key(offerId, local.date);
     await this.redis
