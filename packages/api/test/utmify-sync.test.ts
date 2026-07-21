@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildDays,
   detectCurrency,
   detectDashboardCurrency,
+  saoPauloDayRange,
   toSnapshot,
 } from '../src/services/utmify-sync.js';
 
@@ -73,5 +75,28 @@ describe('UTMify ad-level snapshot', () => {
     };
     expect(detectDashboardCurrency(payload, 'dash-us')).toBe('USD');
     expect(detectDashboardCurrency(payload, 'missing')).toBeUndefined();
+  });
+});
+
+describe('UTMify reporting day', () => {
+  it('queries today from midnight in Sao Paulo and caps the range at now', () => {
+    expect(saoPauloDayRange('2026-07-21', new Date('2026-07-21T15:00:00.000Z'))).toEqual({
+      from: '2026-07-21T03:00:00.000Z',
+      to: '2026-07-21T15:00:00.000Z',
+    });
+  });
+
+  it('closes past days at the following Sao Paulo midnight', () => {
+    expect(saoPauloDayRange('2026-07-20', new Date('2026-07-21T15:00:00.000Z'))).toEqual({
+      from: '2026-07-20T03:00:00.000Z',
+      to: '2026-07-21T03:00:00.000Z',
+    });
+  });
+
+  it('uses the Sao Paulo calendar date near UTC midnight', () => {
+    expect(buildDays(2, new Date('2026-07-22T01:30:00.000Z'))).toEqual([
+      '2026-07-20',
+      '2026-07-21',
+    ]);
   });
 });

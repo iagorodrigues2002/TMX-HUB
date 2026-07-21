@@ -8,6 +8,7 @@ const AUTH_URL = 'https://server.utmify.com.br/users/auth';
 const SEARCH_URL = 'https://server.utmify.com.br/orders/search-objects';
 const SYNC_INTERVAL_MS = 30 * 60 * 1000;
 const LOCK_TTL_MS = 25 * 60 * 1000;
+const REPORT_TIME_ZONE = 'America/Sao_Paulo';
 
 interface UtmifyResult {
   [key: string]: unknown;
@@ -154,9 +155,8 @@ export class UtmifySyncService {
     const credentials = await this.offerStore.getUtmifyCredentials(offer.id);
     if (!credentials) throw new Error('Credenciais da UTMify não configuradas.');
     const session = await authenticate(credentials.login, credentials.password);
-    const yesterday = new Date();
-    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-    const response = await fetchAds(session.token, offer.dashboardId, yesterday.toISOString().slice(0, 10));
+    const yesterday = buildDays(2)[0]!;
+    const response = await fetchAds(session.token, offer.dashboardId, yesterday);
     const results = response.results;
     const resultKeys = [...new Set(results.flatMap((item) => Object.keys(item)))].sort();
     const accountFields = results.slice(0, 200).flatMap((item) => {
@@ -219,10 +219,7 @@ export function detectDashboardCurrency(
 }
 
 async function fetchAds(token: string, dashboardId: string, date: string): Promise<UtmifySearchResponse> {
-  const from = new Date(`${date}T00:00:00.000Z`);
-  const to = new Date(from);
-  to.setUTCDate(to.getUTCDate() + 1);
-  const cappedTo = to > new Date() ? new Date() : to;
+  const dateRange = saoPauloDayRange(date);
   const response = await fetch(SEARCH_URL, {
     method: 'POST',
     headers: {
@@ -231,7 +228,7 @@ async function fetchAds(token: string, dashboardId: string, date: string): Promi
     },
     body: JSON.stringify({
       level: 'ad',
-      dateRange: { from: from.toISOString(), to: cappedTo.toISOString() },
+      dateRange,
       nameContains: null,
       productNames: null,
       orderBy: 'greater_profit',
@@ -337,16 +334,80 @@ export function toSnapshot(offerId: string, date: string, results: UtmifyResult[
   };
 }
 
-function buildDays(count: number): string[] {
+export function buildDays(count: number, now = new Date()): string[] {
   const result: string[] = [];
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
+  const today = dateInTimeZone(now, REPORT_TIME_ZONE);
   for (let offset = count - 1; offset >= 0; offset -= 1) {
-    const day = new Date(today);
-    day.setUTCDate(day.getUTCDate() - offset);
-    result.push(day.toISOString().slice(0, 10));
+    result.push(addIsoDays(today, -offset));
   }
   return result;
+}
+
+export function saoPauloDayRange(
+  date: string,
+  now = new Date(),
+): { from: string; to: string } {
+  const from = midnightInTimeZone(date, REPORT_TIME_ZONE);
+  const to = midnightInTimeZone(addIsoDays(date, 1), REPORT_TIME_ZONE);
+  const cappedTo = to > now ? now : to;
+  return { from: from.toISOString(), to: cappedTo.toISOString() };
+}
+
+function dateInTimeZone(instant: Date, timeZone: string): string {
+  const parts = zonedParts(instant, timeZone);
+  return `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
+}
+
+function midnightInTimeZone(date: string, timeZone: string): Date {
+  const [year, month, day] = parseIsoDate(date);
+  const target = Date.UTC(year, month - 1, day);
+  let instant = new Date(target);
+  // Convert a wall-clock midnight to its UTC instant. Iterating also handles
+  // historical daylight-saving offset changes without hard-coding UTC-3.
+  for (let iteration = 0; iteration < 3; iteration += 1) {
+    const parts = zonedParts(instant, timeZone);
+    const represented = Date.UTC(
+      parts.year,
+      parts.month - 1,
+      parts.day,
+      parts.hour,
+      parts.minute,
+      parts.second,
+    );
+    instant = new Date(instant.getTime() + target - represented);
+  }
+  return instant;
+}
+
+function zonedParts(instant: Date, timeZone: string): Record<'year' | 'month' | 'day' | 'hour' | 'minute' | 'second', number> {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  });
+  const values = Object.fromEntries(
+    formatter.formatToParts(instant).flatMap((part) =>
+      part.type === 'literal' ? [] : [[part.type, Number(part.value)]],
+    ),
+  );
+  return values as Record<'year' | 'month' | 'day' | 'hour' | 'minute' | 'second', number>;
+}
+
+function addIsoDays(date: string, days: number): string {
+  const [year, month, day] = parseIsoDate(date);
+  const result = new Date(Date.UTC(year, month - 1, day + days));
+  return result.toISOString().slice(0, 10);
+}
+
+function parseIsoDate(date: string): [number, number, number] {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!match) throw new Error(`Data invÃ¡lida: ${date}`);
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
 }
 
 function number(value: unknown): number {
