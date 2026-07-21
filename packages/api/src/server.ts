@@ -12,9 +12,9 @@ import swaggerPlugin from './plugins/swagger.js';
 import routes from './routes/index.js';
 import { createBundleWorker } from './workers/bundle.worker.js';
 import { createFunnelWorker } from './workers/funnel.worker.js';
+import { createMediaWorker } from './workers/media.worker.js';
 import { createRenderWorker } from './workers/render.worker.js';
 import { createShieldWorker } from './workers/shield.worker.js';
-import { createMediaWorker } from './workers/media.worker.js';
 import { createVslWorker } from './workers/vsl.worker.js';
 
 // TODO(auth): Authentication is intentionally skipped for the MVP.
@@ -81,6 +81,7 @@ async function main() {
   const mediaWorker = createMediaWorker({
     redisUrl: env.REDIS_URL,
     jobStore: app.mediaJobStore,
+    nicheStore: app.nicheStore,
     storage: app.storage,
   });
 

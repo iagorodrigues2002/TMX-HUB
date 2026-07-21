@@ -12,7 +12,7 @@ import type { NicheStore } from '../services/niche-store.js';
 import type { ShieldJobStore } from '../services/shield-job-store.js';
 import type { StorageService } from '../services/storage.js';
 
-interface FfmpegArgs {
+export interface PhaseCancelFfmpegArgs {
   inputVideo: string;
   whiteAudio: string;
   output: string;
@@ -43,7 +43,7 @@ function buildFilterComplex(whiteVolumeDb: number): string {
   ].join(';');
 }
 
-function videoCompressionArgs(mode: FfmpegArgs['compression']): string[] {
+function videoCompressionArgs(mode: PhaseCancelFfmpegArgs['compression']): string[] {
   // Presets escolhidos pra velocidade: 'veryfast' é ~3x mais rápido que 'medium'
   // com aumento de tamanho típico de 5-10% só. Pra ads de 30-90s isso é irrelevante.
   // 'fast' fica entre os dois quando precisamos qualidade extra (lossless).
@@ -63,22 +63,32 @@ function videoCompressionArgs(mode: FfmpegArgs['compression']): string[] {
   }
 }
 
-function runFfmpeg(args: FfmpegArgs, log: Logger): Promise<void> {
+export function runPhaseCancelFfmpeg(args: PhaseCancelFfmpegArgs, log: Logger): Promise<void> {
   return new Promise((resolve, reject) => {
     const ffArgs = [
       '-y',
       '-hide_banner',
-      '-loglevel', 'warning',
-      '-i', args.inputVideo,
-      '-i', args.whiteAudio,
-      '-filter_complex', buildFilterComplex(args.whiteVolumeDb),
-      '-map', '0:v',
-      '-map', '[outA]',
+      '-loglevel',
+      'warning',
+      '-i',
+      args.inputVideo,
+      '-i',
+      args.whiteAudio,
+      '-filter_complex',
+      buildFilterComplex(args.whiteVolumeDb),
+      '-map',
+      '0:v',
+      '-map',
+      '[outA]',
       ...videoCompressionArgs(args.compression),
-      '-c:a', 'aac',
-      '-b:a', '192k',
-      '-movflags', '+faststart',
-      '-map_metadata', '-1',
+      '-c:a',
+      'aac',
+      '-b:a',
+      '192k',
+      '-movflags',
+      '+faststart',
+      '-map_metadata',
+      '-1',
       '-shortest',
       args.output,
     ];
@@ -105,7 +115,7 @@ function runFfmpeg(args: FfmpegArgs, log: Logger): Promise<void> {
  * (often gibberish + the white script content if the protection works).
  * Polls every 3s up to 5 min.
  */
-async function verifyWithAssemblyAi(filePath: string): Promise<string> {
+export async function verifyWithAssemblyAi(filePath: string): Promise<string> {
   const apiKey = env.ASSEMBLYAI_API_KEY;
   if (!apiKey) throw new Error('ASSEMBLYAI_API_KEY not configured.');
 
@@ -192,9 +202,7 @@ export function createShieldWorker(args: {
         const niche = await nicheStore.get(meta.nicheId);
         const white = niche.whites.find((w) => w.id === meta.whiteId);
         if (!white) {
-          throw new Error(
-            `White audio "${meta.whiteId}" not found in niche "${niche.name}".`,
-          );
+          throw new Error(`White audio "${meta.whiteId}" not found in niche "${niche.name}".`);
         }
 
         jobLog.info({ niche: niche.name, white: white.filename }, 'downloading inputs');
@@ -207,7 +215,7 @@ export function createShieldWorker(args: {
         await fs.writeFile(localInput, inputObj.body);
         await fs.writeFile(localWhite, whiteObj.body);
 
-        await runFfmpeg(
+        await runPhaseCancelFfmpeg(
           {
             inputVideo: localInput,
             whiteAudio: localWhite,
@@ -258,10 +266,7 @@ export function createShieldWorker(args: {
           ...(transcriptError ? { transcriptError } : {}),
         });
 
-        jobLog.info(
-          { outputBytes: outBuf.length, transcriptStatus },
-          'shield job complete',
-        );
+        jobLog.info({ outputBytes: outBuf.length, transcriptStatus }, 'shield job complete');
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         jobLog.error({ err }, 'shield job failed');
