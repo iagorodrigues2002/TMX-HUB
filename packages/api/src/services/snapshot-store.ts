@@ -1,5 +1,10 @@
+import type {
+  AdSnapshot,
+  AdsetSnapshot,
+  DailySnapshot,
+  SnapshotMetrics,
+} from '@page-cloner/shared';
 import type { Redis } from 'ioredis';
-import type { AdsetSnapshot, DailySnapshot, SnapshotMetrics } from '@page-cloner/shared';
 
 const SNAPSHOT_PREFIX = 'snapshot:'; // {offerId}:{date} → hash
 // 1-year TTL on snapshots — long enough for trend analysis, short enough not to balloon Redis.
@@ -60,6 +65,7 @@ export class SnapshotStore {
     if (snapshot.impressions !== undefined) data.impressions = String(snapshot.impressions);
     if (snapshot.clicks !== undefined) data.clicks = String(snapshot.clicks);
     if (snapshot.adsets) data.adsets = JSON.stringify(snapshot.adsets);
+    if (snapshot.ads) data.ads = JSON.stringify(snapshot.ads);
     await this.redis
       .multi()
       .del(k) // ensure stale optional fields aren't left behind
@@ -132,11 +138,19 @@ export class SnapshotStore {
 
   private deserialize(data: Record<string, string>): DailySnapshot {
     let adsets: AdsetSnapshot[] | undefined;
+    let ads: AdSnapshot[] | undefined;
     if (data.adsets) {
       try {
         adsets = JSON.parse(data.adsets);
       } catch {
         adsets = undefined;
+      }
+    }
+    if (data.ads) {
+      try {
+        ads = JSON.parse(data.ads);
+      } catch {
+        ads = undefined;
       }
     }
     const snap: DailySnapshot = {
@@ -151,6 +165,7 @@ export class SnapshotStore {
     if (data.impressions) snap.impressions = Number.parseInt(data.impressions, 10) || 0;
     if (data.clicks) snap.clicks = Number.parseInt(data.clicks, 10) || 0;
     if (adsets) snap.adsets = adsets;
+    if (ads) snap.ads = ads;
     return snap;
   }
 }

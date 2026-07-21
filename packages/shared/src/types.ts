@@ -323,8 +323,15 @@ export interface Offer {
   id: string;
   userId: string;
   name: string; // ex. "PFL_ENG"
+  companyName?: string;
   /** UTMify dashboardId, kept for reference + auto-config in n8n. */
   dashboardId?: string;
+  /** Whether server-side UTMify credentials are configured (credentials are never exposed). */
+  utmifyConfigured?: boolean;
+  utmifyLoginHint?: string;
+  syncStatus?: 'idle' | 'syncing' | 'success' | 'error';
+  lastSyncAt?: string;
+  lastSyncError?: string;
   description?: string;
   status: OfferStatus;
   /** Front links (LP / VSL). At least one expected when active. */
@@ -340,6 +347,7 @@ export interface Offer {
  */
 export interface AdsetSnapshot {
   name: string;
+  company_name?: string;
   spend: number;
   sales: number;
   revenue: number;
@@ -347,6 +355,12 @@ export interface AdsetSnapshot {
   /** Optional traffic-side metrics. */
   impressions?: number;
   clicks?: number;
+}
+
+/** Per-ad breakdown returned by UTMify when querying with level=ad. */
+export interface AdSnapshot extends AdsetSnapshot {
+  hookRate?: number;
+  ctr?: number;
 }
 
 /**
@@ -363,6 +377,7 @@ export interface DailySnapshot {
   impressions?: number;
   clicks?: number;
   adsets?: AdsetSnapshot[];
+  ads?: AdSnapshot[];
   updatedAt: string;
 }
 
@@ -390,15 +405,20 @@ export interface CreateOfferRequest {
   dashboard_id?: string;
   description?: string;
   status?: OfferStatus;
+  utmify_login?: string;
+  utmify_password?: string;
 }
 
 export interface UpdateOfferRequest {
   name?: string;
+  company_name?: string;
   dashboard_id?: string;
   description?: string;
   status?: OfferStatus;
   fronts?: OfferLink[];
   upsells?: OfferLink[];
+  utmify_login?: string;
+  utmify_password?: string;
 }
 
 // ---- Video Shield (cloaker) ----

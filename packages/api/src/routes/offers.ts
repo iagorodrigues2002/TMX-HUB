@@ -1,20 +1,26 @@
 import {
   CreateOfferRequestSchema,
+  type DailySnapshot,
   IngestSnapshotsRequestSchema,
   UpdateOfferRequestSchema,
-  type DailySnapshot,
 } from '@page-cloner/shared';
+import type { Offer } from '@page-cloner/shared';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { BadRequestError, zodToProblem } from '../lib/problem.js';
 import { computeMetrics } from '../services/snapshot-store.js';
-import type { Offer } from '@page-cloner/shared';
 
 function offerToWire(o: Offer): Record<string, unknown> {
   return {
     id: o.id,
     name: o.name,
+    company_name: o.companyName,
     dashboard_id: o.dashboardId,
+    utmify_configured: Boolean(o.utmifyConfigured),
+    utmify_login_hint: o.utmifyLoginHint,
+    sync_status: o.syncStatus ?? 'idle',
+    last_sync_at: o.lastSyncAt,
+    last_sync_error: o.lastSyncError,
     description: o.description,
     status: o.status,
     fronts: o.fronts ?? [],
@@ -68,10 +74,22 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const offer = await app.offerStore.create({
       userId: req.user.sub,
       name: parsed.data.name,
+      ...(parsed.data.company_name ? { companyName: parsed.data.company_name } : {}),
       ...(parsed.data.dashboard_id ? { dashboardId: parsed.data.dashboard_id } : {}),
       ...(parsed.data.description ? { description: parsed.data.description } : {}),
       ...(parsed.data.status ? { status: parsed.data.status } : {}),
     });
+    if (parsed.data.utmify_login && parsed.data.utmify_password) {
+      await app.offerStore.setUtmifyCredentials(offer.id, {
+        login: parsed.data.utmify_login,
+        password: parsed.data.utmify_password,
+      });
+      const connected = await app.offerStore.get(offer.id);
+      void app.utmifySync.syncOffer(connected, true).catch((error) => {
+        app.log.warn({ error, offerId: offer.id }, 'initial utmify sync failed');
+      });
+      return reply.code(201).send(offerToWire(connected));
+    }
     return reply.code(201).send(offerToWire(offer));
   });
 
@@ -81,7 +99,23 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const parsed = UpdateOfferRequestSchema.safeParse(req.body);
     if (!parsed.success) throw zodToProblem(parsed.error, req.url);
     const updated = await app.offerStore.update(req.params.id, req.user.sub, parsed.data);
-    return reply.send(offerToWire(updated));
+    if (parsed.data.utmify_login && parsed.data.utmify_password) {
+      await app.offerStore.setUtmifyCredentials(updated.id, {
+        login: parsed.data.utmify_login,
+        password: parsed.data.utmify_password,
+      });
+    }
+    const finalOffer = await app.offerStore.get(updated.id);
+    if (
+      finalOffer.utmifyConfigured &&
+      finalOffer.dashboardId &&
+      (parsed.data.dashboard_id || parsed.data.utmify_login)
+    ) {
+      void app.utmifySync.syncOffer(finalOffer, true).catch((error) => {
+        app.log.warn({ error, offerId: finalOffer.id }, 'utmify reconnect sync failed');
+      });
+    }
+    return reply.send(offerToWire(finalOffer));
   });
 
   // DELETE /v1/offers/:id
@@ -113,6 +147,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         ...(s.impressions !== undefined ? { impressions: s.impressions } : {}),
         ...(s.clicks !== undefined ? { clicks: s.clicks } : {}),
         ...(s.adsets ? { adsets: s.adsets } : {}),
+        ...(s.ads ? { ads: s.ads } : {}),
         updatedAt: now,
       };
       await app.snapshotStore.upsert(snap);
@@ -143,6 +178,13 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       });
     },
   );
+
+  app.post<{ Params: { id: string } }>('/offers/:id/sync', async (req, reply) => {
+    if (!req.user) throw new BadRequestError('No user attached.');
+    const offer = await app.offerStore.assertOwner(req.params.id, req.user.sub);
+    const result = await app.utmifySync.syncOffer(offer);
+    return reply.send(result);
+  });
 
   // GET /v1/dashboard/summary?from=&to= — cross-offer aggregation for the home
   app.get<{ Querystring: { from?: string; to?: string } }>(
@@ -193,6 +235,7 @@ function snapshotToWire(s: DailySnapshot): Record<string, unknown> {
     impressions: s.impressions,
     clicks: s.clicks,
     adsets: s.adsets,
+    ads: s.ads,
     metrics: computeMetrics({ spend: s.spend, sales: s.sales, revenue: s.revenue, ic: s.ic }),
     updated_at: s.updatedAt,
   };

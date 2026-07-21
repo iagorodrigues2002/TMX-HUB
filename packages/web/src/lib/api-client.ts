@@ -473,6 +473,7 @@ export interface AuthUser {
   id: string;
   email: string;
   name: string;
+  companyName?: string;
   role: 'admin' | 'user';
   allowedTools?: ToolKey[];
   createdAt: string;
@@ -551,7 +552,13 @@ export interface OfferLink {
 export interface OfferView {
   id: string;
   name: string;
+  companyName?: string;
   dashboardId?: string;
+  utmifyConfigured: boolean;
+  utmifyLoginHint?: string;
+  syncStatus: 'idle' | 'syncing' | 'success' | 'error';
+  lastSyncAt?: string;
+  lastSyncError?: string;
   description?: string;
   status: OfferStatus;
   fronts: OfferLink[];
@@ -581,6 +588,11 @@ export interface AdsetView {
   clicks?: number;
 }
 
+export interface AdView extends AdsetView {
+  hookRate?: number;
+  ctr?: number;
+}
+
 export interface DailySnapshotView {
   date: string;
   spend: number;
@@ -590,6 +602,7 @@ export interface DailySnapshotView {
   impressions?: number;
   clicks?: number;
   adsets?: AdsetView[];
+  ads?: AdView[];
   metrics: MetricsView;
   updatedAt: string;
 }
@@ -618,7 +631,13 @@ export interface DashboardSummary {
 interface OfferWire {
   id: string;
   name: string;
+  company_name?: string;
   dashboard_id?: string;
+  utmify_configured?: boolean;
+  utmify_login_hint?: string;
+  sync_status?: 'idle' | 'syncing' | 'success' | 'error';
+  last_sync_at?: string;
+  last_sync_error?: string;
   description?: string;
   status?: OfferStatus;
   fronts?: OfferLink[];
@@ -640,6 +659,7 @@ interface OfferSnapshotsWire {
     impressions?: number;
     clicks?: number;
     adsets?: AdsetView[];
+    ads?: AdView[];
     metrics: MetricsView;
     updated_at: string;
   }>;
@@ -661,7 +681,13 @@ function fromOfferWire(w: OfferWire): OfferView {
   return {
     id: w.id,
     name: w.name,
+    companyName: w.company_name,
     dashboardId: w.dashboard_id,
+    utmifyConfigured: Boolean(w.utmify_configured),
+    utmifyLoginHint: w.utmify_login_hint,
+    syncStatus: w.sync_status ?? 'idle',
+    lastSyncAt: w.last_sync_at,
+    lastSyncError: w.last_sync_error,
     description: w.description,
     status: w.status ?? 'testando',
     fronts: Array.isArray(w.fronts) ? w.fronts : [],
@@ -685,6 +711,7 @@ function fromOfferSnapshotsWire(w: OfferSnapshotsWire): OfferSnapshotsView {
       impressions: s.impressions,
       clicks: s.clicks,
       adsets: s.adsets,
+      ads: s.ads,
       metrics: s.metrics,
       updatedAt: s.updated_at,
     })),
@@ -980,9 +1007,12 @@ export const apiClient = {
 
   async createOffer(input: {
     name: string;
+    company_name?: string;
     dashboard_id?: string;
     description?: string;
     status?: OfferStatus;
+    utmify_login?: string;
+    utmify_password?: string;
   }): Promise<OfferView> {
     const wire = await request<OfferWire>('/v1/offers', { method: 'POST', body: input });
     return fromOfferWire(wire);
@@ -992,11 +1022,14 @@ export const apiClient = {
     id: string,
     patch: {
       name?: string;
+      company_name?: string;
       dashboard_id?: string;
       description?: string;
       status?: OfferStatus;
       fronts?: OfferLink[];
       upsells?: OfferLink[];
+      utmify_login?: string;
+      utmify_password?: string;
     },
   ): Promise<OfferView> {
     const wire = await request<OfferWire>(`/v1/offers/${id}`, { method: 'PATCH', body: patch });
@@ -1005,6 +1038,12 @@ export const apiClient = {
 
   async deleteOffer(id: string): Promise<void> {
     await request<void>(`/v1/offers/${id}`, { method: 'DELETE' });
+  },
+
+  async syncOffer(
+    id: string,
+  ): Promise<{ offerId: string; syncedDays: number; ads: number; skipped?: boolean }> {
+    return request(`/v1/offers/${id}/sync`, { method: 'POST' });
   },
 
   async getOfferSnapshots(

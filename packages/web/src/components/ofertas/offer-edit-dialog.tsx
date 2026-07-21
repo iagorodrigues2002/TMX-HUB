@@ -1,15 +1,5 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2 } from 'lucide-react';
-import { toast } from 'sonner';
-import {
-  apiClient,
-  type OfferLink,
-  type OfferStatus,
-  type OfferView,
-} from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -27,6 +17,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { type OfferLink, type OfferStatus, type OfferView, apiClient } from '@/lib/api-client';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Plus, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { STATUS_LIST, statusLabel } from './status-badge';
 
 function newId(): string {
@@ -49,9 +44,12 @@ export function OfferEditDialog({ offer, open, onOpenChange }: Props) {
 
   // Local form state — initialized from offer when dialog opens.
   const [name, setName] = useState(offer.name);
+  const [companyName, setCompanyName] = useState(offer.companyName ?? '');
   const [description, setDescription] = useState(offer.description ?? '');
   const [dashboardId, setDashboardId] = useState(offer.dashboardId ?? '');
   const [status, setStatus] = useState<OfferStatus>(offer.status);
+  const [utmifyLogin, setUtmifyLogin] = useState('');
+  const [utmifyPassword, setUtmifyPassword] = useState('');
   const [fronts, setFronts] = useState<OfferLink[]>(() => normalize(offer.fronts));
   const [upsells, setUpsells] = useState<OfferLink[]>(() => normalize(offer.upsells));
 
@@ -59,22 +57,29 @@ export function OfferEditDialog({ offer, open, onOpenChange }: Props) {
   useEffect(() => {
     if (!open) return;
     setName(offer.name);
+    setCompanyName(offer.companyName ?? '');
     setDescription(offer.description ?? '');
     setDashboardId(offer.dashboardId ?? '');
     setStatus(offer.status);
     setFronts(normalize(offer.fronts));
     setUpsells(normalize(offer.upsells));
+    setUtmifyLogin('');
+    setUtmifyPassword('');
   }, [open, offer]);
 
   const mut = useMutation({
     mutationFn: () =>
       apiClient.updateOffer(offer.id, {
         name: name.trim(),
+        ...(companyName.trim() ? { company_name: companyName.trim() } : {}),
         description: description.trim(),
         dashboard_id: dashboardId.trim(),
         status,
         fronts: cleanForSubmit(fronts),
         upsells: cleanForSubmit(upsells),
+        ...(utmifyLogin.trim() && utmifyPassword
+          ? { utmify_login: utmifyLogin.trim(), utmify_password: utmifyPassword }
+          : {}),
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['offers'] });
@@ -99,6 +104,15 @@ export function OfferEditDialog({ offer, open, onOpenChange }: Props) {
           <section className="space-y-3">
             <p className="hud-label">Identidade</p>
             <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="of-company">Empresa</Label>
+                <Input
+                  id="of-company"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  placeholder="ex. Empresa 1"
+                />
+              </div>
               <div className="space-y-1.5">
                 <Label htmlFor="of-name">Nome</Label>
                 <Input
@@ -132,6 +146,35 @@ export function OfferEditDialog({ offer, open, onOpenChange }: Props) {
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="opcional — nicho, idioma, observação"
               />
+            </div>
+            <div className="rounded-md border border-white/[0.08] bg-white/[0.02] p-3">
+              <p className="hud-label">Conexão UTMify</p>
+              <p className="mt-1 text-[11px] text-white/45">
+                {offer.utmifyConfigured
+                  ? `Conectada como ${offer.utmifyLoginHint ?? 'usuário protegido'}. Preencha abaixo somente para trocar as credenciais.`
+                  : 'Informe login e senha para conectar.'}
+              </p>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="of-utmify-login">Login</Label>
+                  <Input
+                    id="of-utmify-login"
+                    value={utmifyLogin}
+                    onChange={(e) => setUtmifyLogin(e.target.value)}
+                    autoComplete="username"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="of-utmify-password">Senha</Label>
+                  <Input
+                    id="of-utmify-password"
+                    type="password"
+                    value={utmifyPassword}
+                    onChange={(e) => setUtmifyPassword(e.target.value)}
+                    autoComplete="new-password"
+                  />
+                </div>
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="of-dash">UTMify dashboardId</Label>
@@ -217,10 +260,7 @@ function LinksSection({
       ) : (
         <div className="space-y-3">
           {links.map((l, i) => (
-            <div
-              key={l.id}
-              className="rounded-md border border-white/[0.08] bg-white/[0.02] p-3"
-            >
+            <div key={l.id} className="rounded-md border border-white/[0.08] bg-white/[0.02] p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/65">
                   #{i + 1}
@@ -295,9 +335,9 @@ function cleanForSubmit(arr: OfferLink[]): OfferLink[] {
   return arr
     .map((l) => ({
       id: l.id,
-      ...(l.label && l.label.trim() ? { label: l.label.trim() } : {}),
-      ...(l.whiteUrl && l.whiteUrl.trim() ? { whiteUrl: l.whiteUrl.trim() } : {}),
-      ...(l.blackUrl && l.blackUrl.trim() ? { blackUrl: l.blackUrl.trim() } : {}),
+      ...(l.label?.trim() ? { label: l.label.trim() } : {}),
+      ...(l.whiteUrl?.trim() ? { whiteUrl: l.whiteUrl.trim() } : {}),
+      ...(l.blackUrl?.trim() ? { blackUrl: l.blackUrl.trim() } : {}),
     }))
     .filter((l) => l.label || l.whiteUrl || l.blackUrl);
 }
