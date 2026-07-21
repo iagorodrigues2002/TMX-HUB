@@ -139,13 +139,14 @@ export class UtmifySyncService {
     yesterday.setUTCDate(yesterday.getUTCDate() - 1);
     const results = await fetchAds(token, offer.dashboardId, yesterday.toISOString().slice(0, 10));
     const resultKeys = [...new Set(results.flatMap((item) => Object.keys(item)))].sort();
-    const accountFields = results.slice(0, 50).flatMap((item) => {
+    const accountFields = results.slice(0, 200).flatMap((item) => {
       const fields = Object.entries(item).filter(([key, value]) => {
         return /account|conta/i.test(key) && ['string', 'number', 'boolean'].includes(typeof value);
       });
       return fields.length ? [Object.fromEntries(fields) as Record<string, string | number | boolean>] : [];
     });
-    return { resultKeys, accountFields: accountFields.slice(0, 10) };
+    const uniqueAccounts = [...new Map(accountFields.map((fields) => [JSON.stringify(fields), fields])).values()];
+    return { resultKeys, accountFields: uniqueAccounts.slice(0, 25) };
   }
 }
 

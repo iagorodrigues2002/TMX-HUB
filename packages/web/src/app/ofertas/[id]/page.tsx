@@ -202,16 +202,30 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
           </div>
           {capabilitiesQuery.data?.accountFields.length ? (
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              {Object.entries(capabilitiesQuery.data.accountFields[0] ?? {}).map(([key, value]) => (
-                <div key={key} className="rounded-lg border border-white/[0.06] bg-black/10 px-3 py-2">
-                  <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-white/35">
-                    {key === 'accountId'
-                      ? 'ID da conta'
-                      : key === 'accountStatus'
-                        ? 'Status da conta'
-                        : key}
+              {capabilitiesQuery.data.accountFields.map((account, index) => (
+                <div
+                  key={JSON.stringify(account)}
+                  className="rounded-lg border border-white/[0.06] bg-black/10 px-3 py-3"
+                >
+                  <p className="mb-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-cyan-300/70">
+                    Conta {index + 1}
                   </p>
-                  <p className="mt-1 truncate font-mono text-[12px] text-white/80">{String(value)}</p>
+                  <div className="space-y-2">
+                    {Object.entries(account).map(([key, value]) => (
+                      <div key={key}>
+                        <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-white/35">
+                          {key === 'accountId'
+                            ? 'ID da conta'
+                            : key === 'accountStatus'
+                              ? 'Status da conta'
+                              : key}
+                        </p>
+                        <p className="mt-1 truncate font-mono text-[12px] text-white/80">
+                          {String(value)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>
