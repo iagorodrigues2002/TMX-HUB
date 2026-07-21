@@ -241,6 +241,7 @@ export type ToolKey =
   | 'cloner'
   | 'cloaker-urls'
   | 'video-shield'
+  | 'creative-studio'
   | 'page-diff'
   | 'funnel-clone'
   | 'upsell-analyzer'
@@ -254,6 +255,7 @@ export const ALL_TOOL_KEYS: ToolKey[] = [
   'cloner',
   'cloaker-urls',
   'video-shield',
+  'creative-studio',
   'page-diff',
   'funnel-clone',
   'upsell-analyzer',
@@ -485,6 +487,43 @@ export interface CreateShieldJobRequest {
   white_volume_db?: number;        // default -22
   compression?: ShieldCompressionMode; // default 'none'
   verify_transcript?: boolean;     // default false
+}
+
+// ---- Creative Studio ----
+
+export type MediaCompressionMode = 'none' | 'balanced' | 'small';
+export type MediaAspectRatio = 'original' | '9:16' | '4:5' | '1:1';
+export type MediaExtensionMode = 'none' | 'loop' | 'freeze';
+export type MediaJobStatus = 'queued' | 'processing' | 'ready' | 'failed';
+
+export interface MediaJob {
+  id: string;
+  userId: string;
+  inputStorageKey: string;
+  inputFilename: string;
+  inputBytes: number;
+  compression: MediaCompressionMode;
+  aspectRatio: MediaAspectRatio;
+  stripMetadata: boolean;
+  normalizeAudio: boolean;
+  extensionMode: MediaExtensionMode;
+  targetSeconds?: number;
+  status: MediaJobStatus;
+  outputStorageKey?: string;
+  outputFilename?: string;
+  outputBytes?: number;
+  errorMessage?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateMediaJobRequest {
+  compression?: MediaCompressionMode;
+  aspect_ratio?: MediaAspectRatio;
+  strip_metadata?: boolean;
+  normalize_audio?: boolean;
+  extension_mode?: MediaExtensionMode;
+  target_seconds?: number;
 }
 
 // ---- Digistore24 Approval Audit ----

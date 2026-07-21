@@ -16,6 +16,7 @@ import offersRoutes from './offers.js';
 import pageDiffRoutes from './page-diff.js';
 import previewRoutes from './preview.js';
 import shieldJobsRoutes from './shield-jobs.js';
+import mediaJobsRoutes from './media-jobs.js';
 import usersRoutes from './users.js';
 import vslJobsRoutes from './vsl-jobs.js';
 import webhookTestRoutes from './webhook-test.js';
@@ -29,6 +30,7 @@ import webhookTestRoutes from './webhook-test.js';
 const TOOL_PATH_MAP: Array<{ prefix: string; tool: ToolKey }> = [
   { prefix: '/v1/niches', tool: 'video-shield' },
   { prefix: '/v1/shield-jobs', tool: 'video-shield' },
+  { prefix: '/v1/media-jobs', tool: 'creative-studio' },
   { prefix: '/v1/clones', tool: 'cloner' },
   { prefix: '/v1/forms', tool: 'cloner' },
   { prefix: '/v1/links', tool: 'cloner' },
@@ -96,6 +98,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         await protectedRoutes.register(offersRoutes);
         await protectedRoutes.register(nichesRoutes);
         await protectedRoutes.register(shieldJobsRoutes);
+        await protectedRoutes.register(mediaJobsRoutes);
         await protectedRoutes.register(digiAuditsRoutes);
         await protectedRoutes.register(usersRoutes);
       });

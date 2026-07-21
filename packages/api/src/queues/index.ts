@@ -3,6 +3,7 @@ export const BUNDLE_QUEUE_NAME = 'bundle-queue';
 export const VSL_QUEUE_NAME = 'vsl-queue';
 export const FUNNEL_QUEUE_NAME = 'funnel-queue';
 export const SHIELD_QUEUE_NAME = 'shield-queue';
+export const MEDIA_QUEUE_NAME = 'media-queue';
 
 export interface RenderJobData {
   jobId: string;
@@ -26,5 +27,9 @@ export interface FunnelJobData {
 }
 
 export interface ShieldJobData {
+  jobId: string;
+}
+
+export interface MediaJobData {
   jobId: string;
 }

@@ -241,6 +241,31 @@ export const CreateShieldJobBodySchema = z
   })
   .strict();
 
+// ---- Creative Studio ----
+
+export const MediaCompressionSchema = z.enum(['none', 'balanced', 'small']);
+export const MediaAspectRatioSchema = z.enum(['original', '9:16', '4:5', '1:1']);
+export const MediaExtensionModeSchema = z.enum(['none', 'loop', 'freeze']);
+
+export const CreateMediaJobBodySchema = z
+  .object({
+    compression: MediaCompressionSchema.optional(),
+    aspect_ratio: MediaAspectRatioSchema.optional(),
+    strip_metadata: z.boolean().optional(),
+    normalize_audio: z.boolean().optional(),
+    extension_mode: MediaExtensionModeSchema.optional(),
+    target_seconds: z.number().int().min(1).max(3600).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.extension_mode !== undefined && value.extension_mode !== 'none' && !value.target_seconds) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['target_seconds'],
+        message: 'target_seconds é obrigatório quando a extensão está ativa.',
+      });
+    }
+  });
+
 // ---- Digistore24 Audit ----
 
 export const DigiAuditStatusSchema = z.enum([

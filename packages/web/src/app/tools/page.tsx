@@ -10,6 +10,7 @@ import {
   Shield,
   Shuffle,
   Video,
+  Clapperboard,
   Webhook,
 } from 'lucide-react';
 import { HubShell } from '@/components/hub/hub-shell';
@@ -114,6 +115,19 @@ export default function ToolsIndexPage() {
           title="Cloaker URL Generator"
           description="Gera lotes de URLs com parâmetros aleatorizados (token, ref, hex, UUID, sorteio de lista) pra alimentar campanhas com cloaker. Exporta como .txt."
           href="/tools/cloaker-urls"
+          badge="Novo"
+        />
+      ),
+    },
+    {
+      tool: 'creative-studio',
+      card: (
+        <ToolCard
+          key="creative-studio"
+          icon={<Clapperboard className="h-6 w-6" />}
+          title="Creative Studio"
+          description="Comprime, normaliza, converte proporções e estende vídeos para campanhas e redes sociais."
+          href="/tools/creative-studio"
           badge="Novo"
         />
       ),
