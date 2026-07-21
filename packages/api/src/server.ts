@@ -84,6 +84,7 @@ async function main() {
     nicheStore: app.nicheStore,
     storage: app.storage,
   });
+  app.utmifySync.start();
 
   let shuttingDown = false;
   const shutdown = async (signal: string) => {
@@ -91,6 +92,7 @@ async function main() {
     shuttingDown = true;
     app.log.info({ signal }, 'shutdown initiated');
     try {
+      app.utmifySync.stop();
       // Stop accepting new requests first.
       await app.close();
       // Drain workers (they finish in-flight jobs).

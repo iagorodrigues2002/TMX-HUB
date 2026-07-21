@@ -161,22 +161,52 @@ export const OfferLinkSchema = z.object({
 export const CreateOfferRequestSchema = z
   .object({
     name: z.string().min(1).max(60),
+    company_name: z.string().trim().min(1).max(80).optional(),
     dashboard_id: z.string().max(100).optional(),
     description: z.string().max(500).optional(),
     status: OfferStatusSchema.optional(),
+    utmify_login: z.string().trim().min(1).max(200).optional(),
+    utmify_password: z.string().min(1).max(500).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    const hasConnection = Boolean(
+      value.dashboard_id || value.utmify_login || value.utmify_password,
+    );
+    if (!hasConnection) return;
+    for (const field of ['dashboard_id', 'utmify_login', 'utmify_password'] as const) {
+      if (!value[field]) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [field],
+          message: 'Obrigatório para conectar a UTMify.',
+        });
+      }
+    }
+  });
 
 export const UpdateOfferRequestSchema = z
   .object({
     name: z.string().min(1).max(60).optional(),
+    company_name: z.string().trim().min(1).max(80).optional(),
     dashboard_id: z.string().max(100).optional(),
     description: z.string().max(500).optional(),
     status: OfferStatusSchema.optional(),
     fronts: z.array(OfferLinkSchema).max(20).optional(),
     upsells: z.array(OfferLinkSchema).max(20).optional(),
+    utmify_login: z.string().trim().min(1).max(200).optional(),
+    utmify_password: z.string().min(1).max(500).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    if (Boolean(value.utmify_login) !== Boolean(value.utmify_password)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [value.utmify_login ? 'utmify_password' : 'utmify_login'],
+        message: 'Informe login e senha juntos.',
+      });
+    }
+  });
 
 const AdsetSnapshotSchema = z.object({
   name: z.string(),
@@ -197,6 +227,15 @@ const DailySnapshotInputSchema = z.object({
   impressions: z.number().int().nonnegative().optional(),
   clicks: z.number().int().nonnegative().optional(),
   adsets: z.array(AdsetSnapshotSchema).max(500).optional(),
+  ads: z
+    .array(
+      AdsetSnapshotSchema.extend({
+        hookRate: z.number().nonnegative().optional(),
+        ctr: z.number().nonnegative().optional(),
+      }),
+    )
+    .max(5000)
+    .optional(),
 });
 
 export const IngestSnapshotsRequestSchema = z
