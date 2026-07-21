@@ -55,6 +55,14 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
   });
   const offer = offerQuery.data;
 
+  const capabilitiesQuery = useQuery({
+    queryKey: ['utmify-capabilities', id],
+    queryFn: () => apiClient.getUtmifyCapabilities(id),
+    enabled: Boolean(offer?.utmifyConfigured),
+    staleTime: 30 * 60 * 1000,
+    retry: false,
+  });
+
   const snapshotsQuery = useQuery({
     queryKey: ['offer-snapshots', id, from, to],
     queryFn: () => apiClient.getOfferSnapshots(id, { from, to }),
@@ -176,6 +184,42 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
       {offer && (
         <section className="mb-6">
           <OfferCard offer={offer} onEdit={() => setEditing(true)} onDelete={() => undefined} />
+        </section>
+      )}
+
+      {offer?.utmifyConfigured && (
+        <section className="glass-card mb-6 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="hud-label">Conta de anúncios via UTMify</p>
+              <p className="mt-1 text-[12px] text-white/55">
+                Campos disponíveis na resposta real em nível de anúncio.
+              </p>
+            </div>
+            {capabilitiesQuery.isFetching && (
+              <Loader2 className="h-4 w-4 animate-spin text-cyan-300" />
+            )}
+          </div>
+          {capabilitiesQuery.data?.accountFields.length ? (
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {Object.entries(capabilitiesQuery.data.accountFields[0] ?? {}).map(([key, value]) => (
+                <div key={key} className="rounded-lg border border-white/[0.06] bg-black/10 px-3 py-2">
+                  <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-white/35">
+                    {key}
+                  </p>
+                  <p className="mt-1 truncate font-mono text-[12px] text-white/80">{String(value)}</p>
+                </div>
+              ))}
+            </div>
+          ) : capabilitiesQuery.isSuccess ? (
+            <p className="mt-3 text-[12px] text-amber-200/75">
+              O endpoint de anúncios não retornou nome nem status da conta neste período.
+            </p>
+          ) : capabilitiesQuery.isError ? (
+            <p className="mt-3 text-[12px] text-rose-200/75">
+              Não foi possível inspecionar os campos da conta agora.
+            </p>
+          ) : null}
         </section>
       )}
 

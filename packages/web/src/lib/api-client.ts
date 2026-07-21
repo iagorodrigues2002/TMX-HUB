@@ -1035,6 +1035,13 @@ export const apiClient = {
     return request(`/v1/offers/${id}/sync`, { method: 'POST' });
   },
 
+  async getUtmifyCapabilities(id: string): Promise<{
+    resultKeys: string[];
+    accountFields: Array<Record<string, string | number | boolean>>;
+  }> {
+    return request(`/v1/offers/${id}/utmify-capabilities`);
+  },
+
   async getOfferSnapshots(
     id: string,
     range?: { from?: string; to?: string },
