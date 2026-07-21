@@ -9,6 +9,7 @@ const SYNC_INTERVAL_MS = 30 * 60 * 1000;
 const LOCK_TTL_MS = 25 * 60 * 1000;
 
 interface UtmifyResult {
+  [key: string]: unknown;
   name?: unknown;
   spend?: unknown;
   revenue?: unknown;
@@ -125,6 +126,27 @@ export class UtmifySyncService {
       await this.redis.del(lockKey);
     }
   }
+
+  async inspectCapabilities(offer: Offer): Promise<{
+    resultKeys: string[];
+    accountFields: Array<Record<string, string | number | boolean>>;
+  }> {
+    if (!offer.dashboardId) throw new Error('Dashboard ID da UTMify não configurado.');
+    const credentials = await this.offerStore.getUtmifyCredentials(offer.id);
+    if (!credentials) throw new Error('Credenciais da UTMify não configuradas.');
+    const token = await authenticate(credentials.login, credentials.password);
+    const yesterday = new Date();
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    const results = await fetchAds(token, offer.dashboardId, yesterday.toISOString().slice(0, 10));
+    const resultKeys = [...new Set(results.flatMap((item) => Object.keys(item)))].sort();
+    const accountFields = results.slice(0, 50).flatMap((item) => {
+      const fields = Object.entries(item).filter(([key, value]) => {
+        return /account|conta|status/i.test(key) && ['string', 'number', 'boolean'].includes(typeof value);
+      });
+      return fields.length ? [Object.fromEntries(fields) as Record<string, string | number | boolean>] : [];
+    });
+    return { resultKeys, accountFields: accountFields.slice(0, 10) };
+  }
 }
 
 async function authenticate(login: string, password: string): Promise<string> {
@@ -191,15 +213,23 @@ export function toSnapshot(offerId: string, date: string, results: UtmifyResult[
       impressions: 0,
       clicks: 0,
     };
-    current.spend += number(item.spend) / 100;
+    // The ad-level endpoint can repeat delivery metrics when the same ad is
+    // split into multiple attribution/product rows. Revenue and orders are
+    // additive, but summing delivery fields multiplies spend and traffic.
+    current.spend = Math.max(current.spend, number(item.spend) / 100);
     current.sales += Math.max(0, Math.round(number(item.approvedOrdersCount)));
     current.revenue += number(item.revenue) / 100;
-    current.ic += Math.max(0, Math.round(number(item.initiateCheckout)));
-    current.impressions =
-      (current.impressions ?? 0) + Math.max(0, Math.round(number(item.impressions)));
-    current.clicks = (current.clicks ?? 0) + Math.max(0, Math.round(number(item.inlineLinkClicks)));
+    current.ic = Math.max(current.ic, Math.max(0, Math.round(number(item.initiateCheckout))));
+    current.impressions = Math.max(
+      current.impressions ?? 0,
+      Math.max(0, Math.round(number(item.impressions))),
+    );
+    current.clicks = Math.max(
+      current.clicks ?? 0,
+      Math.max(0, Math.round(number(item.inlineLinkClicks))),
+    );
     const views = Math.max(0, number(item.videoViews3Seconds));
-    current.hookRate = (current.hookRate ?? 0) + views;
+    current.hookRate = Math.max(current.hookRate ?? 0, views);
     byName.set(name, current);
   }
   const ads = [...byName.values()].map((ad) => ({
