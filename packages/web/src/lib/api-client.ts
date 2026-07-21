@@ -459,6 +459,7 @@ export type ToolKey =
   | 'cloner'
   | 'cloaker-urls'
   | 'video-shield'
+  | 'creative-studio'
   | 'page-diff'
   | 'funnel-clone'
   | 'upsell-analyzer'
@@ -1252,6 +1253,32 @@ export const apiClient = {
     return { filename, bytes: blob.size };
   },
 
+  // ---- Creative Studio ----
+  async createMediaJob(
+    args: CreateMediaJobInput,
+    onProgress?: (pct: number) => void,
+  ): Promise<MediaJobView> {
+    const fd = new FormData();
+    fd.append('compression', args.compression);
+    fd.append('aspect_ratio', args.aspectRatio);
+    fd.append('strip_metadata', args.stripMetadata ? '1' : '0');
+    fd.append('normalize_audio', args.normalizeAudio ? '1' : '0');
+    fd.append('extension_mode', args.extensionMode);
+    if (args.targetSeconds) fd.append('target_seconds', String(args.targetSeconds));
+    fd.append('file', args.file);
+    return uploadMultipart<MediaJobView>('/v1/media-jobs', fd, onProgress);
+  },
+  async listMediaJobs(): Promise<MediaJobView[]> {
+    const wire = await request<{ jobs: MediaJobView[] }>('/v1/media-jobs');
+    return wire.jobs ?? [];
+  },
+  async getMediaJob(id: string, signal?: AbortSignal): Promise<MediaJobView> {
+    return request<MediaJobView>(`/v1/media-jobs/${id}`, { signal });
+  },
+  async deleteMediaJob(id: string): Promise<void> {
+    await request<void>(`/v1/media-jobs/${id}`, { method: 'DELETE' });
+  },
+
   // ---- Digistore24 Audits ----
   async listDigiAudits(): Promise<DigiAuditView[]> {
     const wire = await request<{ audits: DigiAuditWire[] }>('/v1/digi-audits');
@@ -1430,6 +1457,38 @@ export interface ShieldJobView {
   error?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export type MediaCompressionMode = 'none' | 'balanced' | 'small';
+export type MediaAspectRatio = 'original' | '9:16' | '4:5' | '1:1';
+export type MediaExtensionMode = 'none' | 'loop' | 'freeze';
+
+export interface CreateMediaJobInput {
+  file: File;
+  compression: MediaCompressionMode;
+  aspectRatio: MediaAspectRatio;
+  stripMetadata: boolean;
+  normalizeAudio: boolean;
+  extensionMode: MediaExtensionMode;
+  targetSeconds?: number;
+}
+
+export interface MediaJobView {
+  id: string;
+  status: 'queued' | 'processing' | 'ready' | 'failed';
+  input: { filename: string; bytes: number };
+  options: {
+    compression: MediaCompressionMode;
+    aspect_ratio: MediaAspectRatio;
+    strip_metadata: boolean;
+    normalize_audio: boolean;
+    extension_mode: MediaExtensionMode;
+    target_seconds?: number;
+  };
+  output?: { filename: string; bytes?: number; download_url?: string };
+  error?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 interface ShieldJobWire {

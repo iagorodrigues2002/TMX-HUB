@@ -14,6 +14,7 @@ import { createBundleWorker } from './workers/bundle.worker.js';
 import { createFunnelWorker } from './workers/funnel.worker.js';
 import { createRenderWorker } from './workers/render.worker.js';
 import { createShieldWorker } from './workers/shield.worker.js';
+import { createMediaWorker } from './workers/media.worker.js';
 import { createVslWorker } from './workers/vsl.worker.js';
 
 // TODO(auth): Authentication is intentionally skipped for the MVP.
@@ -77,6 +78,11 @@ async function main() {
     nicheStore: app.nicheStore,
     storage: app.storage,
   });
+  const mediaWorker = createMediaWorker({
+    redisUrl: env.REDIS_URL,
+    jobStore: app.mediaJobStore,
+    storage: app.storage,
+  });
 
   let shuttingDown = false;
   const shutdown = async (signal: string) => {
@@ -92,6 +98,7 @@ async function main() {
       await vslWorker.close();
       await funnelWorker.close();
       await shieldWorker.close();
+      await mediaWorker.close();
       app.log.info('shutdown complete');
       process.exit(0);
     } catch (err) {

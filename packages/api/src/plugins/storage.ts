@@ -6,6 +6,7 @@ import { JobStore } from '../services/job-store.js';
 import { NicheStore } from '../services/niche-store.js';
 import { OfferStore } from '../services/offer-store.js';
 import { ShieldJobStore } from '../services/shield-job-store.js';
+import { MediaJobStore } from '../services/media-job-store.js';
 import { SnapshotStore } from '../services/snapshot-store.js';
 import { StorageService } from '../services/storage.js';
 import { VslJobStore } from '../services/vsl-job-store.js';
@@ -20,6 +21,7 @@ declare module 'fastify' {
     snapshotStore: SnapshotStore;
     nicheStore: NicheStore;
     shieldJobStore: ShieldJobStore;
+    mediaJobStore: MediaJobStore;
     digiAuditStore: DigiAuditStore;
     inviteStore: InviteStore;
   }
@@ -35,6 +37,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.decorate('snapshotStore', new SnapshotStore(app.redis));
   app.decorate('nicheStore', new NicheStore(app.redis));
   app.decorate('shieldJobStore', new ShieldJobStore(app.redis));
+  app.decorate('mediaJobStore', new MediaJobStore(app.redis));
   app.decorate('digiAuditStore', new DigiAuditStore(app.redis));
   app.decorate('inviteStore', new InviteStore(app.redis));
 
