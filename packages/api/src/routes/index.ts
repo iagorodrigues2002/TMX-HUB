@@ -1,22 +1,20 @@
-import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import type { ToolKey } from '@page-cloner/shared';
+import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { HttpProblem } from '../lib/problem.js';
 import activityRoutes from './activity.js';
 import authRoutes from './auth.js';
 import buildsRoutes from './builds.js';
 import clonesRoutes from './clones.js';
-import digiAuditsRoutes from './digi-audits.js';
 import formsRoutes from './forms.js';
 import funnelJobsRoutes from './funnel-jobs.js';
 import healthRoutes from './health.js';
 import inspectRoutes from './inspect.js';
 import linksRoutes from './links.js';
+import mediaJobsRoutes from './media-jobs.js';
 import nichesRoutes from './niches.js';
 import offersRoutes from './offers.js';
-import pageDiffRoutes from './page-diff.js';
 import previewRoutes from './preview.js';
 import shieldJobsRoutes from './shield-jobs.js';
-import mediaJobsRoutes from './media-jobs.js';
 import usersRoutes from './users.js';
 import vslJobsRoutes from './vsl-jobs.js';
 import webhookTestRoutes from './webhook-test.js';
@@ -37,9 +35,7 @@ const TOOL_PATH_MAP: Array<{ prefix: string; tools: ToolKey[] }> = [
   { prefix: '/v1/inspect', tools: ['cloner'] },
   { prefix: '/v1/vsl-jobs', tools: ['vsl'] },
   { prefix: '/v1/funnel-jobs', tools: ['funnel-clone'] },
-  { prefix: '/v1/page-diff', tools: ['page-diff'] },
   { prefix: '/v1/webhook-test', tools: ['webhook-tester'] },
-  { prefix: '/v1/digi-audits', tools: ['digi-approval'] },
   { prefix: '/v1/offers', tools: ['ofertas'] },
   { prefix: '/v1/dashboard', tools: ['ofertas'] },
 ];
@@ -93,13 +89,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         await protectedRoutes.register(buildsRoutes);
         await protectedRoutes.register(vslJobsRoutes);
         await protectedRoutes.register(webhookTestRoutes);
-        await protectedRoutes.register(pageDiffRoutes);
         await protectedRoutes.register(funnelJobsRoutes);
         await protectedRoutes.register(offersRoutes);
         await protectedRoutes.register(nichesRoutes);
         await protectedRoutes.register(shieldJobsRoutes);
         await protectedRoutes.register(mediaJobsRoutes);
-        await protectedRoutes.register(digiAuditsRoutes);
         await protectedRoutes.register(usersRoutes);
       });
     },

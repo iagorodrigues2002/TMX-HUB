@@ -1,21 +1,10 @@
 'use client';
 
-import {
-  BarChart3,
-  ClipboardCheck,
-  FileAudio,
-  GitCompare,
-  Layers,
-  Network,
-  Shield,
-  Shuffle,
-  Video,
-  Webhook,
-} from 'lucide-react';
 import { HubShell } from '@/components/hub/hub-shell';
 import { ToolCard } from '@/components/hub/tool-card';
 import type { ToolKey } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
+import { BarChart3, FileAudio, Layers, Network, Shield, Video, Webhook } from 'lucide-react';
 
 interface ToolEntry {
   tool?: ToolKey;
@@ -79,19 +68,6 @@ export default function ToolsIndexPage() {
       ),
     },
     {
-      tool: 'page-diff',
-      card: (
-        <ToolCard
-          key="page-diff"
-          icon={<GitCompare className="h-6 w-6" />}
-          title="Page Diff"
-          description="Compara duas URLs e mostra exatamente o que mudou no texto visível. Útil pra monitorar competidores ou validar mudanças no próprio funil."
-          href="/tools/page-diff"
-          badge="Novo"
-        />
-      ),
-    },
-    {
       tool: 'funnel-clone',
       card: (
         <ToolCard
@@ -105,19 +81,6 @@ export default function ToolsIndexPage() {
       ),
     },
     {
-      tool: 'cloaker-urls',
-      card: (
-        <ToolCard
-          key="cloaker-urls"
-          icon={<Shuffle className="h-6 w-6" />}
-          title="Cloaker URL Generator"
-          description="Gera lotes de URLs com parâmetros aleatorizados (token, ref, hex, UUID, sorteio de lista) pra alimentar campanhas com cloaker. Exporta como .txt."
-          href="/tools/cloaker-urls"
-          badge="Novo"
-        />
-      ),
-    },
-    {
       tool: 'video-shield',
       card: (
         <ToolCard
@@ -126,19 +89,6 @@ export default function ToolsIndexPage() {
           title="Video Studio"
           description="Proteja, comprima, normalize, redimensione e estenda criativos em uma única central de processamento."
           href="/tools/video-shield"
-          badge="Novo"
-        />
-      ),
-    },
-    {
-      tool: 'digi-approval',
-      card: (
-        <ToolCard
-          key="digi-approval"
-          icon={<ClipboardCheck className="h-6 w-6" />}
-          title="Digi Approval"
-          description="Auditoria de cadastro de produto na Digistore24 (Blackzada + CloakUp). 12 seções, ~120 itens, ~50 críticos. Persiste por produto."
-          href="/tools/digi-approval"
           badge="Novo"
         />
       ),

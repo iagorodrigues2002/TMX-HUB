@@ -1,15 +1,15 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { useRef, useState } from 'react';
-import { Globe, Loader2, Search } from 'lucide-react';
-import { toast } from 'sonner';
-import type { InspectResult, LinkReplacement } from '@page-cloner/shared';
-import { apiClient } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { apiClient } from '@/lib/api-client';
+import type { InspectResult, LinkReplacement } from '@page-cloner/shared';
+import { Box, Globe, Loader2, Search, Sparkles, Zap } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { InspectionPanel } from './inspection-panel';
 
 type Step = 'idle' | 'inspecting' | 'inspected' | 'cloning';
@@ -24,23 +24,28 @@ export function UrlInputForm() {
   const [inspectResult, setInspectResult] = useState<InspectResult | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  const validateUrl = (value: string): boolean => {
+  const validateUrl = (value: string): string | null => {
+    const normalized = /^https?:\/\//i.test(value.trim())
+      ? value.trim()
+      : `https://${value.trim()}`;
     try {
-      new URL(value);
+      new URL(normalized);
       setUrlError('');
-      return true;
+      return normalized;
     } catch {
       setUrlError('Digite uma URL http(s) válida.');
-      return false;
+      return null;
     }
   };
 
   const handleInspect = async () => {
-    if (!validateUrl(url)) return;
+    const normalizedUrl = validateUrl(url);
+    if (!normalizedUrl) return;
+    setUrl(normalizedUrl);
     setStep('inspecting');
     abortRef.current = new AbortController();
     try {
-      const result = await apiClient.inspectPage(url, abortRef.current.signal);
+      const result = await apiClient.inspectPage(normalizedUrl, abortRef.current.signal);
       setInspectResult(result);
       setStep('inspected');
     } catch (err) {
@@ -75,11 +80,13 @@ export function UrlInputForm() {
   };
 
   const handleCloneDirect = async () => {
-    if (!validateUrl(url)) return;
+    const normalizedUrl = validateUrl(url);
+    if (!normalizedUrl) return;
+    setUrl(normalizedUrl);
     setStep('cloning');
     try {
       const job = await apiClient.createClone({
-        url,
+        url: normalizedUrl,
         options: {
           renderMode: renderJs ? 'js' : 'static',
           inlineAssets,
@@ -135,25 +142,51 @@ export function UrlInputForm() {
         )}
       </div>
 
-      <fieldset className="space-y-3 rounded-md border border-white/[0.08] bg-white/[0.02] p-4">
+      <fieldset className="space-y-3">
         <legend className="px-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45">
           Opções
         </legend>
-        <label className="flex cursor-pointer items-center gap-3 text-[13px] text-white/75">
+        <label
+          htmlFor="render-js"
+          className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.025] p-3.5 transition hover:border-cyan-300/20 hover:bg-cyan-300/[0.025]"
+        >
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-cyan-300/[0.07] text-cyan-300">
+            <Sparkles className="h-4 w-4" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-medium text-white/85">
+              Renderização inteligente
+            </span>
+            <span className="block text-xs text-white/40">
+              Executa JavaScript para capturar SPAs e conteúdo dinâmico
+            </span>
+          </span>
           <Checkbox
+            id="render-js"
             checked={renderJs}
             onChange={(e) => setRenderJs(e.target.checked)}
             disabled={busy}
           />
-          <span>Executar JavaScript (mais lento, necessário para SPAs)</span>
         </label>
-        <label className="flex cursor-pointer items-center gap-3 text-[13px] text-white/75">
+        <label
+          htmlFor="inline-assets"
+          className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.025] p-3.5 transition hover:border-cyan-300/20 hover:bg-cyan-300/[0.025]"
+        >
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white/[0.04] text-white/60">
+            <Box className="h-4 w-4" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-medium text-white/85">Pacote independente</span>
+            <span className="block text-xs text-white/40">
+              Incorpora imagens, estilos e fontes diretamente no clone
+            </span>
+          </span>
           <Checkbox
+            id="inline-assets"
             checked={inlineAssets}
             onChange={(e) => setInlineAssets(e.target.checked)}
             disabled={busy}
           />
-          <span>Embutir assets (imagens, CSS, fontes) como data-URIs</span>
         </label>
       </fieldset>
 
@@ -190,7 +223,9 @@ export function UrlInputForm() {
               Clonando…
             </span>
           ) : (
-            'Ou clonar diretamente sem inspecionar'
+            <span className="inline-flex items-center gap-1.5">
+              <Zap className="h-3 w-3" /> Clonagem rápida sem inspeção
+            </span>
           )}
         </button>
       </div>

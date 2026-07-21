@@ -1,6 +1,6 @@
+import { ALL_TOOL_KEYS, type ToolKey, type User } from '@page-cloner/shared';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { ALL_TOOL_KEYS, type ToolKey, type User } from '@page-cloner/shared';
 import { BadRequestError, HttpProblem, zodToProblem } from '../lib/problem.js';
 
 const ToolKeySchema = z.enum(ALL_TOOL_KEYS as [ToolKey, ...ToolKey[]]);
@@ -29,7 +29,16 @@ class BusinessRuleError extends HttpProblem {
   }
 }
 
-function userToWire(u: User): Record<string, unknown> {
+interface UserWire {
+  id: string;
+  email: string;
+  name: string;
+  role: 'admin' | 'user';
+  allowed_tools?: ToolKey[];
+  created_at: string;
+}
+
+function userToWire(u: User): UserWire {
   return {
     id: u.id,
     email: u.email,
@@ -41,6 +50,45 @@ function userToWire(u: User): Record<string, unknown> {
 }
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
+  // GET /v1/admin/overview — visão operacional consolidada para admins.
+  app.get('/admin/overview', async (req, reply) => {
+    if (!req.user) throw new BadRequestError('No user attached.');
+    if (req.user.role !== 'admin') {
+      throw new ForbiddenError('Apenas admins podem acessar o painel administrativo.');
+    }
+    const records = await app.userStore.listAll();
+    const users = await Promise.all(
+      records.map(async (record) => {
+        const activity = await app.activityStore.list(record.id, 20);
+        return {
+          ...userToWire(app.userStore.toPublic(record)),
+          activity_count: activity.length,
+          last_activity_at: activity[0]?.createdAt,
+          recent_activity: activity.slice(0, 8),
+        };
+      }),
+    );
+    const recentActivity = users
+      .flatMap((user) =>
+        user.recent_activity.map((entry) => ({ ...entry, user_id: user.id, user_name: user.name })),
+      )
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, 50);
+    return reply.send({
+      totals: {
+        users: users.length,
+        admins: users.filter((user) => user.role === 'admin').length,
+        restricted: users.filter((user) => (user.allowed_tools?.length ?? 0) > 0).length,
+        active_30d: users.filter((user) => {
+          if (!user.last_activity_at) return false;
+          return Date.now() - Date.parse(user.last_activity_at) <= 30 * 24 * 60 * 60 * 1000;
+        }).length,
+      },
+      users,
+      recent_activity: recentActivity,
+    });
+  });
+
   // GET /v1/users — admin lista todos os usuários
   app.get('/users', async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');
@@ -105,10 +153,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     }
     // Não pode deletar a si mesmo (UX clara — evita lockout acidental).
     if (req.params.id === req.user.sub) {
-      throw new BusinessRuleError(
-        'Você não pode deletar a sua própria conta.',
-        'self_delete',
-      );
+      throw new BusinessRuleError('Você não pode deletar a sua própria conta.', 'self_delete');
     }
     const target = await app.userStore.maybeGetById(req.params.id);
     if (!target) return reply.code(204).send();

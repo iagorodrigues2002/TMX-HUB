@@ -1,7 +1,7 @@
 'use client';
 
-import type { ReactNode } from 'react';
 import { AuthGate } from '@/components/auth/auth-gate';
+import type { ReactNode } from 'react';
 import { MicroFooter } from './micro-footer';
 import { Sidebar } from './sidebar';
 import { Topbar } from './topbar';
@@ -38,7 +38,7 @@ export function HubShell({ children, breadcrumb, topbarRight, fullBleed }: HubSh
           {fullBleed ? (
             <div className="flex-1 overflow-hidden">{children}</div>
           ) : (
-            <main className="flex-1 overflow-y-auto px-6 py-8 md:px-10 md:py-12">
+            <main className="flex-1 overflow-y-auto px-4 pb-28 pt-6 sm:px-6 md:px-10 md:py-12 lg:pb-12">
               <div className="mx-auto w-full max-w-6xl">{children}</div>
               <MicroFooter />
             </main>
