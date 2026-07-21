@@ -542,13 +542,6 @@ function fromInviteWire(w: InviteWire): InviteView {
 
 export type OfferStatus = 'testando' | 'validando' | 'escala' | 'pausado' | 'morrendo';
 
-export interface OfferLink {
-  id: string;
-  label?: string;
-  whiteUrl?: string;
-  blackUrl?: string;
-}
-
 export interface OfferView {
   id: string;
   name: string;
@@ -561,8 +554,6 @@ export interface OfferView {
   lastSyncError?: string;
   description?: string;
   status: OfferStatus;
-  fronts: OfferLink[];
-  upsells: OfferLink[];
   createdAt: string;
   updatedAt?: string;
 }
@@ -640,8 +631,6 @@ interface OfferWire {
   last_sync_error?: string;
   description?: string;
   status?: OfferStatus;
-  fronts?: OfferLink[];
-  upsells?: OfferLink[];
   created_at: string;
   updated_at?: string;
 }
@@ -690,8 +679,6 @@ function fromOfferWire(w: OfferWire): OfferView {
     lastSyncError: w.last_sync_error,
     description: w.description,
     status: w.status ?? 'testando',
-    fronts: Array.isArray(w.fronts) ? w.fronts : [],
-    upsells: Array.isArray(w.upsells) ? w.upsells : [],
     createdAt: w.created_at,
     updatedAt: w.updated_at,
   };
@@ -1026,8 +1013,6 @@ export const apiClient = {
       dashboard_id?: string;
       description?: string;
       status?: OfferStatus;
-      fronts?: OfferLink[];
-      upsells?: OfferLink[];
       utmify_login?: string;
       utmify_password?: string;
     },

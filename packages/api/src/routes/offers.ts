@@ -23,8 +23,6 @@ function offerToWire(o: Offer): Record<string, unknown> {
     last_sync_error: o.lastSyncError,
     description: o.description,
     status: o.status,
-    fronts: o.fronts ?? [],
-    upsells: o.upsells ?? [],
     created_at: o.createdAt,
     updated_at: o.updatedAt,
   };

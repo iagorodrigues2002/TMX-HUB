@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
-import type { Offer, OfferLink, OfferStatus, UpdateOfferRequest } from '@page-cloner/shared';
+import type { Offer, OfferStatus, UpdateOfferRequest } from '@page-cloner/shared';
 import type { Redis } from 'ioredis';
 import { ulid } from 'ulid';
 import { ConflictError, NotFoundError } from '../lib/problem.js';
@@ -17,24 +17,6 @@ const VALID_STATUSES: OfferStatus[] = ['testando', 'validando', 'escala', 'pausa
 
 function isValidStatus(s: unknown): s is OfferStatus {
   return typeof s === 'string' && VALID_STATUSES.includes(s as OfferStatus);
-}
-
-function safeParseLinks(raw: string | undefined): OfferLink[] {
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter((l) => l && typeof l === 'object' && typeof l.id === 'string')
-      .map((l) => ({
-        id: String(l.id),
-        ...(typeof l.label === 'string' && l.label ? { label: l.label } : {}),
-        ...(typeof l.whiteUrl === 'string' && l.whiteUrl ? { whiteUrl: l.whiteUrl } : {}),
-        ...(typeof l.blackUrl === 'string' && l.blackUrl ? { blackUrl: l.blackUrl } : {}),
-      }));
-  } catch {
-    return [];
-  }
 }
 
 export class OfferStore {
@@ -68,8 +50,6 @@ export class OfferStore {
       ...(args.dashboardId ? { dashboardId: args.dashboardId.trim() } : {}),
       ...(args.description ? { description: args.description.trim() } : {}),
       status: args.status ?? 'testando',
-      fronts: [],
-      upsells: [],
       createdAt: new Date().toISOString(),
     };
     await this.redis
@@ -106,8 +86,6 @@ export class OfferStore {
         ? { description: patch.description.trim() || undefined }
         : {}),
       ...(patch.status ? { status: patch.status } : {}),
-      ...(patch.fronts ? { fronts: patch.fronts } : {}),
-      ...(patch.upsells ? { upsells: patch.upsells } : {}),
       updatedAt: new Date().toISOString(),
     };
 
@@ -263,8 +241,6 @@ export class OfferStore {
       userId: offer.userId,
       name: offer.name,
       status: offer.status,
-      fronts: JSON.stringify(offer.fronts ?? []),
-      upsells: JSON.stringify(offer.upsells ?? []),
       createdAt: offer.createdAt,
     };
     if (offer.companyName) out.companyName = offer.companyName;
@@ -299,8 +275,6 @@ export class OfferStore {
       ...(data.lastSyncAt ? { lastSyncAt: data.lastSyncAt } : {}),
       ...(data.lastSyncError ? { lastSyncError: data.lastSyncError } : {}),
       status,
-      fronts: safeParseLinks(data.fronts),
-      upsells: safeParseLinks(data.upsells),
       createdAt: data.createdAt ?? '',
       ...(data.updatedAt ? { updatedAt: data.updatedAt } : {}),
     };

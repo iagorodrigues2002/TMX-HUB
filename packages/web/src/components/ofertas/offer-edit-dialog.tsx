@@ -17,32 +17,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { type OfferLink, type OfferStatus, type OfferView, apiClient } from '@/lib/api-client';
+import { type OfferStatus, type OfferView, apiClient } from '@/lib/api-client';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { STATUS_LIST, statusLabel } from './status-badge';
-
-function newId(): string {
-  // Cheap unique id for client-side rows; server doesn't enforce format.
-  return `lnk_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
-}
-
-function emptyLink(): OfferLink {
-  return { id: newId(), label: '', whiteUrl: '', blackUrl: '' };
-}
 
 interface Props {
   offer: OfferView;
   open: boolean;
-  onOpenChange: (v: boolean) => void;
+  onOpenChange: (value: boolean) => void;
 }
 
 export function OfferEditDialog({ offer, open, onOpenChange }: Props) {
   const qc = useQueryClient();
-
-  // Local form state — initialized from offer when dialog opens.
   const [name, setName] = useState(offer.name);
   const [companyName, setCompanyName] = useState(offer.companyName ?? '');
   const [description, setDescription] = useState(offer.description ?? '');
@@ -50,10 +38,7 @@ export function OfferEditDialog({ offer, open, onOpenChange }: Props) {
   const [status, setStatus] = useState<OfferStatus>(offer.status);
   const [utmifyLogin, setUtmifyLogin] = useState('');
   const [utmifyPassword, setUtmifyPassword] = useState('');
-  const [fronts, setFronts] = useState<OfferLink[]>(() => normalize(offer.fronts));
-  const [upsells, setUpsells] = useState<OfferLink[]>(() => normalize(offer.upsells));
 
-  // Re-sync when the dialog (re)opens with a possibly different offer.
   useEffect(() => {
     if (!open) return;
     setName(offer.name);
@@ -61,13 +46,11 @@ export function OfferEditDialog({ offer, open, onOpenChange }: Props) {
     setDescription(offer.description ?? '');
     setDashboardId(offer.dashboardId ?? '');
     setStatus(offer.status);
-    setFronts(normalize(offer.fronts));
-    setUpsells(normalize(offer.upsells));
     setUtmifyLogin('');
     setUtmifyPassword('');
   }, [open, offer]);
 
-  const mut = useMutation({
+  const mutation = useMutation({
     mutationFn: () =>
       apiClient.updateOffer(offer.id, {
         name: name.trim(),
@@ -75,22 +58,18 @@ export function OfferEditDialog({ offer, open, onOpenChange }: Props) {
         description: description.trim(),
         dashboard_id: dashboardId.trim(),
         status,
-        fronts: cleanForSubmit(fronts),
-        upsells: cleanForSubmit(upsells),
         ...(utmifyLogin.trim() && utmifyPassword
           ? { utmify_login: utmifyLogin.trim(), utmify_password: utmifyPassword }
           : {}),
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['offers'] });
-      qc.invalidateQueries({ queryKey: ['dashboard-summary'] });
-      toast.success('Oferta atualizada.');
+      void qc.invalidateQueries({ queryKey: ['offers'] });
+      void qc.invalidateQueries({ queryKey: ['dashboard-summary'] });
+      toast.success('Oferta atualizada e sincronização iniciada.');
       onOpenChange(false);
     },
-    onError: (err) => toast.error((err as Error).message),
+    onError: (error) => toast.error((error as Error).message),
   });
-
-  const canSave = name.trim().length > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -100,119 +79,105 @@ export function OfferEditDialog({ offer, open, onOpenChange }: Props) {
         </DialogHeader>
 
         <div className="space-y-5">
-          {/* Identidade */}
           <section className="space-y-3">
             <p className="hud-label">Identidade</p>
             <div className="grid gap-3 md:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="of-company">Empresa</Label>
+              <Field label="Empresa" htmlFor="of-company">
                 <Input
                   id="of-company"
                   value={companyName}
-                  onChange={(e) => setCompanyName(e.target.value)}
-                  placeholder="ex. Empresa 1"
+                  onChange={(event) => setCompanyName(event.target.value)}
                 />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="of-name">Nome</Label>
+              </Field>
+              <Field label="Nome da oferta" htmlFor="of-name">
                 <Input
                   id="of-name"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="ex. PFL_ENG"
+                  onChange={(event) => setName(event.target.value)}
                 />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="of-status">Status</Label>
-                <Select value={status} onValueChange={(v) => setStatus(v as OfferStatus)}>
+              </Field>
+              <Field label="Status" htmlFor="of-status">
+                <Select value={status} onValueChange={(value) => setStatus(value as OfferStatus)}>
                   <SelectTrigger id="of-status">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {STATUS_LIST.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {statusLabel(s)}
+                    {STATUS_LIST.map((item) => (
+                      <SelectItem key={item} value={item}>
+                        {statusLabel(item)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="of-desc">Descrição</Label>
-              <Input
-                id="of-desc"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="opcional — nicho, idioma, observação"
-              />
-            </div>
-            <div className="rounded-md border border-white/[0.08] bg-white/[0.02] p-3">
-              <p className="hud-label">Conexão UTMify</p>
-              <p className="mt-1 text-[11px] text-white/45">
-                {offer.utmifyConfigured
-                  ? `Conectada como ${offer.utmifyLoginHint ?? 'usuário protegido'}. Preencha abaixo somente para trocar as credenciais.`
-                  : 'Informe login e senha para conectar.'}
-              </p>
-              <div className="mt-3 grid gap-3 md:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="of-utmify-login">Login</Label>
-                  <Input
-                    id="of-utmify-login"
-                    value={utmifyLogin}
-                    onChange={(e) => setUtmifyLogin(e.target.value)}
-                    autoComplete="username"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="of-utmify-password">Senha</Label>
-                  <Input
-                    id="of-utmify-password"
-                    type="password"
-                    value={utmifyPassword}
-                    onChange={(e) => setUtmifyPassword(e.target.value)}
-                    autoComplete="new-password"
-                  />
-                </div>
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="of-dash">UTMify dashboardId</Label>
-              <Input
-                id="of-dash"
-                value={dashboardId}
-                onChange={(e) => setDashboardId(e.target.value)}
-                placeholder="ex. 69f3b5692659d80c33debea2"
-                className="font-mono text-[12px]"
-              />
+              </Field>
+              <Field label="Descrição" htmlFor="of-description">
+                <Input
+                  id="of-description"
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  placeholder="Nicho, idioma ou observação"
+                />
+              </Field>
             </div>
           </section>
 
-          {/* Front links */}
-          <LinksSection
-            title="Front (LP / VSL)"
-            hint="Cada item tem White (página segura) e Black (página real)."
-            links={fronts}
-            onChange={setFronts}
-            addLabel="Adicionar Front"
-          />
-
-          {/* Upsell links */}
-          <LinksSection
-            title="Upsell"
-            hint="Sequência pós-checkout. Cada item tem White e Black."
-            links={upsells}
-            onChange={setUpsells}
-            addLabel="Adicionar Upsell"
-          />
+          <section className="space-y-3 rounded-md border border-white/[0.08] bg-white/[0.02] p-4">
+            <div>
+              <p className="hud-label">Conexão UTMify</p>
+              <p className="mt-1 text-[11px] text-white/45">
+                {offer.utmifyConfigured
+                  ? `Conectada como ${offer.utmifyLoginHint ?? 'usuário protegido'}. Preencha login e senha somente para trocar a conta.`
+                  : 'Informe a conta que possui acesso à dashboard.'}
+              </p>
+            </div>
+            <Field label="ID da dashboard" htmlFor="of-dashboard">
+              <Input
+                id="of-dashboard"
+                value={dashboardId}
+                onChange={(event) => setDashboardId(event.target.value)}
+                className="font-mono text-[12px]"
+              />
+            </Field>
+            <div className="grid gap-3 md:grid-cols-2">
+              <Field label="Novo login" htmlFor="of-login">
+                <Input
+                  id="of-login"
+                  value={utmifyLogin}
+                  onChange={(event) => setUtmifyLogin(event.target.value)}
+                  autoComplete="username"
+                />
+              </Field>
+              <Field label="Nova senha" htmlFor="of-password">
+                <Input
+                  id="of-password"
+                  type="password"
+                  value={utmifyPassword}
+                  onChange={(event) => setUtmifyPassword(event.target.value)}
+                  autoComplete="new-password"
+                />
+              </Field>
+            </div>
+            {offer.syncStatus === 'error' && (
+              <p className="rounded-md border border-red-300/20 bg-red-300/[0.04] p-3 text-[12px] text-red-200">
+                {offer.lastSyncError}
+              </p>
+            )}
+          </section>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={mut.isPending}>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={mutation.isPending}
+          >
             Cancelar
           </Button>
-          <Button onClick={() => mut.mutate()} disabled={!canSave || mut.isPending}>
-            {mut.isPending ? 'Salvando…' : 'Salvar'}
+          <Button
+            onClick={() => mutation.mutate()}
+            disabled={!name.trim() || !dashboardId.trim() || mutation.isPending}
+          >
+            {mutation.isPending ? 'Salvando…' : 'Salvar e sincronizar'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -220,124 +185,15 @@ export function OfferEditDialog({ offer, open, onOpenChange }: Props) {
   );
 }
 
-function LinksSection({
-  title,
-  hint,
-  links,
-  onChange,
-  addLabel,
-}: {
-  title: string;
-  hint?: string;
-  links: OfferLink[];
-  onChange: (next: OfferLink[]) => void;
-  addLabel: string;
-}) {
-  const update = (idx: number, patch: Partial<OfferLink>) => {
-    const next = links.map((l, i) => (i === idx ? { ...l, ...patch } : l));
-    onChange(next);
-  };
-  const remove = (idx: number) => onChange(links.filter((_, i) => i !== idx));
-  const add = () => onChange([...links, emptyLink()]);
-
+function Field({
+  label,
+  htmlFor,
+  children,
+}: { label: string; htmlFor: string; children: ReactNode }) {
   return (
-    <section className="space-y-3">
-      <div className="flex items-baseline justify-between">
-        <div>
-          <p className="hud-label">{title}</p>
-          {hint && <p className="mt-0.5 text-[11px] text-white/45">{hint}</p>}
-        </div>
-        <Button size="sm" variant="outline" onClick={add} type="button">
-          <Plus className="h-3 w-3" />
-          {addLabel}
-        </Button>
-      </div>
-
-      {links.length === 0 ? (
-        <p className="rounded-md border border-dashed border-white/10 bg-white/[0.01] p-4 text-center text-[12px] text-white/45">
-          Nenhum link ainda. Clique em <strong>{addLabel}</strong>.
-        </p>
-      ) : (
-        <div className="space-y-3">
-          {links.map((l, i) => (
-            <div key={l.id} className="rounded-md border border-white/[0.08] bg-white/[0.02] p-3">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/65">
-                  #{i + 1}
-                </p>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  type="button"
-                  onClick={() => remove(i)}
-                  aria-label="Remover link"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </Button>
-              </div>
-              <div className="space-y-2">
-                <div className="space-y-1">
-                  <Label className="text-[10px] uppercase tracking-[0.12em] text-white/45">
-                    Label (opcional)
-                  </Label>
-                  <Input
-                    value={l.label ?? ''}
-                    onChange={(e) => update(i, { label: e.target.value })}
-                    placeholder='ex. "Front PT" ou "OB Garantia"'
-                    className="h-9"
-                  />
-                </div>
-                <div className="grid gap-2 md:grid-cols-2">
-                  <div className="space-y-1">
-                    <Label className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.12em] text-emerald-300/85">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-300/70" />
-                      White (página safe)
-                    </Label>
-                    <Input
-                      value={l.whiteUrl ?? ''}
-                      onChange={(e) => update(i, { whiteUrl: e.target.value })}
-                      placeholder="https://..."
-                      className="h-9 font-mono text-[12px]"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.12em] text-rose-300/85">
-                      <span className="h-1.5 w-1.5 rounded-full bg-rose-300/70" />
-                      Black (página real)
-                    </Label>
-                    <Input
-                      value={l.blackUrl ?? ''}
-                      onChange={(e) => update(i, { blackUrl: e.target.value })}
-                      placeholder="https://..."
-                      className="h-9 font-mono text-[12px]"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
+    <div className="space-y-1.5">
+      <Label htmlFor={htmlFor}>{label}</Label>
+      {children}
+    </div>
   );
-}
-
-function normalize(arr: OfferLink[] | undefined): OfferLink[] {
-  return (arr ?? []).map((l) => ({
-    id: l.id || newId(),
-    label: l.label ?? '',
-    whiteUrl: l.whiteUrl ?? '',
-    blackUrl: l.blackUrl ?? '',
-  }));
-}
-
-function cleanForSubmit(arr: OfferLink[]): OfferLink[] {
-  return arr
-    .map((l) => ({
-      id: l.id,
-      ...(l.label?.trim() ? { label: l.label.trim() } : {}),
-      ...(l.whiteUrl?.trim() ? { whiteUrl: l.whiteUrl.trim() } : {}),
-      ...(l.blackUrl?.trim() ? { blackUrl: l.blackUrl.trim() } : {}),
-    }))
-    .filter((l) => l.label || l.whiteUrl || l.blackUrl);
 }
