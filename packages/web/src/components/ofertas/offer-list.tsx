@@ -21,6 +21,8 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { OfferCard } from './offer-card';
 import { OfferEditDialog } from './offer-edit-dialog';
+import { OfferMemberPicker } from './offer-member-picker';
+import { useAuth } from '@/lib/auth-context';
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -34,6 +36,7 @@ function nDaysAgoIso(n: number) {
 
 export function OfferList() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   const [from, setFrom] = useState(() => nDaysAgoIso(6));
   const [to, setTo] = useState(() => todayIso());
   const [showCreate, setShowCreate] = useState(false);
@@ -43,6 +46,13 @@ export function OfferList() {
   const [utmifyLogin, setUtmifyLogin] = useState('');
   const [utmifyPassword, setUtmifyPassword] = useState('');
   const [editing, setEditing] = useState<OfferView | null>(null);
+  const [memberIds, setMemberIds] = useState<string[]>([]);
+
+  const usersQuery = useQuery({
+    queryKey: ['users-list'],
+    queryFn: () => apiClient.listUsers(),
+    enabled: user?.role === 'admin',
+  });
 
   const offersQuery = useQuery<OfferView[]>({
     queryKey: ['offers'],
@@ -64,6 +74,7 @@ export function OfferList() {
         dashboard_id: dashboardId.trim(),
         utmify_login: utmifyLogin.trim(),
         utmify_password: utmifyPassword,
+        ...(user?.role === 'admin' ? { member_ids: memberIds } : {}),
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['offers'] });
@@ -74,6 +85,7 @@ export function OfferList() {
       setDashboardId('');
       setUtmifyLogin('');
       setUtmifyPassword('');
+      setMemberIds([]);
       toast.success('Oferta criada. A primeira sincronização já começou.');
     },
     onError: (error) => toast.error((error as Error).message),
@@ -144,9 +156,24 @@ export function OfferList() {
             <div className="space-y-3">
               {summary.currencyTotals.map(({ currency, totals }) => (
                 <div key={currency} className="grid gap-3 md:grid-cols-3">
-                  <Kpi label={`Investimento geral · ${currency}`} value={formatCurrency(totals.spend, currency)} icon={<Wallet className="h-4 w-4" />} tone="spend" />
-                  <Kpi label={`Faturamento geral · ${currency}`} value={formatCurrency(totals.revenue, currency)} icon={<Receipt className="h-4 w-4" />} tone="positive" />
-                  <Kpi label={`ROAS geral · ${currency}`} value={formatRoas(totals.roas)} icon={<TrendingUp className="h-4 w-4" />} tone={totals.roas !== null && totals.roas >= 1 ? 'positive' : 'warn'} />
+                  <Kpi
+                    label={`Investimento geral · ${currency}`}
+                    value={formatCurrency(totals.spend, currency)}
+                    icon={<Wallet className="h-4 w-4" />}
+                    tone="spend"
+                  />
+                  <Kpi
+                    label={`Faturamento geral · ${currency}`}
+                    value={formatCurrency(totals.revenue, currency)}
+                    icon={<Receipt className="h-4 w-4" />}
+                    tone="positive"
+                  />
+                  <Kpi
+                    label={`ROAS geral · ${currency}`}
+                    value={formatRoas(totals.roas)}
+                    icon={<TrendingUp className="h-4 w-4" />}
+                    tone={totals.roas !== null && totals.roas >= 1 ? 'positive' : 'warn'}
+                  />
                 </div>
               ))}
             </div>
@@ -207,17 +234,19 @@ export function OfferList() {
               {offers.length} ofertas cadastradas
             </h2>
           </div>
-          <Button
-            size="sm"
-            onClick={() => setShowCreate((value) => !value)}
-            variant={showCreate ? 'outline' : 'default'}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            {showCreate ? 'Cancelar' : 'Nova oferta'}
-          </Button>
+          {user?.role === 'admin' && (
+            <Button
+              size="sm"
+              onClick={() => setShowCreate((value) => !value)}
+              variant={showCreate ? 'outline' : 'default'}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {showCreate ? 'Cancelar' : 'Nova oferta'}
+            </Button>
+          )}
         </div>
 
-        {showCreate && (
+        {showCreate && user?.role === 'admin' && (
           <form
             onSubmit={(event) => {
               event.preventDefault();
@@ -272,6 +301,14 @@ export function OfferList() {
                 />
               </Field>
             </div>
+            {user?.role === 'admin' && (
+              <OfferMemberPicker
+                members={usersQuery.data ?? []}
+                selected={memberIds}
+                onChange={setMemberIds}
+                loading={usersQuery.isLoading}
+              />
+            )}
             <div className="flex justify-end">
               <Button type="submit" disabled={!canCreate || createMut.isPending}>
                 {createMut.isPending && <Loader2 className="h-4 w-4 animate-spin" />}Criar e
@@ -295,22 +332,28 @@ export function OfferList() {
               <div key={offer.id} className="space-y-2">
                 <OfferCard
                   offer={offer}
-                  onEdit={() => setEditing(offer)}
-                  onDelete={() => deleteMut.mutate(offer.id)}
+                  {...(user?.role === 'admin'
+                    ? {
+                        onEdit: () => setEditing(offer),
+                        onDelete: () => deleteMut.mutate(offer.id),
+                      }
+                    : {})}
                 />
                 <div className="flex items-center justify-between px-1 text-[11px] text-white/45">
                   <span>{syncLabel(offer)}</span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => syncMut.mutate(offer.id)}
-                    disabled={syncMut.isPending || offer.syncStatus === 'syncing'}
-                  >
-                    <RefreshCw
-                      className={`h-3.5 w-3.5 ${offer.syncStatus === 'syncing' ? 'animate-spin' : ''}`}
-                    />
-                    Sincronizar
-                  </Button>
+                  {user?.role === 'admin' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => syncMut.mutate(offer.id)}
+                      disabled={syncMut.isPending || offer.syncStatus === 'syncing'}
+                    >
+                      <RefreshCw
+                        className={`h-3.5 w-3.5 ${offer.syncStatus === 'syncing' ? 'animate-spin' : ''}`}
+                      />
+                      Sincronizar
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}

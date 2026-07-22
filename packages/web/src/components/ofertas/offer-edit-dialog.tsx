@@ -18,10 +18,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { type OfferStatus, type OfferView, apiClient } from '@/lib/api-client';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { STATUS_LIST, statusLabel } from './status-badge';
+import { OfferMemberPicker } from './offer-member-picker';
+import { useAuth } from '@/lib/auth-context';
 
 interface Props {
   offer: OfferView;
@@ -31,6 +33,7 @@ interface Props {
 
 export function OfferEditDialog({ offer, open, onOpenChange }: Props) {
   const qc = useQueryClient();
+  const { user } = useAuth();
   const [name, setName] = useState(offer.name);
   const [companyName, setCompanyName] = useState(offer.companyName ?? '');
   const [description, setDescription] = useState(offer.description ?? '');
@@ -38,6 +41,12 @@ export function OfferEditDialog({ offer, open, onOpenChange }: Props) {
   const [status, setStatus] = useState<OfferStatus>(offer.status);
   const [utmifyLogin, setUtmifyLogin] = useState('');
   const [utmifyPassword, setUtmifyPassword] = useState('');
+  const [memberIds, setMemberIds] = useState<string[]>(offer.memberIds);
+  const usersQuery = useQuery({
+    queryKey: ['users-list'],
+    queryFn: () => apiClient.listUsers(),
+    enabled: open && user?.role === 'admin',
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -48,6 +57,7 @@ export function OfferEditDialog({ offer, open, onOpenChange }: Props) {
     setStatus(offer.status);
     setUtmifyLogin('');
     setUtmifyPassword('');
+    setMemberIds(offer.memberIds);
   }, [open, offer]);
 
   const mutation = useMutation({
@@ -58,6 +68,7 @@ export function OfferEditDialog({ offer, open, onOpenChange }: Props) {
         description: description.trim(),
         dashboard_id: dashboardId.trim(),
         status,
+        member_ids: memberIds,
         ...(utmifyLogin.trim() && utmifyPassword
           ? { utmify_login: utmifyLogin.trim(), utmify_password: utmifyPassword }
           : {}),
@@ -65,7 +76,8 @@ export function OfferEditDialog({ offer, open, onOpenChange }: Props) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['offers'] });
       void qc.invalidateQueries({ queryKey: ['dashboard-summary'] });
-      toast.success('Oferta atualizada e sincronização iniciada.');
+      void qc.invalidateQueries({ queryKey: ['offer-detail', offer.id] });
+      toast.success('Oferta e acessos atualizados.');
       onOpenChange(false);
     },
     onError: (error) => toast.error((error as Error).message),
@@ -120,6 +132,15 @@ export function OfferEditDialog({ offer, open, onOpenChange }: Props) {
               </Field>
             </div>
           </section>
+
+          {user?.role === 'admin' && (
+            <OfferMemberPicker
+              members={usersQuery.data ?? []}
+              selected={memberIds}
+              onChange={setMemberIds}
+              loading={usersQuery.isLoading}
+            />
+          )}
 
           <section className="space-y-3 rounded-md border border-white/[0.08] bg-white/[0.02] p-4">
             <div>

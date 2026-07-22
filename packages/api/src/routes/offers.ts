@@ -7,10 +7,10 @@ import {
 import type { Offer } from '@page-cloner/shared';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { BadRequestError, zodToProblem } from '../lib/problem.js';
+import { BadRequestError, HttpProblem, zodToProblem } from '../lib/problem.js';
 import { computeMetrics } from '../services/snapshot-store.js';
 
-function offerToWire(o: Offer): Record<string, unknown> {
+function offerToWire(o: Offer, includeAccess = false): Record<string, unknown> {
   return {
     id: o.id,
     name: o.name,
@@ -26,7 +26,29 @@ function offerToWire(o: Offer): Record<string, unknown> {
     status: o.status,
     created_at: o.createdAt,
     updated_at: o.updatedAt,
+    ...(includeAccess ? { member_ids: o.memberIds ?? [] } : {}),
   };
+}
+
+async function validateMemberIds(
+  app: FastifyInstance,
+  memberIds: string[] | undefined,
+  ownerId: string,
+): Promise<string[] | undefined> {
+  if (memberIds === undefined) return undefined;
+  const unique = [...new Set(memberIds)].filter((id) => id !== ownerId);
+  for (const id of unique) {
+    const member = await app.userStore.maybeGetById(id);
+    if (!member || member.role === 'admin') {
+      throw new BadRequestError(`Membro inválido para a oferta: ${id}`);
+    }
+    if (member.allowedTools && !member.allowedTools.includes('ofertas')) {
+      await app.userStore.update(member.id, {
+        allowedTools: [...member.allowedTools, 'ofertas'],
+      });
+    }
+  }
+  return unique;
 }
 
 function isoToday(): string {
@@ -61,15 +83,25 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   // GET /v1/offers — list all offers belonging to the caller
   app.get('/offers', async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');
-    const offers = await app.offerStore.listByUser(req.user.sub);
-    return reply.send({ offers: offers.map(offerToWire) });
+    const offers = await app.offerStore.listAccessible(req.user.sub, req.user.role === 'admin');
+    const includeAccess = req.user.role === 'admin';
+    return reply.send({ offers: offers.map((offer) => offerToWire(offer, includeAccess)) });
   });
 
   // POST /v1/offers — create a new offer
   app.post('/offers', async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');
+    if (req.user.role !== 'admin') {
+      throw new HttpProblem({
+        status: 403,
+        title: 'Forbidden',
+        detail: 'Apenas administradores podem criar ofertas.',
+        code: 'forbidden',
+      });
+    }
     const parsed = CreateOfferRequestSchema.safeParse(req.body);
     if (!parsed.success) throw zodToProblem(parsed.error, req.url);
+    const memberIds = await validateMemberIds(app, parsed.data.member_ids, req.user.sub);
     const offer = await app.offerStore.create({
       userId: req.user.sub,
       name: parsed.data.name,
@@ -77,6 +109,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       ...(parsed.data.dashboard_id ? { dashboardId: parsed.data.dashboard_id } : {}),
       ...(parsed.data.description ? { description: parsed.data.description } : {}),
       ...(parsed.data.status ? { status: parsed.data.status } : {}),
+      ...(memberIds ? { memberIds } : {}),
     });
     if (parsed.data.utmify_login && parsed.data.utmify_password) {
       await app.offerStore.setUtmifyCredentials(offer.id, {
@@ -87,9 +120,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       void app.utmifySync.syncOffer(connected, true).catch((error) => {
         app.log.warn({ error, offerId: offer.id }, 'initial utmify sync failed');
       });
-      return reply.code(201).send(offerToWire(connected));
+      return reply.code(201).send(offerToWire(connected, true));
     }
-    return reply.code(201).send(offerToWire(offer));
+    return reply.code(201).send(offerToWire(offer, true));
   });
 
   // PATCH /v1/offers/:id — update name/status/links/etc
@@ -97,7 +130,16 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!req.user) throw new BadRequestError('No user attached.');
     const parsed = UpdateOfferRequestSchema.safeParse(req.body);
     if (!parsed.success) throw zodToProblem(parsed.error, req.url);
-    const updated = await app.offerStore.update(req.params.id, req.user.sub, parsed.data);
+    const current = await app.offerStore.assertManager(
+      req.params.id,
+      req.user.sub,
+      req.user.role === 'admin',
+    );
+    const memberIds = await validateMemberIds(app, parsed.data.member_ids, current.userId);
+    const updated = await app.offerStore.update(req.params.id, current.userId, {
+      ...parsed.data,
+      ...(memberIds !== undefined ? { member_ids: memberIds } : {}),
+    });
     if (parsed.data.utmify_login && parsed.data.utmify_password) {
       await app.offerStore.setUtmifyCredentials(updated.id, {
         login: parsed.data.utmify_login,
@@ -114,23 +156,27 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         app.log.warn({ error, offerId: finalOffer.id }, 'utmify reconnect sync failed');
       });
     }
-    return reply.send(offerToWire(finalOffer));
+    return reply.send(offerToWire(finalOffer, true));
   });
 
   // DELETE /v1/offers/:id
   app.delete<{ Params: { id: string } }>('/offers/:id', async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');
-    await app.offerStore.assertOwner(req.params.id, req.user.sub);
+    const offer = await app.offerStore.assertManager(
+      req.params.id,
+      req.user.sub,
+      req.user.role === 'admin',
+    );
     await app.snapshotStore.deleteAllForOffer(req.params.id);
     await app.intradayStore.deleteAllForOffer(req.params.id);
-    await app.offerStore.delete(req.params.id, req.user.sub);
+    await app.offerStore.delete(req.params.id, offer.userId);
     return reply.code(204).send();
   });
 
   // POST /v1/offers/:id/ingest — accept daily snapshots from n8n / external sources
   app.post<{ Params: { id: string } }>('/offers/:id/ingest', async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');
-    await app.offerStore.assertOwner(req.params.id, req.user.sub);
+    await app.offerStore.assertManager(req.params.id, req.user.sub, req.user.role === 'admin');
     const parsed = IngestSnapshotsRequestSchema.safeParse(req.body);
     if (!parsed.success) throw zodToProblem(parsed.error, req.url);
 
@@ -165,12 +211,16 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     '/offers/:id/snapshots',
     async (req, reply) => {
       if (!req.user) throw new BadRequestError('No user attached.');
-      const offer = await app.offerStore.assertOwner(req.params.id, req.user.sub);
+      const offer = await app.offerStore.assertAccess(
+        req.params.id,
+        req.user.sub,
+        req.user.role === 'admin',
+      );
       const range = resolveRange(RangeQuerySchema.parse(req.query));
       const snapshots = await app.snapshotStore.listRange(offer.id, range.from, range.to);
       const totals = app.snapshotStore.aggregate(snapshots);
       return reply.send({
-        offer: offerToWire(offer),
+        offer: offerToWire(offer, req.user.role === 'admin'),
         from: range.from,
         to: range.to,
         snapshots: snapshots.map(snapshotToWire),
@@ -181,7 +231,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   app.post<{ Params: { id: string } }>('/offers/:id/sync', async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');
-    const offer = await app.offerStore.assertOwner(req.params.id, req.user.sub);
+    const offer = await app.offerStore.assertManager(
+      req.params.id,
+      req.user.sub,
+      req.user.role === 'admin',
+    );
     // A sync acionada pelo operador reconstrói todo o histórico recente. A
     // rotina automática continua incremental para não sobrecarregar a UTMify.
     const result = await app.utmifySync.syncOffer(offer, true);
@@ -192,13 +246,21 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   // without returning credentials, tokens, or the complete ads payload.
   app.get<{ Params: { id: string } }>('/offers/:id/utmify-capabilities', async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');
-    const offer = await app.offerStore.assertOwner(req.params.id, req.user.sub);
+    const offer = await app.offerStore.assertManager(
+      req.params.id,
+      req.user.sub,
+      req.user.role === 'admin',
+    );
     return reply.send(await app.utmifySync.inspectCapabilities(offer));
   });
 
   app.get<{ Params: { id: string } }>('/offers/:id/intraday', async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');
-    const offer = await app.offerStore.assertOwner(req.params.id, req.user.sub);
+    const offer = await app.offerStore.assertAccess(
+      req.params.id,
+      req.user.sub,
+      req.user.role === 'admin',
+    );
     return reply.send(await app.intradayStore.summary(offer.id));
   });
 
@@ -208,7 +270,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     async (req, reply) => {
       if (!req.user) throw new BadRequestError('No user attached.');
       const range = resolveRange(RangeQuerySchema.parse(req.query));
-      const offers = await app.offerStore.listByUser(req.user.sub);
+      const offers = await app.offerStore.listAccessible(req.user.sub, req.user.role === 'admin');
       const perOffer: Array<{
         offer: Record<string, unknown>;
         totals: ReturnType<typeof computeMetrics>;
@@ -218,7 +280,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       let sales = 0;
       let revenue = 0;
       let ic = 0;
-      const byCurrency = new Map<string, { spend: number; sales: number; revenue: number; ic: number }>();
+      const byCurrency = new Map<
+        string,
+        { spend: number; sales: number; revenue: number; ic: number }
+      >();
       for (const offer of offers) {
         const snaps = await app.snapshotStore.listRange(offer.id, range.from, range.to);
         const totals = app.snapshotStore.aggregate(snaps);
@@ -227,14 +292,19 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         revenue += totals.revenue;
         ic += totals.ic;
         const currency = offer.currency ?? 'BRL';
-        const currencyTotals = byCurrency.get(currency) ?? { spend: 0, sales: 0, revenue: 0, ic: 0 };
+        const currencyTotals = byCurrency.get(currency) ?? {
+          spend: 0,
+          sales: 0,
+          revenue: 0,
+          ic: 0,
+        };
         currencyTotals.spend += totals.spend;
         currencyTotals.sales += totals.sales;
         currencyTotals.revenue += totals.revenue;
         currencyTotals.ic += totals.ic;
         byCurrency.set(currency, currencyTotals);
         perOffer.push({
-          offer: offerToWire(offer),
+          offer: offerToWire(offer, req.user.role === 'admin'),
           totals,
           snapshots_count: snaps.length,
         });

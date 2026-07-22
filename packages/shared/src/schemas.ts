@@ -153,6 +153,7 @@ export const CreateOfferRequestSchema = z
     status: OfferStatusSchema.optional(),
     utmify_login: z.string().trim().min(1).max(200).optional(),
     utmify_password: z.string().min(1).max(500).optional(),
+    member_ids: z.array(z.string().min(1).max(64)).max(100).optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -180,6 +181,7 @@ export const UpdateOfferRequestSchema = z
     status: OfferStatusSchema.optional(),
     utmify_login: z.string().trim().min(1).max(200).optional(),
     utmify_password: z.string().min(1).max(500).optional(),
+    member_ids: z.array(z.string().min(1).max(64)).max(100).optional(),
   })
   .strict()
   .superRefine((value, ctx) => {

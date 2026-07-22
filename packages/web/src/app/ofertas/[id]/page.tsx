@@ -18,6 +18,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ChevronDown, Clock3, Loader2, Pencil, Search, Target } from 'lucide-react';
 import Link from 'next/link';
 import { use, useMemo, useState } from 'react';
+import { useAuth } from '@/lib/auth-context';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,7 +44,9 @@ function WindowMetrics({ metrics, currency }: { metrics: MetricsView; currency: 
     <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
       <div>
         <dt className="hud-label">Investido</dt>
-        <dd className="mt-1 font-mono text-[15px] text-amber-300">{formatCurrency(metrics.spend, currency)}</dd>
+        <dd className="mt-1 font-mono text-[15px] text-amber-300">
+          {formatCurrency(metrics.spend, currency)}
+        </dd>
       </div>
       <div>
         <dt className="hud-label">Vendas</dt>
@@ -51,7 +54,9 @@ function WindowMetrics({ metrics, currency }: { metrics: MetricsView; currency: 
       </div>
       <div>
         <dt className="hud-label">CPA</dt>
-        <dd className="mt-1 font-mono text-[15px] text-white/85">{formatCurrency(metrics.cpa, currency)}</dd>
+        <dd className="mt-1 font-mono text-[15px] text-white/85">
+          {formatCurrency(metrics.cpa, currency)}
+        </dd>
       </div>
       <div>
         <dt className="hud-label">IC</dt>
@@ -59,11 +64,15 @@ function WindowMetrics({ metrics, currency }: { metrics: MetricsView; currency: 
       </div>
       <div>
         <dt className="hud-label">Faturamento</dt>
-        <dd className="mt-1 font-mono text-[15px] text-emerald-300">{formatCurrency(metrics.revenue, currency)}</dd>
+        <dd className="mt-1 font-mono text-[15px] text-emerald-300">
+          {formatCurrency(metrics.revenue, currency)}
+        </dd>
       </div>
       <div>
         <dt className="hud-label">CPA IC</dt>
-        <dd className="mt-1 font-mono text-[15px] text-white/85">{formatCurrency(metrics.icCpa, currency)}</dd>
+        <dd className="mt-1 font-mono text-[15px] text-white/85">
+          {formatCurrency(metrics.icCpa, currency)}
+        </dd>
       </div>
       <div>
         <dt className="hud-label">Conv. IC</dt>
@@ -81,6 +90,8 @@ function WindowMetrics({ metrics, currency }: { metrics: MetricsView; currency: 
 
 export default function OfertaDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const { user } = useAuth();
+  const canManage = user?.role === 'admin';
   const [from, setFrom] = useState(() => nDaysAgoIso(6));
   const [to, setTo] = useState(() => todayIso());
   const [editing, setEditing] = useState(false);
@@ -106,7 +117,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
   const capabilitiesQuery = useQuery({
     queryKey: ['utmify-capabilities', id],
     queryFn: () => apiClient.getUtmifyCapabilities(id),
-    enabled: Boolean(offer?.utmifyConfigured),
+    enabled: Boolean(offer?.utmifyConfigured) && canManage,
     staleTime: 30 * 60 * 1000,
     retry: false,
   });
@@ -216,12 +227,12 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
   const currentWindow = intraday?.windows.find(
     (window) => window.index === intraday.currentWindowIndex,
   );
-  const selectedAdWindow = intradayAdWindow === 'overall'
-    ? undefined
-    : intraday?.windows.find((window) => window.index === Number(intradayAdWindow));
-  const intradayAds = intradayAdWindow === 'overall'
-    ? (intraday?.overallAds ?? [])
-    : (selectedAdWindow?.ads ?? []);
+  const selectedAdWindow =
+    intradayAdWindow === 'overall'
+      ? undefined
+      : intraday?.windows.find((window) => window.index === Number(intradayAdWindow));
+  const intradayAds =
+    intradayAdWindow === 'overall' ? (intraday?.overallAds ?? []) : (selectedAdWindow?.ads ?? []);
   const intradayAdQuery = intradayAdSearch.trim().toLocaleLowerCase('pt-BR');
   const filteredIntradayAds = intradayAds.filter(
     (ad) => !intradayAdQuery || ad.name.toLocaleLowerCase('pt-BR').includes(intradayAdQuery),
@@ -236,7 +247,10 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
     (window) => window.index === (adCompareRight ? Number(adCompareRight) : defaultAdRight),
   );
   const comparedAds = useMemo(() => {
-    const byName = new Map<string, { name: string; left?: IntradayAdView; right?: IntradayAdView }>();
+    const byName = new Map<
+      string,
+      { name: string; left?: IntradayAdView; right?: IntradayAdView }
+    >();
     for (const ad of leftAdWindow?.ads ?? []) byName.set(ad.name, { name: ad.name, left: ad });
     for (const ad of rightAdWindow?.ads ?? []) {
       const row = byName.get(ad.name) ?? { name: ad.name };
@@ -244,7 +258,9 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
       byName.set(ad.name, row);
     }
     return [...byName.values()]
-      .filter((row) => !intradayAdQuery || row.name.toLocaleLowerCase('pt-BR').includes(intradayAdQuery))
+      .filter(
+        (row) => !intradayAdQuery || row.name.toLocaleLowerCase('pt-BR').includes(intradayAdQuery),
+      )
       .sort((a, b) => (b.right?.revenue ?? 0) - (a.right?.revenue ?? 0));
   }, [leftAdWindow, rightAdWindow, intradayAdQuery]);
 
@@ -268,13 +284,13 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
             <p className="hud-label">Oferta</p>
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-white">{offerName}</h1>
-          {offer?.dashboardId && (
+          {offer?.dashboardId && canManage && (
             <p className="font-mono text-[11px] text-white/40">
               utmify dashboardId: {offer.dashboardId} · moeda: {currency}
             </p>
           )}
         </div>
-        {offer && (
+        {offer && canManage && (
           <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
             <Pencil className="h-3.5 w-3.5" />
             Editar oferta
@@ -285,17 +301,18 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
       {/* Identidade + links da oferta (mesmo card da listagem, em destaque) */}
       {offer && (
         <section className="mb-6">
-          <OfferCard offer={offer} onEdit={() => setEditing(true)} onDelete={() => undefined} />
+          <OfferCard offer={offer} {...(canManage ? { onEdit: () => setEditing(true) } : {})} />
         </section>
       )}
 
-      {offer?.utmifyConfigured && (
+      {offer?.utmifyConfigured && canManage && (
         <details className="glass-card group mb-6 overflow-hidden p-0">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 [&::-webkit-details-marker]:hidden">
             <div>
               <p className="hud-label">Conta de anúncios via UTMify</p>
               <p className="mt-1 text-[12px] text-white/55">
-                {capabilitiesQuery.data?.accountFields.length ?? 0} conta(s) identificada(s) · clique para abrir
+                {capabilitiesQuery.data?.accountFields.length ?? 0} conta(s) identificada(s) ·
+                clique para abrir
               </p>
             </div>
             {capabilitiesQuery.isFetching ? (
@@ -305,44 +322,44 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
             )}
           </summary>
           <div className="border-t border-white/[0.06] px-4 pb-4">
-          {capabilitiesQuery.data?.accountFields.length ? (
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              {capabilitiesQuery.data.accountFields.map((account, index) => (
-                <div
-                  key={JSON.stringify(account)}
-                  className="rounded-lg border border-white/[0.06] bg-black/10 px-3 py-3"
-                >
-                  <p className="mb-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-cyan-300/70">
-                    Conta {index + 1}
-                  </p>
-                  <div className="space-y-2">
-                    {Object.entries(account).map(([key, value]) => (
-                      <div key={key}>
-                        <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-white/35">
-                          {key === 'accountId'
-                            ? 'ID da conta'
-                            : key === 'accountStatus'
-                              ? 'Status da conta'
-                              : key}
-                        </p>
-                        <p className="mt-1 truncate font-mono text-[12px] text-white/80">
-                          {String(value)}
-                        </p>
-                      </div>
-                    ))}
+            {capabilitiesQuery.data?.accountFields.length ? (
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {capabilitiesQuery.data.accountFields.map((account, index) => (
+                  <div
+                    key={JSON.stringify(account)}
+                    className="rounded-lg border border-white/[0.06] bg-black/10 px-3 py-3"
+                  >
+                    <p className="mb-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-cyan-300/70">
+                      Conta {index + 1}
+                    </p>
+                    <div className="space-y-2">
+                      {Object.entries(account).map(([key, value]) => (
+                        <div key={key}>
+                          <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-white/35">
+                            {key === 'accountId'
+                              ? 'ID da conta'
+                              : key === 'accountStatus'
+                                ? 'Status da conta'
+                                : key}
+                          </p>
+                          <p className="mt-1 truncate font-mono text-[12px] text-white/80">
+                            {String(value)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          ) : capabilitiesQuery.isSuccess ? (
-            <p className="mt-3 text-[12px] text-amber-200/75">
-              O endpoint de anúncios não retornou nome nem status da conta neste período.
-            </p>
-          ) : capabilitiesQuery.isError ? (
-            <p className="mt-3 text-[12px] text-rose-200/75">
-              Não foi possível inspecionar os campos da conta agora.
-            </p>
-          ) : null}
+                ))}
+              </div>
+            ) : capabilitiesQuery.isSuccess ? (
+              <p className="mt-3 text-[12px] text-amber-200/75">
+                O endpoint de anúncios não retornou nome nem status da conta neste período.
+              </p>
+            ) : capabilitiesQuery.isError ? (
+              <p className="mt-3 text-[12px] text-rose-200/75">
+                Não foi possível inspecionar os campos da conta agora.
+              </p>
+            ) : null}
           </div>
         </details>
       )}
@@ -612,7 +629,11 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
           </div>
           {intraday?.updatedAt && (
             <span className="hud-label">
-              Atualizado {new Date(intraday.updatedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+              Atualizado{' '}
+              {new Date(intraday.updatedAt).toLocaleTimeString('pt-BR', {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
             </span>
           )}
         </header>
@@ -668,7 +689,8 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                   <WindowMetrics metrics={currentWindow.metrics} currency={currency} />
                 ) : (
                   <p className="mt-5 text-[12px] text-white/45">
-                    É necessário um checkpoint anterior ao início da janela para calcular a diferença.
+                    É necessário um checkpoint anterior ao início da janela para calcular a
+                    diferença.
                   </p>
                 )}
               </article>
@@ -685,23 +707,53 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                 {intraday.windows.map((window) => (
                   <article key={window.index} className="bg-[#07151b] p-4">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="font-mono text-[13px] font-semibold text-white/85">{window.label}</p>
+                      <p className="font-mono text-[13px] font-semibold text-white/85">
+                        {window.label}
+                      </p>
                       <span className="text-[9px] uppercase tracking-[0.12em] text-white/30">
                         {window.samples} coleta(s)
                       </span>
                     </div>
                     {window.available ? (
                       <dl className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
-                        <div><dt className="text-white/35">Investido</dt><dd className="font-mono text-amber-300">{money(window.metrics.spend)}</dd></div>
-                        <div><dt className="text-white/35">Vendas</dt><dd className="font-mono text-emerald-300">{formatInt(window.metrics.sales)}</dd></div>
-                        <div><dt className="text-white/35">CPA</dt><dd className="font-mono text-white/75">{money(window.metrics.cpa)}</dd></div>
-                        <div><dt className="text-white/35">IC</dt><dd className="font-mono text-cyan-300">{formatInt(window.metrics.ic)}</dd></div>
-                        <div><dt className="text-white/35">CPA IC</dt><dd className="font-mono text-white/75">{money(window.metrics.icCpa)}</dd></div>
-                        <div><dt className="text-white/35">ROAS</dt><dd className="font-mono text-cyan-300">{formatRoas(window.metrics.roas)}</dd></div>
+                        <div>
+                          <dt className="text-white/35">Investido</dt>
+                          <dd className="font-mono text-amber-300">
+                            {money(window.metrics.spend)}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-white/35">Vendas</dt>
+                          <dd className="font-mono text-emerald-300">
+                            {formatInt(window.metrics.sales)}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-white/35">CPA</dt>
+                          <dd className="font-mono text-white/75">{money(window.metrics.cpa)}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-white/35">IC</dt>
+                          <dd className="font-mono text-cyan-300">
+                            {formatInt(window.metrics.ic)}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-white/35">CPA IC</dt>
+                          <dd className="font-mono text-white/75">{money(window.metrics.icCpa)}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-white/35">ROAS</dt>
+                          <dd className="font-mono text-cyan-300">
+                            {formatRoas(window.metrics.roas)}
+                          </dd>
+                        </div>
                       </dl>
                     ) : (
                       <p className="mt-3 text-[11px] text-white/30">
-                        {window.partial ? 'Coleta iniciada no meio desta janela.' : 'Sem dados coletados.'}
+                        {window.partial
+                          ? 'Coleta iniciada no meio desta janela.'
+                          : 'Sem dados coletados.'}
                       </p>
                     )}
                   </article>
@@ -713,28 +765,51 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
               <div className="flex flex-wrap items-end gap-3">
                 <div className="mr-auto">
                   <h3 className="text-[14px] font-semibold text-white">Comparar janelas</h3>
-                  <p className="mt-1 text-[11px] text-white/40">Selecione duas faixas já calculadas.</p>
+                  <p className="mt-1 text-[11px] text-white/40">
+                    Selecione duas faixas já calculadas.
+                  </p>
                 </div>
                 <Label className="space-y-1">
                   <span className="hud-label">Janela A</span>
-                  <select value={compareLeft} onChange={(event) => setCompareLeft(event.target.value)} className="block h-9 rounded-md border border-white/10 bg-[#0b1b22] px-3 text-[12px] text-white">
+                  <select
+                    value={compareLeft}
+                    onChange={(event) => setCompareLeft(event.target.value)}
+                    className="block h-9 rounded-md border border-white/10 bg-[#0b1b22] px-3 text-[12px] text-white"
+                  >
                     <option value="">Anterior disponível</option>
-                    {availableWindows.map((window) => <option key={window.index} value={window.index}>{window.label}</option>)}
+                    {availableWindows.map((window) => (
+                      <option key={window.index} value={window.index}>
+                        {window.label}
+                      </option>
+                    ))}
                   </select>
                 </Label>
                 <Label className="space-y-1">
                   <span className="hud-label">Janela B</span>
-                  <select value={compareRight} onChange={(event) => setCompareRight(event.target.value)} className="block h-9 rounded-md border border-white/10 bg-[#0b1b22] px-3 text-[12px] text-white">
+                  <select
+                    value={compareRight}
+                    onChange={(event) => setCompareRight(event.target.value)}
+                    className="block h-9 rounded-md border border-white/10 bg-[#0b1b22] px-3 text-[12px] text-white"
+                  >
                     <option value="">Mais recente disponível</option>
-                    {availableWindows.map((window) => <option key={window.index} value={window.index}>{window.label}</option>)}
+                    {availableWindows.map((window) => (
+                      <option key={window.index} value={window.index}>
+                        {window.label}
+                      </option>
+                    ))}
                   </select>
                 </Label>
               </div>
               {leftWindow?.available && rightWindow?.available ? (
                 <div className="mt-4 grid gap-3 lg:grid-cols-2">
                   {[leftWindow, rightWindow].map((window) => (
-                    <article key={window.index} className="rounded-xl border border-white/[0.06] bg-black/10 p-4">
-                      <p className="font-mono text-[13px] font-semibold text-cyan-200">{window.label}</p>
+                    <article
+                      key={window.index}
+                      className="rounded-xl border border-white/[0.06] bg-black/10 p-4"
+                    >
+                      <p className="font-mono text-[13px] font-semibold text-cyan-200">
+                        {window.label}
+                      </p>
                       <WindowMetrics metrics={window.metrics} currency={currency} />
                     </article>
                   ))}
@@ -765,7 +840,8 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                   <option value="overall">Acumulado do dia</option>
                   {intraday.windows.map((window) => (
                     <option key={window.index} value={window.index} disabled={!window.adsAvailable}>
-                      {window.label}{window.adsAvailable ? '' : ' · aguardando dados'}
+                      {window.label}
+                      {window.adsAvailable ? '' : ' · aguardando dados'}
                     </option>
                   ))}
                 </select>
@@ -784,7 +860,8 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
 
             {selectedAdWindow?.adsPartial && (
               <div className="border-b border-amber-300/10 bg-amber-300/[0.04] px-4 py-3 text-[11px] text-amber-100/70">
-                Janela parcial: o cálculo começa no primeiro checkpoint com anúncios disponível nesta faixa.
+                Janela parcial: o cálculo começa no primeiro checkpoint com anúncios disponível
+                nesta faixa.
               </div>
             )}
 
@@ -805,15 +882,37 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                   </thead>
                   <tbody>
                     {filteredIntradayAds.map((ad) => (
-                      <tr key={ad.name} className="border-t border-white/[0.05] hover:bg-cyan-300/[0.025]">
-                        <td className="max-w-[360px] truncate px-4 py-3 font-medium text-white/85" title={ad.name}>{ad.name}</td>
-                        <td className="px-3 py-3 text-right font-mono text-amber-300">{money(ad.spend)}</td>
-                        <td className="px-3 py-3 text-right font-mono text-emerald-300">{money(ad.revenue)}</td>
-                        <td className="px-3 py-3 text-right font-mono text-emerald-300">{formatInt(ad.sales)}</td>
-                        <td className="px-3 py-3 text-right font-mono text-white/75">{money(ad.cpa)}</td>
-                        <td className="px-3 py-3 text-right font-mono text-cyan-300">{formatInt(ad.ic)}</td>
-                        <td className="px-3 py-3 text-right font-mono text-white/75">{money(ad.icCpa)}</td>
-                        <td className="px-4 py-3 text-right font-mono text-cyan-300">{formatRoas(ad.roas)}</td>
+                      <tr
+                        key={ad.name}
+                        className="border-t border-white/[0.05] hover:bg-cyan-300/[0.025]"
+                      >
+                        <td
+                          className="max-w-[360px] truncate px-4 py-3 font-medium text-white/85"
+                          title={ad.name}
+                        >
+                          {ad.name}
+                        </td>
+                        <td className="px-3 py-3 text-right font-mono text-amber-300">
+                          {money(ad.spend)}
+                        </td>
+                        <td className="px-3 py-3 text-right font-mono text-emerald-300">
+                          {money(ad.revenue)}
+                        </td>
+                        <td className="px-3 py-3 text-right font-mono text-emerald-300">
+                          {formatInt(ad.sales)}
+                        </td>
+                        <td className="px-3 py-3 text-right font-mono text-white/75">
+                          {money(ad.cpa)}
+                        </td>
+                        <td className="px-3 py-3 text-right font-mono text-cyan-300">
+                          {formatInt(ad.ic)}
+                        </td>
+                        <td className="px-3 py-3 text-right font-mono text-white/75">
+                          {money(ad.icCpa)}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono text-cyan-300">
+                          {formatRoas(ad.roas)}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -830,7 +929,9 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
             <section className="border-t border-cyan-300/10">
               <header className="flex flex-wrap items-end gap-3 px-4 py-4">
                 <div className="mr-auto">
-                  <h3 className="text-[14px] font-semibold text-white">Comparar janelas por anúncio</h3>
+                  <h3 className="text-[14px] font-semibold text-white">
+                    Comparar janelas por anúncio
+                  </h3>
                   <p className="mt-1 text-[11px] text-white/40">
                     Compare o mesmo anúncio em duas faixas de 2 horas.
                   </p>
@@ -843,7 +944,11 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                     className="block h-9 min-w-[150px] rounded-md border border-white/10 bg-[#0b1b22] px-3 text-[12px] text-white"
                   >
                     <option value="">Anterior disponível</option>
-                    {availableAdWindows.map((window) => <option key={window.index} value={window.index}>{window.label}</option>)}
+                    {availableAdWindows.map((window) => (
+                      <option key={window.index} value={window.index}>
+                        {window.label}
+                      </option>
+                    ))}
                   </select>
                 </Label>
                 <Label className="space-y-1">
@@ -854,7 +959,11 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                     className="block h-9 min-w-[150px] rounded-md border border-white/10 bg-[#0b1b22] px-3 text-[12px] text-white"
                   >
                     <option value="">Mais recente disponível</option>
-                    {availableAdWindows.map((window) => <option key={window.index} value={window.index}>{window.label}</option>)}
+                    {availableAdWindows.map((window) => (
+                      <option key={window.index} value={window.index}>
+                        {window.label}
+                      </option>
+                    ))}
                   </select>
                 </Label>
               </header>
@@ -864,28 +973,75 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                   <table className="w-full text-[11px]">
                     <thead className="bg-white/[0.03] text-[9px] font-semibold uppercase tracking-[0.14em] text-white/50">
                       <tr>
-                        <th rowSpan={2} className="px-4 py-3 text-left">Anúncio</th>
-                        <th colSpan={4} className="border-l border-white/[0.05] px-3 py-2 text-center text-cyan-200">{leftAdWindow.label}</th>
-                        <th colSpan={4} className="border-l border-white/[0.05] px-3 py-2 text-center text-emerald-200">{rightAdWindow.label}</th>
+                        <th rowSpan={2} className="px-4 py-3 text-left">
+                          Anúncio
+                        </th>
+                        <th
+                          colSpan={4}
+                          className="border-l border-white/[0.05] px-3 py-2 text-center text-cyan-200"
+                        >
+                          {leftAdWindow.label}
+                        </th>
+                        <th
+                          colSpan={4}
+                          className="border-l border-white/[0.05] px-3 py-2 text-center text-emerald-200"
+                        >
+                          {rightAdWindow.label}
+                        </th>
                       </tr>
                       <tr>
-                        {['Invest.', 'Vendas', 'CPA', 'ROAS', 'Invest.', 'Vendas', 'CPA', 'ROAS'].map((label, index) => (
-                          <th key={`${label}-${index}`} className="border-l border-white/[0.05] px-3 py-2 text-right">{label}</th>
+                        {[
+                          'Invest.',
+                          'Vendas',
+                          'CPA',
+                          'ROAS',
+                          'Invest.',
+                          'Vendas',
+                          'CPA',
+                          'ROAS',
+                        ].map((label, index) => (
+                          <th
+                            key={`${label}-${index}`}
+                            className="border-l border-white/[0.05] px-3 py-2 text-right"
+                          >
+                            {label}
+                          </th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {comparedAds.map((row) => (
                         <tr key={row.name} className="border-t border-white/[0.05]">
-                          <td className="max-w-[300px] truncate px-4 py-3 font-medium text-white/85" title={row.name}>{row.name}</td>
-                          <td className="border-l border-white/[0.05] px-3 py-3 text-right font-mono text-amber-300">{money(row.left?.spend)}</td>
-                          <td className="px-3 py-3 text-right font-mono text-white/75">{formatInt(row.left?.sales)}</td>
-                          <td className="px-3 py-3 text-right font-mono text-white/75">{money(row.left?.cpa)}</td>
-                          <td className="px-3 py-3 text-right font-mono text-cyan-300">{formatRoas(row.left?.roas)}</td>
-                          <td className="border-l border-white/[0.05] px-3 py-3 text-right font-mono text-amber-300">{money(row.right?.spend)}</td>
-                          <td className="px-3 py-3 text-right font-mono text-white/75">{formatInt(row.right?.sales)}</td>
-                          <td className="px-3 py-3 text-right font-mono text-white/75">{money(row.right?.cpa)}</td>
-                          <td className="px-3 py-3 text-right font-mono text-emerald-300">{formatRoas(row.right?.roas)}</td>
+                          <td
+                            className="max-w-[300px] truncate px-4 py-3 font-medium text-white/85"
+                            title={row.name}
+                          >
+                            {row.name}
+                          </td>
+                          <td className="border-l border-white/[0.05] px-3 py-3 text-right font-mono text-amber-300">
+                            {money(row.left?.spend)}
+                          </td>
+                          <td className="px-3 py-3 text-right font-mono text-white/75">
+                            {formatInt(row.left?.sales)}
+                          </td>
+                          <td className="px-3 py-3 text-right font-mono text-white/75">
+                            {money(row.left?.cpa)}
+                          </td>
+                          <td className="px-3 py-3 text-right font-mono text-cyan-300">
+                            {formatRoas(row.left?.roas)}
+                          </td>
+                          <td className="border-l border-white/[0.05] px-3 py-3 text-right font-mono text-amber-300">
+                            {money(row.right?.spend)}
+                          </td>
+                          <td className="px-3 py-3 text-right font-mono text-white/75">
+                            {formatInt(row.right?.sales)}
+                          </td>
+                          <td className="px-3 py-3 text-right font-mono text-white/75">
+                            {money(row.right?.cpa)}
+                          </td>
+                          <td className="px-3 py-3 text-right font-mono text-emerald-300">
+                            {formatRoas(row.right?.roas)}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -893,7 +1049,8 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                 </div>
               ) : (
                 <p className="border-t border-white/[0.05] px-4 py-8 text-center text-[12px] text-white/40">
-                  A comparação por anúncio ficará disponível após duas janelas com checkpoints de anúncios.
+                  A comparação por anúncio ficará disponível após duas janelas com checkpoints de
+                  anúncios.
                 </p>
               )}
             </section>
@@ -901,7 +1058,9 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
         )}
       </section>
 
-      {offer && <OfferEditDialog offer={offer} open={editing} onOpenChange={setEditing} />}
+      {offer && canManage && (
+        <OfferEditDialog offer={offer} open={editing} onOpenChange={setEditing} />
+      )}
     </HubShell>
   );
 }

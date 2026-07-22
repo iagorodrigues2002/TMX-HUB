@@ -544,6 +544,7 @@ export type OfferStatus = 'testando' | 'validando' | 'escala' | 'pausado' | 'mor
 
 export interface OfferView {
   id: string;
+  memberIds: string[];
   name: string;
   companyName?: string;
   dashboardId?: string;
@@ -650,6 +651,7 @@ export interface IntradaySummaryView {
 
 interface OfferWire {
   id: string;
+  member_ids?: string[];
   name: string;
   company_name?: string;
   dashboard_id?: string;
@@ -700,6 +702,7 @@ interface DashboardSummaryWire {
 function fromOfferWire(w: OfferWire): OfferView {
   return {
     id: w.id,
+    memberIds: w.member_ids ?? [],
     name: w.name,
     companyName: w.company_name,
     dashboardId: w.dashboard_id,
@@ -1033,6 +1036,7 @@ export const apiClient = {
     status?: OfferStatus;
     utmify_login?: string;
     utmify_password?: string;
+    member_ids?: string[];
   }): Promise<OfferView> {
     const wire = await request<OfferWire>('/v1/offers', { method: 'POST', body: input });
     return fromOfferWire(wire);
@@ -1048,6 +1052,7 @@ export const apiClient = {
       status?: OfferStatus;
       utmify_login?: string;
       utmify_password?: string;
+      member_ids?: string[];
     },
   ): Promise<OfferView> {
     const wire = await request<OfferWire>(`/v1/offers/${id}`, { method: 'PATCH', body: patch });

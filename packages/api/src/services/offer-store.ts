@@ -19,6 +19,14 @@ function isValidStatus(s: unknown): s is OfferStatus {
   return typeof s === 'string' && VALID_STATUSES.includes(s as OfferStatus);
 }
 
+export function canAccessOffer(offer: Offer, userId: string, isAdmin = false): boolean {
+  return isAdmin || offer.userId === userId || Boolean(offer.memberIds?.includes(userId));
+}
+
+export function canManageOffer(offer: Offer, userId: string, isAdmin = false): boolean {
+  return isAdmin || offer.userId === userId;
+}
+
 export class OfferStore {
   private readonly encryptionKey: Buffer;
 
@@ -36,6 +44,7 @@ export class OfferStore {
     dashboardId?: string;
     description?: string;
     status?: OfferStatus;
+    memberIds?: string[];
   }): Promise<Offer> {
     // Disallow duplicate names per user — keeps URLs predictable.
     const existing = await this.listByUser(args.userId);
@@ -46,6 +55,9 @@ export class OfferStore {
       id: ulid(),
       userId: args.userId,
       name: args.name.trim(),
+      ...(args.memberIds && args.memberIds.length > 0
+        ? { memberIds: [...new Set(args.memberIds)] }
+        : {}),
       ...(args.companyName ? { companyName: args.companyName.trim() } : {}),
       ...(args.dashboardId ? { dashboardId: args.dashboardId.trim() } : {}),
       ...(args.description ? { description: args.description.trim() } : {}),
@@ -86,6 +98,13 @@ export class OfferStore {
         ? { description: patch.description.trim() || undefined }
         : {}),
       ...(patch.status ? { status: patch.status } : {}),
+      ...(patch.member_ids !== undefined
+        ? {
+            memberIds: [...new Set(patch.member_ids)].filter(
+              (memberId) => memberId !== current.userId,
+            ),
+          }
+        : {}),
       updatedAt: new Date().toISOString(),
     };
 
@@ -124,6 +143,32 @@ export class OfferStore {
       offers.push(this.deserialize(rec));
     }
     return offers.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  }
+
+  async listAccessible(userId: string, isAdmin = false): Promise<Offer[]> {
+    const offers = await this.listAll();
+    return offers
+      .filter((offer) => canAccessOffer(offer, userId, isAdmin))
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  }
+
+  async removeMemberFromAll(memberId: string): Promise<void> {
+    const offers = await this.listAll();
+    for (const offer of offers) {
+      if (!offer.memberIds?.includes(memberId)) continue;
+      const memberIds = offer.memberIds.filter((id) => id !== memberId);
+      const tx = this.redis.multi();
+      if (memberIds.length > 0) {
+        tx.hset(this.key(offer.id), {
+          memberIds: JSON.stringify(memberIds),
+          updatedAt: new Date().toISOString(),
+        });
+      } else {
+        tx.hdel(this.key(offer.id), 'memberIds');
+        tx.hset(this.key(offer.id), 'updatedAt', new Date().toISOString());
+      }
+      await tx.exec();
+    }
   }
 
   async delete(id: string, userId: string): Promise<void> {
@@ -214,6 +259,22 @@ export class OfferStore {
     return offer;
   }
 
+  async assertManager(id: string, userId: string, isAdmin = false): Promise<Offer> {
+    const offer = await this.get(id);
+    if (!canManageOffer(offer, userId, isAdmin)) {
+      throw new NotFoundError(`Oferta não encontrada: ${id}`);
+    }
+    return offer;
+  }
+
+  async assertAccess(id: string, userId: string, isAdmin = false): Promise<Offer> {
+    const offer = await this.get(id);
+    if (!canAccessOffer(offer, userId, isAdmin)) {
+      throw new NotFoundError(`Oferta não encontrada: ${id}`);
+    }
+    return offer;
+  }
+
   private key(id: string): string {
     return `${OFFER_PREFIX}${id}`;
   }
@@ -255,6 +316,9 @@ export class OfferStore {
       createdAt: offer.createdAt,
     };
     if (offer.companyName) out.companyName = offer.companyName;
+    if (offer.memberIds && offer.memberIds.length > 0) {
+      out.memberIds = JSON.stringify(offer.memberIds);
+    }
     if (offer.dashboardId) out.dashboardId = offer.dashboardId;
     if (offer.currency) out.currency = offer.currency;
     if (offer.description) out.description = offer.description;
@@ -273,6 +337,7 @@ export class OfferStore {
       id: data.id ?? '',
       userId: data.userId ?? '',
       name: data.name ?? '',
+      ...(data.memberIds ? { memberIds: parseMemberIds(data.memberIds) } : {}),
       ...(data.companyName ? { companyName: data.companyName } : {}),
       ...(data.dashboardId ? { dashboardId: data.dashboardId } : {}),
       ...(data.currency ? { currency: data.currency } : {}),
@@ -292,6 +357,21 @@ export class OfferStore {
       createdAt: data.createdAt ?? '',
       ...(data.updatedAt ? { updatedAt: data.updatedAt } : {}),
     };
+  }
+}
+
+function parseMemberIds(value: string): string[] {
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? [
+          ...new Set(
+            parsed.filter((item): item is string => typeof item === 'string' && item.length > 0),
+          ),
+        ]
+      : [];
+  } catch {
+    return [];
   }
 }
 

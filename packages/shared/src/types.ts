@@ -310,6 +310,8 @@ export type OfferStatus = 'testando' | 'validando' | 'escala' | 'pausado' | 'mor
 export interface Offer {
   id: string;
   userId: string;
+  /** Existing member accounts allowed to view this offer and its metrics. */
+  memberIds?: string[];
   name: string; // ex. "PFL_ENG"
   companyName?: string;
   /** UTMify dashboardId, kept for reference + auto-config in n8n. */
@@ -392,6 +394,7 @@ export interface CreateOfferRequest {
   status?: OfferStatus;
   utmify_login?: string;
   utmify_password?: string;
+  member_ids?: string[];
 }
 
 export interface UpdateOfferRequest {
@@ -402,6 +405,7 @@ export interface UpdateOfferRequest {
   status?: OfferStatus;
   utmify_login?: string;
   utmify_password?: string;
+  member_ids?: string[];
 }
 
 // ---- Video Shield (cloaker) ----

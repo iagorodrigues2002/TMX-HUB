@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import type { OfferView } from '@/lib/api-client';
-import { Activity, Building2, Pencil, Trash2 } from 'lucide-react';
+import { Activity, Building2, Pencil, Trash2, Users } from 'lucide-react';
 import Link from 'next/link';
 import { StatusBadge } from './status-badge';
 
@@ -12,8 +12,8 @@ export function OfferCard({
   onDelete,
 }: {
   offer: OfferView;
-  onEdit: () => void;
-  onDelete: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   return (
     <div className="glass-card flex flex-col gap-4 p-4">
@@ -37,27 +37,39 @@ export function OfferCard({
           {offer.description && (
             <p className="line-clamp-2 text-[12px] text-white/55">{offer.description}</p>
           )}
-          {offer.dashboardId && (
+          {offer.dashboardId && (onEdit || onDelete) && (
             <p className="truncate font-mono text-[10px] text-white/35">
               dashboard: {offer.dashboardId}
             </p>
           )}
+          {offer.memberIds.length > 0 && (
+            <p className="flex items-center gap-1.5 text-[11px] text-cyan-200/55">
+              <Users className="h-3.5 w-3.5" />
+              {offer.memberIds.length} membro(s) com acesso
+            </p>
+          )}
         </div>
-        <div className="flex shrink-0 gap-1">
-          <Button variant="ghost" size="sm" onClick={onEdit} aria-label="Editar oferta">
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              if (confirm(`Remover oferta "${offer.name}" e todos os dados?`)) onDelete();
-            }}
-            aria-label="Remover oferta"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
+        {(onEdit || onDelete) && (
+          <div className="flex shrink-0 gap-1">
+            {onEdit && (
+              <Button variant="ghost" size="sm" onClick={onEdit} aria-label="Editar oferta">
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+            )}
+            {onDelete && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  if (confirm(`Remover oferta "${offer.name}" e todos os dados?`)) onDelete();
+                }}
+                aria-label="Remover oferta"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       <Button asChild size="sm" variant="outline" className="w-full">

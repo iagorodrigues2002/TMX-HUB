@@ -27,4 +27,15 @@ describe('Offer UTMify connection schema', () => {
   it('keeps legacy offers without a UTMify connection valid', () => {
     expect(CreateOfferRequestSchema.safeParse({ name: 'Oferta manual' }).success).toBe(true);
   });
+
+  it('accepts existing member ids and rejects oversized access lists', () => {
+    expect(
+      UpdateOfferRequestSchema.safeParse({ member_ids: ['member-1', 'member-2'] }).success,
+    ).toBe(true);
+    expect(
+      UpdateOfferRequestSchema.safeParse({
+        member_ids: Array.from({ length: 101 }, (_, index) => `member-${index}`),
+      }).success,
+    ).toBe(false);
+  });
 });

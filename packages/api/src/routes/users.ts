@@ -136,6 +136,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     // Se a role final for admin, força allowedTools = null pra evitar inconsistência.
     const finalRole = parsed.data.role ?? target.role;
     if (finalRole === 'admin') allowedTools = null;
+    if (finalRole !== 'admin' && allowedTools !== undefined && !allowedTools?.includes('ofertas')) {
+      const accessibleOffers = await app.offerStore.listAccessible(target.id, false);
+      if (accessibleOffers.length > 0) {
+        allowedTools = [...(allowedTools ?? []), 'ofertas'];
+      }
+    }
 
     const updated = await app.userStore.update(req.params.id, {
       ...(parsed.data.name !== undefined ? { name: parsed.data.name } : {}),
@@ -169,6 +175,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       }
     }
     await app.userStore.delete(req.params.id);
+    await app.offerStore.removeMemberFromAll(req.params.id);
     return reply.code(204).send();
   });
 };
