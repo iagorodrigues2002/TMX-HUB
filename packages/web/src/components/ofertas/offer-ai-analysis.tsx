@@ -59,7 +59,7 @@ export function OfferAiAnalysis({ offerId }: { offerId: string }) {
     mutationFn: () =>
       apiClient.updateOfferAiConfig(offerId, {
         ...(apiKey.trim() ? { api_key: apiKey.trim() } : {}),
-        provider: 'opencode-zen',
+        provider: 'opencode-go',
         model,
         role,
         template,
@@ -148,11 +148,11 @@ export function OfferAiAnalysis({ offerId }: { offerId: string }) {
       {configQuery.data?.canManage && (
         <details className="border-b border-white/[0.06]">
           <summary className="cursor-pointer px-5 py-4 text-[12px] font-semibold text-cyan-100">
-            Configurar OpenCode Zen, modelo e instruções
+            Configurar OpenCode Go, modelo e instruções
           </summary>
           <div className="space-y-5 border-t border-white/[0.05] px-5 py-5">
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Chave API do OpenCode Zen" htmlFor="ai-api-key">
+              <Field label="Chave API do OpenCode Go" htmlFor="ai-api-key">
                 <Input
                   id="ai-api-key"
                   type="password"

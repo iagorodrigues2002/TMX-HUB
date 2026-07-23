@@ -4,17 +4,14 @@ import type { IntradaySummary } from './intraday-store.js';
 import type { OfferAiAnalysisRecord, OfferAiSecretConfig } from './offer-store.js';
 
 export const OPENCODE_MODELS = [
-  { id: 'gpt-5.6-terra', label: 'GPT 5.6 Terra · equilibrado', protocol: 'responses' },
-  { id: 'gpt-5.6-sol', label: 'GPT 5.6 Sol · análise avançada', protocol: 'responses' },
-  { id: 'gpt-5.4-mini', label: 'GPT 5.4 Mini · econômico', protocol: 'responses' },
-  { id: 'gpt-5.4-nano', label: 'GPT 5.4 Nano · mais econômico', protocol: 'responses' },
-  {
-    id: 'deepseek-v4-flash',
-    label: 'DeepSeek V4 Flash · econômico',
-    protocol: 'chat',
-  },
-  { id: 'kimi-k2.6', label: 'Kimi K2.6 · análise detalhada', protocol: 'chat' },
-  { id: 'grok-4.5', label: 'Grok 4.5 · análise avançada', protocol: 'chat' },
+  { id: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash · recomendado e econômico' },
+  { id: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro · análise avançada' },
+  { id: 'kimi-k2.6', label: 'Kimi K2.6 · análise detalhada' },
+  { id: 'kimi-k2.7-code', label: 'Kimi K2.7 Code · raciocínio avançado' },
+  { id: 'kimi-k3', label: 'Kimi K3 · alta capacidade' },
+  { id: 'glm-5.2', label: 'GLM 5.2 · análise avançada' },
+  { id: 'grok-4.5', label: 'Grok 4.5 · alta capacidade' },
+  { id: 'mimo-v2.5', label: 'MiMo V2.5 · mais econômico' },
 ] as const;
 
 export const DEFAULT_AI_ROLE = `Você é um gestor de tráfego sênior especializado em campanhas de resposta direta no Meta Ads.
@@ -143,31 +140,16 @@ function renderTemplate(template: string, values: Record<string, string>): strin
 
 async function callOpenCode(config: OfferAiSecretConfig, prompt: string): Promise<string> {
   const selected = OPENCODE_MODELS.find((model) => model.id === config.model);
-  if (!selected) throw new Error(`Modelo OpenCode não suportado: ${config.model}.`);
-  const isChat = selected.protocol === 'chat';
-  const url = isChat
-    ? 'https://opencode.ai/zen/v1/chat/completions'
-    : 'https://opencode.ai/zen/v1/responses';
-  const requestBody = JSON.stringify(
-    isChat
-      ? {
-          model: config.model,
-          max_tokens: 700,
-          messages: [
-            { role: 'system', content: config.role },
-            { role: 'user', content: prompt },
-          ],
-        }
-      : {
-          model: config.model,
-          store: false,
-          max_output_tokens: 700,
-          input: [
-            { role: 'system', content: config.role },
-            { role: 'user', content: prompt },
-          ],
-        },
-  );
+  if (!selected) throw new Error(`Modelo OpenCode Go não suportado: ${config.model}.`);
+  const url = 'https://opencode.ai/zen/go/v1/chat/completions';
+  const requestBody = JSON.stringify({
+    model: config.model,
+    max_tokens: 700,
+    messages: [
+      { role: 'system', content: config.role },
+      { role: 'user', content: prompt },
+    ],
+  });
 
   let response: Response;
   try {

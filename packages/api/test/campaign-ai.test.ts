@@ -48,8 +48,8 @@ const summary: IntradaySummary = {
 
 const config: OfferAiSecretConfig = {
   apiKey: 'opencode-secret-key',
-  provider: 'opencode-zen',
-  model: 'gpt-5.6-terra',
+  provider: 'opencode-go',
+  model: 'deepseek-v4-flash',
   role: DEFAULT_AI_ROLE,
   template: DEFAULT_AI_TEMPLATE,
   responsible: 'Iago Rodrigues',
@@ -106,11 +106,11 @@ describe('campaign AI analysis', () => {
       authorization: 'Bearer opencode-secret-key',
     });
     const body = JSON.parse(String(options.body));
-    expect(body.model).toBe('gpt-5.6-terra');
-    expect(body.store).toBe(false);
-    expect(JSON.stringify(body.input)).toContain('ad3-l14');
-    expect(JSON.stringify(body.input)).toContain('Reduzi o orçamento');
-    expect(JSON.stringify(body.input)).toContain('A janela das 10h às 12h');
+    expect(body.model).toBe('deepseek-v4-flash');
+    expect(body.messages).toHaveLength(2);
+    expect(JSON.stringify(body.messages)).toContain('ad3-l14');
+    expect(JSON.stringify(body.messages)).toContain('Reduzi o orçamento');
+    expect(JSON.stringify(body.messages)).toContain('A janela das 10h às 12h');
     expect(result.metrics).toMatchObject({ spend: 628.11, revenue: 976.06, sales: 5 });
   });
 
@@ -172,11 +172,11 @@ describe('campaign AI analysis', () => {
     const result = await generateCampaignAnalysis({
       offer,
       summary,
-      config: { ...config, model: 'deepseek-v4-flash' },
+      config: { ...config, model: 'kimi-k2.6' },
       now: new Date('2026-07-23T17:00:00.000Z'),
     });
 
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://opencode.ai/zen/v1/chat/completions');
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://opencode.ai/zen/go/v1/chat/completions');
     const body = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
     expect(body.messages).toHaveLength(2);
     expect(result.observation).toBe('A janela atual está abaixo da meta.');

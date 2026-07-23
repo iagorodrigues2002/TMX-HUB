@@ -652,7 +652,7 @@ export interface IntradaySummaryView {
 export type OfferAiTone = 'direto' | 'conservador' | 'detalhado';
 
 export interface OfferAiConfigView {
-  provider: 'opencode-zen';
+  provider: 'opencode-go';
   model: string;
   role: string;
   template: string;
@@ -693,7 +693,7 @@ export interface OfferAiAnalysisView {
 }
 
 interface OfferAiConfigWire {
-  provider: 'opencode-zen';
+  provider: 'opencode-go';
   model: string;
   role: string;
   template: string;
@@ -1177,7 +1177,7 @@ export const apiClient = {
     id: string,
     input: {
       api_key?: string;
-      provider: 'opencode-zen';
+      provider: 'opencode-go';
       model: string;
       role: string;
       template: string;

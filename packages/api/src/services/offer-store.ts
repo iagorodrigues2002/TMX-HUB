@@ -9,6 +9,16 @@ const USER_OFFERS_PREFIX = 'user-offers:'; // {userId} → set of offer ids
 const CREDENTIAL_PREFIX = 'offer-utmify:';
 const AI_CONFIG_PREFIX = 'offer-ai-config:';
 const AI_HISTORY_PREFIX = 'offer-ai-history:';
+const OPENCODE_GO_MODEL_IDS = new Set([
+  'deepseek-v4-flash',
+  'deepseek-v4-pro',
+  'kimi-k2.6',
+  'kimi-k2.7-code',
+  'kimi-k3',
+  'glm-5.2',
+  'grok-4.5',
+  'mimo-v2.5',
+]);
 
 export interface UtmifyCredentials {
   login: string;
@@ -17,7 +27,7 @@ export interface UtmifyCredentials {
 
 export interface OfferAiSecretConfig {
   apiKey: string;
-  provider: 'opencode-zen';
+  provider: 'opencode-go';
   model: string;
   role: string;
   template: string;
@@ -283,7 +293,7 @@ export class OfferStore {
     const current = await this.getAiSecretConfig(id);
     const apiKey = config.apiKey?.trim() || current?.apiKey;
     if (!apiKey) {
-      throw new ConflictError('Informe uma chave de API do OpenCode Zen.');
+      throw new ConflictError('Informe uma chave de API do OpenCode Go.');
     }
     const next: OfferAiSecretConfig = { ...config, apiKey };
     await this.redis.set(this.aiConfigKey(id), this.encrypt(JSON.stringify(next)));
@@ -299,10 +309,12 @@ export class OfferStore {
     const encrypted = await this.redis.get(this.aiConfigKey(id));
     if (!encrypted) return null;
     try {
-      const parsed = JSON.parse(this.decrypt(encrypted)) as Partial<OfferAiSecretConfig>;
+      const parsed = JSON.parse(this.decrypt(encrypted)) as Partial<
+        Omit<OfferAiSecretConfig, 'provider'>
+      > & { provider?: 'opencode-go' | 'opencode-zen' };
       if (
         !parsed.apiKey ||
-        parsed.provider !== 'opencode-zen' ||
+        (parsed.provider !== 'opencode-go' && parsed.provider !== 'opencode-zen') ||
         !parsed.model ||
         !parsed.role ||
         !parsed.template
@@ -311,8 +323,8 @@ export class OfferStore {
       }
       return {
         apiKey: parsed.apiKey,
-        provider: parsed.provider,
-        model: parsed.model,
+        provider: 'opencode-go',
+        model: OPENCODE_GO_MODEL_IDS.has(parsed.model) ? parsed.model : 'deepseek-v4-flash',
         role: parsed.role,
         template: parsed.template,
         responsible: parsed.responsible ?? '',

@@ -81,15 +81,16 @@ const RangeQuerySchema = z.object({
 const AiConfigSchema = z
   .object({
     api_key: z.string().trim().min(8).max(500).optional(),
-    provider: z.literal('opencode-zen').default('opencode-zen'),
+    provider: z.literal('opencode-go').default('opencode-go'),
     model: z.enum([
-      'gpt-5.6-terra',
-      'gpt-5.6-sol',
-      'gpt-5.4-mini',
-      'gpt-5.4-nano',
       'deepseek-v4-flash',
+      'deepseek-v4-pro',
       'kimi-k2.6',
+      'kimi-k2.7-code',
+      'kimi-k3',
+      'glm-5.2',
       'grok-4.5',
+      'mimo-v2.5',
     ]),
     role: z.string().trim().min(20).max(4_000),
     template: z.string().trim().min(50).max(12_000),
@@ -322,8 +323,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             ...(canManage && config.apiKeyHint ? { api_key_hint: config.apiKeyHint } : {}),
           }
         : {
-            provider: 'opencode-zen',
-            model: 'gpt-5.6-terra',
+            provider: 'opencode-go',
+            model: 'deepseek-v4-flash',
             role: DEFAULT_AI_ROLE,
             template: DEFAULT_AI_TEMPLATE,
             responsible: '',
