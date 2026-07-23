@@ -1193,15 +1193,29 @@ export const apiClient = {
   },
 
   async generateOfferAiAnalysis(id: string): Promise<OfferAiAnalysisView> {
-    const wire = await request<{
-      id: string;
-      offerId: string;
-      model: string;
-      text: string;
-      observation: string;
-      createdAt: string;
-    }>(`/v1/offers/${id}/ai-analysis`, { method: 'POST' });
-    return wire;
+    await request<{ accepted: true }>(`/v1/offers/${id}/ai-analysis`, { method: 'POST' });
+
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+      const status = await request<{
+        status: 'idle' | 'processing' | 'success' | 'error';
+        analysisId?: string;
+        error?: string;
+      }>(`/v1/offers/${id}/ai-analysis-status`);
+      if (status.status === 'error') {
+        throw new ApiError(status.error || 'Falha ao gerar análise.', 422);
+      }
+      if (status.status === 'success' && status.analysisId) {
+        const analyses = await this.listOfferAiAnalyses(id);
+        const analysis = analyses.find((item) => item.id === status.analysisId);
+        if (analysis) return analysis;
+      }
+    }
+
+    throw new ApiError(
+      'A análise continua processando. Aguarde alguns instantes e atualize o histórico.',
+      408,
+    );
   },
 
   async listOfferAiAnalyses(id: string): Promise<OfferAiAnalysisView[]> {

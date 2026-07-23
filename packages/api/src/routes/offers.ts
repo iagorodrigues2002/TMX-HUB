@@ -386,7 +386,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       throw new BadRequestError('Configure a chave e o modelo da IA antes de gerar a análise.');
     }
     const lockKey = `lock:offer-ai-analysis:${offer.id}`;
-    const lock = await app.redis.set(lockKey, req.user.sub, 'EX', 90, 'NX');
+    const statusKey = `offer-ai-analysis-status:${offer.id}`;
+    const lock = await app.redis.set(lockKey, req.user.sub, 'EX', 120, 'NX');
     if (!lock) {
       throw new HttpProblem({
         status: 429,
@@ -395,21 +396,61 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         code: 'ai_analysis_in_progress',
       });
     }
+    const startedAt = new Date().toISOString();
+    await app.redis.set(
+      statusKey,
+      JSON.stringify({ status: 'processing', startedAt }),
+      'EX',
+      10 * 60,
+    );
+
+    void (async () => {
+      try {
+        const summary = await app.intradayStore.summary(offer.id);
+        const history = await app.offerStore.listAiAnalyses(offer.id);
+        const analysis = await generateCampaignAnalysis({ offer, summary, config, history });
+        await app.offerStore.addAiAnalysis(analysis);
+        await app.redis.set(
+          statusKey,
+          JSON.stringify({
+            status: 'success',
+            startedAt,
+            finishedAt: new Date().toISOString(),
+            analysisId: analysis.id,
+          }),
+          'EX',
+          10 * 60,
+        );
+      } catch (error) {
+        app.log.error({ err: error, offerId: offer.id }, 'AI analysis generation failed');
+        await app.redis.set(
+          statusKey,
+          JSON.stringify({
+            status: 'error',
+            startedAt,
+            finishedAt: new Date().toISOString(),
+            error: error instanceof Error ? error.message : 'Falha ao gerar análise.',
+          }),
+          'EX',
+          10 * 60,
+        );
+      } finally {
+        await app.redis.del(lockKey);
+      }
+    })();
+
+    return reply.code(202).send({ accepted: true, status: 'processing', startedAt });
+  });
+
+  app.get<{ Params: { id: string } }>('/offers/:id/ai-analysis-status', async (req, reply) => {
+    if (!req.user) throw new BadRequestError('No user attached.');
+    await app.offerStore.assertAccess(req.params.id, req.user.sub, req.user.role === 'admin');
+    const raw = await app.redis.get(`offer-ai-analysis-status:${req.params.id}`);
+    if (!raw) return reply.send({ status: 'idle' });
     try {
-      const summary = await app.intradayStore.summary(offer.id);
-      const history = await app.offerStore.listAiAnalyses(offer.id);
-      const analysis = await generateCampaignAnalysis({ offer, summary, config, history });
-      await app.offerStore.addAiAnalysis(analysis);
-      return reply.send(analysis);
-    } catch (error) {
-      throw new HttpProblem({
-        status: 502,
-        title: 'AI provider error',
-        detail: error instanceof Error ? error.message : 'Falha ao gerar análise.',
-        code: 'ai_provider_error',
-      });
-    } finally {
-      await app.redis.del(lockKey);
+      return reply.send(JSON.parse(raw));
+    } catch {
+      return reply.send({ status: 'idle' });
     }
   });
 

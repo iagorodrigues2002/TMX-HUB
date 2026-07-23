@@ -160,12 +160,12 @@ async function callOpenCode(config: OfferAiSecretConfig, prompt: string): Promis
         'content-type': 'application/json',
       },
       body: requestBody,
-      signal: AbortSignal.timeout(20_000),
+      signal: AbortSignal.timeout(60_000),
     });
   } catch (error) {
     if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
       throw new Error(
-        'A OpenCode demorou mais de 20 segundos para responder. Tente novamente em instantes.',
+        'A OpenCode demorou mais de 60 segundos para responder. Tente novamente em instantes.',
       );
     }
     throw new Error(
