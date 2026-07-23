@@ -231,8 +231,10 @@ async function callOpenCode(config: OfferAiSecretConfig, prompt: string): Promis
     });
   } catch (error) {
     if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
-      throw new Error(
-        'A OpenCode demorou mais de 60 segundos para responder. Tente novamente em instantes.',
+      return finalizeWithMimo(
+        config,
+        prompt,
+        'O modelo principal excedeu o tempo limite antes de produzir um rascunho.',
       );
     }
     throw new Error(
@@ -267,7 +269,7 @@ async function callOpenCode(config: OfferAiSecretConfig, prompt: string): Promis
   );
   const finishReason = extractContentText(firstChoice?.finish_reason);
   if (reasoningContent && finishReason === 'length') {
-    return finalizeReasoning(config, prompt, reasoningContent);
+    return finalizeWithMimo(config, prompt, reasoningContent);
   }
   const rootContent = extractContentText(payload?.content);
   if (rootContent) return rootContent;
@@ -284,11 +286,19 @@ async function callOpenCode(config: OfferAiSecretConfig, prompt: string): Promis
   );
 }
 
-async function finalizeReasoning(
+async function finalizeWithMimo(
   config: OfferAiSecretConfig,
   originalPrompt: string,
   reasoning: string,
 ): Promise<string> {
+  const compactPrompt =
+    originalPrompt.length <= 30_000
+      ? originalPrompt
+      : `${originalPrompt.slice(0, 10_000)}
+
+[contexto intermediário resumido para reduzir latência]
+
+${originalPrompt.slice(-20_000)}`;
   const response = await fetch('https://opencode.ai/zen/go/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -307,7 +317,7 @@ async function finalizeReasoning(
         {
           role: 'user',
           content: `INSTRUÇÕES E DADOS ORIGINAIS
-${originalPrompt.slice(0, 24_000)}
+${compactPrompt}
 
 RASCUNHO INTERNO DO PRIMEIRO MODELO
 ${reasoning.slice(0, 12_000)}

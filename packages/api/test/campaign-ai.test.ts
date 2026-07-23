@@ -266,6 +266,42 @@ describe('campaign AI analysis', () => {
     expect(finalizeBody.model).toBe('mimo-v2.5');
   });
 
+  it('falls back to MiMo when the selected Go model times out', async () => {
+    const timeout = new Error('timed out');
+    timeout.name = 'TimeoutError';
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(timeout)
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: 'F303 está abaixo da meta e exige acompanhamento.',
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await generateCampaignAnalysis({
+      offer,
+      summary,
+      config,
+      now: new Date('2026-07-23T17:00:00.000Z'),
+    });
+
+    expect(result.observation).toBe('F303 está abaixo da meta e exige acompanhamento.');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const fallbackBody = JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body));
+    expect(fallbackBody.model).toBe('mimo-v2.5');
+    expect(fallbackBody.messages[1].content).toContain('excedeu o tempo limite');
+  });
+
   it('groups ads by F code and switches the report to funnel analysis', async () => {
     const funnelAds: IntradaySummary['overallAds'] = [
       {
