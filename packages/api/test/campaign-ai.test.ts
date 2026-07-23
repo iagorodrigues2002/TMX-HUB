@@ -132,7 +132,30 @@ describe('campaign AI analysis', () => {
         config,
         now: new Date('2026-07-23T17:00:00.000Z'),
       }),
-    ).rejects.toThrow('saldo insuficiente');
+    ).rejects.toThrow('A conta OpenCode está sem créditos');
+  });
+
+  it('preserves a useful error when the provider returns a non-JSON response', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response('upstream temporarily unavailable', {
+          status: 503,
+          headers: { 'content-type': 'text/plain' },
+        }),
+      ),
+    );
+
+    await expect(
+      generateCampaignAnalysis({
+        offer,
+        summary,
+        config,
+        now: new Date('2026-07-23T17:00:00.000Z'),
+      }),
+    ).rejects.toThrow(
+      'A OpenCode está temporariamente indisponível (HTTP 503). Detalhe: upstream temporarily unavailable',
+    );
   });
 
   it('uses the OpenAI-compatible chat endpoint for DeepSeek', async () => {

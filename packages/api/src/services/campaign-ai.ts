@@ -145,45 +145,63 @@ async function callOpenCode(config: OfferAiSecretConfig, prompt: string): Promis
   const selected = OPENCODE_MODELS.find((model) => model.id === config.model);
   if (!selected) throw new Error(`Modelo OpenCode não suportado: ${config.model}.`);
   const isChat = selected.protocol === 'chat';
-  const response = await fetch(
-    isChat ? 'https://opencode.ai/zen/v1/chat/completions' : 'https://opencode.ai/zen/v1/responses',
-    {
+  const url = isChat
+    ? 'https://opencode.ai/zen/v1/chat/completions'
+    : 'https://opencode.ai/zen/v1/responses';
+  const requestBody = JSON.stringify(
+    isChat
+      ? {
+          model: config.model,
+          max_tokens: 700,
+          messages: [
+            { role: 'system', content: config.role },
+            { role: 'user', content: prompt },
+          ],
+        }
+      : {
+          model: config.model,
+          store: false,
+          max_output_tokens: 700,
+          input: [
+            { role: 'system', content: config.role },
+            { role: 'user', content: prompt },
+          ],
+        },
+  );
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
       method: 'POST',
       headers: {
         authorization: `Bearer ${config.apiKey}`,
         'content-type': 'application/json',
       },
-      body: JSON.stringify(
-        isChat
-          ? {
-              model: config.model,
-              max_tokens: 700,
-              messages: [
-                { role: 'system', content: config.role },
-                { role: 'user', content: prompt },
-              ],
-            }
-          : {
-              model: config.model,
-              store: false,
-              max_output_tokens: 700,
-              input: [
-                { role: 'system', content: config.role },
-                { role: 'user', content: prompt },
-              ],
-            },
-      ),
-      signal: AbortSignal.timeout(45_000),
-    },
-  );
-  const payload = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+      body: requestBody,
+      signal: AbortSignal.timeout(20_000),
+    });
+  } catch (error) {
+    if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
+      throw new Error(
+        'A OpenCode demorou mais de 20 segundos para responder. Tente novamente em instantes.',
+      );
+    }
+    throw new Error(
+      `Não foi possível conectar à OpenCode: ${error instanceof Error ? error.message : 'falha de rede'}.`,
+    );
+  }
+
+  const responseText = await response.text();
+  const payload = safeJsonObject(responseText);
   if (!response.ok) {
     const detail =
       typeof payload?.error === 'object' && payload.error
         ? String((payload.error as Record<string, unknown>).message ?? '')
-        : '';
+        : typeof payload?.message === 'string'
+          ? payload.message
+          : responseText.trim().slice(0, 300);
     throw new Error(
-      `OpenCode recusou a análise (${response.status})${detail ? `: ${detail}` : '.'}`,
+      `${providerStatusMessage(response.status)}${detail ? ` Detalhe: ${detail}` : ''}`,
     );
   }
   const direct = payload?.output_text;
@@ -206,6 +224,34 @@ async function callOpenCode(config: OfferAiSecretConfig, prompt: string): Promis
     }
   }
   throw new Error('O OpenCode respondeu sem um texto de análise.');
+}
+
+function safeJsonObject(value: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+function providerStatusMessage(status: number): string {
+  if (status === 401 || status === 403) {
+    return 'A OpenCode recusou a chave API. Confira a chave salva e a conta utilizada.';
+  }
+  if (status === 402) {
+    return 'A conta OpenCode está sem créditos ou com a cobrança pendente.';
+  }
+  if (status === 404) {
+    return 'O modelo selecionado não está disponível na OpenCode.';
+  }
+  if (status === 429) {
+    return 'A OpenCode atingiu o limite de requisições. Aguarde alguns instantes.';
+  }
+  if (status >= 500) {
+    return `A OpenCode está temporariamente indisponível (HTTP ${status}).`;
+  }
+  return `A OpenCode recusou a análise (HTTP ${status}).`;
 }
 
 function formatReport(args: {
