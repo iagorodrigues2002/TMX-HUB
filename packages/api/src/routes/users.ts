@@ -136,6 +136,13 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     // Se a role final for admin, força allowedTools = null pra evitar inconsistência.
     const finalRole = parsed.data.role ?? target.role;
     if (finalRole === 'admin') allowedTools = null;
+    if (
+      finalRole !== 'admin' &&
+      allowedTools?.includes('ofertas-ia') &&
+      !allowedTools.includes('ofertas')
+    ) {
+      allowedTools = [...allowedTools, 'ofertas'];
+    }
     if (finalRole !== 'admin' && allowedTools !== undefined && !allowedTools?.includes('ofertas')) {
       const accessibleOffers = await app.offerStore.listAccessible(target.id, false);
       if (accessibleOffers.length > 0) {

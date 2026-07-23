@@ -1,8 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { HttpProblem, NotFoundError, zodToProblem } from '../src/lib/problem.js';
+import { canUseOfferAi } from '../src/routes/offers.js';
 
 describe('Problem helpers', () => {
+  it('requires explicit offer AI permission for non-admin members', () => {
+    expect(canUseOfferAi('admin')).toBe(true);
+    expect(canUseOfferAi('user')).toBe(false);
+    expect(canUseOfferAi('user', ['ofertas'])).toBe(false);
+    expect(canUseOfferAi('user', ['ofertas', 'ofertas-ia'])).toBe(true);
+  });
+
   it('NotFoundError serializes to RFC 7807 shape', () => {
     const err = new NotFoundError('thing missing');
     const json = err.toJSON();

@@ -14,7 +14,12 @@ import { OfferAiAnalysis } from '@/components/ofertas/offer-ai-analysis';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { apiClient, type IntradayAdView, type MetricsView } from '@/lib/api-client';
+import {
+  apiClient,
+  canAccessOfferAi,
+  type IntradayAdView,
+  type MetricsView,
+} from '@/lib/api-client';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ChevronDown, Clock3, Loader2, Pencil, Search, Target } from 'lucide-react';
 import Link from 'next/link';
@@ -93,6 +98,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
   const { id } = use(params);
   const { user } = useAuth();
   const canManage = user?.role === 'admin';
+  const canUseAi = canAccessOfferAi(user);
   const [from, setFrom] = useState(() => nDaysAgoIso(6));
   const [to, setTo] = useState(() => todayIso());
   const [editing, setEditing] = useState(false);
@@ -1059,7 +1065,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
         )}
       </section>
 
-      <OfferAiAnalysis offerId={id} />
+      {canUseAi && <OfferAiAnalysis offerId={id} />}
 
       {offer && canManage && (
         <OfferEditDialog offer={offer} open={editing} onOpenChange={setEditing} />

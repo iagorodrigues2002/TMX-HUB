@@ -467,6 +467,7 @@ export type ToolKey =
   | 'vsl'
   | 'digi-approval'
   | 'ofertas'
+  | 'ofertas-ia'
   | 'logs';
 
 export interface AuthUser {
@@ -489,6 +490,12 @@ export function canAccessTool(user: AuthUser | null, tool: ToolKey): boolean {
     return list.includes('video-shield') || list.includes('creative-studio');
   }
   return list.includes(tool);
+}
+
+export function canAccessOfferAi(user: AuthUser | null): boolean {
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  return user.allowedTools?.includes('ofertas-ia') ?? false;
 }
 
 interface AuthSessionWire {

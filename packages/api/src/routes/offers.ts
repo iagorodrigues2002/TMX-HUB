@@ -5,7 +5,7 @@ import {
   UpdateOfferRequestSchema,
 } from '@page-cloner/shared';
 import type { Offer } from '@page-cloner/shared';
-import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import type { FastifyInstance, FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { BadRequestError, HttpProblem, zodToProblem } from '../lib/problem.js';
 import {
@@ -108,6 +108,20 @@ const AiFeedbackSchema = z
     feedback: z.string().trim().max(1_000),
   })
   .strict();
+
+export function canUseOfferAi(role: 'admin' | 'user', tools?: string[]): boolean {
+  return role === 'admin' || Boolean(tools?.includes('ofertas-ia'));
+}
+
+function assertAiAccess(user: NonNullable<FastifyRequest['user']>): void {
+  if (canUseOfferAi(user.role, user.tools)) return;
+  throw new HttpProblem({
+    status: 403,
+    title: 'Forbidden',
+    detail: 'Sua conta não tem permissão para usar a IA de Ofertas.',
+    code: 'offer_ai_forbidden',
+  });
+}
 
 function resolveRange(q: { from?: string; to?: string }): { from: string; to: string } {
   // Default: last 7 days inclusive (today minus 6).
@@ -303,6 +317,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   app.get<{ Params: { id: string } }>('/offers/:id/ai-config', async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');
+    assertAiAccess(req.user);
     await app.offerStore.assertAccess(req.params.id, req.user.sub, req.user.role === 'admin');
     const config = await app.offerStore.getAiConfig(req.params.id);
     const canManage = req.user.role === 'admin';
@@ -342,6 +357,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   app.put<{ Params: { id: string } }>('/offers/:id/ai-config', async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');
+    assertAiAccess(req.user);
     await app.offerStore.assertManager(req.params.id, req.user.sub, req.user.role === 'admin');
     const parsed = AiConfigSchema.safeParse(req.body);
     if (!parsed.success) throw zodToProblem(parsed.error, req.url);
@@ -376,6 +392,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   app.post<{ Params: { id: string } }>('/offers/:id/ai-analysis', async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');
+    assertAiAccess(req.user);
     const offer = await app.offerStore.assertAccess(
       req.params.id,
       req.user.sub,
@@ -444,6 +461,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   app.get<{ Params: { id: string } }>('/offers/:id/ai-analysis-status', async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');
+    assertAiAccess(req.user);
     await app.offerStore.assertAccess(req.params.id, req.user.sub, req.user.role === 'admin');
     const raw = await app.redis.get(`offer-ai-analysis-status:${req.params.id}`);
     if (!raw) return reply.send({ status: 'idle' });
@@ -456,6 +474,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   app.get<{ Params: { id: string } }>('/offers/:id/ai-analyses', async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');
+    assertAiAccess(req.user);
     await app.offerStore.assertAccess(req.params.id, req.user.sub, req.user.role === 'admin');
     return reply.send({ analyses: await app.offerStore.listAiAnalyses(req.params.id) });
   });
@@ -464,6 +483,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     '/offers/:id/ai-analyses/:analysisId/feedback',
     async (req, reply) => {
       if (!req.user) throw new BadRequestError('No user attached.');
+      assertAiAccess(req.user);
       if (req.user.role !== 'admin') {
         throw new HttpProblem({
           status: 403,

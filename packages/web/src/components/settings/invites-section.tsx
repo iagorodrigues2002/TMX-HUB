@@ -55,6 +55,7 @@ const CUSTOM_TOOL_OPTIONS: { key: ToolKey; label: string }[] = [
   { key: 'webhook-tester', label: 'Webhook Tester' },
   { key: 'vsl', label: 'VSL Downloader' },
   { key: 'ofertas', label: 'Ofertas' },
+  { key: 'ofertas-ia', label: 'IA de Ofertas' },
   { key: 'logs', label: 'Logs' },
 ];
 
@@ -210,11 +211,21 @@ export function InvitesSection() {
                           type="checkbox"
                           checked={checked}
                           onChange={(e) => {
-                            setCustomTools((prev) =>
-                              e.target.checked
-                                ? Array.from(new Set([...prev, t.key]))
-                                : prev.filter((x) => x !== t.key),
-                            );
+                            setCustomTools((prev) => {
+                              if (e.target.checked) {
+                                return Array.from(
+                                  new Set([
+                                    ...prev,
+                                    t.key,
+                                    ...(t.key === 'ofertas-ia' ? ['ofertas' as const] : []),
+                                  ]),
+                                );
+                              }
+                              return prev.filter(
+                                (key) =>
+                                  key !== t.key && !(t.key === 'ofertas' && key === 'ofertas-ia'),
+                              );
+                            });
                           }}
                           disabled={createMut.isPending}
                         />

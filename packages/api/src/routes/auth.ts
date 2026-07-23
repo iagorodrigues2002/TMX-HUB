@@ -75,9 +75,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         sub: user.id,
         email: user.email,
         role: user.role,
-        ...(user.allowedTools && user.allowedTools.length > 0
-          ? { tools: user.allowedTools }
-          : {}),
+        ...(user.allowedTools && user.allowedTools.length > 0 ? { tools: user.allowedTools } : {}),
       },
       env.JWT_SECRET,
     );
@@ -119,16 +117,17 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       consumedInvite = true;
       // Convite com escopo restrito → user nasce com allowedTools.
       if (invite.allowedTools && invite.allowedTools.length > 0) {
-        scopedTools = invite.allowedTools;
+        scopedTools =
+          invite.allowedTools.includes('ofertas-ia') && !invite.allowedTools.includes('ofertas')
+            ? [...invite.allowedTools, 'ofertas']
+            : invite.allowedTools;
       }
     } else if (!env.ALLOW_REGISTRATION) {
       // Tier 3: must be authenticated admin.
       try {
         await app.requireAuth(req);
       } catch {
-        throw new ForbiddenError(
-          'Registro fechado. Solicite um convite a um administrador.',
-        );
+        throw new ForbiddenError('Registro fechado. Solicite um convite a um administrador.');
       }
       if (req.user?.role !== 'admin') {
         throw new ForbiddenError('Apenas admins podem criar usuários nesta instância.');
@@ -165,83 +164,72 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   // GET /v1/auth/invites/:token — público. Valida convite, retorna metadata
   // (email/name pré-preenchidos), sem nenhum dado sensível.
-  app.get<{ Params: { token: string } }>(
-    '/auth/invites/:token',
-    async (req, reply) => {
-      const invite = await app.inviteStore.get(req.params.token);
-      if (!invite) {
-        return reply.code(404).send({
-          valid: false,
-          detail: 'Convite inválido ou expirado.',
-        });
-      }
-      return reply.send({
-        valid: true,
-        email: invite.email,
-        name: invite.name,
-        expires_at: invite.expiresAt,
-        invited_by: invite.createdByName,
-        allowed_tools: invite.allowedTools,
+  app.get<{ Params: { token: string } }>('/auth/invites/:token', async (req, reply) => {
+    const invite = await app.inviteStore.get(req.params.token);
+    if (!invite) {
+      return reply.code(404).send({
+        valid: false,
+        detail: 'Convite inválido ou expirado.',
       });
-    },
-  );
+    }
+    return reply.send({
+      valid: true,
+      email: invite.email,
+      name: invite.name,
+      expires_at: invite.expiresAt,
+      invited_by: invite.createdByName,
+      allowed_tools: invite.allowedTools,
+    });
+  });
 
   // POST /v1/auth/invites — admin gera novo convite. Retorna token + URL pronta.
-  app.post(
-    '/auth/invites',
-    { preHandler: (req) => app.requireAuth(req) },
-    async (req, reply) => {
-      if (req.user?.role !== 'admin') {
-        throw new ForbiddenError('Apenas admins podem criar convites.');
-      }
-      const parsed = CreateInviteSchema.safeParse(req.body);
-      if (!parsed.success) throw zodToProblem(parsed.error, req.url);
-      const days = parsed.data.expires_in_days ?? 7;
-      const me = await app.userStore.maybeGetById(req.user.sub);
-      const invite = await app.inviteStore.create({
-        createdBy: req.user.sub,
-        ...(me?.name ? { createdByName: me.name } : {}),
-        ...(parsed.data.email ? { email: parsed.data.email } : {}),
-        ...(parsed.data.name ? { name: parsed.data.name } : {}),
-        expiresInSec: days * 24 * 60 * 60,
-        ...(parsed.data.allowed_tools && parsed.data.allowed_tools.length > 0
-          ? { allowedTools: parsed.data.allowed_tools }
-          : {}),
-      });
-      return reply.code(201).send({
-        token: invite.token,
-        email: invite.email,
-        name: invite.name,
-        created_at: invite.createdAt,
-        expires_at: invite.expiresAt,
-        invited_by: invite.createdByName,
-        allowed_tools: invite.allowedTools,
-      });
-    },
-  );
+  app.post('/auth/invites', { preHandler: (req) => app.requireAuth(req) }, async (req, reply) => {
+    if (req.user?.role !== 'admin') {
+      throw new ForbiddenError('Apenas admins podem criar convites.');
+    }
+    const parsed = CreateInviteSchema.safeParse(req.body);
+    if (!parsed.success) throw zodToProblem(parsed.error, req.url);
+    const days = parsed.data.expires_in_days ?? 7;
+    const me = await app.userStore.maybeGetById(req.user.sub);
+    const invite = await app.inviteStore.create({
+      createdBy: req.user.sub,
+      ...(me?.name ? { createdByName: me.name } : {}),
+      ...(parsed.data.email ? { email: parsed.data.email } : {}),
+      ...(parsed.data.name ? { name: parsed.data.name } : {}),
+      expiresInSec: days * 24 * 60 * 60,
+      ...(parsed.data.allowed_tools && parsed.data.allowed_tools.length > 0
+        ? { allowedTools: parsed.data.allowed_tools }
+        : {}),
+    });
+    return reply.code(201).send({
+      token: invite.token,
+      email: invite.email,
+      name: invite.name,
+      created_at: invite.createdAt,
+      expires_at: invite.expiresAt,
+      invited_by: invite.createdByName,
+      allowed_tools: invite.allowedTools,
+    });
+  });
 
   // GET /v1/auth/invites — admin lista convites pendentes.
-  app.get(
-    '/auth/invites',
-    { preHandler: (req) => app.requireAuth(req) },
-    async (req, reply) => {
-      if (req.user?.role !== 'admin') {
-        throw new ForbiddenError('Apenas admins podem listar convites.');
-      }
-      const invites = await app.inviteStore.listActive();
-      return reply.send({
-        invites: invites.map((i) => ({
-          token: i.token,
-          email: i.email,
-          name: i.name,
-          created_at: i.createdAt,
-          expires_at: i.expiresAt,
-          invited_by: i.createdByName,
-          allowed_tools: i.allowedTools,
-        })),
-      });
-    },
-  );
+  app.get('/auth/invites', { preHandler: (req) => app.requireAuth(req) }, async (req, reply) => {
+    if (req.user?.role !== 'admin') {
+      throw new ForbiddenError('Apenas admins podem listar convites.');
+    }
+    const invites = await app.inviteStore.listActive();
+    return reply.send({
+      invites: invites.map((i) => ({
+        token: i.token,
+        email: i.email,
+        name: i.name,
+        created_at: i.createdAt,
+        expires_at: i.expiresAt,
+        invited_by: i.createdByName,
+        allowed_tools: i.allowedTools,
+      })),
+    });
+  });
 
   // DELETE /v1/auth/invites/:token — admin revoga convite.
   app.delete<{ Params: { token: string } }>(
@@ -257,15 +245,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   );
 
   // GET /v1/auth/me — protected
-  app.get(
-    '/auth/me',
-    { preHandler: (req) => app.requireAuth(req) },
-    async (req, reply) => {
-      if (!req.user) throw new BadRequestError('No user attached.');
-      const u = await app.userStore.getById(req.user.sub);
-      return reply.send({ user: app.userStore.toPublic(u) });
-    },
-  );
+  app.get('/auth/me', { preHandler: (req) => app.requireAuth(req) }, async (req, reply) => {
+    if (!req.user) throw new BadRequestError('No user attached.');
+    const u = await app.userStore.getById(req.user.sub);
+    return reply.send({ user: app.userStore.toPublic(u) });
+  });
 };
 
 export default plugin;

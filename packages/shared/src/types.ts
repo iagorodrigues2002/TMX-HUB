@@ -249,6 +249,7 @@ export type ToolKey =
   | 'vsl'
   | 'digi-approval'
   | 'ofertas'
+  | 'ofertas-ia'
   | 'logs';
 
 export const ALL_TOOL_KEYS: ToolKey[] = [
@@ -263,6 +264,7 @@ export const ALL_TOOL_KEYS: ToolKey[] = [
   'vsl',
   'digi-approval',
   'ofertas',
+  'ofertas-ia',
   'logs',
 ];
 
