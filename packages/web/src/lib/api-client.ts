@@ -1195,7 +1195,7 @@ export const apiClient = {
   async generateOfferAiAnalysis(id: string): Promise<OfferAiAnalysisView> {
     await request<{ accepted: true }>(`/v1/offers/${id}/ai-analysis`, { method: 'POST' });
 
-    for (let attempt = 0; attempt < 40; attempt += 1) {
+    for (let attempt = 0; attempt < 70; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 2_000));
       const status = await request<{
         status: 'idle' | 'processing' | 'success' | 'error';

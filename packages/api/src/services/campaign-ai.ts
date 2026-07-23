@@ -86,10 +86,9 @@ export async function generateCampaignAnalysis(args: {
   };
   const history = (args.history ?? []).slice(0, 10).map((item) => ({
     data_hora: item.createdAt,
-    observacao: item.observation,
+    observacao: item.observation.slice(0, 800),
     metricas_naquele_momento: item.metrics,
-    janelas_naquele_momento: item.windows,
-    feedback_do_gestor: item.feedback,
+    feedback_do_gestor: item.feedback?.slice(0, 500),
   }));
   const learningContext = history.length
     ? `\n\nMEMÓRIA OPERACIONAL DAS ANÁLISES ANTERIORES\n${JSON.stringify(history)}\n
@@ -212,7 +211,7 @@ async function callOpenCode(config: OfferAiSecretConfig, prompt: string): Promis
   const url = 'https://opencode.ai/zen/go/v1/chat/completions';
   const requestBody = JSON.stringify({
     model: config.model,
-    max_tokens: 1_600,
+    max_tokens: 3_000,
     messages: [
       { role: 'system', content: config.role },
       { role: 'user', content: prompt },
@@ -263,6 +262,13 @@ async function callOpenCode(config: OfferAiSecretConfig, prompt: string): Promis
   if (messageContent) return messageContent;
   const choiceText = extractContentText(firstChoice?.text);
   if (choiceText) return choiceText;
+  const reasoningContent = extractContentText(
+    message?.reasoning_content ?? message?.reasoning ?? firstChoice?.reasoning_content,
+  );
+  const finishReason = extractContentText(firstChoice?.finish_reason);
+  if (reasoningContent && finishReason === 'length') {
+    return finalizeReasoning(config, prompt, reasoningContent);
+  }
   const rootContent = extractContentText(payload?.content);
   if (rootContent) return rootContent;
   const output = Array.isArray(payload?.output) ? payload.output : [];
@@ -271,12 +277,69 @@ async function callOpenCode(config: OfferAiSecretConfig, prompt: string): Promis
     const content = extractContentText((item as Record<string, unknown>).content);
     if (content) return content;
   }
-  const finishReason = extractContentText(firstChoice?.finish_reason);
   throw new Error(
     `O OpenCode respondeu sem um texto de análise${
       finishReason ? ` (finalização: ${finishReason})` : ''
     }. Tente novamente ou selecione outro modelo do OpenCode Go.`,
   );
+}
+
+async function finalizeReasoning(
+  config: OfferAiSecretConfig,
+  originalPrompt: string,
+  reasoning: string,
+): Promise<string> {
+  const response = await fetch('https://opencode.ai/zen/go/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${config.apiKey}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'mimo-v2.5',
+      max_tokens: 1_600,
+      messages: [
+        {
+          role: 'system',
+          content:
+            'Você é um editor de relatórios de tráfego. Responda somente com o relatório final em português do Brasil. Não mostre raciocínio, planejamento ou cálculos intermediários.',
+        },
+        {
+          role: 'user',
+          content: `INSTRUÇÕES E DADOS ORIGINAIS
+${originalPrompt.slice(0, 24_000)}
+
+RASCUNHO INTERNO DO PRIMEIRO MODELO
+${reasoning.slice(0, 12_000)}
+
+Transforme o conteúdo acima no relatório final solicitado. Preserve exatamente os números fornecidos e não acrescente explicações sobre esta tarefa.`,
+        },
+      ],
+    }),
+    signal: AbortSignal.timeout(45_000),
+  });
+  const responseText = await response.text();
+  const payload = safeJsonObject(responseText);
+  if (!response.ok) {
+    const detail =
+      typeof payload?.error === 'object' && payload.error
+        ? String((payload.error as Record<string, unknown>).message ?? '')
+        : responseText.trim().slice(0, 300);
+    throw new Error(
+      `A OpenCode não conseguiu finalizar a análise (${response.status})${
+        detail ? `: ${detail}` : '.'
+      }`,
+    );
+  }
+  const choices = Array.isArray(payload?.choices) ? payload.choices : [];
+  const firstChoice = choices[0] as Record<string, unknown> | undefined;
+  const message = firstChoice?.message as Record<string, unknown> | undefined;
+  const text =
+    extractContentText(message?.content) ||
+    extractContentText(firstChoice?.text) ||
+    extractContentText(payload?.content);
+  if (text) return text;
+  throw new Error('A OpenCode concluiu o processamento, mas não gerou o relatório final.');
 }
 
 function extractContentText(value: unknown): string {

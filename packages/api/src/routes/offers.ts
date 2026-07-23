@@ -387,7 +387,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     }
     const lockKey = `lock:offer-ai-analysis:${offer.id}`;
     const statusKey = `offer-ai-analysis-status:${offer.id}`;
-    const lock = await app.redis.set(lockKey, req.user.sub, 'EX', 120, 'NX');
+    const lock = await app.redis.set(lockKey, req.user.sub, 'EX', 180, 'NX');
     if (!lock) {
       throw new HttpProblem({
         status: 429,

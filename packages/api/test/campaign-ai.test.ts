@@ -217,34 +217,53 @@ describe('campaign AI analysis', () => {
     );
   });
 
-  it('does not expose internal reasoning when a Go model omits the final content', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(
+  it('finalizes hidden reasoning with a non-reasoning Go model when output reaches its limit', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
             choices: [
               {
+                finish_reason: 'length',
                 message: {
                   content: null,
-                  reasoning_content: 'Os dados ainda são insuficientes para recomendar cortes.',
+                  reasoning_content: 'Rascunho interno que não deve aparecer no relatório.',
                 },
               },
             ],
           }),
           { status: 200, headers: { 'content-type': 'application/json' } },
         ),
-      ),
-    );
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: 'Os dados ainda são insuficientes para recomendar cortes.',
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      );
+    vi.stubGlobal('fetch', fetchMock);
 
-    await expect(
-      generateCampaignAnalysis({
-        offer,
-        summary,
-        config,
-        now: new Date('2026-07-23T17:00:00.000Z'),
-      }),
-    ).rejects.toThrow('O OpenCode respondeu sem um texto de análise');
+    const result = await generateCampaignAnalysis({
+      offer,
+      summary,
+      config,
+      now: new Date('2026-07-23T17:00:00.000Z'),
+    });
+
+    expect(result.observation).toBe('Os dados ainda são insuficientes para recomendar cortes.');
+    expect(result.text).not.toContain('Rascunho interno');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const finalizeBody = JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body));
+    expect(finalizeBody.model).toBe('mimo-v2.5');
   });
 
   it('groups ads by F code and switches the report to funnel analysis', async () => {
