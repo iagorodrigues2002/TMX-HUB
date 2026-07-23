@@ -144,7 +144,7 @@ async function callOpenCode(config: OfferAiSecretConfig, prompt: string): Promis
   const url = 'https://opencode.ai/zen/go/v1/chat/completions';
   const requestBody = JSON.stringify({
     model: config.model,
-    max_tokens: 700,
+    max_tokens: 1_600,
     messages: [
       { role: 'system', content: config.role },
       { role: 'user', content: prompt },
@@ -186,26 +186,51 @@ async function callOpenCode(config: OfferAiSecretConfig, prompt: string): Promis
       `${providerStatusMessage(response.status)}${detail ? ` Detalhe: ${detail}` : ''}`,
     );
   }
-  const direct = payload?.output_text;
-  if (typeof direct === 'string' && direct.trim()) return direct.trim();
+  const direct = extractContentText(payload?.output_text);
+  if (direct) return direct;
   const choices = Array.isArray(payload?.choices) ? payload.choices : [];
   const firstChoice = choices[0] as Record<string, unknown> | undefined;
   const message = firstChoice?.message as Record<string, unknown> | undefined;
-  if (typeof message?.content === 'string' && message.content.trim()) {
-    return message.content.trim();
-  }
+  const messageContent = extractContentText(message?.content);
+  if (messageContent) return messageContent;
+  const choiceText = extractContentText(firstChoice?.text);
+  if (choiceText) return choiceText;
+  const reasoningContent = extractContentText(
+    message?.reasoning_content ?? message?.reasoning ?? firstChoice?.reasoning_content,
+  );
+  if (reasoningContent) return reasoningContent;
+  const rootContent = extractContentText(payload?.content);
+  if (rootContent) return rootContent;
   const output = Array.isArray(payload?.output) ? payload.output : [];
   for (const item of output) {
     if (!item || typeof item !== 'object') continue;
-    const content = (item as Record<string, unknown>).content;
-    if (!Array.isArray(content)) continue;
-    for (const part of content) {
-      if (!part || typeof part !== 'object') continue;
-      const text = (part as Record<string, unknown>).text;
-      if (typeof text === 'string' && text.trim()) return text.trim();
-    }
+    const content = extractContentText((item as Record<string, unknown>).content);
+    if (content) return content;
   }
-  throw new Error('O OpenCode respondeu sem um texto de análise.');
+  const finishReason = extractContentText(firstChoice?.finish_reason);
+  throw new Error(
+    `O OpenCode respondeu sem um texto de análise${
+      finishReason ? ` (finalização: ${finishReason})` : ''
+    }. Tente novamente ou selecione outro modelo do OpenCode Go.`,
+  );
+}
+
+function extractContentText(value: unknown): string {
+  if (typeof value === 'string') return value.trim();
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => extractContentText(item))
+      .filter(Boolean)
+      .join('\n')
+      .trim();
+  }
+  if (!value || typeof value !== 'object') return '';
+  const object = value as Record<string, unknown>;
+  for (const key of ['text', 'content', 'value', 'output_text']) {
+    const text = extractContentText(object[key]);
+    if (text) return text;
+  }
+  return '';
 }
 
 function safeJsonObject(value: string): Record<string, unknown> | null {

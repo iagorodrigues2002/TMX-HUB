@@ -181,4 +181,68 @@ describe('campaign AI analysis', () => {
     expect(body.messages).toHaveLength(2);
     expect(result.observation).toBe('A janela atual está abaixo da meta.');
   });
+
+  it('extracts text blocks returned by OpenCode Go models', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: [
+                    { type: 'text', text: 'A janela das 10h às 12h teve baixo retorno.' },
+                    { type: 'text', text: 'O acumulado segue próximo da meta.' },
+                  ],
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      ),
+    );
+
+    const result = await generateCampaignAnalysis({
+      offer,
+      summary,
+      config,
+      now: new Date('2026-07-23T17:00:00.000Z'),
+    });
+
+    expect(result.observation).toBe(
+      'A janela das 10h às 12h teve baixo retorno.\nO acumulado segue próximo da meta.',
+    );
+  });
+
+  it('uses reasoning content when a Go model omits the regular content field', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: null,
+                  reasoning_content: 'Os dados ainda são insuficientes para recomendar cortes.',
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      ),
+    );
+
+    const result = await generateCampaignAnalysis({
+      offer,
+      summary,
+      config,
+      now: new Date('2026-07-23T17:00:00.000Z'),
+    });
+
+    expect(result.observation).toBe('Os dados ainda são insuficientes para recomendar cortes.');
+  });
 });
