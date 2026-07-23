@@ -48,7 +48,7 @@ export interface BulkLinkUpdateResult {
 }
 
 interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   headers?: Record<string, string>;
   signal?: AbortSignal;
@@ -649,6 +649,47 @@ export interface IntradaySummaryView {
   windows: IntradayWindowView[];
 }
 
+export type OfferAiTone = 'direto' | 'conservador' | 'detalhado';
+
+export interface OfferAiConfigView {
+  provider: 'opencode-zen';
+  model: string;
+  role: string;
+  template: string;
+  responsible: string;
+  minRoas: number;
+  tone: OfferAiTone;
+  includeAds: boolean;
+  autoGenerate: boolean;
+  scheduleHours: number[];
+  apiKeyConfigured: boolean;
+  apiKeyHint?: string;
+}
+
+export interface OfferAiAnalysisView {
+  id: string;
+  offerId: string;
+  model: string;
+  text: string;
+  observation: string;
+  createdAt: string;
+}
+
+interface OfferAiConfigWire {
+  provider: 'opencode-zen';
+  model: string;
+  role: string;
+  template: string;
+  responsible: string;
+  min_roas: number;
+  tone: OfferAiTone;
+  include_ads: boolean;
+  auto_generate: boolean;
+  schedule_hours: number[];
+  api_key_configured: boolean;
+  api_key_hint?: string;
+}
+
 interface OfferWire {
   id: string;
   member_ids?: string[];
@@ -1083,6 +1124,72 @@ export const apiClient = {
 
   async getOfferIntraday(id: string): Promise<IntradaySummaryView> {
     return request(`/v1/offers/${id}/intraday`);
+  },
+
+  async getOfferAiConfig(id: string): Promise<{
+    config: OfferAiConfigView;
+    models: Array<{ id: string; label: string }>;
+    canManage: boolean;
+  }> {
+    const wire = await request<{
+      config: OfferAiConfigWire;
+      models: Array<{ id: string; label: string }>;
+      can_manage: boolean;
+    }>(`/v1/offers/${id}/ai-config`);
+    return {
+      config: {
+        provider: wire.config.provider,
+        model: wire.config.model,
+        role: wire.config.role,
+        template: wire.config.template,
+        responsible: wire.config.responsible,
+        minRoas: wire.config.min_roas,
+        tone: wire.config.tone,
+        includeAds: wire.config.include_ads,
+        autoGenerate: wire.config.auto_generate,
+        scheduleHours: wire.config.schedule_hours,
+        apiKeyConfigured: wire.config.api_key_configured,
+        apiKeyHint: wire.config.api_key_hint,
+      },
+      models: wire.models,
+      canManage: wire.can_manage,
+    };
+  },
+
+  async updateOfferAiConfig(
+    id: string,
+    input: {
+      api_key?: string;
+      provider: 'opencode-zen';
+      model: string;
+      role: string;
+      template: string;
+      responsible: string;
+      min_roas: number;
+      tone: OfferAiTone;
+      include_ads: boolean;
+      auto_generate: boolean;
+      schedule_hours: number[];
+    },
+  ): Promise<void> {
+    await request(`/v1/offers/${id}/ai-config`, { method: 'PUT', body: input });
+  },
+
+  async generateOfferAiAnalysis(id: string): Promise<OfferAiAnalysisView> {
+    const wire = await request<{
+      id: string;
+      offerId: string;
+      model: string;
+      text: string;
+      observation: string;
+      createdAt: string;
+    }>(`/v1/offers/${id}/ai-analysis`, { method: 'POST' });
+    return wire;
+  },
+
+  async listOfferAiAnalyses(id: string): Promise<OfferAiAnalysisView[]> {
+    const wire = await request<{ analyses: OfferAiAnalysisView[] }>(`/v1/offers/${id}/ai-analyses`);
+    return wire.analyses ?? [];
   },
 
   async getOfferSnapshots(

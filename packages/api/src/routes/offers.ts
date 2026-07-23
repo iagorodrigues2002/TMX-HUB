@@ -8,6 +8,12 @@ import type { Offer } from '@page-cloner/shared';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { BadRequestError, HttpProblem, zodToProblem } from '../lib/problem.js';
+import {
+  DEFAULT_AI_ROLE,
+  DEFAULT_AI_TEMPLATE,
+  generateCampaignAnalysis,
+  OPENCODE_MODELS,
+} from '../services/campaign-ai.js';
 import { computeMetrics } from '../services/snapshot-store.js';
 
 function offerToWire(o: Offer, includeAccess = false): Record<string, unknown> {
@@ -71,6 +77,30 @@ const RangeQuerySchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .optional(),
 });
+
+const AiConfigSchema = z
+  .object({
+    api_key: z.string().trim().min(8).max(500).optional(),
+    provider: z.literal('opencode-zen').default('opencode-zen'),
+    model: z.enum([
+      'gpt-5.6-terra',
+      'gpt-5.6-sol',
+      'gpt-5.4-mini',
+      'gpt-5.4-nano',
+      'deepseek-v4-flash',
+      'kimi-k2.6',
+      'grok-4.5',
+    ]),
+    role: z.string().trim().min(20).max(4_000),
+    template: z.string().trim().min(50).max(12_000),
+    responsible: z.string().trim().max(100).default(''),
+    min_roas: z.number().min(0).max(100).default(0),
+    tone: z.enum(['direto', 'conservador', 'detalhado']).default('direto'),
+    include_ads: z.boolean().default(true),
+    auto_generate: z.boolean().default(false),
+    schedule_hours: z.array(z.number().int().min(0).max(23)).max(24).default([]),
+  })
+  .strict();
 
 function resolveRange(q: { from?: string; to?: string }): { from: string; to: string } {
   // Default: last 7 days inclusive (today minus 6).
@@ -262,6 +292,123 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       req.user.role === 'admin',
     );
     return reply.send(await app.intradayStore.summary(offer.id));
+  });
+
+  app.get<{ Params: { id: string } }>('/offers/:id/ai-config', async (req, reply) => {
+    if (!req.user) throw new BadRequestError('No user attached.');
+    await app.offerStore.assertAccess(req.params.id, req.user.sub, req.user.role === 'admin');
+    const config = await app.offerStore.getAiConfig(req.params.id);
+    const canManage = req.user.role === 'admin';
+    return reply.send({
+      config: config
+        ? {
+            provider: config.provider,
+            model: config.model,
+            role: config.role,
+            template: config.template,
+            responsible: config.responsible,
+            min_roas: config.minRoas,
+            tone: config.tone,
+            include_ads: config.includeAds,
+            auto_generate: config.autoGenerate,
+            schedule_hours: config.scheduleHours,
+            api_key_configured: config.apiKeyConfigured,
+            ...(canManage && config.apiKeyHint ? { api_key_hint: config.apiKeyHint } : {}),
+          }
+        : {
+            provider: 'opencode-zen',
+            model: 'gpt-5.6-terra',
+            role: DEFAULT_AI_ROLE,
+            template: DEFAULT_AI_TEMPLATE,
+            responsible: '',
+            min_roas: 0,
+            tone: 'direto',
+            include_ads: true,
+            auto_generate: false,
+            schedule_hours: [10, 14, 18, 22],
+            api_key_configured: false,
+          },
+      models: OPENCODE_MODELS,
+      can_manage: canManage,
+    });
+  });
+
+  app.put<{ Params: { id: string } }>('/offers/:id/ai-config', async (req, reply) => {
+    if (!req.user) throw new BadRequestError('No user attached.');
+    await app.offerStore.assertManager(req.params.id, req.user.sub, req.user.role === 'admin');
+    const parsed = AiConfigSchema.safeParse(req.body);
+    if (!parsed.success) throw zodToProblem(parsed.error, req.url);
+    const config = await app.offerStore.setAiConfig(req.params.id, {
+      ...(parsed.data.api_key ? { apiKey: parsed.data.api_key } : {}),
+      provider: parsed.data.provider,
+      model: parsed.data.model,
+      role: parsed.data.role,
+      template: parsed.data.template,
+      responsible: parsed.data.responsible,
+      minRoas: parsed.data.min_roas,
+      tone: parsed.data.tone,
+      includeAds: parsed.data.include_ads,
+      autoGenerate: parsed.data.auto_generate,
+      scheduleHours: [...new Set(parsed.data.schedule_hours)].sort((a, b) => a - b),
+    });
+    return reply.send({
+      provider: config.provider,
+      model: config.model,
+      role: config.role,
+      template: config.template,
+      responsible: config.responsible,
+      min_roas: config.minRoas,
+      tone: config.tone,
+      include_ads: config.includeAds,
+      auto_generate: config.autoGenerate,
+      schedule_hours: config.scheduleHours,
+      api_key_configured: true,
+      api_key_hint: config.apiKeyHint,
+    });
+  });
+
+  app.post<{ Params: { id: string } }>('/offers/:id/ai-analysis', async (req, reply) => {
+    if (!req.user) throw new BadRequestError('No user attached.');
+    const offer = await app.offerStore.assertAccess(
+      req.params.id,
+      req.user.sub,
+      req.user.role === 'admin',
+    );
+    const config = await app.offerStore.getAiSecretConfig(offer.id);
+    if (!config) {
+      throw new BadRequestError('Configure a chave e o modelo da IA antes de gerar a análise.');
+    }
+    const lockKey = `lock:offer-ai-analysis:${offer.id}`;
+    const lock = await app.redis.set(lockKey, req.user.sub, 'EX', 90, 'NX');
+    if (!lock) {
+      throw new HttpProblem({
+        status: 429,
+        title: 'Too Many Requests',
+        detail: 'Já existe uma análise sendo gerada. Aguarde alguns instantes.',
+        code: 'ai_analysis_in_progress',
+      });
+    }
+    try {
+      const summary = await app.intradayStore.summary(offer.id);
+      const analysis = await generateCampaignAnalysis({ offer, summary, config });
+      await app.offerStore.addAiAnalysis(analysis);
+      return reply.send(analysis);
+    } catch (error) {
+      throw new HttpProblem({
+        status: 502,
+        title: 'AI provider error',
+        detail: error instanceof Error ? error.message : 'Falha ao gerar análise.',
+        code: 'ai_provider_error',
+      });
+    } finally {
+      await app.redis.del(lockKey);
+    }
+  });
+
+  app.get<{ Params: { id: string } }>('/offers/:id/ai-analyses', async (req, reply) => {
+    if (!req.user) throw new BadRequestError('No user attached.');
+    await app.offerStore.assertAccess(req.params.id, req.user.sub, req.user.role === 'admin');
+    return reply.send({ analyses: await app.offerStore.listAiAnalyses(req.params.id) });
   });
 
   // GET /v1/dashboard/summary?from=&to= — cross-offer aggregation for the home

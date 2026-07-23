@@ -3,6 +3,7 @@ import type { Redis } from 'ioredis';
 import type { OfferStore } from './offer-store.js';
 import type { SnapshotStore } from './snapshot-store.js';
 import type { IntradayStore } from './intraday-store.js';
+import { generateCampaignAnalysis } from './campaign-ai.js';
 
 const AUTH_URL = 'https://server.utmify.com.br/users/auth';
 const SEARCH_URL = 'https://server.utmify.com.br/orders/search-objects';
@@ -131,6 +132,9 @@ export class UtmifySyncService {
         { offerId: offer.id, days: syncedDays, failedDays: failures.length, ads },
         'utmify offer synced',
       );
+      await this.generateScheduledAnalysis(offer).catch((error) => {
+        this.log.warn({ error, offerId: offer.id }, 'scheduled campaign analysis failed');
+      });
       return {
         offerId: offer.id,
         syncedDays,
@@ -144,6 +148,47 @@ export class UtmifySyncService {
     } finally {
       await this.redis.del(lockKey);
     }
+  }
+
+  private async generateScheduledAnalysis(offer: Offer): Promise<void> {
+    const config = await this.offerStore.getAiSecretConfig(offer.id);
+    if (!config?.autoGenerate || config.scheduleHours.length === 0) return;
+    const now = new Date();
+    const local = new Intl.DateTimeFormat('en-CA', {
+      timeZone: REPORT_TIME_ZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(now);
+    const part = (type: Intl.DateTimeFormatPartTypes) =>
+      local.find((item) => item.type === type)?.value ?? '';
+    const hour = Number(part('hour'));
+    if (!config.scheduleHours.includes(hour)) return;
+    const localDay = `${part('year')}-${part('month')}-${part('day')}`;
+    const history = await this.offerStore.listAiAnalyses(offer.id);
+    const alreadyGenerated = history.some((item) => {
+      const created = new Date(item.createdAt);
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: REPORT_TIME_ZONE,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        hourCycle: 'h23',
+      }).formatToParts(created);
+      const value = (type: Intl.DateTimeFormatPartTypes) =>
+        parts.find((entry) => entry.type === type)?.value ?? '';
+      return (
+        `${value('year')}-${value('month')}-${value('day')}` === localDay &&
+        Number(value('hour')) === hour
+      );
+    });
+    if (alreadyGenerated) return;
+    const summary = await this.intradayStore.summary(offer.id, now);
+    const analysis = await generateCampaignAnalysis({ offer, summary, config, now });
+    await this.offerStore.addAiAnalysis(analysis);
   }
 
   async inspectCapabilities(offer: Offer): Promise<{

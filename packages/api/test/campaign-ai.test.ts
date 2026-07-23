@@ -1,0 +1,145 @@
+import type { Offer } from '@page-cloner/shared';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  DEFAULT_AI_ROLE,
+  DEFAULT_AI_TEMPLATE,
+  generateCampaignAnalysis,
+} from '../src/services/campaign-ai.js';
+import type { IntradaySummary } from '../src/services/intraday-store.js';
+import type { OfferAiSecretConfig } from '../src/services/offer-store.js';
+
+const offer: Offer = {
+  id: 'offer-sdm',
+  userId: 'admin-1',
+  name: 'SDM',
+  currency: 'BRL',
+  status: 'escala',
+  createdAt: '2026-07-01T00:00:00.000Z',
+};
+
+const summary: IntradaySummary = {
+  date: '2026-07-23',
+  overall: {
+    spend: 628.11,
+    revenue: 976.06,
+    sales: 5,
+    ic: 20,
+    cpa: 125.622,
+    icCpa: 31.4055,
+    conversionRate: 0.25,
+    roas: 1.553974,
+  },
+  overallAds: [
+    {
+      name: 'ad3-l14',
+      spend: 200,
+      revenue: 300,
+      sales: 2,
+      ic: 6,
+      cpa: 100,
+      icCpa: 33.333,
+      conversionRate: 0.333,
+      roas: 1.5,
+    },
+  ],
+  currentWindowIndex: 7,
+  windows: [],
+};
+
+const config: OfferAiSecretConfig = {
+  apiKey: 'opencode-secret-key',
+  provider: 'opencode-zen',
+  model: 'gpt-5.6-terra',
+  role: DEFAULT_AI_ROLE,
+  template: DEFAULT_AI_TEMPLATE,
+  responsible: 'Iago Rodrigues',
+  minRoas: 1.6,
+  tone: 'direto',
+  includeAds: true,
+  autoGenerate: false,
+  scheduleHours: [],
+};
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe('campaign AI analysis', () => {
+  it('sends calculated data to OpenCode and formats the fixed report safely', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          output: [{ content: [{ type: 'output_text', text: 'ROAS próximo da meta.' }] }],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await generateCampaignAnalysis({
+      offer,
+      summary,
+      config,
+      now: new Date('2026-07-23T17:00:00.000Z'),
+    });
+
+    expect(result.text).toContain('[SDM {23/07 14:00} — ATUALIZAÇÃO]');
+    expect(result.text).toContain('Responsável: Iago Rodrigues');
+    expect(result.text).toContain('GASTO: R$ 628,11');
+    expect(result.text).toContain('FATURAMENTO: R$ 976,06');
+    expect(result.text).toContain('ROAS: 1,55');
+    expect(result.text).toContain('OBS: ROAS próximo da meta.');
+
+    const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(options.headers).toMatchObject({
+      authorization: 'Bearer opencode-secret-key',
+    });
+    const body = JSON.parse(String(options.body));
+    expect(body.model).toBe('gpt-5.6-terra');
+    expect(body.store).toBe(false);
+    expect(JSON.stringify(body.input)).toContain('ad3-l14');
+  });
+
+  it('surfaces provider errors without exposing the API key', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: { message: 'saldo insuficiente' } }), {
+          status: 402,
+          headers: { 'content-type': 'application/json' },
+        }),
+      ),
+    );
+
+    await expect(
+      generateCampaignAnalysis({
+        offer,
+        summary,
+        config,
+        now: new Date('2026-07-23T17:00:00.000Z'),
+      }),
+    ).rejects.toThrow('saldo insuficiente');
+  });
+
+  it('uses the OpenAI-compatible chat endpoint for DeepSeek', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: 'A janela atual está abaixo da meta.' } }],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await generateCampaignAnalysis({
+      offer,
+      summary,
+      config: { ...config, model: 'deepseek-v4-flash' },
+      now: new Date('2026-07-23T17:00:00.000Z'),
+    });
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://opencode.ai/zen/v1/chat/completions');
+    const body = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+    expect(body.messages).toHaveLength(2);
+    expect(result.observation).toBe('A janela atual está abaixo da meta.');
+  });
+});

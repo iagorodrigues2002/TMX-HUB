@@ -10,6 +10,7 @@ import {
 import { HubShell } from '@/components/hub/hub-shell';
 import { OfferCard } from '@/components/ofertas/offer-card';
 import { OfferEditDialog } from '@/components/ofertas/offer-edit-dialog';
+import { OfferAiAnalysis } from '@/components/ofertas/offer-ai-analysis';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -1057,6 +1058,8 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
           </div>
         )}
       </section>
+
+      <OfferAiAnalysis offerId={id} />
 
       {offer && canManage && (
         <OfferEditDialog offer={offer} open={editing} onOpenChange={setEditing} />
