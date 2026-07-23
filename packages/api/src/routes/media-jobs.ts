@@ -1,9 +1,15 @@
 import { CreateMediaJobBodySchema, type MediaJob } from '@page-cloner/shared';
+import archiver from 'archiver';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { ulid } from 'ulid';
-import { BadRequestError, zodToProblem } from '../lib/problem.js';
+import { z } from 'zod';
+import { BadRequestError, NotFoundError, zodToProblem } from '../lib/problem.js';
 
 const MAX_INPUT_BYTES = 500 * 1024 * 1024;
+const MAX_BULK_ZIP_BYTES = 3 * 1024 * 1024 * 1024;
+const BulkDownloadBodySchema = z
+  .object({ ids: z.array(z.string().min(1)).min(1).max(100) })
+  .strict();
 const MIME_BY_EXT: Record<string, string> = {
   mp4: 'video/mp4',
   mov: 'video/quicktime',
@@ -158,6 +164,65 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         }),
       ),
     };
+  });
+
+  app.post('/media-jobs/bulk-download', async (req, reply) => {
+    if (!req.user) throw new BadRequestError('No user attached.');
+    const parsed = BulkDownloadBodySchema.safeParse(req.body);
+    if (!parsed.success) throw zodToProblem(parsed.error, req.url);
+
+    const jobs = await Promise.all(
+      parsed.data.ids.map(async (id) => {
+        const job = await app.mediaJobStore.assertOwner(id, req.user!.sub);
+        if (job.status !== 'ready' || !job.outputStorageKey) {
+          throw new BadRequestError(
+            `O vídeo "${job.inputFilename}" ainda não está pronto (status: ${job.status}).`,
+          );
+        }
+        return job;
+      }),
+    );
+    const totalBytes = jobs.reduce((total, job) => total + (job.outputBytes ?? 0), 0);
+    if (totalBytes > MAX_BULK_ZIP_BYTES) {
+      throw new BadRequestError(
+        `A seleção tem ${(totalBytes / 1024 / 1024 / 1024).toFixed(2)}GB. O limite por ZIP é 3GB.`,
+      );
+    }
+
+    const archive = archiver('zip', { zlib: { level: 6 } });
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    reply.raw.writeHead(200, {
+      'content-type': 'application/zip',
+      'content-disposition': `attachment; filename="video-studio-${stamp}.zip"`,
+      'cache-control': 'no-store',
+    });
+    archive.on('error', (error) => {
+      app.log.error({ error }, 'media jobs bulk download failed');
+      reply.raw.destroy(error);
+    });
+    archive.pipe(reply.raw);
+
+    const usedNames = new Map<string, number>();
+    for (const job of jobs) {
+      const object = await app.storage.get(job.outputStorageKey!).catch((error) => {
+        throw new NotFoundError(
+          `Falha ao ler o resultado de ${job.inputFilename}: ${(error as Error).message}`,
+        );
+      });
+      const originalName = job.outputFilename || `${job.id}.mp4`;
+      const duplicateIndex = usedNames.get(originalName) ?? 0;
+      let filename = originalName;
+      if (duplicateIndex > 0) {
+        const dot = originalName.lastIndexOf('.');
+        const base = dot > 0 ? originalName.slice(0, dot) : originalName;
+        const extension = dot > 0 ? originalName.slice(dot) : '';
+        filename = `${base} (${duplicateIndex})${extension}`;
+      }
+      usedNames.set(originalName, duplicateIndex + 1);
+      archive.append(object.body, { name: filename });
+    }
+    await archive.finalize();
+    return reply;
   });
 
   app.get<{ Params: { id: string } }>('/media-jobs/:id', async (req) => {

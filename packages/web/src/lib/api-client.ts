@@ -1597,6 +1597,39 @@ export const apiClient = {
   async deleteMediaJob(id: string): Promise<void> {
     await request<void>(`/v1/media-jobs/${id}`, { method: 'DELETE' });
   },
+  async bulkDownloadMediaJobs(ids: string[]): Promise<{ filename: string; bytes: number }> {
+    const baseUrl = env.NEXT_PUBLIC_API_URL;
+    const token = authToken.get();
+    const headers: Record<string, string> = { 'content-type': 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(`${baseUrl}/v1/media-jobs/bulk-download`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ ids }),
+    });
+    if (!res.ok) {
+      let message = `HTTP ${res.status}`;
+      try {
+        const body = (await res.json()) as { detail?: string; message?: string };
+        message = body.detail ?? body.message ?? message;
+      } catch {}
+      throw new ApiError(message, res.status);
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get('content-disposition') || '';
+    const filename =
+      disposition.match(/filename="([^"]+)"/)?.[1] ??
+      `video-studio-${new Date().toISOString().slice(0, 10)}.zip`;
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+    return { filename, bytes: blob.size };
+  },
 
   // ---- Digistore24 Audits ----
   async listDigiAudits(): Promise<DigiAuditView[]> {
