@@ -398,4 +398,64 @@ describe('campaign AI analysis', () => {
     const body = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
     expect(body.messages[1].content).not.toContain('INSTRUÇÃO OBRIGATÓRIA — ANÁLISE POR FUNIL');
   });
+
+  it('replaces leaked or incomplete reasoning with a deterministic funnel report', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content:
+                    'We need produce final answer in Portuguese. Need to calculate F303 first.',
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      ),
+    );
+
+    const result = await generateCampaignAnalysis({
+      offer: { ...offer, name: 'Geral Gex', currency: 'USD' },
+      summary: {
+        ...summary,
+        overallAds: [
+          {
+            ...summary.overallAds[0]!,
+            name: '[#15] [JVC_INTER-F303-AQS-2026]',
+            spend: 100,
+            revenue: 250,
+            sales: 1,
+            ic: 2,
+            cpa: 100,
+            roas: 2.5,
+          },
+          {
+            ...summary.overallAds[0]!,
+            name: '[#43] [VPC_INTER-F308-AQS-2026]',
+            spend: 200,
+            revenue: 0,
+            sales: 0,
+            ic: 1,
+            cpa: null,
+            roas: 0,
+          },
+        ],
+      },
+      config,
+      now: new Date('2026-07-23T17:00:00.000Z'),
+    });
+
+    expect(result.text).not.toContain('We need');
+    expect(result.text).toContain('F303');
+    expect(result.text).toContain('F308');
+    expect(result.text).toContain('➡️ Investimento: US$ 100,00');
+    expect(result.text).toContain('➡️ Investimento: US$ 200,00');
+    expect(result.text).toContain('O melhor resultado veio de [#15]');
+    expect(result.text).toContain('[#43] (US$ 200,00) concentraram investimento sem vendas');
+  });
 });

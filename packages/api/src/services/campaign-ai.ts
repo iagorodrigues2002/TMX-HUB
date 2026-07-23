@@ -109,7 +109,11 @@ Não apresente raciocínio interno, cálculos intermediários ou texto em inglê
 Não produza uma análise geral antes ou depois dos funis.`
     : '';
   const prompt = `${renderTemplate(args.config.template, values)}${learningContext}${funnelInstruction}`;
-  const observation = await callOpenCode(args.config, prompt);
+  const aiObservation = await callOpenCode(args.config, prompt);
+  const observation =
+    funnels.length > 0 && !isValidFunnelAnalysis(aiObservation, funnels)
+      ? buildDeterministicFunnelAnalysis(funnels, currency, args.config.minRoas)
+      : aiObservation;
   const text = formatReport({
     offer: args.offer,
     responsible: args.config.responsible,
@@ -199,6 +203,73 @@ export function buildFunnelSummaries(ads: IntradaySummary['overallAds']): Funnel
       };
     })
     .sort((a, b) => a.code.localeCompare(b.code, 'pt-BR', { numeric: true }));
+}
+
+function isValidFunnelAnalysis(text: string, funnels: FunnelSummary[]): boolean {
+  if (!text.trim() || text.length > 12_000) return false;
+  if (
+    /\b(?:we need|need to|the user|let me|let's|must not|final answer|reasoning|provided precomputed|now wording)\b/i.test(
+      text,
+    )
+  ) {
+    return false;
+  }
+  return funnels.every((funnel) => new RegExp(`\\b${funnel.code}\\b`, 'i').test(text));
+}
+
+function buildDeterministicFunnelAnalysis(
+  funnels: FunnelSummary[],
+  currency: string,
+  minRoas: number,
+): string {
+  return funnels
+    .map((funnel) => {
+      const best = [...funnel.ads]
+        .filter((ad) => ad.sales > 0)
+        .sort((a, b) => (b.roas ?? 0) - (a.roas ?? 0) || b.revenue - a.revenue)[0];
+      const noSale = [...funnel.ads]
+        .filter((ad) => ad.sales === 0 && ad.spend > 0)
+        .sort((a, b) => b.spend - a.spend)
+        .slice(0, best ? 2 : 3);
+      const comparison =
+        funnel.roas !== null && funnel.roas >= minRoas
+          ? `acima da meta de ${formatNumber(minRoas)}`
+          : `abaixo da meta de ${formatNumber(minRoas)}`;
+      const evidence: string[] = [];
+      if (best) {
+        evidence.push(
+          `O melhor resultado veio de ${shortAdName(best.name)}, com ${best.sales} ${
+            best.sales === 1 ? 'venda' : 'vendas'
+          } e ROAS ${formatNumber(best.roas)}.`,
+        );
+      }
+      if (noSale.length > 0) {
+        evidence.push(
+          `${noSale
+            .map((ad) => `${shortAdName(ad.name)} (${money(ad.spend, currency)})`)
+            .join(' e ')} concentraram investimento sem vendas.`,
+        );
+      }
+      if (!best && funnel.spend < 100) {
+        evidence.push('A amostra ainda é pequena para uma conclusão mais firme.');
+      }
+
+      return `${funnel.code}
+➡️ Investimento: ${money(funnel.spend, currency)}
+➡️ Faturamento: ${money(funnel.revenue, currency)}
+➡️ Vendas: ${funnel.sales}
+➡️ CPA: ${money(funnel.cpa, currency)}
+➡️ IC: ${funnel.ic}
+✅ ROAS: ${formatNumber(funnel.roas)}
+
+Análise: O funil está ${comparison}. ${evidence.join(' ')}`.trim();
+    })
+    .join('\n\n');
+}
+
+function shortAdName(name: string): string {
+  const bracketed = /^\s*(\[[^\]]+\])/.exec(name)?.[1];
+  return bracketed ?? name.slice(0, 80);
 }
 
 function renderTemplate(template: string, values: Record<string, string>): string {
