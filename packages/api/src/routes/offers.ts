@@ -109,6 +109,22 @@ const AiFeedbackSchema = z
   })
   .strict();
 
+const AiPreferencesSchema = z
+  .object({
+    model: z.enum([
+      'deepseek-v4-flash',
+      'deepseek-v4-pro',
+      'kimi-k2.6',
+      'kimi-k2.7-code',
+      'kimi-k3',
+      'glm-5.2',
+      'grok-4.5',
+      'mimo-v2.5',
+    ]),
+    responsible: z.string().trim().max(100),
+  })
+  .strict();
+
 export function canUseOfferAi(role: 'admin' | 'user', tools?: string[]): boolean {
   return role === 'admin' || Boolean(tools?.includes('ofertas-ia'));
 }
@@ -320,15 +336,19 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     assertAiAccess(req.user);
     await app.offerStore.assertAccess(req.params.id, req.user.sub, req.user.role === 'admin');
     const config = await app.offerStore.getAiConfig(req.params.id);
+    const preferences =
+      req.user.role === 'admin'
+        ? null
+        : await app.offerStore.getAiUserPreferences(req.params.id, req.user.sub);
     const canManage = req.user.role === 'admin';
     return reply.send({
       config: config
         ? {
             provider: config.provider,
-            model: config.model,
+            model: preferences?.model ?? config.model,
             role: config.role,
             template: config.template,
-            responsible: config.responsible,
+            responsible: preferences?.responsible ?? config.responsible,
             min_roas: config.minRoas,
             tone: config.tone,
             include_ads: config.includeAds,
@@ -352,6 +372,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           },
       models: OPENCODE_MODELS,
       can_manage: canManage,
+      can_customize: true,
     });
   });
 
@@ -390,6 +411,20 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     });
   });
 
+  app.patch<{ Params: { id: string } }>('/offers/:id/ai-preferences', async (req, reply) => {
+    if (!req.user) throw new BadRequestError('No user attached.');
+    assertAiAccess(req.user);
+    await app.offerStore.assertAccess(req.params.id, req.user.sub, req.user.role === 'admin');
+    const parsed = AiPreferencesSchema.safeParse(req.body);
+    if (!parsed.success) throw zodToProblem(parsed.error, req.url);
+    if (req.user.role === 'admin') {
+      throw new BadRequestError('Administradores devem salvar essas opções na configuração geral.');
+    }
+    return reply.send(
+      await app.offerStore.setAiUserPreferences(req.params.id, req.user.sub, parsed.data),
+    );
+  });
+
   app.post<{ Params: { id: string } }>('/offers/:id/ai-analysis', async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');
     assertAiAccess(req.user);
@@ -398,10 +433,15 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       req.user.sub,
       req.user.role === 'admin',
     );
-    const config = await app.offerStore.getAiSecretConfig(offer.id);
-    if (!config) {
+    const baseConfig = await app.offerStore.getAiSecretConfig(offer.id);
+    if (!baseConfig) {
       throw new BadRequestError('Configure a chave e o modelo da IA antes de gerar a análise.');
     }
+    const preferences =
+      req.user.role === 'admin'
+        ? null
+        : await app.offerStore.getAiUserPreferences(offer.id, req.user.sub);
+    const config = preferences ? { ...baseConfig, ...preferences } : baseConfig;
     const lockKey = `lock:offer-ai-analysis:${offer.id}`;
     const statusKey = `offer-ai-analysis-status:${offer.id}`;
     const lock = await app.redis.set(lockKey, req.user.sub, 'EX', 180, 'NX');

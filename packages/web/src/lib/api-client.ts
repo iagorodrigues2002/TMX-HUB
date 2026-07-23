@@ -1154,11 +1154,13 @@ export const apiClient = {
     config: OfferAiConfigView;
     models: Array<{ id: string; label: string }>;
     canManage: boolean;
+    canCustomize: boolean;
   }> {
     const wire = await request<{
       config: OfferAiConfigWire;
       models: Array<{ id: string; label: string }>;
       can_manage: boolean;
+      can_customize: boolean;
     }>(`/v1/offers/${id}/ai-config`);
     return {
       config: {
@@ -1177,6 +1179,7 @@ export const apiClient = {
       },
       models: wire.models,
       canManage: wire.can_manage,
+      canCustomize: wire.can_customize,
     };
   },
 
@@ -1197,6 +1200,13 @@ export const apiClient = {
     },
   ): Promise<void> {
     await request(`/v1/offers/${id}/ai-config`, { method: 'PUT', body: input });
+  },
+
+  async updateOfferAiPreferences(
+    id: string,
+    input: { model: string; responsible: string },
+  ): Promise<void> {
+    await request(`/v1/offers/${id}/ai-preferences`, { method: 'PATCH', body: input });
   },
 
   async generateOfferAiAnalysis(id: string): Promise<OfferAiAnalysisView> {

@@ -9,6 +9,7 @@ const USER_OFFERS_PREFIX = 'user-offers:'; // {userId} → set of offer ids
 const CREDENTIAL_PREFIX = 'offer-utmify:';
 const AI_CONFIG_PREFIX = 'offer-ai-config:';
 const AI_HISTORY_PREFIX = 'offer-ai-history:';
+const AI_PREFERENCES_PREFIX = 'offer-ai-preferences:';
 const OPENCODE_GO_MODEL_IDS = new Set([
   'deepseek-v4-flash',
   'deepseek-v4-pro',
@@ -68,6 +69,11 @@ export interface OfferAiAnalysisRecord {
   }>;
   feedback?: string;
   createdAt: string;
+}
+
+export interface OfferAiUserPreferences {
+  model: string;
+  responsible: string;
 }
 
 const VALID_STATUSES: OfferStatus[] = ['testando', 'validando', 'escala', 'pausado', 'morrendo'];
@@ -303,6 +309,33 @@ export class OfferStore {
   async getAiConfig(id: string): Promise<OfferAiPublicConfig | null> {
     const config = await this.getAiSecretConfig(id);
     return config ? this.toPublicAiConfig(config) : null;
+  }
+
+  async getAiUserPreferences(
+    offerId: string,
+    userId: string,
+  ): Promise<OfferAiUserPreferences | null> {
+    const raw = await this.redis.get(`${AI_PREFERENCES_PREFIX}${offerId}:${userId}`);
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw) as Partial<OfferAiUserPreferences>;
+      if (!parsed.model || typeof parsed.responsible !== 'string') return null;
+      return { model: parsed.model, responsible: parsed.responsible };
+    } catch {
+      return null;
+    }
+  }
+
+  async setAiUserPreferences(
+    offerId: string,
+    userId: string,
+    preferences: OfferAiUserPreferences,
+  ): Promise<OfferAiUserPreferences> {
+    await this.redis.set(
+      `${AI_PREFERENCES_PREFIX}${offerId}:${userId}`,
+      JSON.stringify(preferences),
+    );
+    return preferences;
   }
 
   async getAiSecretConfig(id: string): Promise<OfferAiSecretConfig | null> {

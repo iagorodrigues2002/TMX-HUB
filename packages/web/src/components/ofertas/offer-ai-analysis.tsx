@@ -87,6 +87,19 @@ export function OfferAiAnalysis({ offerId }: { offerId: string }) {
     onError: (error) => toast.error((error as Error).message),
   });
 
+  const preferencesMutation = useMutation({
+    mutationFn: () =>
+      apiClient.updateOfferAiPreferences(offerId, {
+        model,
+        responsible: responsible.trim(),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['offer-ai-config', offerId] });
+      toast.success('Suas preferências de análise foram salvas.');
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
+
   const feedbackMutation = useMutation({
     mutationFn: ({ analysisId, feedback }: { analysisId: string; feedback: string }) =>
       apiClient.updateOfferAiAnalysisFeedback(offerId, analysisId, feedback),
@@ -299,6 +312,56 @@ export function OfferAiAnalysis({ offerId }: { offerId: string }) {
               )}
               Salvar configuração
             </Button>
+          </div>
+        </details>
+      )}
+
+      {configQuery.data?.canCustomize && !configQuery.data.canManage && (
+        <details className="border-b border-white/[0.06]">
+          <summary className="cursor-pointer px-5 py-4 text-[12px] font-semibold text-cyan-100">
+            Suas preferências de análise
+          </summary>
+          <div className="grid gap-4 border-t border-white/[0.05] px-5 py-5 md:grid-cols-2">
+            <Field label="Seu nome no relatório" htmlFor="member-ai-responsible">
+              <Input
+                id="member-ai-responsible"
+                value={responsible}
+                onChange={(event) => setResponsible(event.target.value)}
+                placeholder="Digite seu nome"
+                maxLength={100}
+              />
+            </Field>
+            <Field label="Modelo de IA" htmlFor="member-ai-model">
+              <Select value={model} onValueChange={setModel}>
+                <SelectTrigger id="member-ai-model">
+                  <SelectValue placeholder="Selecione o modelo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {configQuery.data.models.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <div className="md:col-span-2">
+              <p className="mb-3 text-[10px] text-white/35">
+                A chave API é administrada com segurança pelo responsável do hub e não fica
+                disponível para membros.
+              </p>
+              <Button
+                onClick={() => preferencesMutation.mutate()}
+                disabled={!model || !responsible.trim() || preferencesMutation.isPending}
+              >
+                {preferencesMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                Salvar minhas preferências
+              </Button>
+            </div>
           </div>
         </details>
       )}
