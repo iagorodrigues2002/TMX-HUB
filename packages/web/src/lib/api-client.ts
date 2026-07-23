@@ -672,6 +672,23 @@ export interface OfferAiAnalysisView {
   model: string;
   text: string;
   observation: string;
+  metrics?: {
+    spend: number;
+    revenue: number;
+    sales: number;
+    ic: number;
+    cpa: number | null;
+    roas: number | null;
+  };
+  windows?: Array<{
+    label: string;
+    spend: number;
+    revenue: number;
+    sales: number;
+    cpa: number | null;
+    roas: number | null;
+  }>;
+  feedback?: string;
   createdAt: string;
 }
 
@@ -1190,6 +1207,17 @@ export const apiClient = {
   async listOfferAiAnalyses(id: string): Promise<OfferAiAnalysisView[]> {
     const wire = await request<{ analyses: OfferAiAnalysisView[] }>(`/v1/offers/${id}/ai-analyses`);
     return wire.analyses ?? [];
+  },
+
+  async updateOfferAiAnalysisFeedback(
+    id: string,
+    analysisId: string,
+    feedback: string,
+  ): Promise<OfferAiAnalysisView> {
+    return request(`/v1/offers/${id}/ai-analyses/${analysisId}/feedback`, {
+      method: 'PATCH',
+      body: { feedback },
+    });
   },
 
   async getOfferSnapshots(

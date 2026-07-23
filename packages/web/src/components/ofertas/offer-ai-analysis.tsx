@@ -30,6 +30,7 @@ export function OfferAiAnalysis({ offerId }: { offerId: string }) {
   const [autoGenerate, setAutoGenerate] = useState(false);
   const [scheduleHours, setScheduleHours] = useState<number[]>([]);
   const [copied, setCopied] = useState(false);
+  const [feedbackDrafts, setFeedbackDrafts] = useState<Record<string, string>>({});
 
   const configQuery = useQuery({
     queryKey: ['offer-ai-config', offerId],
@@ -82,6 +83,17 @@ export function OfferAiAnalysis({ offerId }: { offerId: string }) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['offer-ai-analyses', offerId] });
       toast.success('Análise de campanha gerada.');
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
+
+  const feedbackMutation = useMutation({
+    mutationFn: ({ analysisId, feedback }: { analysisId: string; feedback: string }) =>
+      apiClient.updateOfferAiAnalysisFeedback(offerId, analysisId, feedback),
+    onSuccess: (analysis) => {
+      setFeedbackDrafts((current) => ({ ...current, [analysis.id]: analysis.feedback ?? '' }));
+      void qc.invalidateQueries({ queryKey: ['offer-ai-analyses', offerId] });
+      toast.success('Feedback salvo. Ele será usado nas próximas análises.');
     },
     onError: (error) => toast.error((error as Error).message),
   });
@@ -307,6 +319,22 @@ export function OfferAiAnalysis({ offerId }: { offerId: string }) {
             <p className="text-[10px] text-white/30">
               {new Date(latest.createdAt).toLocaleString('pt-BR')} · {latest.model}
             </p>
+            {configQuery.data?.canManage && (
+              <AnalysisFeedback
+                analysisId={latest.id}
+                value={feedbackDrafts[latest.id] ?? latest.feedback ?? ''}
+                pending={feedbackMutation.isPending}
+                onChange={(value) =>
+                  setFeedbackDrafts((current) => ({ ...current, [latest.id]: value }))
+                }
+                onSave={() =>
+                  feedbackMutation.mutate({
+                    analysisId: latest.id,
+                    feedback: feedbackDrafts[latest.id] ?? latest.feedback ?? '',
+                  })
+                }
+              />
+            )}
             {(historyQuery.data?.length ?? 0) > 1 && (
               <details className="rounded-md border border-white/[0.06]">
                 <summary className="cursor-pointer px-4 py-3 text-[11px] font-semibold text-white/55">
@@ -336,6 +364,25 @@ export function OfferAiAnalysis({ offerId }: { offerId: string }) {
                       <pre className="line-clamp-6 whitespace-pre-wrap font-sans text-[11px] leading-5 text-white/55">
                         {analysis.text}
                       </pre>
+                      {configQuery.data?.canManage && (
+                        <AnalysisFeedback
+                          analysisId={analysis.id}
+                          value={feedbackDrafts[analysis.id] ?? analysis.feedback ?? ''}
+                          pending={feedbackMutation.isPending}
+                          onChange={(value) =>
+                            setFeedbackDrafts((current) => ({
+                              ...current,
+                              [analysis.id]: value,
+                            }))
+                          }
+                          onSave={() =>
+                            feedbackMutation.mutate({
+                              analysisId: analysis.id,
+                              feedback: feedbackDrafts[analysis.id] ?? analysis.feedback ?? '',
+                            })
+                          }
+                        />
+                      )}
                     </div>
                   ))}
                 </div>
@@ -349,6 +396,50 @@ export function OfferAiAnalysis({ offerId }: { offerId: string }) {
         )}
       </div>
     </section>
+  );
+}
+
+function AnalysisFeedback({
+  analysisId,
+  value,
+  pending,
+  onChange,
+  onSave,
+}: {
+  analysisId: string;
+  value: string;
+  pending: boolean;
+  onChange: (value: string) => void;
+  onSave: () => void;
+}) {
+  return (
+    <div className="mt-3 rounded-md border border-cyan-300/10 bg-cyan-300/[0.025] p-3">
+      <Label htmlFor={`ai-feedback-${analysisId}`} className="text-[11px] text-cyan-100/70">
+        Resultado depois desta análise
+      </Label>
+      <textarea
+        id={`ai-feedback-${analysisId}`}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        maxLength={1_000}
+        rows={3}
+        className={`${textareaClass} mt-2`}
+        placeholder="Ex.: reduzi o orçamento às 16h; a janela seguinte recuperou para ROAS 1,8."
+      />
+      <div className="mt-2 flex items-center justify-between gap-3">
+        <p className="text-[10px] text-white/30">
+          A próxima análise usará este resultado como memória operacional.
+        </p>
+        <Button variant="outline" size="sm" onClick={onSave} disabled={pending}>
+          {pending ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Save className="h-3.5 w-3.5" />
+          )}
+          Salvar feedback
+        </Button>
+      </div>
+    </div>
   );
 }
 

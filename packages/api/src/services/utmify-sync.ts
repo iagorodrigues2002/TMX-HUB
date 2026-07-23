@@ -187,7 +187,13 @@ export class UtmifySyncService {
     });
     if (alreadyGenerated) return;
     const summary = await this.intradayStore.summary(offer.id, now);
-    const analysis = await generateCampaignAnalysis({ offer, summary, config, now });
+    const analysis = await generateCampaignAnalysis({
+      offer,
+      summary,
+      config,
+      history,
+      now,
+    });
     await this.offerStore.addAiAnalysis(analysis);
   }
 

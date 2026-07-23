@@ -40,6 +40,23 @@ export interface OfferAiAnalysisRecord {
   model: string;
   text: string;
   observation: string;
+  metrics?: {
+    spend: number;
+    revenue: number;
+    sales: number;
+    ic: number;
+    cpa: number | null;
+    roas: number | null;
+  };
+  windows?: Array<{
+    label: string;
+    spend: number;
+    revenue: number;
+    sales: number;
+    cpa: number | null;
+    roas: number | null;
+  }>;
+  feedback?: string;
   createdAt: string;
 }
 
@@ -332,6 +349,29 @@ export class OfferStore {
         return [];
       }
     });
+  }
+
+  async setAiAnalysisFeedback(
+    offerId: string,
+    analysisId: string,
+    feedback: string,
+  ): Promise<OfferAiAnalysisRecord> {
+    const records = await this.listAiAnalyses(offerId);
+    const index = records.findIndex((record) => record.id === analysisId);
+    const existing = records[index];
+    if (!existing) throw new NotFoundError('Análise de IA não encontrada.');
+
+    const updated: OfferAiAnalysisRecord = {
+      ...existing,
+      feedback: feedback.trim() || undefined,
+    };
+    records[index] = updated;
+    const key = this.aiHistoryKey(offerId);
+    const tx = this.redis.multi().del(key);
+    if (records.length > 0) tx.rpush(key, ...records.map((record) => JSON.stringify(record)));
+    tx.expire(key, 180 * 24 * 60 * 60);
+    await tx.exec();
+    return updated;
   }
 
   async setSyncState(

@@ -78,6 +78,19 @@ describe('campaign AI analysis', () => {
       offer,
       summary,
       config,
+      history: [
+        {
+          id: 'analysis-old',
+          offerId: offer.id,
+          model: config.model,
+          text: 'Relatório anterior',
+          observation: 'A janela das 10h às 12h ficou sem vendas.',
+          metrics: { spend: 400, revenue: 500, sales: 3, ic: 12, cpa: 133.33, roas: 1.25 },
+          windows: [{ label: '10h–12h', spend: 120, revenue: 0, sales: 0, cpa: null, roas: 0 }],
+          feedback: 'Reduzi o orçamento e a janela seguinte recuperou.',
+          createdAt: '2026-07-23T13:00:00.000Z',
+        },
+      ],
       now: new Date('2026-07-23T17:00:00.000Z'),
     });
 
@@ -96,6 +109,9 @@ describe('campaign AI analysis', () => {
     expect(body.model).toBe('gpt-5.6-terra');
     expect(body.store).toBe(false);
     expect(JSON.stringify(body.input)).toContain('ad3-l14');
+    expect(JSON.stringify(body.input)).toContain('Reduzi o orçamento');
+    expect(JSON.stringify(body.input)).toContain('A janela das 10h às 12h');
+    expect(result.metrics).toMatchObject({ spend: 628.11, revenue: 976.06, sales: 5 });
   });
 
   it('surfaces provider errors without exposing the API key', async () => {

@@ -55,6 +55,7 @@ export async function generateCampaignAnalysis(args: {
   offer: Offer;
   summary: IntradaySummary;
   config: OfferAiSecretConfig;
+  history?: OfferAiAnalysisRecord[];
   now?: Date;
 }): Promise<OfferAiAnalysisRecord> {
   const now = args.now ?? new Date();
@@ -84,7 +85,20 @@ export async function generateCampaignAnalysis(args: {
       ? JSON.stringify(args.summary.overallAds.slice(0, 30))
       : 'Análise por anúncio desativada.',
   };
-  const prompt = renderTemplate(args.config.template, values);
+  const history = (args.history ?? []).slice(0, 10).map((item) => ({
+    data_hora: item.createdAt,
+    observacao: item.observation,
+    metricas_naquele_momento: item.metrics,
+    janelas_naquele_momento: item.windows,
+    feedback_do_gestor: item.feedback,
+  }));
+  const learningContext = history.length
+    ? `\n\nMEMÓRIA OPERACIONAL DAS ANÁLISES ANTERIORES\n${JSON.stringify(history)}\n
+Use esse histórico para reconhecer padrões recorrentes e comparar a evolução dos resultados.
+Não trate correlação como causa. Não repita mecanicamente conclusões antigas quando os dados atuais mudaram.
+Quando houver feedback do gestor, use-o para adaptar o estilo e evitar recomendações que já se mostraram inadequadas.`
+    : '\n\nAinda não há análises anteriores. Trate esta geração como a linha de base da operação.';
+  const prompt = `${renderTemplate(args.config.template, values)}${learningContext}`;
   const observation = await callOpenCode(args.config, prompt);
   const text = formatReport({
     offer: args.offer,
@@ -101,6 +115,24 @@ export async function generateCampaignAnalysis(args: {
     model: args.config.model,
     text,
     observation,
+    metrics: {
+      spend: metrics.spend,
+      revenue: metrics.revenue,
+      sales: metrics.sales,
+      ic: metrics.ic,
+      cpa: metrics.cpa,
+      roas: metrics.roas,
+    },
+    windows: args.summary.windows
+      .filter((window) => window.available)
+      .map((window) => ({
+        label: window.label,
+        spend: window.metrics.spend,
+        revenue: window.metrics.revenue,
+        sales: window.metrics.sales,
+        cpa: window.metrics.cpa,
+        roas: window.metrics.roas,
+      })),
     createdAt: now.toISOString(),
   };
 }

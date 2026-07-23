@@ -102,6 +102,12 @@ const AiConfigSchema = z
   })
   .strict();
 
+const AiFeedbackSchema = z
+  .object({
+    feedback: z.string().trim().max(1_000),
+  })
+  .strict();
+
 function resolveRange(q: { from?: string; to?: string }): { from: string; to: string } {
   // Default: last 7 days inclusive (today minus 6).
   const to = q.to ?? isoToday();
@@ -390,7 +396,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     }
     try {
       const summary = await app.intradayStore.summary(offer.id);
-      const analysis = await generateCampaignAnalysis({ offer, summary, config });
+      const history = await app.offerStore.listAiAnalyses(offer.id);
+      const analysis = await generateCampaignAnalysis({ offer, summary, config, history });
       await app.offerStore.addAiAnalysis(analysis);
       return reply.send(analysis);
     } catch (error) {
@@ -410,6 +417,31 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     await app.offerStore.assertAccess(req.params.id, req.user.sub, req.user.role === 'admin');
     return reply.send({ analyses: await app.offerStore.listAiAnalyses(req.params.id) });
   });
+
+  app.patch<{ Params: { id: string; analysisId: string } }>(
+    '/offers/:id/ai-analyses/:analysisId/feedback',
+    async (req, reply) => {
+      if (!req.user) throw new BadRequestError('No user attached.');
+      if (req.user.role !== 'admin') {
+        throw new HttpProblem({
+          status: 403,
+          title: 'Forbidden',
+          detail: 'Apenas administradores podem registrar feedback para a IA.',
+          code: 'admin_required',
+        });
+      }
+      await app.offerStore.assertAccess(req.params.id, req.user.sub, true);
+      const parsed = AiFeedbackSchema.safeParse(req.body);
+      if (!parsed.success) throw zodToProblem(parsed.error);
+      return reply.send(
+        await app.offerStore.setAiAnalysisFeedback(
+          req.params.id,
+          req.params.analysisId,
+          parsed.data.feedback,
+        ),
+      );
+    },
+  );
 
   // GET /v1/dashboard/summary?from=&to= — cross-offer aggregation for the home
   app.get<{ Querystring: { from?: string; to?: string } }>(
