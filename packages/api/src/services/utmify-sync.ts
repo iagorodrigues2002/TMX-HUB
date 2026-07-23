@@ -357,6 +357,7 @@ export function canonicalAdIdentity(value: unknown): { key: string; name: string
   const name =
     original
       .replace(/\s*(?:[-–—]\s*)?(?:\(\s*)?(?:c[oó]pia|copy)(?:\s+\d+)?(?:\s*\))?\s*$/iu, '')
+      .replace(/[\s_-]*p\+g[\s_-]*cloaked\s*$/iu, '')
       .trim() || original;
   const key = name
     .normalize('NFD')

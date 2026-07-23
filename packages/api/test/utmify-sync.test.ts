@@ -113,6 +113,31 @@ describe('UTMify reporting day', () => {
     expect(snapshot.spend).toBeCloseTo(211.1);
   });
 
+  it('groups p+g cloaked ads with their base ad', () => {
+    const snapshot = toSnapshot('offer-sdm', '2026-07-23', [
+      {
+        name: 'ad3-l14_p+g_cloaked',
+        spend: 7000,
+        revenue: 12000,
+        approvedOrdersCount: 1,
+      },
+      {
+        name: 'ad3-l14',
+        spend: 3000,
+        revenue: 8000,
+        approvedOrdersCount: 1,
+      },
+    ]);
+
+    expect(snapshot.ads).toHaveLength(1);
+    expect(snapshot.ads?.[0]).toMatchObject({
+      name: 'ad3-l14',
+      revenue: 200,
+      sales: 2,
+    });
+    expect(snapshot.spend).toBe(100);
+  });
+
   it('removes only explicit copy suffixes from ad identities', () => {
     expect(canonicalAdIdentity('AD3-L14 (Cópia 2)')).toEqual({
       key: 'ad3-l14',
