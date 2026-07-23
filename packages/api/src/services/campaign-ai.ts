@@ -59,7 +59,7 @@ export async function generateCampaignAnalysis(args: {
   const locale = zonedDate(now);
   const currency = args.offer.currency ?? 'BRL';
   const metrics = args.summary.overall;
-  const funnels = buildFunnelSummaries(args.summary.overallAds);
+  const funnels = isGeralGex(args.offer.name) ? buildFunnelSummaries(args.summary.overallAds) : [];
   const values: Record<string, string> = {
     offer_name: args.offer.name,
     date: locale.date,
@@ -147,6 +147,17 @@ Não produza uma análise geral antes ou depois dos funis.`
       })),
     createdAt: now.toISOString(),
   };
+}
+
+function isGeralGex(name: string): boolean {
+  return (
+    name
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toLocaleLowerCase('pt-BR')
+      .replace(/\s+/g, ' ') === 'geral gex'
+  );
 }
 
 interface FunnelSummary {

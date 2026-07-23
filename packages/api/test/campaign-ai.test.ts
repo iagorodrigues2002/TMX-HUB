@@ -310,4 +310,37 @@ describe('campaign AI analysis', () => {
     expect(body.messages[1].content).toContain('"code":"F303"');
     expect(body.messages[1].content).toContain('"spend":250');
   });
+
+  it('keeps every offer other than Geral Gex in the regular report format', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: 'A oferta segue abaixo da meta.' } }],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await generateCampaignAnalysis({
+      offer: { ...offer, name: 'SDM' },
+      summary: {
+        ...summary,
+        overallAds: [
+          {
+            ...summary.overallAds[0]!,
+            name: '[#15] [CAMPANHA-F303]',
+          },
+        ],
+      },
+      config,
+      now: new Date('2026-07-23T17:00:00.000Z'),
+    });
+
+    expect(result.text).toContain('— ATUALIZAÇÃO');
+    expect(result.text).toContain('➡️ GASTO:');
+    expect(result.text).not.toContain('ANÁLISE POR FUNIL');
+    const body = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+    expect(body.messages[1].content).not.toContain('INSTRUÇÃO OBRIGATÓRIA — ANÁLISE POR FUNIL');
+  });
 });
