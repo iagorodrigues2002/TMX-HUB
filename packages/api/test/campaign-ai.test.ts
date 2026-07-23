@@ -1,6 +1,7 @@
 import type { Offer } from '@page-cloner/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  buildFunnelSummaries,
   DEFAULT_AI_ROLE,
   DEFAULT_AI_TEMPLATE,
   generateCampaignAnalysis,
@@ -216,7 +217,7 @@ describe('campaign AI analysis', () => {
     );
   });
 
-  it('uses reasoning content when a Go model omits the regular content field', async () => {
+  it('does not expose internal reasoning when a Go model omits the final content', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -236,13 +237,77 @@ describe('campaign AI analysis', () => {
       ),
     );
 
+    await expect(
+      generateCampaignAnalysis({
+        offer,
+        summary,
+        config,
+        now: new Date('2026-07-23T17:00:00.000Z'),
+      }),
+    ).rejects.toThrow('O OpenCode respondeu sem um texto de análise');
+  });
+
+  it('groups ads by F code and switches the report to funnel analysis', async () => {
+    const funnelAds: IntradaySummary['overallAds'] = [
+      {
+        ...summary.overallAds[0]!,
+        name: '[#15] [JVC_INTER-F303-AQS-2026]',
+        spend: 100,
+        revenue: 250,
+        sales: 1,
+        ic: 2,
+      },
+      {
+        ...summary.overallAds[0]!,
+        name: '[#57] [JVC_INTER-F303-AQS-2026]',
+        spend: 150,
+        revenue: 0,
+        sales: 0,
+        ic: 1,
+      },
+      {
+        ...summary.overallAds[0]!,
+        name: '[#43] [VPC_INTER-F308-AQS-2026]',
+        spend: 200,
+        revenue: 0,
+        sales: 0,
+        ic: 2,
+      },
+    ];
+    const grouped = buildFunnelSummaries(funnelAds);
+    expect(grouped).toMatchObject([
+      { code: 'F303', spend: 250, revenue: 250, sales: 1, ic: 3, cpa: 250, roas: 1 },
+      { code: 'F308', spend: 200, revenue: 0, sales: 0, ic: 2, cpa: null, roas: 0 },
+    ]);
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: 'F303 — ROAS 1,00, abaixo da meta.\n\nF308 — Sem vendas até o momento.',
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
     const result = await generateCampaignAnalysis({
-      offer,
-      summary,
+      offer: { ...offer, name: 'Geral Gex', currency: 'USD' },
+      summary: { ...summary, overallAds: funnelAds },
       config,
       now: new Date('2026-07-23T17:00:00.000Z'),
     });
 
-    expect(result.observation).toBe('Os dados ainda são insuficientes para recomendar cortes.');
+    expect(result.text).toContain('ANÁLISE POR FUNIL');
+    expect(result.text).toContain('F303 — ROAS 1,00');
+    expect(result.text).not.toContain('➡️ GASTO:');
+    const body = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+    expect(body.messages[1].content).toContain('"code":"F303"');
+    expect(body.messages[1].content).toContain('"spend":250');
   });
 });

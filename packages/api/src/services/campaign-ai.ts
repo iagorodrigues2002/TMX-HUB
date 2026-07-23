@@ -59,6 +59,7 @@ export async function generateCampaignAnalysis(args: {
   const locale = zonedDate(now);
   const currency = args.offer.currency ?? 'BRL';
   const metrics = args.summary.overall;
+  const funnels = buildFunnelSummaries(args.summary.overallAds);
   const values: Record<string, string> = {
     offer_name: args.offer.name,
     date: locale.date,
@@ -81,6 +82,7 @@ export async function generateCampaignAnalysis(args: {
     ads_json: args.config.includeAds
       ? JSON.stringify(args.summary.overallAds.slice(0, 30))
       : 'Análise por anúncio desativada.',
+    funnels_json: JSON.stringify(funnels),
   };
   const history = (args.history ?? []).slice(0, 10).map((item) => ({
     data_hora: item.createdAt,
@@ -95,7 +97,19 @@ Use esse histórico para reconhecer padrões recorrentes e comparar a evolução
 Não trate correlação como causa. Não repita mecanicamente conclusões antigas quando os dados atuais mudaram.
 Quando houver feedback do gestor, use-o para adaptar o estilo e evitar recomendações que já se mostraram inadequadas.`
     : '\n\nAinda não há análises anteriores. Trate esta geração como a linha de base da operação.';
-  const prompt = `${renderTemplate(args.config.template, values)}${learningContext}`;
+  const funnelInstruction = funnels.length
+    ? `\n\nINSTRUÇÃO OBRIGATÓRIA — ANÁLISE POR FUNIL
+Foram identificados os seguintes funis nos nomes das campanhas/anúncios:
+${JSON.stringify(funnels)}
+
+Ignore o formato de resumo geral solicitado anteriormente e entregue uma seção separada para cada funil.
+Use exatamente os totais calculados acima; não recalcule nem invente valores.
+Para cada funil, escreva o código, investimento, faturamento, vendas, CPA, IC, ROAS e uma análise de 2 a 4 frases.
+Compare cada funil com o ROAS mínimo. Destaque no máximo três anúncios relevantes por funil.
+Não apresente raciocínio interno, cálculos intermediários ou texto em inglês.
+Não produza uma análise geral antes ou depois dos funis.`
+    : '';
+  const prompt = `${renderTemplate(args.config.template, values)}${learningContext}${funnelInstruction}`;
   const observation = await callOpenCode(args.config, prompt);
   const text = formatReport({
     offer: args.offer,
@@ -104,6 +118,7 @@ Quando houver feedback do gestor, use-o para adaptar o estilo e evitar recomenda
     time: locale.time,
     currency,
     metrics,
+    funnels,
     observation,
   });
   return {
@@ -132,6 +147,48 @@ Quando houver feedback do gestor, use-o para adaptar o estilo e evitar recomenda
       })),
     createdAt: now.toISOString(),
   };
+}
+
+interface FunnelSummary {
+  code: string;
+  spend: number;
+  revenue: number;
+  sales: number;
+  ic: number;
+  cpa: number | null;
+  roas: number | null;
+  ads: IntradaySummary['overallAds'];
+}
+
+export function buildFunnelSummaries(ads: IntradaySummary['overallAds']): FunnelSummary[] {
+  const grouped = new Map<string, IntradaySummary['overallAds']>();
+  for (const ad of ads) {
+    const match = /(?:^|[^a-z0-9])(f\d{2,5})(?=$|[^a-z0-9])/i.exec(ad.name);
+    const code = match?.[1]?.toUpperCase();
+    if (!code) continue;
+    const current = grouped.get(code) ?? [];
+    current.push(ad);
+    grouped.set(code, current);
+  }
+
+  return [...grouped.entries()]
+    .map(([code, funnelAds]) => {
+      const spend = funnelAds.reduce((sum, ad) => sum + ad.spend, 0);
+      const revenue = funnelAds.reduce((sum, ad) => sum + ad.revenue, 0);
+      const sales = funnelAds.reduce((sum, ad) => sum + ad.sales, 0);
+      const ic = funnelAds.reduce((sum, ad) => sum + ad.ic, 0);
+      return {
+        code,
+        spend,
+        revenue,
+        sales,
+        ic,
+        cpa: sales > 0 ? spend / sales : null,
+        roas: spend > 0 ? revenue / spend : null,
+        ads: [...funnelAds].sort((a, b) => b.spend - a.spend).slice(0, 10),
+      };
+    })
+    .sort((a, b) => a.code.localeCompare(b.code, 'pt-BR', { numeric: true }));
 }
 
 function renderTemplate(template: string, values: Record<string, string>): string {
@@ -195,10 +252,6 @@ async function callOpenCode(config: OfferAiSecretConfig, prompt: string): Promis
   if (messageContent) return messageContent;
   const choiceText = extractContentText(firstChoice?.text);
   if (choiceText) return choiceText;
-  const reasoningContent = extractContentText(
-    message?.reasoning_content ?? message?.reasoning ?? firstChoice?.reasoning_content,
-  );
-  if (reasoningContent) return reasoningContent;
   const rootContent = extractContentText(payload?.content);
   if (rootContent) return rootContent;
   const output = Array.isArray(payload?.output) ? payload.output : [];
@@ -268,8 +321,16 @@ function formatReport(args: {
   time: string;
   currency: string;
   metrics: IntradaySummary['overall'];
+  funnels: FunnelSummary[];
   observation: string;
 }): string {
+  if (args.funnels.length > 0) {
+    return `🟡 [${args.offer.name} {${args.date} ${args.time}} — ANÁLISE POR FUNIL] 🟡
+
+Responsável: ${args.responsible || 'Não informado'}
+
+${args.observation}`;
+  }
   return `🟡 [${args.offer.name} {${args.date} ${args.time}} — ATUALIZAÇÃO] 🟡
 
 Responsável: ${args.responsible || 'Não informado'}

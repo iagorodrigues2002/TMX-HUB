@@ -286,7 +286,7 @@ export function OfferAiAnalysis({ offerId }: { offerId: string }) {
               Variáveis disponíveis: {'{{offer_name}}'}, {'{{date}}'}, {'{{time}}'},{' '}
               {'{{responsible}}'}, {'{{currency}}'}, {'{{min_roas}}'}, {'{{spend}}'},{' '}
               {'{{revenue}}'}, {'{{sales}}'}, {'{{roas}}'}, {'{{cpa}}'}, {'{{ic}}'},{' '}
-              {'{{windows_json}}'} e {'{{ads_json}}'}.
+              {'{{windows_json}}'}, {'{{ads_json}}'} e {'{{funnels_json}}'}.
             </p>
             <Button
               onClick={() => saveMutation.mutate()}
