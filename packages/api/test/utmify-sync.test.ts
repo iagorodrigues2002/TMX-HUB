@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildDays,
+  canonicalAdIdentity,
   detectCurrency,
   detectDashboardCurrency,
   saoPauloDayRange,
@@ -83,6 +84,43 @@ describe('UTMify reporting day', () => {
     expect(saoPauloDayRange('2026-07-21', new Date('2026-07-21T15:00:00.000Z'))).toEqual({
       from: '2026-07-21T03:00:00.000Z',
       to: '2026-07-21T15:00:00.000Z',
+    });
+  });
+
+  it('groups copied ads with their original visible name', () => {
+    const snapshot = toSnapshot('offer-sdm', '2026-07-23', [
+      {
+        name: 'ad3-l14 — Cópia',
+        spend: 12345,
+        revenue: 20000,
+        approvedOrdersCount: 1,
+      },
+      {
+        name: 'ad3-l14',
+        spend: 8765,
+        revenue: 15000,
+        approvedOrdersCount: 2,
+      },
+    ]);
+
+    expect(snapshot.ads).toHaveLength(1);
+    expect(snapshot.ads?.[0]).toMatchObject({
+      name: 'ad3-l14',
+      revenue: 350,
+      sales: 3,
+    });
+    expect(snapshot.ads?.[0]?.spend).toBeCloseTo(211.1);
+    expect(snapshot.spend).toBeCloseTo(211.1);
+  });
+
+  it('removes only explicit copy suffixes from ad identities', () => {
+    expect(canonicalAdIdentity('AD3-L14 (Cópia 2)')).toEqual({
+      key: 'ad3-l14',
+      name: 'AD3-L14',
+    });
+    expect(canonicalAdIdentity('Cópia que vende')).toEqual({
+      key: 'copia que vende',
+      name: 'Cópia que vende',
     });
   });
 

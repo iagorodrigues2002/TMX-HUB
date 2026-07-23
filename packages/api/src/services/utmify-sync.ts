@@ -163,9 +163,13 @@ export class UtmifySyncService {
       const fields = Object.entries(item).filter(([key, value]) => {
         return /account|conta/i.test(key) && ['string', 'number', 'boolean'].includes(typeof value);
       });
-      return fields.length ? [Object.fromEntries(fields) as Record<string, string | number | boolean>] : [];
+      return fields.length
+        ? [Object.fromEntries(fields) as Record<string, string | number | boolean>]
+        : [];
     });
-    const uniqueAccounts = [...new Map(accountFields.map((fields) => [JSON.stringify(fields), fields])).values()];
+    const uniqueAccounts = [
+      ...new Map(accountFields.map((fields) => [JSON.stringify(fields), fields])).values(),
+    ];
     return {
       resultKeys,
       accountFields: uniqueAccounts.slice(0, 25),
@@ -191,10 +195,7 @@ async function authenticate(login: string, password: string): Promise<UtmifyAuth
   };
 }
 
-export function detectDashboardCurrency(
-  payload: unknown,
-  dashboardId: string,
-): string | undefined {
+export function detectDashboardCurrency(payload: unknown, dashboardId: string): string | undefined {
   const visit = (value: unknown, depth: number): string | undefined => {
     if (depth > 8 || value === null || typeof value !== 'object') return undefined;
     if (Array.isArray(value)) {
@@ -218,7 +219,11 @@ export function detectDashboardCurrency(
   return visit(payload, 0);
 }
 
-async function fetchAds(token: string, dashboardId: string, date: string): Promise<UtmifySearchResponse> {
+async function fetchAds(
+  token: string,
+  dashboardId: string,
+  date: string,
+): Promise<UtmifySearchResponse> {
   const dateRange = saoPauloDayRange(date);
   const response = await fetch(SEARCH_URL, {
     method: 'POST',
@@ -256,7 +261,21 @@ async function fetchAds(token: string, dashboardId: string, date: string): Promi
 }
 
 export function detectCurrency(payload: unknown): string | undefined {
-  const validCodes = new Set(['BRL', 'USD', 'EUR', 'GBP', 'CAD', 'AUD', 'MXN', 'COP', 'ARS', 'CLP', 'PEN', 'PYG', 'UYU']);
+  const validCodes = new Set([
+    'BRL',
+    'USD',
+    'EUR',
+    'GBP',
+    'CAD',
+    'AUD',
+    'MXN',
+    'COP',
+    'ARS',
+    'CLP',
+    'PEN',
+    'PYG',
+    'UYU',
+  ]);
   const visit = (value: unknown, depth: number): string | undefined => {
     if (depth > 6 || value === null || typeof value !== 'object') return undefined;
     if (Array.isArray(value)) {
@@ -284,10 +303,10 @@ export function detectCurrency(payload: unknown): string | undefined {
 export function toSnapshot(offerId: string, date: string, results: UtmifyResult[]): DailySnapshot {
   const byName = new Map<string, AdSnapshot>();
   for (const item of results) {
-    const name = String(item.name ?? '').trim();
-    if (!name) continue;
-    const current = byName.get(name) ?? {
-      name,
+    const identity = canonicalAdIdentity(item.name);
+    if (!identity) continue;
+    const current = byName.get(identity.key) ?? {
+      name: identity.name,
       spend: 0,
       sales: 0,
       revenue: 0,
@@ -303,11 +322,10 @@ export function toSnapshot(offerId: string, date: string, results: UtmifyResult[
     current.ic += Math.max(0, Math.round(number(item.initiateCheckout)));
     current.impressions =
       (current.impressions ?? 0) + Math.max(0, Math.round(number(item.impressions)));
-    current.clicks =
-      (current.clicks ?? 0) + Math.max(0, Math.round(number(item.inlineLinkClicks)));
+    current.clicks = (current.clicks ?? 0) + Math.max(0, Math.round(number(item.inlineLinkClicks)));
     const views = Math.max(0, number(item.videoViews3Seconds));
     current.hookRate = (current.hookRate ?? 0) + views;
-    byName.set(name, current);
+    byName.set(identity.key, current);
   }
   const ads = [...byName.values()].map((ad) => ({
     ...ad,
@@ -329,6 +347,28 @@ export function toSnapshot(offerId: string, date: string, results: UtmifyResult[
   };
 }
 
+export function canonicalAdIdentity(value: unknown): { key: string; name: string } | undefined {
+  const original = String(value ?? '').trim();
+  if (!original) return undefined;
+
+  // Meta commonly appends a copy marker when an ad is duplicated. UTMify
+  // returns both rows, so remove only an explicit trailing copy marker before
+  // grouping. The metrics from every physical ad are still accumulated.
+  const name =
+    original
+      .replace(/\s*(?:[-–—]\s*)?(?:\(\s*)?(?:c[oó]pia|copy)(?:\s+\d+)?(?:\s*\))?\s*$/iu, '')
+      .trim() || original;
+  const key = name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('pt-BR')
+    .replace(/[–—]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return { key, name };
+}
+
 export function buildDays(count: number, now = new Date()): string[] {
   const result: string[] = [];
   const today = dateInTimeZone(now, REPORT_TIME_ZONE);
@@ -338,10 +378,7 @@ export function buildDays(count: number, now = new Date()): string[] {
   return result;
 }
 
-export function saoPauloDayRange(
-  date: string,
-  now = new Date(),
-): { from: string; to: string } {
+export function saoPauloDayRange(date: string, now = new Date()): { from: string; to: string } {
   const from = midnightInTimeZone(date, REPORT_TIME_ZONE);
   const to = midnightInTimeZone(addIsoDays(date, 1), REPORT_TIME_ZONE);
   const cappedTo = to > now ? now : to;
@@ -374,7 +411,10 @@ function midnightInTimeZone(date: string, timeZone: string): Date {
   return instant;
 }
 
-function zonedParts(instant: Date, timeZone: string): Record<'year' | 'month' | 'day' | 'hour' | 'minute' | 'second', number> {
+function zonedParts(
+  instant: Date,
+  timeZone: string,
+): Record<'year' | 'month' | 'day' | 'hour' | 'minute' | 'second', number> {
   const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone,
     year: 'numeric',
@@ -386,9 +426,9 @@ function zonedParts(instant: Date, timeZone: string): Record<'year' | 'month' | 
     hourCycle: 'h23',
   });
   const values = Object.fromEntries(
-    formatter.formatToParts(instant).flatMap((part) =>
-      part.type === 'literal' ? [] : [[part.type, Number(part.value)]],
-    ),
+    formatter
+      .formatToParts(instant)
+      .flatMap((part) => (part.type === 'literal' ? [] : [[part.type, Number(part.value)]])),
   );
   return values as Record<'year' | 'month' | 'day' | 'hour' | 'minute' | 'second', number>;
 }
