@@ -304,7 +304,7 @@ export function toSnapshot(offerId: string, date: string, results: UtmifyResult[
   const byName = new Map<string, AdSnapshot>();
   for (const item of results) {
     const identity = canonicalAdIdentity(item.name);
-    if (!identity) continue;
+    if (!identity || isIgnoredAdIdentity(identity.key)) continue;
     const current = byName.get(identity.key) ?? {
       name: identity.name,
       spend: 0,
@@ -367,6 +367,10 @@ export function canonicalAdIdentity(value: unknown): { key: string; name: string
     .trim();
 
   return { key, name };
+}
+
+export function isIgnoredAdIdentity(key: string): boolean {
+  return key === 'novo anuncio de engajamento';
 }
 
 export function buildDays(count: number, now = new Date()): string[] {

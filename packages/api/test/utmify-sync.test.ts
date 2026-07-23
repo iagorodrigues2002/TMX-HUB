@@ -124,6 +124,39 @@ describe('UTMify reporting day', () => {
     });
   });
 
+  it('excludes engagement placeholder ads from every calculated total', () => {
+    const snapshot = toSnapshot('offer-sdm', '2026-07-23', [
+      {
+        name: 'Novo anúncio de Engajamento',
+        spend: 10000,
+        revenue: 50000,
+        approvedOrdersCount: 5,
+        initiateCheckout: 12,
+      },
+      {
+        name: 'NOVO ANUNCIO DE ENGAJAMENTO — Cópia',
+        spend: 2500,
+        revenue: 10000,
+        approvedOrdersCount: 1,
+        initiateCheckout: 3,
+      },
+      {
+        name: 'ad3-l14',
+        spend: 1234,
+        revenue: 3000,
+        approvedOrdersCount: 1,
+        initiateCheckout: 2,
+      },
+    ]);
+
+    expect(snapshot.ads).toHaveLength(1);
+    expect(snapshot.ads?.[0]?.name).toBe('ad3-l14');
+    expect(snapshot.spend).toBe(12.34);
+    expect(snapshot.revenue).toBe(30);
+    expect(snapshot.sales).toBe(1);
+    expect(snapshot.ic).toBe(2);
+  });
+
   it('closes past days at the following Sao Paulo midnight', () => {
     expect(saoPauloDayRange('2026-07-20', new Date('2026-07-21T15:00:00.000Z'))).toEqual({
       from: '2026-07-20T03:00:00.000Z',
