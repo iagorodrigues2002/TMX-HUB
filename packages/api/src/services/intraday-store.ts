@@ -3,7 +3,10 @@ import type { Redis } from 'ioredis';
 import { computeMetrics } from './snapshot-store.js';
 
 const PREFIX = 'intraday:';
-const TTL_SECONDS = 60 * 60 * 24 * 3;
+// Keep the same retention as daily snapshots so historical windows remain
+// available without allowing Redis to grow forever.
+const TTL_SECONDS = 60 * 60 * 24 * 365;
+const MAX_CHECKPOINTS_PER_DAY = 100;
 const TIME_ZONE = 'America/Sao_Paulo';
 
 export interface IntradayCheckpoint {
@@ -44,6 +47,16 @@ export interface IntradaySummary {
 
 function key(offerId: string, date: string): string {
   return `${PREFIX}${offerId}:${date}`;
+}
+
+function summaryKey(offerId: string, date: string): string {
+  return `${PREFIX}${offerId}:summary:${date}`;
+}
+
+function previousIsoDate(date: string): string {
+  const value = new Date(`${date}T00:00:00Z`);
+  value.setUTCDate(value.getUTCDate() - 1);
+  return value.toISOString().slice(0, 10);
 }
 
 export function saoPauloParts(at: Date): { date: string; hour: number } {
@@ -91,7 +104,10 @@ function groupedAds(ads: AdSnapshot[] | undefined): Map<string, AdSnapshot> {
   return grouped;
 }
 
-function adMetrics(current: IntradayCheckpoint, baseline?: IntradayCheckpoint): IntradayAdMetrics[] {
+function adMetrics(
+  current: IntradayCheckpoint,
+  baseline?: IntradayCheckpoint,
+): IntradayAdMetrics[] {
   const currentAds = groupedAds(current.ads);
   const baselineAds = groupedAds(baseline?.ads);
   return [...currentAds.values()]
@@ -182,6 +198,7 @@ export class IntradayStore {
   async capture(offerId: string, snapshot: DailySnapshot, capturedAt = new Date()): Promise<void> {
     const local = saoPauloParts(capturedAt);
     if (snapshot.date !== local.date) return;
+    await this.archiveDay(offerId, previousIsoDate(local.date), capturedAt);
     const checkpoint: IntradayCheckpoint = {
       capturedAt: capturedAt.toISOString(),
       spend: snapshot.spend,
@@ -194,31 +211,73 @@ export class IntradayStore {
     await this.redis
       .multi()
       .zadd(redisKey, capturedAt.getTime(), JSON.stringify(checkpoint))
+      .zremrangebyrank(redisKey, 0, -(MAX_CHECKPOINTS_PER_DAY + 1))
       .expire(redisKey, TTL_SECONDS)
       .exec();
   }
 
-  async summary(offerId: string, now = new Date()): Promise<IntradaySummary> {
+  async summary(
+    offerId: string,
+    now = new Date(),
+    requestedDate?: string,
+  ): Promise<IntradaySummary> {
     const local = saoPauloParts(now);
-    const members = await this.redis.zrange(key(offerId, local.date), 0, -1);
-    const checkpoints = members.flatMap((member) => {
+    const date = requestedDate ?? local.date;
+    if (date !== local.date) await this.archiveDay(offerId, date, now);
+    const pipeline = this.redis.pipeline();
+    pipeline.zrange(key(offerId, date), 0, -1);
+    pipeline.get(summaryKey(offerId, date));
+    const results = (await pipeline.exec()) ?? [];
+    const members = Array.isArray(results[0]?.[1]) ? (results[0]![1] as string[]) : [];
+    const checkpoints = parseCheckpoints(members);
+    if (checkpoints.length === 0 && typeof results[1]?.[1] === 'string') {
       try {
-        return [JSON.parse(member) as IntradayCheckpoint];
+        return JSON.parse(results[1][1]) as IntradaySummary;
       } catch {
-        return [];
+        // A malformed materialized summary must not break the dashboard.
       }
-    });
-    return buildIntradaySummary(local.date, checkpoints, now);
+    }
+    return buildIntradaySummary(date, checkpoints, now);
+  }
+
+  private async archiveDay(offerId: string, date: string, now: Date): Promise<void> {
+    const archivedKey = summaryKey(offerId, date);
+    if (await this.redis.exists(archivedKey)) return;
+    const rawKey = key(offerId, date);
+    const checkpoints = parseCheckpoints(await this.redis.zrange(rawKey, 0, -1));
+    if (checkpoints.length === 0) return;
+    const summary = buildIntradaySummary(date, checkpoints, now);
+    await this.redis
+      .multi()
+      .set(archivedKey, JSON.stringify(summary), 'EX', TTL_SECONDS)
+      .del(rawKey)
+      .exec();
   }
 
   async deleteAllForOffer(offerId: string): Promise<number> {
     let cursor = '0';
     let removed = 0;
     do {
-      const [next, keys] = await this.redis.scan(cursor, 'MATCH', `${PREFIX}${offerId}:*`, 'COUNT', '50');
+      const [next, keys] = await this.redis.scan(
+        cursor,
+        'MATCH',
+        `${PREFIX}${offerId}:*`,
+        'COUNT',
+        '50',
+      );
       cursor = next;
       if (keys.length) removed += await this.redis.del(...keys);
     } while (cursor !== '0');
     return removed;
   }
+}
+
+function parseCheckpoints(members: string[]): IntradayCheckpoint[] {
+  return members.flatMap((member) => {
+    try {
+      return [JSON.parse(member) as IntradayCheckpoint];
+    } catch {
+      return [];
+    }
+  });
 }

@@ -77,6 +77,12 @@ const RangeQuerySchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .optional(),
 });
+const IntradayQuerySchema = z.object({
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+});
 
 const AiConfigSchema = z
   .object({
@@ -321,15 +327,20 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     return reply.send(await app.utmifySync.inspectCapabilities(offer));
   });
 
-  app.get<{ Params: { id: string } }>('/offers/:id/intraday', async (req, reply) => {
-    if (!req.user) throw new BadRequestError('No user attached.');
-    const offer = await app.offerStore.assertAccess(
-      req.params.id,
-      req.user.sub,
-      req.user.role === 'admin',
-    );
-    return reply.send(await app.intradayStore.summary(offer.id));
-  });
+  app.get<{ Params: { id: string }; Querystring: { date?: string } }>(
+    '/offers/:id/intraday',
+    async (req, reply) => {
+      if (!req.user) throw new BadRequestError('No user attached.');
+      const parsed = IntradayQuerySchema.safeParse(req.query);
+      if (!parsed.success) throw zodToProblem(parsed.error, req.url);
+      const offer = await app.offerStore.assertAccess(
+        req.params.id,
+        req.user.sub,
+        req.user.role === 'admin',
+      );
+      return reply.send(await app.intradayStore.summary(offer.id, new Date(), parsed.data.date));
+    },
+  );
 
   app.get<{ Params: { id: string } }>('/offers/:id/ai-config', async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');
@@ -552,11 +563,17 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!req.user) throw new BadRequestError('No user attached.');
       const range = resolveRange(RangeQuerySchema.parse(req.query));
       const offers = await app.offerStore.listAccessible(req.user.sub, req.user.role === 'admin');
-      const perOffer: Array<{
-        offer: Record<string, unknown>;
-        totals: ReturnType<typeof computeMetrics>;
-        snapshots_count: number;
-      }> = [];
+      const perOffer = await Promise.all(
+        offers.map(async (offer) => {
+          const snaps = await app.snapshotStore.listRange(offer.id, range.from, range.to);
+          return {
+            offer: offerToWire(offer, req.user!.role === 'admin'),
+            totals: app.snapshotStore.aggregate(snaps),
+            snapshots_count: snaps.length,
+            currency: offer.currency ?? 'BRL',
+          };
+        }),
+      );
       let spend = 0;
       let sales = 0;
       let revenue = 0;
@@ -565,14 +582,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         string,
         { spend: number; sales: number; revenue: number; ic: number }
       >();
-      for (const offer of offers) {
-        const snaps = await app.snapshotStore.listRange(offer.id, range.from, range.to);
-        const totals = app.snapshotStore.aggregate(snaps);
+      for (const entry of perOffer) {
+        const { totals, currency } = entry;
         spend += totals.spend;
         sales += totals.sales;
         revenue += totals.revenue;
         ic += totals.ic;
-        const currency = offer.currency ?? 'BRL';
         const currencyTotals = byCurrency.get(currency) ?? {
           spend: 0,
           sales: 0,
@@ -584,11 +599,6 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         currencyTotals.revenue += totals.revenue;
         currencyTotals.ic += totals.ic;
         byCurrency.set(currency, currencyTotals);
-        perOffer.push({
-          offer: offerToWire(offer, req.user.role === 'admin'),
-          totals,
-          snapshots_count: snaps.length,
-        });
       }
       return reply.send({
         from: range.from,
@@ -598,7 +608,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           currency,
           totals: computeMetrics(values),
         })),
-        offers: perOffer,
+        offers: perOffer.map(({ currency: _currency, ...entry }) => entry),
       });
     },
   );

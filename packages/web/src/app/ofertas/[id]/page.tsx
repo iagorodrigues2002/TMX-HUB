@@ -106,6 +106,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
   const [compareLeft, setCompareLeft] = useState('');
   const [compareRight, setCompareRight] = useState('');
   const [intradayMode, setIntradayMode] = useState<'overview' | 'ads'>('overview');
+  const [intradayDate, setIntradayDate] = useState(() => todayIso());
   const [intradayAdWindow, setIntradayAdWindow] = useState('overall');
   const [intradayAdSearch, setIntradayAdSearch] = useState('');
   const [adCompareLeft, setAdCompareLeft] = useState('');
@@ -137,10 +138,10 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
   const data = snapshotsQuery.data;
 
   const intradayQuery = useQuery({
-    queryKey: ['offer-intraday', id],
-    queryFn: () => apiClient.getOfferIntraday(id),
+    queryKey: ['offer-intraday', id, intradayDate],
+    queryFn: () => apiClient.getOfferIntraday(id, intradayDate),
     enabled: Boolean(offer?.utmifyConfigured),
-    refetchInterval: 60_000,
+    refetchInterval: intradayDate === todayIso() ? 60_000 : false,
     refetchOnWindowFocus: false,
   });
   const intraday = intradayQuery.data;
@@ -232,7 +233,9 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
     (window) => window.index === (compareRight ? Number(compareRight) : defaultRight),
   );
   const currentWindow = intraday?.windows.find(
-    (window) => window.index === intraday.currentWindowIndex,
+    (window) =>
+      window.index ===
+      (intradayDate === todayIso() ? intraday.currentWindowIndex : availableWindows.at(-1)?.index),
   );
   const selectedAdWindow =
     intradayAdWindow === 'overall'
@@ -631,18 +634,37 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
               <h2 className="text-[16px] font-semibold text-white">Janelas intradiárias</h2>
             </div>
             <p className="mt-1 text-[12px] text-white/45">
-              Checkpoints a cada 30 minutos · janelas fixas de 2 horas · somente de hoje em diante
+              Checkpoints a cada 30 minutos · janelas fixas de 2 horas · histórico separado por dia
             </p>
           </div>
-          {intraday?.updatedAt && (
-            <span className="hud-label">
-              Atualizado{' '}
-              {new Date(intraday.updatedAt).toLocaleTimeString('pt-BR', {
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </span>
-          )}
+          <div className="flex items-end gap-3">
+            <Label className="space-y-1">
+              <span className="hud-label">Dia das janelas</span>
+              <Input
+                type="date"
+                value={intradayDate}
+                max={todayIso()}
+                onChange={(event) => {
+                  setIntradayDate(event.target.value || todayIso());
+                  setCompareLeft('');
+                  setCompareRight('');
+                  setIntradayAdWindow('overall');
+                  setAdCompareLeft('');
+                  setAdCompareRight('');
+                }}
+                className="h-9 w-[160px]"
+              />
+            </Label>
+            {intraday?.updatedAt && (
+              <span className="hud-label pb-2.5">
+                Atualizado{' '}
+                {new Date(intraday.updatedAt).toLocaleTimeString('pt-BR', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </span>
+            )}
+          </div>
         </header>
 
         <div className="inline-flex w-fit rounded-lg border border-white/10 bg-black/15 p-1">
@@ -674,14 +696,18 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
           <>
             <div className="grid gap-4 xl:grid-cols-2">
               <article className="glass-card p-4">
-                <p className="hud-label">Janela geral de hoje</p>
+                <p className="hud-label">
+                  Janela geral · {new Date(`${intraday.date}T12:00:00`).toLocaleDateString('pt-BR')}
+                </p>
                 <p className="mt-1 text-[12px] text-white/45">Acumulado desde 00h</p>
                 <WindowMetrics metrics={intraday.overall} currency={currency} />
               </article>
               <article className="glass-card border-cyan-300/15 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="hud-label">Janela atual</p>
+                    <p className="hud-label">
+                      {intradayDate === todayIso() ? 'Janela atual' : 'Última janela disponível'}
+                    </p>
                     <p className="mt-1 text-[12px] text-white/45">
                       {currentWindow?.label ?? 'Aguardando checkpoint'}
                     </p>

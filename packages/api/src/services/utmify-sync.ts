@@ -1,4 +1,5 @@
 import type { AdSnapshot, DailySnapshot, Offer } from '@page-cloner/shared';
+import { randomUUID } from 'node:crypto';
 import type { Redis } from 'ioredis';
 import type { OfferStore } from './offer-store.js';
 import type { SnapshotStore } from './snapshot-store.js';
@@ -10,6 +11,8 @@ const SEARCH_URL = 'https://server.utmify.com.br/orders/search-objects';
 const SYNC_INTERVAL_MS = 30 * 60 * 1000;
 const LOCK_TTL_MS = 25 * 60 * 1000;
 const REPORT_TIME_ZONE = 'America/Sao_Paulo';
+const OFFER_SYNC_CONCURRENCY = 3;
+const DAY_SYNC_CONCURRENCY = 3;
 
 interface UtmifyResult {
   [key: string]: unknown;
@@ -71,22 +74,25 @@ export class UtmifySyncService {
 
   async syncAll(): Promise<void> {
     const offers = await this.offerStore.listAll();
-    for (const offer of offers.filter((item) => item.utmifyConfigured && item.dashboardId)) {
+    const configured = offers.filter((item) => item.utmifyConfigured && item.dashboardId);
+    await mapWithConcurrency(configured, OFFER_SYNC_CONCURRENCY, async (offer) => {
       try {
         await this.syncOffer(offer);
       } catch (error) {
         this.log.warn({ error, offerId: offer.id }, 'utmify offer sync failed');
       }
-    }
+    });
   }
 
   async syncOffer(offer: Offer, full = false): Promise<SyncResult> {
     if (!offer.dashboardId) throw new Error('Dashboard ID da UTMify não configurado.');
+    const dashboardId = offer.dashboardId;
     const credentials = await this.offerStore.getUtmifyCredentials(offer.id);
     if (!credentials) throw new Error('Credenciais da UTMify não configuradas.');
 
     const lockKey = `lock:utmify-sync:${offer.id}`;
-    const lock = await this.redis.set(lockKey, String(process.pid), 'PX', LOCK_TTL_MS, 'NX');
+    const lockToken = `${process.pid}:${randomUUID()}`;
+    const lock = await this.redis.set(lockKey, lockToken, 'PX', LOCK_TTL_MS, 'NX');
     if (!lock) return { offerId: offer.id, syncedDays: 0, ads: 0, skipped: true };
 
     await this.offerStore.setSyncState(offer.id, { status: 'syncing' });
@@ -97,9 +103,9 @@ export class UtmifySyncService {
       let syncedDays = 0;
       let detectedCurrency = detectDashboardCurrency(session.payload, offer.dashboardId);
       const failures: Array<{ date: string; message: string }> = [];
-      for (const date of days) {
+      await mapWithConcurrency(days, DAY_SYNC_CONCURRENCY, async (date) => {
         try {
-          const response = await fetchAds(session.token, offer.dashboardId, date);
+          const response = await fetchAds(session.token, dashboardId, date);
           detectedCurrency ??= response.currency;
           const snapshot = toSnapshot(offer.id, date, response.results);
           ads += snapshot.ads?.length ?? 0;
@@ -112,7 +118,7 @@ export class UtmifySyncService {
             message: error instanceof Error ? error.message : 'Falha desconhecida.',
           });
         }
-      }
+      });
       if (syncedDays === 0) {
         throw new Error(failures[0]?.message ?? 'Nenhuma janela foi sincronizada.');
       }
@@ -146,7 +152,7 @@ export class UtmifySyncService {
       await this.offerStore.setSyncState(offer.id, { status: 'error', error: message });
       throw error;
     } finally {
-      await this.redis.del(lockKey);
+      await releaseLock(this.redis, lockKey, lockToken);
     }
   }
 
@@ -227,6 +233,31 @@ export class UtmifySyncService {
       currency: detectDashboardCurrency(session.payload, offer.dashboardId) ?? response.currency,
     };
   }
+}
+
+async function mapWithConcurrency<T>(
+  values: T[],
+  concurrency: number,
+  task: (value: T) => Promise<void>,
+): Promise<void> {
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < values.length) {
+      const value = values[cursor++];
+      if (value === undefined) return;
+      await task(value);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, () => worker()));
+}
+
+async function releaseLock(redis: Redis, key: string, token: string): Promise<void> {
+  await redis.eval(
+    "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+    1,
+    key,
+    token,
+  );
 }
 
 async function authenticate(login: string, password: string): Promise<UtmifyAuthSession> {

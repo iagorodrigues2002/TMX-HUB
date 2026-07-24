@@ -1146,8 +1146,9 @@ export const apiClient = {
     return request(`/v1/offers/${id}/utmify-capabilities`);
   },
 
-  async getOfferIntraday(id: string): Promise<IntradaySummaryView> {
-    return request(`/v1/offers/${id}/intraday`);
+  async getOfferIntraday(id: string, date?: string): Promise<IntradaySummaryView> {
+    const query = date ? `?date=${encodeURIComponent(date)}` : '';
+    return request(`/v1/offers/${id}/intraday${query}`);
   },
 
   async getOfferAiConfig(id: string): Promise<{

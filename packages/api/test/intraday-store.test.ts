@@ -73,4 +73,23 @@ describe('intraday two-hour windows', () => {
       cpa: 50,
     });
   });
+
+  it('keeps a historical day complete when viewed on a later date', () => {
+    const summary = buildIntradaySummary(
+      '2026-07-21',
+      [
+        { capturedAt: '2026-07-21T12:00:00.000Z', spend: 100, sales: 1, revenue: 200, ic: 2 },
+        { capturedAt: '2026-07-21T14:00:00.000Z', spend: 250, sales: 3, revenue: 600, ic: 5 },
+      ],
+      new Date('2026-07-24T15:00:00.000Z'),
+    );
+
+    expect(summary.date).toBe('2026-07-21');
+    expect(summary.currentWindowIndex).toBe(11);
+    expect(summary.overall).toMatchObject({ spend: 250, sales: 3, revenue: 600, ic: 5 });
+    expect(summary.windows[5]).toMatchObject({
+      available: true,
+      metrics: expect.objectContaining({ spend: 150, sales: 2, revenue: 400, ic: 3 }),
+    });
+  });
 });
