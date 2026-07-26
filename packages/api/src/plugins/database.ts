@@ -24,4 +24,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   });
 };
 
+// The routes are registered as sibling plugins. Bypass Fastify encapsulation so
+// every route receives the same managed PostgreSQL connection.
+(plugin as unknown as Record<symbol, boolean>)[Symbol.for('skip-override')] = true;
+
 export default plugin;

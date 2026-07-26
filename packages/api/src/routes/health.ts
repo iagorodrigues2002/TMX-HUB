@@ -25,6 +25,15 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     }
 
     try {
+      if (!app.db) throw new Error('DATABASE_URL ausente');
+      await app.db`SELECT 1`;
+      checks.postgres = { status: 'ok' };
+    } catch (err) {
+      checks.postgres = { status: 'fail', detail: (err as Error)?.message ?? 'unknown error' };
+      healthy = false;
+    }
+
+    try {
       await app.storage.ping();
       checks.s3 = { status: 'ok' };
     } catch (err) {
