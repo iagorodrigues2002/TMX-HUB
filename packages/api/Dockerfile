@@ -50,4 +50,4 @@ COPY --from=deps /ms-playwright /ms-playwright
 
 WORKDIR /app/packages/api
 EXPOSE 4000
-CMD ["node", "dist/server.js"]
+CMD ["sh", "-c", "node scripts/migrate.mjs && exec node dist/server.js"]
