@@ -11,10 +11,13 @@ import healthRoutes from './health.js';
 import inspectRoutes from './inspect.js';
 import linksRoutes from './links.js';
 import mediaJobsRoutes from './media-jobs.js';
+import metaAdminRoutes from './meta-admin.js';
 import nichesRoutes from './niches.js';
 import offersRoutes from './offers.js';
 import previewRoutes from './preview.js';
 import shieldJobsRoutes from './shield-jobs.js';
+import trackingAdminRoutes from './tracking-admin.js';
+import trackingPublicRoutes from './tracking-public.js';
 import usersRoutes from './users.js';
 import vslJobsRoutes from './vsl-jobs.js';
 import webhookTestRoutes from './webhook-test.js';
@@ -64,6 +67,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       // Preview is loaded inside an iframe (no Authorization header possible).
       // Stays public; the ULID in the URL is the capability token.
       await v1.register(previewRoutes);
+      await v1.register(trackingPublicRoutes);
 
       // Everything below requires a valid JWT.
       await v1.register(async (protectedRoutes) => {
@@ -91,9 +95,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         await protectedRoutes.register(webhookTestRoutes);
         await protectedRoutes.register(funnelJobsRoutes);
         await protectedRoutes.register(offersRoutes);
+        await protectedRoutes.register(trackingAdminRoutes);
         await protectedRoutes.register(nichesRoutes);
         await protectedRoutes.register(shieldJobsRoutes);
         await protectedRoutes.register(mediaJobsRoutes);
+        await protectedRoutes.register(metaAdminRoutes);
         await protectedRoutes.register(usersRoutes);
       });
     },

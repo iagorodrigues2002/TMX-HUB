@@ -3,6 +3,7 @@ import { env } from './env.js';
 import { logger } from './lib/logger.js';
 import authPlugin from './plugins/auth.js';
 import corsPlugin from './plugins/cors.js';
+import databasePlugin from './plugins/database.js';
 import errorHandlerPlugin from './plugins/error-handler.js';
 import multipartPlugin from './plugins/multipart.js';
 import queuePlugin from './plugins/queue.js';
@@ -13,6 +14,7 @@ import routes from './routes/index.js';
 import { createBundleWorker } from './workers/bundle.worker.js';
 import { createFunnelWorker } from './workers/funnel.worker.js';
 import { createMediaWorker } from './workers/media.worker.js';
+import { createMetaWorker } from './workers/meta.worker.js';
 import { createRenderWorker } from './workers/render.worker.js';
 import { createShieldWorker } from './workers/shield.worker.js';
 import { createVslWorker } from './workers/vsl.worker.js';
@@ -33,6 +35,7 @@ export async function buildApp() {
   // Order matters: queue first (decorates app.redis), then storage (uses redis),
   // then auth (decorates app.userStore + activityStore + requireAuth).
   await app.register(queuePlugin);
+  await app.register(databasePlugin);
   await app.register(storagePlugin);
   await app.register(authPlugin);
   await app.register(corsPlugin);
@@ -47,6 +50,17 @@ export async function buildApp() {
 
 async function main() {
   const app = await buildApp();
+  if (app.db) {
+    const pending = await app.db<{ id: string }[]>`
+      SELECT id FROM meta_deliveries
+      WHERE state IN ('pending', 'failed')
+      ORDER BY created_at ASC
+      LIMIT 1000
+    `;
+    await Promise.allSettled(
+      pending.map(({ id }) => app.metaQueue.add('send', { deliveryId: id })),
+    );
+  }
 
   // NOTE(workers): For dev simplicity we run the workers in the same Node
   // process as the HTTP server. In production these should run as separate
@@ -84,6 +98,7 @@ async function main() {
     nicheStore: app.nicheStore,
     storage: app.storage,
   });
+  const metaWorker = createMetaWorker();
   app.utmifySync.start();
 
   let shuttingDown = false;
@@ -102,6 +117,7 @@ async function main() {
       await funnelWorker.close();
       await shieldWorker.close();
       await mediaWorker.close();
+      await metaWorker?.close();
       app.log.info('shutdown complete');
       process.exit(0);
     } catch (err) {

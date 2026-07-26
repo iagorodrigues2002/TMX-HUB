@@ -1,5 +1,6 @@
 import type { Queue } from 'bullmq';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import type { Redis } from 'ioredis';
 import { env } from '../env.js';
 import { makeRedis } from '../lib/redis.js';
 import { createBundleQueue } from '../queues/bundle.queue.js';
@@ -7,16 +8,17 @@ import { createFunnelQueue } from '../queues/funnel.queue.js';
 import type {
   BundleJobData,
   FunnelJobData,
+  MediaJobData,
+  MetaJobData,
   RenderJobData,
   ShieldJobData,
-  MediaJobData,
   VslJobData,
 } from '../queues/index.js';
+import { createMediaQueue } from '../queues/media.queue.js';
+import { createMetaQueue } from '../queues/meta.queue.js';
 import { createRenderQueue } from '../queues/render.queue.js';
 import { createShieldQueue } from '../queues/shield.queue.js';
-import { createMediaQueue } from '../queues/media.queue.js';
 import { createVslQueue } from '../queues/vsl.queue.js';
-import type { Redis } from 'ioredis';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -27,6 +29,7 @@ declare module 'fastify' {
     funnelQueue: Queue<FunnelJobData>;
     shieldQueue: Queue<ShieldJobData>;
     mediaQueue: Queue<MediaJobData>;
+    metaQueue: Queue<MetaJobData>;
   }
 }
 
@@ -53,6 +56,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   const funnelQueue = createFunnelQueue(env.REDIS_URL);
   const shieldQueue = createShieldQueue(env.REDIS_URL);
   const mediaQueue = createMediaQueue(env.REDIS_URL);
+  const metaQueue = createMetaQueue(env.REDIS_URL);
 
   app.decorate('redis', redis);
   app.decorate('renderQueue', renderQueue);
@@ -61,6 +65,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.decorate('funnelQueue', funnelQueue);
   app.decorate('shieldQueue', shieldQueue);
   app.decorate('mediaQueue', mediaQueue);
+  app.decorate('metaQueue', metaQueue);
 
   app.addHook('onClose', async () => {
     await renderQueue.close();
@@ -69,6 +74,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     await funnelQueue.close();
     await shieldQueue.close();
     await mediaQueue.close();
+    await metaQueue.close();
     await redis.quit();
   });
 };

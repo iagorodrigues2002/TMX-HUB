@@ -18,6 +18,12 @@ const EnvSchema = z.object({
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
 
   REDIS_URL: z.string().default('redis://localhost:6379'),
+  DATABASE_URL: z.string().optional(),
+  TRACKING_ENCRYPTION_KEY: z.string().min(32).optional(),
+  META_GRAPH_API_VERSION: z
+    .string()
+    .regex(/^v\d+\.\d+$/)
+    .default('v25.0'),
 
   S3_ENDPOINT: z.string().default('http://localhost:9000'),
   S3_REGION: z.string().default('us-east-1'),

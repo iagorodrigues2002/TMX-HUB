@@ -4,6 +4,7 @@ export const VSL_QUEUE_NAME = 'vsl-queue';
 export const FUNNEL_QUEUE_NAME = 'funnel-queue';
 export const SHIELD_QUEUE_NAME = 'shield-queue';
 export const MEDIA_QUEUE_NAME = 'media-queue';
+export const META_QUEUE_NAME = 'meta-capi-queue';
 
 export interface RenderJobData {
   jobId: string;
@@ -32,4 +33,8 @@ export interface ShieldJobData {
 
 export interface MediaJobData {
   jobId: string;
+}
+
+export interface MetaJobData {
+  deliveryId: string;
 }
