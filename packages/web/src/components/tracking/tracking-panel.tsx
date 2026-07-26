@@ -4,8 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api-client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Activity, CheckCircle2, Copy, ExternalLink, Loader2, Radio } from 'lucide-react';
-import Link from 'next/link';
+import { Activity, CheckCircle2, Copy, Loader2, Radio } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -88,11 +87,6 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
             <code className="text-cyan-200">src</code> e envio server-side.
           </p>
         </div>
-        <Button asChild variant="outline" size="sm">
-          <Link href="/help/tracking-vendepay">
-            Guia de configuração <ExternalLink className="ml-2 h-3.5 w-3.5" />
-          </Link>
-        </Button>
       </div>
 
       {config.isLoading ? (

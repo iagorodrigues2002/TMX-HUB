@@ -4,8 +4,8 @@ import type { ToolKey } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
 import { cn } from '@/lib/utils';
 import {
-  CircleHelp,
   Home,
+  RadioTower,
   ScrollText,
   Settings,
   ShieldCheck,
@@ -30,9 +30,14 @@ interface NavItem {
 const NAV: NavItem[] = [
   { label: 'Home', href: '/', icon: Home },
   { label: 'Ofertas', href: '/ofertas', icon: Target, requiresTool: 'ofertas' },
+  {
+    label: 'Trackeamento avançado',
+    href: '/tracking',
+    icon: RadioTower,
+    requiresTool: 'ofertas',
+  },
   { label: 'Tools', href: '/tools', icon: Wrench },
   { label: 'Logs', href: '/logs', icon: ScrollText, requiresTool: 'logs' },
-  { label: 'Ajuda', href: '/help/tracking-vendepay', icon: CircleHelp },
   { label: 'Admin', href: '/admin', icon: ShieldCheck, adminOnly: true },
   { label: 'Configurações', href: '/settings', icon: Settings, adminOnly: true },
   { label: 'Conta', href: '#', icon: User, disabled: true },
