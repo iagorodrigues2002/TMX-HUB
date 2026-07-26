@@ -36,8 +36,15 @@ function shortId(value?: string) {
   return value.length > 16 ? `${value.slice(0, 8)}…${value.slice(-5)}` : value;
 }
 
-export function TrackingLiveConsole({ offerId }: { offerId: string }) {
+export function TrackingLiveConsole({
+  offerId,
+  mode,
+}: {
+  offerId: string;
+  mode?: 'tracker' | 'funnel' | 'infrastructure';
+}) {
   const [view, setView] = useState<View>('tracker');
+  const activeView = mode ?? view;
   const [feed, setFeed] = useState<'sales' | 'events'>('sales');
   const [search, setSearch] = useState('');
   const summary = useQuery({
@@ -94,39 +101,41 @@ export function TrackingLiveConsole({ offerId }: { offerId: string }) {
 
   return (
     <section className="overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.02]">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.07] p-3">
-        <div className="flex flex-wrap gap-1">
-          {[
-            { id: 'tracker' as const, label: 'Tracker', icon: RadioTower },
-            { id: 'funnel' as const, label: 'Funil', icon: Filter },
-            { id: 'infrastructure' as const, label: 'Saúde automática', icon: Database },
-          ].map(({ id, label, icon: Icon }) => (
-            <Button
-              key={id}
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setView(id)}
-              className={cn(
-                'gap-2 text-white/45',
-                view === id && 'bg-emerald-300/[0.09] text-emerald-200',
-              )}
-            >
-              <Icon className="h-3.5 w-3.5" />
-              {label}
-            </Button>
-          ))}
+      {!mode && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.07] p-3">
+          <div className="flex flex-wrap gap-1">
+            {[
+              { id: 'tracker' as const, label: 'Tracker', icon: RadioTower },
+              { id: 'funnel' as const, label: 'Funil', icon: Filter },
+              { id: 'infrastructure' as const, label: 'Saúde automática', icon: Database },
+            ].map(({ id, label, icon: Icon }) => (
+              <Button
+                key={id}
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setView(id)}
+                className={cn(
+                  'gap-2 text-white/45',
+                  activeView === id && 'bg-emerald-300/[0.09] text-emerald-200',
+                )}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {label}
+              </Button>
+            ))}
+          </div>
+          <p className="flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-emerald-200/70">
+            <span className="status-dot" aria-hidden /> atualização automática · 30s
+          </p>
         </div>
-        <p className="flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-emerald-200/70">
-          <span className="status-dot" aria-hidden /> atualização automática · 30s
-        </p>
-      </div>
+      )}
 
       {summary.isLoading ? (
         <div className="flex min-h-48 items-center justify-center gap-2 text-sm text-white/45">
           <Loader2 className="h-4 w-4 animate-spin" /> Carregando sinais…
         </div>
-      ) : view === 'infrastructure' ? (
+      ) : activeView === 'infrastructure' ? (
         <div className="p-5 md:p-6">
           <div className="mb-5">
             <p className="hud-label">Infraestrutura gerenciada</p>
@@ -173,7 +182,7 @@ export function TrackingLiveConsole({ offerId }: { offerId: string }) {
               'O diagnóstico será exibido assim que o tracking da oferta for criado.'}
           </div>
         </div>
-      ) : view === 'funnel' ? (
+      ) : activeView === 'funnel' ? (
         <div className="p-5 md:p-6">
           <div className="mb-5">
             <p className="hud-label">Funil total · dados first-party + backend</p>

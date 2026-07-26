@@ -122,6 +122,18 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           RETURNING id, status
         `;
         if (!order || order.status !== 'paid') return { inserted: true, deliveryIds: [] };
+        const [rules] = await sql<
+          Array<{ attributed_only: boolean; minimum_amount_minor: number }>
+        >`
+          SELECT attributed_only, minimum_amount_minor
+          FROM tracking_meta_rules WHERE project_id = ${connection.project_id}
+        `;
+        if (
+          (rules?.attributed_only && !event.trackingSrc) ||
+          (rules && (event.amountMinor ?? 0) < rules.minimum_amount_minor)
+        ) {
+          return { inserted: true, deliveryIds: [] };
+        }
         const pixels = await sql<{ id: string }[]>`
           SELECT id FROM meta_pixels
           WHERE project_id = ${connection.project_id} AND enabled = true

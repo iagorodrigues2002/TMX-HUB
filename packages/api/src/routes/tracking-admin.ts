@@ -67,6 +67,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           orders: string | null;
           pixels: string | null;
           deliveries: string | null;
+          domains: string | null;
+          ab_tests: string | null;
         }>
       >`
         SELECT
@@ -74,7 +76,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           to_regclass('public.tracking_events')::text AS events,
           to_regclass('public.tracking_orders')::text AS orders,
           to_regclass('public.meta_pixels')::text AS pixels,
-          to_regclass('public.meta_deliveries')::text AS deliveries
+          to_regclass('public.meta_deliveries')::text AS deliveries,
+          to_regclass('public.tracking_domains')::text AS domains,
+          to_regclass('public.tracking_ab_tests')::text AS ab_tests
       `,
       app.db<
         Array<{
@@ -101,14 +105,20 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     ]);
     const tables = schema[0];
     const schemaReady = Boolean(
-      tables?.projects && tables.events && tables.orders && tables.pixels && tables.deliveries,
+      tables?.projects &&
+        tables.events &&
+        tables.orders &&
+        tables.pixels &&
+        tables.deliveries &&
+        tables.domains &&
+        tables.ab_tests,
     );
     return {
       managed: true,
       database: 'ready',
       migrations: schemaReady ? 'ready' : 'updating',
       encryption: env.TRACKING_ENCRYPTION_KEY ? 'ready' : 'unavailable',
-      schema_version: schemaReady ? 2 : null,
+      schema_version: schemaReady ? 3 : null,
       last_event_at: activity[0]?.last_event_at ?? null,
       last_order_at: activity[0]?.last_order_at ?? null,
       meta: {
