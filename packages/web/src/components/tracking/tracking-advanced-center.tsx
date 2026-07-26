@@ -61,6 +61,7 @@ export function TrackingAdvancedCenter({
   const [kind, setKind] = useState<'checkout' | 'presell'>('checkout');
   const [armA, setArmA] = useState('A');
   const [armB, setArmB] = useState('B');
+  const [vendepayWebhook, setVendepayWebhook] = useState('');
   const qc = useQueryClient();
   const advanced = useQuery({
     queryKey: ['tracking-advanced', offerId],
@@ -112,6 +113,18 @@ export function TrackingAdvancedCenter({
     queryFn: () => apiClient.getTrackingConfig(offerId),
     retry: false,
   });
+  const rotateVendepay = useMutation({
+    mutationFn: () => apiClient.rotateVendepayWebhook(offerId),
+    onSuccess: (result) => {
+      setVendepayWebhook(result.vendepay_webhook_url);
+      toast.success('URL real gerada. A URL anterior foi desativada.');
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
+  const copyVendepayWebhook = async () => {
+    await navigator.clipboard.writeText(vendepayWebhook);
+    toast.success('Webhook real copiado.');
+  };
 
   return (
     <div className="grid gap-5 lg:grid-cols-[230px_minmax(0,1fr)]">
@@ -209,6 +222,31 @@ export function TrackingAdvancedCenter({
                 </div>
               ))}
             </div>
+            {canManage && config.data?.configured && (
+              <div className="mt-5 rounded-md border border-amber-300/15 bg-amber-300/[0.04] p-4">
+                <p className="text-sm font-medium text-amber-100">URL secreta da Vendepay</p>
+                <p className="mt-1 text-xs leading-5 text-white/45">
+                  Por segurança, o token só aparece ao gerar a URL. Gerar novamente desativa o
+                  webhook anterior.
+                </p>
+                <Button
+                  className="mt-3"
+                  variant="outline"
+                  disabled={rotateVendepay.isPending}
+                  onClick={() => rotateVendepay.mutate()}
+                >
+                  {rotateVendepay.isPending ? 'Gerando…' : 'Gerar URL real do webhook'}
+                </Button>
+                {vendepayWebhook && (
+                  <div className="mt-3 flex gap-2">
+                    <code className="min-w-0 flex-1 overflow-x-auto rounded bg-black/25 p-3 text-xs text-cyan-100">
+                      {vendepayWebhook}
+                    </code>
+                    <Button onClick={copyVendepayWebhook}>Copiar</Button>
+                  </div>
+                )}
+              </div>
+            )}
           </Module>
         )}
         {section === 'meta' && (
