@@ -1203,6 +1203,89 @@ export const apiClient = {
     return request(`/v1/offers/${id}/tracking/diagnostics`);
   },
 
+  async getAdvancedTracking(id: string): Promise<{
+    configured: boolean;
+    public_key?: string;
+    domains: Array<{
+      id: string;
+      hostname: string;
+      enabled: boolean;
+      status: string;
+      last_error?: string;
+    }>;
+    gateways: Array<{
+      id?: string;
+      provider: string;
+      propagation_param: string;
+      enabled: boolean;
+      managed?: boolean;
+    }>;
+    meta_rules: { attributed_only: boolean; minimum_amount_minor: string | number };
+    ab_tests: Array<{
+      id: string;
+      name: string;
+      kind: 'checkout' | 'presell';
+      status: string;
+      traffic_a: number;
+      deleted_at?: string;
+      variants: Array<{
+        id: string;
+        label: string;
+        gateway?: string;
+        destination_url?: string;
+        position: number;
+      }>;
+    }>;
+    vturb: { enabled: boolean; endpoint_url?: string };
+  }> {
+    return request(`/v1/offers/${id}/tracking/advanced`);
+  },
+
+  async addTrackingDomain(id: string, hostname: string): Promise<void> {
+    await request(`/v1/offers/${id}/tracking/domains`, { method: 'POST', body: { hostname } });
+  },
+
+  async verifyTrackingDomain(
+    id: string,
+    domainId: string,
+  ): Promise<{ status: string; detail: string }> {
+    return request(`/v1/offers/${id}/tracking/domains/${domainId}/verify`, { method: 'POST' });
+  },
+
+  async removeTrackingDomain(id: string, domainId: string): Promise<void> {
+    await request(`/v1/offers/${id}/tracking/domains/${domainId}`, { method: 'DELETE' });
+  },
+
+  async saveTrackingMetaRules(
+    id: string,
+    body: { attributed_only: boolean; minimum_amount_minor: number },
+  ): Promise<void> {
+    await request(`/v1/offers/${id}/tracking/meta-rules`, { method: 'PATCH', body });
+  },
+
+  async addTrackingGateway(
+    id: string,
+    body: { provider: 'vendepay' | 'cooud'; propagation_param: string },
+  ): Promise<void> {
+    await request(`/v1/offers/${id}/tracking/gateways`, { method: 'POST', body });
+  },
+
+  async createTrackingAbTest(
+    id: string,
+    body: {
+      name: string;
+      kind: 'checkout' | 'presell';
+      traffic_a: number;
+      variants: Array<{ label: string; gateway?: string; destination_url?: string }>;
+    },
+  ): Promise<void> {
+    await request(`/v1/offers/${id}/tracking/ab-tests`, { method: 'POST', body });
+  },
+
+  async deleteTrackingAbTest(id: string, testId: string): Promise<void> {
+    await request(`/v1/offers/${id}/tracking/ab-tests/${testId}`, { method: 'DELETE' });
+  },
+
   async listTrackingEvents(
     id: string,
     page = 1,
