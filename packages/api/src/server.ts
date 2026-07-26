@@ -3,6 +3,7 @@ import { env } from './env.js';
 import { logger } from './lib/logger.js';
 import authPlugin from './plugins/auth.js';
 import corsPlugin from './plugins/cors.js';
+import databasePlugin from './plugins/database.js';
 import errorHandlerPlugin from './plugins/error-handler.js';
 import multipartPlugin from './plugins/multipart.js';
 import queuePlugin from './plugins/queue.js';
@@ -33,6 +34,7 @@ export async function buildApp() {
   // Order matters: queue first (decorates app.redis), then storage (uses redis),
   // then auth (decorates app.userStore + activityStore + requireAuth).
   await app.register(queuePlugin);
+  await app.register(databasePlugin);
   await app.register(storagePlugin);
   await app.register(authPlugin);
   await app.register(corsPlugin);
