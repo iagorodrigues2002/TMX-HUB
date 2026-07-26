@@ -20,7 +20,7 @@ import {
 import { type ReactNode, useState } from 'react';
 
 const steps = [
-  { id: 'railway', label: 'PostgreSQL', icon: Database },
+  { id: 'railway', label: 'Infraestrutura', icon: Database },
   { id: 'projeto', label: 'Oferta', icon: Radio },
   { id: 'script', label: 'Script', icon: Code2 },
   { id: 'webhook', label: 'Webhook', icon: Webhook },
@@ -171,40 +171,32 @@ export function TrackingHelp() {
         <Section
           id="railway"
           number="01"
-          title="Adicionar PostgreSQL no Railway"
-          subtitle="O tracking precisa de um banco permanente para eventos, pedidos e auditoria."
+          title="Infraestrutura automática"
+          subtitle="Banco, migrations e criptografia são administrados pelo próprio TMXHUB."
           icon={<Database className="h-5 w-5" />}
         >
-          <ol className="space-y-4 text-sm leading-6 text-white/65">
-            <li className="flex gap-3">
-              <span className="font-mono text-cyan-300/60">01</span>
-              No projeto do TMXHUB no Railway, clique em{' '}
-              <strong className="text-white/80">+ New</strong>, escolha{' '}
-              <strong className="text-white/80">Database</strong> e depois{' '}
-              <strong className="text-white/80">PostgreSQL</strong>.
-            </li>
-            <li className="flex gap-3">
-              <span className="font-mono text-cyan-300/60">02</span>
-              Abra o serviço da API, entre em <strong className="text-white/80">Variables</strong> e
-              crie uma referência para a variável{' '}
-              <code className="text-cyan-200">DATABASE_URL</code> do PostgreSQL.
-            </li>
-            <li className="flex gap-3">
-              <span className="font-mono text-cyan-300/60">03</span>
-              Aguarde o redeploy. A API executa a migration de tracking automaticamente ao iniciar.
-            </li>
-          </ol>
-          <div className="mt-5">
-            <CopyBlock label="Nome da variável">DATABASE_URL</CopyBlock>
-          </div>
-          <div className="mt-3">
-            <CopyBlock label="Segredo adicional da API">
-              TRACKING_ENCRYPTION_KEY=gere-um-segredo-aleatorio-com-32-ou-mais-caracteres
-            </CopyBlock>
-          </div>
+          <Checklist
+            items={[
+              {
+                id: 'managed-db',
+                content:
+                  'O PostgreSQL é provisionado uma única vez pela operação do TMXHUB e fica disponível para todas as ofertas autorizadas.',
+              },
+              {
+                id: 'managed-migrations',
+                content:
+                  'As migrations são executadas automaticamente antes de cada inicialização da API.',
+              },
+              {
+                id: 'managed-health',
+                content:
+                  'A própria tela mostra a saúde do banco, da estrutura e da criptografia. Você não precisa acessar o Railway.',
+              },
+            ]}
+          />
           <Result
-            title="Critério de sucesso"
-            detail="O deploy da API fica verde e os logs exibem que a migration de tracking foi aplicada ou já estava atualizada."
+            title="Nenhuma ação externa necessária"
+            detail="Se algum componente ficar indisponível, o TMXHUB exibe o diagnóstico e a operação técnica corrige a infraestrutura sem expor credenciais."
           />
         </Section>
 
@@ -455,7 +447,7 @@ export function TrackingHelp() {
               ],
               [
                 'Tracking indisponível',
-                'Verifique DATABASE_URL, TRACKING_ENCRYPTION_KEY, o PostgreSQL e os logs da migration no Railway.',
+                'Consulte o diagnóstico automático na área de tracking. Não é necessário acessar o Railway.',
               ],
               [
                 'Purchase não aparece no Meta',
