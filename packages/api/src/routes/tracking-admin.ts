@@ -17,7 +17,7 @@ type PaginationQuery = {
 
 const databaseUnavailable = {
   error: 'tracking_database_unavailable',
-  detail: 'Configure DATABASE_URL e execute a migration de tracking.',
+  detail: 'A infraestrutura de tracking está temporariamente indisponível.',
 };
 
 const webhookUrl = (token: string) =>
@@ -47,6 +47,80 @@ function pagination(page: number, perPage: number, total: number) {
 }
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
+  app.get<{ Params: { id: string } }>('/offers/:id/tracking/diagnostics', async (req, reply) => {
+    await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
+    if (!app.db) {
+      return reply.code(503).send({
+        managed: true,
+        database: 'unavailable',
+        migrations: 'unavailable',
+        encryption: env.TRACKING_ENCRYPTION_KEY ? 'ready' : 'unavailable',
+        detail: 'O TMXHUB já está tentando restabelecer a infraestrutura automaticamente.',
+      });
+    }
+
+    const [schema, activity] = await Promise.all([
+      app.db<
+        Array<{
+          projects: string | null;
+          events: string | null;
+          orders: string | null;
+          pixels: string | null;
+          deliveries: string | null;
+        }>
+      >`
+        SELECT
+          to_regclass('public.tracking_projects')::text AS projects,
+          to_regclass('public.tracking_events')::text AS events,
+          to_regclass('public.tracking_orders')::text AS orders,
+          to_regclass('public.meta_pixels')::text AS pixels,
+          to_regclass('public.meta_deliveries')::text AS deliveries
+      `,
+      app.db<
+        Array<{
+          last_event_at: Date | null;
+          last_order_at: Date | null;
+          pending_meta: number;
+          failed_meta: number;
+        }>
+      >`
+        SELECT
+          (SELECT max(e.received_at) FROM tracking_events e
+            JOIN tracking_projects p ON p.id = e.project_id
+            WHERE p.offer_id = ${req.params.id}) AS last_event_at,
+          (SELECT max(o.occurred_at) FROM tracking_orders o
+            JOIN tracking_projects p ON p.id = o.project_id
+            WHERE p.offer_id = ${req.params.id}) AS last_order_at,
+          (SELECT count(*)::int FROM meta_deliveries d
+            JOIN tracking_projects p ON p.id = d.project_id
+            WHERE p.offer_id = ${req.params.id} AND d.state = 'pending') AS pending_meta,
+          (SELECT count(*)::int FROM meta_deliveries d
+            JOIN tracking_projects p ON p.id = d.project_id
+            WHERE p.offer_id = ${req.params.id} AND d.state = 'failed') AS failed_meta
+      `,
+    ]);
+    const tables = schema[0];
+    const schemaReady = Boolean(
+      tables?.projects && tables.events && tables.orders && tables.pixels && tables.deliveries,
+    );
+    return {
+      managed: true,
+      database: 'ready',
+      migrations: schemaReady ? 'ready' : 'updating',
+      encryption: env.TRACKING_ENCRYPTION_KEY ? 'ready' : 'unavailable',
+      schema_version: schemaReady ? 2 : null,
+      last_event_at: activity[0]?.last_event_at ?? null,
+      last_order_at: activity[0]?.last_order_at ?? null,
+      meta: {
+        pending: activity[0]?.pending_meta ?? 0,
+        failed: activity[0]?.failed_meta ?? 0,
+      },
+      detail: schemaReady
+        ? 'Banco, migrations e criptografia são gerenciados automaticamente pelo TMXHUB.'
+        : 'O TMXHUB está atualizando a estrutura do tracking automaticamente.',
+    };
+  });
+
   app.post<{ Params: { id: string } }>('/offers/:id/tracking/setup', async (req, reply) => {
     await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
     if (!app.db) return reply.code(503).send(databaseUnavailable);

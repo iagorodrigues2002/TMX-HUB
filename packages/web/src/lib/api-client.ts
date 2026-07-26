@@ -1189,6 +1189,81 @@ export const apiClient = {
     return request(`/v1/offers/${id}/tracking/summary`);
   },
 
+  async getTrackingDiagnostics(id: string): Promise<{
+    managed: boolean;
+    database: 'ready' | 'unavailable';
+    migrations: 'ready' | 'updating' | 'unavailable';
+    encryption: 'ready' | 'unavailable';
+    schema_version?: number;
+    last_event_at?: string;
+    last_order_at?: string;
+    meta: { pending: number; failed: number };
+    detail: string;
+  }> {
+    return request(`/v1/offers/${id}/tracking/diagnostics`);
+  },
+
+  async listTrackingEvents(
+    id: string,
+    page = 1,
+    perPage = 25,
+  ): Promise<{
+    items: Array<{
+      id: string;
+      visitor_id: string;
+      session_id?: string;
+      event_name: 'PageView' | 'ViewContent' | 'InitiateCheckout';
+      event_url: string;
+      referrer?: string;
+      source: Record<string, string>;
+      client_at?: string;
+      received_at: string;
+    }>;
+    pagination: { page: number; per_page: number; total: number; total_pages: number };
+  }> {
+    return request(`/v1/offers/${id}/tracking/events?page=${page}&per_page=${perPage}`);
+  },
+
+  async listTrackingOrders(
+    id: string,
+    page = 1,
+    perPage = 25,
+  ): Promise<{
+    items: Array<{
+      id: string;
+      provider: string;
+      external_id: string;
+      status: string;
+      amount_minor?: string;
+      currency?: string;
+      visitor_id?: string;
+      buyer: Record<string, unknown>;
+      raw_status?: string;
+      occurred_at: string;
+      updated_at: string;
+    }>;
+    pagination: { page: number; per_page: number; total: number; total_pages: number };
+  }> {
+    return request(`/v1/offers/${id}/tracking/orders?page=${page}&per_page=${perPage}`);
+  },
+
+  async listMetaDeliveries(id: string): Promise<{
+    deliveries: Array<{
+      id: string;
+      event_id: string;
+      state: 'pending' | 'processing' | 'delivered' | 'failed';
+      attempts: number;
+      last_error?: string;
+      created_at: string;
+      delivered_at?: string;
+      pixel_name: string;
+      pixel_id: string;
+      transaction_id: string;
+    }>;
+  }> {
+    return request(`/v1/offers/${id}/tracking/meta-deliveries`);
+  },
+
   async listMetaPixels(id: string): Promise<{
     pixels: Array<{
       id: string;

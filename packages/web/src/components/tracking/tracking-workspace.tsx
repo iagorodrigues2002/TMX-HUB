@@ -1,6 +1,7 @@
 'use client';
 
 import { TrackingHelp } from '@/components/tracking/tracking-help';
+import { TrackingLiveConsole } from '@/components/tracking/tracking-live-console';
 import { TrackingPanel } from '@/components/tracking/tracking-panel';
 import { Button } from '@/components/ui/button';
 import { type OfferView, apiClient } from '@/lib/api-client';
@@ -198,7 +199,10 @@ export function TrackingWorkspace() {
               </p>
             </div>
           ) : selectedOffer ? (
-            <TrackingPanel offerId={selectedOffer.id} canManage={Boolean(canManage)} />
+            <>
+              <TrackingLiveConsole offerId={selectedOffer.id} />
+              <TrackingPanel offerId={selectedOffer.id} canManage={Boolean(canManage)} />
+            </>
           ) : null}
         </div>
       )}
