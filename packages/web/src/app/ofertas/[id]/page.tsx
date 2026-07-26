@@ -8,23 +8,24 @@ import {
   formatRoas,
 } from '@/components/dashboard/kpi-cards';
 import { HubShell } from '@/components/hub/hub-shell';
+import { OfferAiAnalysis } from '@/components/ofertas/offer-ai-analysis';
 import { OfferCard } from '@/components/ofertas/offer-card';
 import { OfferEditDialog } from '@/components/ofertas/offer-edit-dialog';
-import { OfferAiAnalysis } from '@/components/ofertas/offer-ai-analysis';
+import { TrackingPanel } from '@/components/tracking/tracking-panel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
-  apiClient,
-  canAccessOfferAi,
   type IntradayAdView,
   type MetricsView,
+  apiClient,
+  canAccessOfferAi,
 } from '@/lib/api-client';
+import { useAuth } from '@/lib/auth-context';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ChevronDown, Clock3, Loader2, Pencil, Search, Target } from 'lucide-react';
 import Link from 'next/link';
 import { use, useMemo, useState } from 'react';
-import { useAuth } from '@/lib/auth-context';
 
 export const dynamic = 'force-dynamic';
 
@@ -1091,6 +1092,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
         )}
       </section>
 
+      <TrackingPanel offerId={id} canManage={canManage} />
       {canUseAi && <OfferAiAnalysis offerId={id} />}
 
       {offer && canManage && (

@@ -1151,6 +1151,63 @@ export const apiClient = {
     return request(`/v1/offers/${id}/intraday${query}`);
   },
 
+  async getTrackingConfig(id: string): Promise<{
+    configured: boolean;
+    project?: { id: string; public_key: string; enabled: boolean; install_code: string };
+    vendepay?: { configured: boolean; enabled: boolean; propagation_param: string };
+  }> {
+    return request(`/v1/offers/${id}/tracking`);
+  },
+
+  async setupTracking(id: string): Promise<{
+    project_id: string;
+    public_key: string;
+    install_code: string;
+    vendepay_webhook_url: string;
+    warning: string;
+  }> {
+    return request(`/v1/offers/${id}/tracking/setup`, { method: 'POST' });
+  },
+
+  async rotateVendepayWebhook(id: string): Promise<{
+    vendepay_webhook_url: string;
+    warning: string;
+  }> {
+    return request(`/v1/offers/${id}/tracking/vendepay/rotate-token`, { method: 'POST' });
+  },
+
+  async getTrackingSummary(id: string): Promise<{
+    events: number;
+    visitors: number;
+    page_views: number;
+    checkouts: number;
+    orders: number;
+    paid_orders: number;
+    orphan_orders: number;
+    paid_revenue_minor: string;
+  }> {
+    return request(`/v1/offers/${id}/tracking/summary`);
+  },
+
+  async listMetaPixels(id: string): Promise<{
+    pixels: Array<{
+      id: string;
+      name: string;
+      pixel_id: string;
+      test_event_code?: string;
+      enabled: boolean;
+    }>;
+  }> {
+    return request(`/v1/offers/${id}/tracking/meta-pixels`);
+  },
+
+  async saveMetaPixel(
+    id: string,
+    input: { name: string; pixel_id: string; access_token: string; test_event_code?: string },
+  ): Promise<void> {
+    await request(`/v1/offers/${id}/tracking/meta-pixels`, { method: 'POST', body: input });
+  },
+
   async getOfferAiConfig(id: string): Promise<{
     config: OfferAiConfigView;
     models: Array<{ id: string; label: string }>;

@@ -19,7 +19,7 @@ const EventSchema = z.object({
 const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex');
 
 const trackerScript = (publicKey: string) =>
-  `(()=>{const K=${JSON.stringify(publicKey)},A=document.currentScript.src.replace(/\\/track\\/t\\.js.*$/,'/track/events'),C='_tmx',S='_tmx_s';let id=localStorage.getItem(C);if(!id){id=crypto.randomUUID();localStorage.setItem(C,id)}let sid=sessionStorage.getItem(S);if(!sid){sid=crypto.randomUUID();sessionStorage.setItem(S,sid)}document.cookie=C+'='+id+';path=/;max-age=31536000;SameSite=Lax';const src={};for(const [k,v] of new URL(location.href).searchParams)if(/^utm_|^(fbclid|gclid)$/.test(k))src[k]=v;const send=(name)=>{const body=JSON.stringify({public_key:K,event_id:crypto.randomUUID(),visitor_id:id,session_id:sid,event_name:name,event_url:location.href,referrer:document.referrer||'',source:src,client_at:new Date().toISOString()});navigator.sendBeacon?navigator.sendBeacon(A,new Blob([body],{type:'application/json'})):fetch(A,{method:'POST',headers:{'content-type':'application/json'},body,keepalive:true})};send('PageView');document.addEventListener('click',e=>{const a=e.target.closest?.('a[href]');if(!a)return;try{const u=new URL(a.href,location.href);if(/vendepay|checkout|pay\\./i.test(u.hostname+u.pathname)){u.searchParams.set('src',id);a.href=u.toString();send('InitiateCheckout')}}catch{}})})();`;
+  `(()=>{const K=${JSON.stringify(publicKey)},A=document.currentScript.src.replace(/\\/track\\/t\\.js.*$/,'/track/events'),C='_tmx',S='_tmx_s';let id=localStorage.getItem(C);if(!id){id=crypto.randomUUID();localStorage.setItem(C,id)}let sid=sessionStorage.getItem(S);if(!sid){sid=crypto.randomUUID();sessionStorage.setItem(S,sid)}document.cookie=C+'='+id+';path=/;max-age=31536000;SameSite=Lax';const src={};for(const [k,v] of new URL(location.href).searchParams)if(/^utm_|^(fbclid|gclid)$/.test(k))src[k]=v;for(const k of ['_fbp','_fbc']){const v=document.cookie.split('; ').find(x=>x.startsWith(k+'='))?.split('=').slice(1).join('=');if(v)src[k]=decodeURIComponent(v)}const send=(name)=>{const body=JSON.stringify({public_key:K,event_id:crypto.randomUUID(),visitor_id:id,session_id:sid,event_name:name,event_url:location.href,referrer:document.referrer||'',source:src,client_at:new Date().toISOString()});navigator.sendBeacon?navigator.sendBeacon(A,new Blob([body],{type:'application/json'})):fetch(A,{method:'POST',headers:{'content-type':'application/json'},body,keepalive:true})};send('PageView');document.addEventListener('click',e=>{const a=e.target.closest?.('a[href]');if(!a)return;try{const u=new URL(a.href,location.href);if(/vendepay|checkout|pay\\./i.test(u.hostname+u.pathname)){u.searchParams.set('src',id);a.href=u.toString();send('InitiateCheckout')}}catch{}})})();`;
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get<{ Querystring: { key?: string } }>('/track/t.js', async (req, reply) => {
@@ -45,11 +45,13 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!project?.enabled) return reply.code(404).send({ accepted: false });
     await app.db`
       INSERT INTO tracking_events
-        (id, project_id, visitor_id, session_id, event_name, event_url, referrer, source, client_at)
+        (id, project_id, visitor_id, session_id, event_name, event_url, referrer, source,
+         client_ip, user_agent, client_at)
       VALUES
         (${event.event_id}, ${project.id}, ${event.visitor_id}, ${event.session_id ?? null},
          ${event.event_name}, ${event.event_url}, ${event.referrer || null},
-         ${app.db.json(event.source)}, ${event.client_at ?? null})
+         ${app.db.json(event.source)}, ${req.ip}, ${req.headers['user-agent'] ?? null},
+         ${event.client_at ?? null})
       ON CONFLICT (project_id, id) DO NOTHING
     `;
     return reply.code(202).send({ accepted: true });
@@ -74,7 +76,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
       const normalized = normalizeVendepay(req.body);
       const receiptId = ulid();
-      const inserted = await app.db.begin(async (sql) => {
+      const outcome = await app.db.begin(async (sql) => {
         const receipts = await sql<{ id: string }[]>`
           INSERT INTO webhook_receipts
             (id, connection_id, dedupe_key, payload, state, diagnostics)
@@ -84,17 +86,19 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           ON CONFLICT (connection_id, dedupe_key) DO NOTHING
           RETURNING id
         `;
-        if (receipts.length === 0 || normalized.kind !== 'processable') return receipts.length > 0;
+        if (receipts.length === 0 || normalized.kind !== 'processable') {
+          return { inserted: receipts.length > 0, deliveryIds: [] as string[] };
+        }
         const event = normalized.event;
-        await sql`
+        const [order] = await sql<{ id: string; status: string }[]>`
           INSERT INTO tracking_orders
             (id, project_id, provider, external_id, status, amount_minor, currency,
-             visitor_id, buyer, raw_status, occurred_at)
+             visitor_id, buyer, raw_status, occurred_at, paid_at)
           VALUES
             (${ulid()}, ${connection.project_id}, 'vendepay', ${event.transactionId},
              ${event.status}, ${event.amountMinor ?? null}, ${event.currency ?? null},
              ${event.trackingSrc ?? null}, ${sql.json(event.buyer)}, ${event.rawStatus ?? null},
-             ${event.occurredAt})
+             ${event.occurredAt}, ${event.status === 'paid' ? event.occurredAt : null})
           ON CONFLICT (project_id, provider, external_id) DO UPDATE SET
             status = CASE
               WHEN tracking_orders.status IN ('refunded', 'chargeback') THEN tracking_orders.status
@@ -110,14 +114,42 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             buyer = tracking_orders.buyer || EXCLUDED.buyer,
             raw_status = COALESCE(EXCLUDED.raw_status, tracking_orders.raw_status),
             occurred_at = LEAST(tracking_orders.occurred_at, EXCLUDED.occurred_at),
+            paid_at = CASE
+              WHEN EXCLUDED.status = 'paid' THEN COALESCE(tracking_orders.paid_at, EXCLUDED.paid_at)
+              ELSE tracking_orders.paid_at
+            END,
             updated_at = now()
+          RETURNING id, status
         `;
-        return true;
+        if (!order || order.status !== 'paid') return { inserted: true, deliveryIds: [] };
+        const pixels = await sql<{ id: string }[]>`
+          SELECT id FROM meta_pixels
+          WHERE project_id = ${connection.project_id} AND enabled = true
+        `;
+        const deliveryIds: string[] = [];
+        for (const pixel of pixels) {
+          const deliveryId = ulid();
+          const deliveries = await sql<{ id: string }[]>`
+            INSERT INTO meta_deliveries
+              (id, project_id, pixel_id, order_id, event_id)
+            VALUES
+              (${deliveryId}, ${connection.project_id}, ${pixel.id}, ${order.id},
+               ${`vendepay:${event.transactionId}:purchase`})
+            ON CONFLICT (pixel_id, event_id) DO NOTHING
+            RETURNING id
+          `;
+          if (deliveries[0]) deliveryIds.push(deliveries[0].id);
+        }
+        return { inserted: true, deliveryIds };
       });
-      return reply.code(inserted ? 202 : 200).send({
+      await Promise.allSettled(
+        outcome.deliveryIds.map((deliveryId) => app.metaQueue.add('send', { deliveryId })),
+      );
+      return reply.code(outcome.inserted ? 202 : 200).send({
         accepted: true,
         receipt_id: receiptId,
-        ...(!inserted ? { duplicate: true } : {}),
+        meta_deliveries: outcome.deliveryIds.length,
+        ...(!outcome.inserted ? { duplicate: true } : {}),
       });
     },
   );

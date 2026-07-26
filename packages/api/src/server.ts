@@ -14,6 +14,7 @@ import routes from './routes/index.js';
 import { createBundleWorker } from './workers/bundle.worker.js';
 import { createFunnelWorker } from './workers/funnel.worker.js';
 import { createMediaWorker } from './workers/media.worker.js';
+import { createMetaWorker } from './workers/meta.worker.js';
 import { createRenderWorker } from './workers/render.worker.js';
 import { createShieldWorker } from './workers/shield.worker.js';
 import { createVslWorker } from './workers/vsl.worker.js';
@@ -49,6 +50,17 @@ export async function buildApp() {
 
 async function main() {
   const app = await buildApp();
+  if (app.db) {
+    const pending = await app.db<{ id: string }[]>`
+      SELECT id FROM meta_deliveries
+      WHERE state IN ('pending', 'failed')
+      ORDER BY created_at ASC
+      LIMIT 1000
+    `;
+    await Promise.allSettled(
+      pending.map(({ id }) => app.metaQueue.add('send', { deliveryId: id })),
+    );
+  }
 
   // NOTE(workers): For dev simplicity we run the workers in the same Node
   // process as the HTTP server. In production these should run as separate
@@ -86,6 +98,7 @@ async function main() {
     nicheStore: app.nicheStore,
     storage: app.storage,
   });
+  const metaWorker = createMetaWorker();
   app.utmifySync.start();
 
   let shuttingDown = false;
@@ -104,6 +117,7 @@ async function main() {
       await funnelWorker.close();
       await shieldWorker.close();
       await mediaWorker.close();
+      await metaWorker?.close();
       app.log.info('shutdown complete');
       process.exit(0);
     } catch (err) {

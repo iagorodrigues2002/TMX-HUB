@@ -3,7 +3,16 @@
 import type { ToolKey } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
 import { cn } from '@/lib/utils';
-import { Home, ScrollText, Settings, ShieldCheck, Target, User, Wrench } from 'lucide-react';
+import {
+  CircleHelp,
+  Home,
+  ScrollText,
+  Settings,
+  ShieldCheck,
+  Target,
+  User,
+  Wrench,
+} from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -23,6 +32,7 @@ const NAV: NavItem[] = [
   { label: 'Ofertas', href: '/ofertas', icon: Target, requiresTool: 'ofertas' },
   { label: 'Tools', href: '/tools', icon: Wrench },
   { label: 'Logs', href: '/logs', icon: ScrollText, requiresTool: 'logs' },
+  { label: 'Ajuda', href: '/help/tracking-vendepay', icon: CircleHelp },
   { label: 'Admin', href: '/admin', icon: ShieldCheck, adminOnly: true },
   { label: 'Configurações', href: '/settings', icon: Settings, adminOnly: true },
   { label: 'Conta', href: '#', icon: User, disabled: true },

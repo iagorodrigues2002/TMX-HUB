@@ -25,6 +25,8 @@ CREATE TABLE IF NOT EXISTS tracking_events (
   event_url text NOT NULL,
   referrer text,
   source jsonb NOT NULL DEFAULT '{}'::jsonb,
+  client_ip text,
+  user_agent text,
   client_at timestamptz,
   received_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (project_id, id)
@@ -57,6 +59,7 @@ CREATE TABLE IF NOT EXISTS tracking_orders (
   buyer jsonb NOT NULL DEFAULT '{}'::jsonb,
   raw_status text,
   occurred_at timestamptz NOT NULL,
+  paid_at timestamptz,
   updated_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE(project_id, provider, external_id)
 );
