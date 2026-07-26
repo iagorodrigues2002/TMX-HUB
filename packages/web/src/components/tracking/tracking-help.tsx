@@ -29,7 +29,15 @@ const steps = [
   { id: 'diagnostico', label: 'Diagnóstico', icon: AlertTriangle },
 ];
 
-function CopyBlock({ children, label }: { children: string; label: string }) {
+function CopyBlock({
+  children,
+  label,
+  copyable = true,
+}: {
+  children: string;
+  label: string;
+  copyable?: boolean;
+}) {
   const [copied, setCopied] = useState(false);
 
   async function copy() {
@@ -44,14 +52,20 @@ function CopyBlock({ children, label }: { children: string; label: string }) {
         <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/35">
           {label}
         </span>
-        <button
-          type="button"
-          onClick={copy}
-          className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-cyan-200/70 transition hover:text-cyan-200"
-        >
-          {copied ? <Check className="h-3.5 w-3.5" /> : <Clipboard className="h-3.5 w-3.5" />}
-          {copied ? 'Copiado' : 'Copiar'}
-        </button>
+        {copyable ? (
+          <button
+            type="button"
+            onClick={copy}
+            className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-cyan-200/70 transition hover:text-cyan-200"
+          >
+            {copied ? <Check className="h-3.5 w-3.5" /> : <Clipboard className="h-3.5 w-3.5" />}
+            {copied ? 'Copiado' : 'Copiar'}
+          </button>
+        ) : (
+          <span className="text-[10px] uppercase tracking-[0.14em] text-amber-200/65">
+            apenas exemplo
+          </span>
+        )}
       </div>
       <pre className="overflow-x-auto p-4 font-mono text-xs leading-6 text-cyan-100/75">
         <code>{children}</code>
@@ -252,7 +266,7 @@ export function TrackingHelp() {
           subtitle="Cole o código antes do fechamento de </head> em todas as páginas que antecedem o checkout."
           icon={<Code2 className="h-5 w-5" />}
         >
-          <CopyBlock label="Exemplo — use o código gerado na oferta">
+          <CopyBlock label="Exemplo — use o código gerado na oferta" copyable={false}>
             {'<script async src="https://SUA-API/v1/track/t.js?key=SUA_CHAVE"></script>'}
           </CopyBlock>
           <div className="mt-5 grid gap-3 md:grid-cols-2">
@@ -295,7 +309,7 @@ export function TrackingHelp() {
             </li>
           </ol>
           <div className="mt-5">
-            <CopyBlock label="Formato — copie a URL real da oferta">
+            <CopyBlock label="Formato ilustrativo — não use esta URL" copyable={false}>
               {'https://SUA-API/v1/webhooks/vendepay?token=SEU_TOKEN_SECRETO'}
             </CopyBlock>
           </div>
