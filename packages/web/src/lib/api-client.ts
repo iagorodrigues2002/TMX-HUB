@@ -1295,7 +1295,7 @@ export const apiClient = {
       id: string;
       visitor_id: string;
       session_id?: string;
-      event_name: 'PageView' | 'ViewContent' | 'InitiateCheckout';
+      event_name: string;
       event_url: string;
       referrer?: string;
       source: Record<string, string>;
@@ -1364,6 +1364,53 @@ export const apiClient = {
     input: { name: string; pixel_id: string; access_token: string; test_event_code?: string },
   ): Promise<void> {
     await request(`/v1/offers/${id}/tracking/meta-pixels`, { method: 'POST', body: input });
+  },
+
+  async getTrackingUtmifyDestination(id: string): Promise<{
+    configured: boolean;
+    destination?: {
+      id: string;
+      name: string;
+      endpoint_url: string;
+      enabled: boolean;
+      updated_at: string;
+    } | null;
+  }> {
+    return request(`/v1/offers/${id}/tracking/utmify-destination`);
+  },
+
+  async saveTrackingUtmifyDestination(
+    id: string,
+    input: { name: string; api_token: string; endpoint_url?: string },
+  ): Promise<void> {
+    await request(`/v1/offers/${id}/tracking/utmify-destination`, {
+      method: 'PUT',
+      body: input,
+    });
+  },
+
+  async listTrackingUtmifyDeliveries(id: string): Promise<{
+    deliveries: Array<{
+      id: string;
+      event_id: string;
+      event_type: string;
+      state: 'pending' | 'processing' | 'delivered' | 'failed' | 'dead';
+      attempts: number;
+      response_status?: number;
+      last_error?: string;
+      created_at: string;
+      delivered_at?: string;
+      transaction_id: string;
+      order_status: string;
+    }>;
+  }> {
+    return request(`/v1/offers/${id}/tracking/utmify-deliveries`);
+  },
+
+  async retryTrackingUtmifyDelivery(id: string, deliveryId: string): Promise<void> {
+    await request(`/v1/offers/${id}/tracking/utmify-deliveries/${deliveryId}/retry`, {
+      method: 'POST',
+    });
   },
 
   async getOfferAiConfig(id: string): Promise<{

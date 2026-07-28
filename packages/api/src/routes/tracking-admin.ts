@@ -69,6 +69,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           deliveries: string | null;
           domains: string | null;
           ab_tests: string | null;
+          outbox: string | null;
         }>
       >`
         SELECT
@@ -78,7 +79,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           to_regclass('public.meta_pixels')::text AS pixels,
           to_regclass('public.meta_deliveries')::text AS deliveries,
           to_regclass('public.tracking_domains')::text AS domains,
-          to_regclass('public.tracking_ab_tests')::text AS ab_tests
+          to_regclass('public.tracking_ab_tests')::text AS ab_tests,
+          to_regclass('public.tracking_delivery_outbox')::text AS outbox
       `,
       app.db<
         Array<{
@@ -111,14 +113,15 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         tables.pixels &&
         tables.deliveries &&
         tables.domains &&
-        tables.ab_tests,
+        tables.ab_tests &&
+        tables.outbox,
     );
     return {
       managed: true,
       database: 'ready',
       migrations: schemaReady ? 'ready' : 'updating',
       encryption: env.TRACKING_ENCRYPTION_KEY ? 'ready' : 'unavailable',
-      schema_version: schemaReady ? 3 : null,
+      schema_version: schemaReady ? 4 : null,
       last_event_at: activity[0]?.last_event_at ?? null,
       last_order_at: activity[0]?.last_order_at ?? null,
       meta: {

@@ -34,6 +34,7 @@ type Section =
   | 'code'
   | 'gateways'
   | 'meta'
+  | 'utmify'
   | 'help';
 
 const sections: Array<{ id: Section; label: string; icon: LucideIcon; group: string }> = [
@@ -46,6 +47,7 @@ const sections: Array<{ id: Section; label: string; icon: LucideIcon; group: str
   { id: 'code', label: 'Código', icon: Braces, group: 'Configuração' },
   { id: 'gateways', label: 'Gateways', icon: Cable, group: 'Configuração' },
   { id: 'meta', label: 'Envio ao Meta', icon: Send, group: 'Configuração' },
+  { id: 'utmify', label: 'Envio à UTMify', icon: Cable, group: 'Configuração' },
   { id: 'help', label: 'Ajuda e testes', icon: HelpCircle, group: 'Configuração' },
 ];
 
@@ -62,6 +64,10 @@ export function TrackingAdvancedCenter({
   const [armA, setArmA] = useState('A');
   const [armB, setArmB] = useState('B');
   const [vendepayWebhook, setVendepayWebhook] = useState('');
+  const [utmifyToken, setUtmifyToken] = useState('');
+  const [utmifyEndpoint, setUtmifyEndpoint] = useState(
+    'https://api.utmify.com.br/api-credentials/orders',
+  );
   const qc = useQueryClient();
   const advanced = useQuery({
     queryKey: ['tracking-advanced', offerId],
@@ -112,6 +118,39 @@ export function TrackingAdvancedCenter({
     queryKey: ['tracking-config', offerId],
     queryFn: () => apiClient.getTrackingConfig(offerId),
     retry: false,
+  });
+  const utmify = useQuery({
+    queryKey: ['tracking-utmify-destination', offerId],
+    queryFn: () => apiClient.getTrackingUtmifyDestination(offerId),
+    retry: false,
+  });
+  const utmifyDeliveries = useQuery({
+    queryKey: ['tracking-utmify-deliveries', offerId],
+    queryFn: () => apiClient.listTrackingUtmifyDeliveries(offerId),
+    refetchInterval: 30_000,
+    retry: false,
+  });
+  const saveUtmify = useMutation({
+    mutationFn: () =>
+      apiClient.saveTrackingUtmifyDestination(offerId, {
+        name: 'UTMify',
+        api_token: utmifyToken,
+        endpoint_url: utmifyEndpoint,
+      }),
+    onSuccess: () => {
+      setUtmifyToken('');
+      void qc.invalidateQueries({ queryKey: ['tracking-utmify-destination', offerId] });
+      toast.success('Destino UTMify configurado.');
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
+  const retryUtmify = useMutation({
+    mutationFn: (deliveryId: string) => apiClient.retryTrackingUtmifyDelivery(offerId, deliveryId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['tracking-utmify-deliveries', offerId] });
+      toast.success('Reenvio colocado na fila.');
+    },
+    onError: (error) => toast.error((error as Error).message),
   });
   const rotateVendepay = useMutation({
     mutationFn: () => apiClient.rotateVendepayWebhook(offerId),
@@ -277,6 +316,98 @@ export function TrackingAdvancedCenter({
                 Salvar regras
               </Button>
             )}
+          </Module>
+        )}
+        {section === 'utmify' && (
+          <Module
+            title="Envio à UTMify"
+            description="Replica cada mudança do pedido na API de vendas da UTMify, preservando UTMs e mantendo uma fila auditável."
+          >
+            <div className="mb-5 flex items-center justify-between rounded border border-white/[0.07] p-4">
+              <div>
+                <p className="text-sm text-white/75">Destino de vendas</p>
+                <p className="mt-1 text-xs text-white/40">
+                  {utmify.data?.configured
+                    ? `Ativo · ${utmify.data.destination?.endpoint_url}`
+                    : 'Ainda não configurado'}
+                </p>
+              </div>
+              <span
+                className={
+                  utmify.data?.destination?.enabled ? 'text-emerald-300' : 'text-amber-300'
+                }
+              >
+                {utmify.data?.destination?.enabled ? 'operacional' : 'aguardando token'}
+              </span>
+            </div>
+            {canManage && (
+              <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                <Input
+                  value={utmifyToken}
+                  onChange={(event) => setUtmifyToken(event.target.value)}
+                  type="password"
+                  autoComplete="off"
+                  placeholder="Token de API da UTMify"
+                />
+                <Button
+                  disabled={utmifyToken.trim().length < 16 || saveUtmify.isPending}
+                  onClick={() => saveUtmify.mutate()}
+                >
+                  {utmify.data?.configured ? 'Atualizar conexão' : 'Conectar UTMify'}
+                </Button>
+                <Input
+                  className="md:col-span-2"
+                  value={utmifyEndpoint}
+                  onChange={(event) => setUtmifyEndpoint(event.target.value)}
+                  placeholder="Endpoint da API de vendas"
+                />
+              </div>
+            )}
+            <div className="mt-6">
+              <p className="hud-label">Últimas entregas</p>
+              <div className="mt-3 space-y-2">
+                {(utmifyDeliveries.data?.deliveries ?? []).slice(0, 20).map((delivery) => (
+                  <div
+                    key={delivery.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded border border-white/[0.07] p-3 text-xs"
+                  >
+                    <div>
+                      <p className="font-mono text-white/70">{delivery.transaction_id}</p>
+                      <p className="mt-1 text-white/35">
+                        {delivery.event_type} · {delivery.attempts} tentativa(s)
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={
+                          delivery.state === 'delivered'
+                            ? 'text-emerald-300'
+                            : delivery.state === 'failed' || delivery.state === 'dead'
+                              ? 'text-red-300'
+                              : 'text-amber-300'
+                        }
+                      >
+                        {delivery.state}
+                      </span>
+                      {canManage && (delivery.state === 'failed' || delivery.state === 'dead') && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => retryUtmify.mutate(delivery.id)}
+                        >
+                          Reenviar
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {!utmifyDeliveries.data?.deliveries?.length && (
+                  <p className="rounded border border-dashed border-white/[0.08] p-4 text-sm text-white/35">
+                    As entregas aparecerão aqui quando o primeiro pedido for recebido.
+                  </p>
+                )}
+              </div>
+            </div>
           </Module>
         )}
         {section === 'ab' && (
