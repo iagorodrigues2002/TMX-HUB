@@ -95,7 +95,15 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
           body: JSON.stringify(payload),
           signal: AbortSignal.timeout(15_000),
         });
-        const result = (await response.json().catch(() => ({}))) as object;
+        const responseText = await response.text();
+        const result = (() => {
+          if (!responseText) return {};
+          try {
+            return JSON.parse(responseText) as object;
+          } catch {
+            return { message: responseText.slice(0, 800) };
+          }
+        })();
         if (!response.ok) {
           const detail = JSON.stringify(result).slice(0, 800);
           throw new Error(`UTMify HTTP ${response.status}${detail !== '{}' ? `: ${detail}` : ''}`);
