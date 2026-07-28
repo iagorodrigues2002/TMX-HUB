@@ -18,6 +18,7 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
   const [pixelId, setPixelId] = useState('');
   const [pixelToken, setPixelToken] = useState('');
   const [testEventCode, setTestEventCode] = useState('');
+  const [pixelTestCodes, setPixelTestCodes] = useState<Record<string, string>>({});
   const config = useQuery({
     queryKey: ['tracking-config', offerId],
     queryFn: () => apiClient.getTrackingConfig(offerId),
@@ -88,6 +89,16 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
       toast.success(
         `${result.event_name} aceito pela Meta (${result.events_received} evento recebido).`,
       ),
+    onError: (error) => toast.error((error as Error).message),
+  });
+  const updateTestEventCode = useMutation({
+    mutationFn: ({ pixelId, code }: { pixelId: string; code: string }) =>
+      apiClient.updateMetaTestEventCode(offerId, pixelId, code),
+    onSuccess: (_, variables) => {
+      setPixelTestCodes((current) => ({ ...current, [variables.pixelId]: '' }));
+      void queryClient.invalidateQueries({ queryKey: ['tracking-meta-pixels', offerId] });
+      toast.success('Test Event Code salvo. Os botões de teste estão liberados.');
+    },
     onError: (error) => toast.error((error as Error).message),
   });
   const copy = async (value: string) => {
@@ -226,7 +237,41 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
                     <code className="text-cyan-200/70">{pixel.pixel_id}</code>
                   </div>
                   {canManage && (
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <div className="mt-3 space-y-2">
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <Input
+                          className="h-9 flex-1"
+                          value={pixelTestCodes[pixel.id] ?? ''}
+                          onChange={(event) =>
+                            setPixelTestCodes((current) => ({
+                              ...current,
+                              [pixel.id]: event.target.value,
+                            }))
+                          }
+                          placeholder={
+                            pixel.test_event_code
+                              ? `Código atual: ${pixel.test_event_code}`
+                              : 'Cole o Test Event Code da Meta'
+                          }
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={
+                            !(pixelTestCodes[pixel.id] ?? '').trim() ||
+                            updateTestEventCode.isPending
+                          }
+                          onClick={() =>
+                            updateTestEventCode.mutate({
+                              pixelId: pixel.id,
+                              code: (pixelTestCodes[pixel.id] ?? '').trim(),
+                            })
+                          }
+                        >
+                          {updateTestEventCode.isPending ? 'Salvando…' : 'Salvar código'}
+                        </Button>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
                       <Button
                         size="sm"
                         variant="outline"
@@ -265,9 +310,10 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
                       </Button>
                       {!pixel.test_event_code && (
                         <span className="text-amber-200/65">
-                          Adicione um Test Event Code para habilitar os testes.
+                          Cole e salve o código acima para habilitar os testes.
                         </span>
                       )}
+                      </div>
                     </div>
                   )}
                 </div>
