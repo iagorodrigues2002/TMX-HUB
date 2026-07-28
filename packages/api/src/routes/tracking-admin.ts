@@ -577,6 +577,75 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   );
 
   app.get<{ Params: { id: string }; Querystring: { date?: string } }>(
+    '/offers/:id/tracking/countries',
+    async (req, reply) => {
+      await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
+      if (!app.db) return reply.code(503).send(databaseUnavailable);
+      const { date, from, to } = parseTrackingDate(req.query);
+      const rows = await app.db`
+        WITH event_counts AS (
+          SELECT
+            CASE
+              WHEN upper(e.source->>'country') ~ '^[A-Z]{2}$' THEN upper(e.source->>'country')
+              ELSE 'ZZ'
+            END AS country,
+            count(*) FILTER (WHERE e.event_name = 'PageView')::int AS page_views,
+            count(*) FILTER (WHERE e.event_name = 'InitiateCheckout')::int AS checkouts
+          FROM tracking_events e
+          JOIN tracking_projects p ON p.id = e.project_id
+          WHERE p.offer_id = ${req.params.id}
+            AND e.received_at >= ${from} AND e.received_at < ${to}
+            AND e.event_name IN ('PageView', 'InitiateCheckout')
+          GROUP BY 1
+        ),
+        order_counts AS (
+          SELECT
+            CASE
+              WHEN upper(COALESCE(
+                NULLIF(o.buyer->>'country', ''),
+                NULLIF(o.attribution_source->>'country', ''),
+                latest_event.source->>'country'
+              )) ~ '^[A-Z]{2}$'
+                THEN upper(COALESCE(
+                  NULLIF(o.buyer->>'country', ''),
+                  NULLIF(o.attribution_source->>'country', ''),
+                  latest_event.source->>'country'
+                ))
+              ELSE 'ZZ'
+            END AS country,
+            count(*)::int AS orders,
+            count(*) FILTER (WHERE o.status = 'paid')::int AS paid_orders,
+            COALESCE(sum(o.amount_minor) FILTER (WHERE o.status = 'paid'), 0)::text
+              AS paid_revenue_minor
+          FROM tracking_orders o
+          JOIN tracking_projects p ON p.id = o.project_id
+          LEFT JOIN LATERAL (
+            SELECT e.source
+            FROM tracking_events e
+            WHERE e.project_id = o.project_id AND e.visitor_id = o.visitor_id
+            ORDER BY e.received_at DESC
+            LIMIT 1
+          ) latest_event ON true
+          WHERE p.offer_id = ${req.params.id}
+            AND o.occurred_at >= ${from} AND o.occurred_at < ${to}
+          GROUP BY 1
+        )
+        SELECT
+          COALESCE(e.country, o.country) AS country,
+          COALESCE(e.page_views, 0)::int AS page_views,
+          COALESCE(e.checkouts, 0)::int AS checkouts,
+          COALESCE(o.orders, 0)::int AS orders,
+          COALESCE(o.paid_orders, 0)::int AS paid_orders,
+          COALESCE(o.paid_revenue_minor, '0') AS paid_revenue_minor
+        FROM event_counts e
+        FULL OUTER JOIN order_counts o ON o.country = e.country
+        ORDER BY page_views DESC, checkouts DESC, paid_orders DESC
+      `;
+      return { date, time_zone: 'America/Sao_Paulo', rows };
+    },
+  );
+
+  app.get<{ Params: { id: string }; Querystring: { date?: string } }>(
     '/offers/:id/tracking/attribution',
     async (req, reply) => {
       await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');

@@ -7,7 +7,13 @@ export interface UtmifyOrderInput {
   currency: string;
   createdAt: Date;
   paidAt?: Date | null;
-  buyer: { name?: string; email?: string; phone?: string; document?: string };
+  buyer: {
+    name?: string;
+    email?: string;
+    phone?: string;
+    document?: string;
+    country?: string;
+  };
   source?: Record<string, string>;
   clientIp?: string | null;
 }
@@ -23,6 +29,8 @@ const statusMap: Record<string, string> = {
 
 export function buildUtmifyOrderPayload(input: UtmifyOrderInput) {
   const source = input.source ?? {};
+  const countryCandidate = input.buyer.country ?? source.country ?? 'BR';
+  const country = /^[A-Za-z]{2}$/.test(countryCandidate) ? countryCandidate.toUpperCase() : 'BR';
   return {
     isTest: input.isTest ?? false,
     orderId: input.orderId,
@@ -39,7 +47,7 @@ export function buildUtmifyOrderPayload(input: UtmifyOrderInput) {
       email: input.buyer.email ?? '',
       phone: input.buyer.phone ?? '',
       document: input.buyer.document ?? null,
-      country: source.country ?? 'BR',
+      country,
       ip: input.clientIp ?? null,
     },
     products: [

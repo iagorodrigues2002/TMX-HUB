@@ -42,7 +42,7 @@ export interface NormalizedVendepayEvent {
   trackingSrc?: string;
   amountMinor?: number;
   currency?: string;
-  buyer: { name?: string; email?: string; phone?: string };
+  buyer: { name?: string; email?: string; phone?: string; country?: string };
   paymentMethod?: string;
   product: { id?: string; name?: string; planId?: string; planName?: string };
   source: Record<string, string>;
@@ -112,6 +112,15 @@ const isoDate = (raw: unknown, fallback: Date): string => {
   return fallback.toISOString();
 };
 
+const countryCode = (raw: string | undefined): string | undefined => {
+  if (!raw) return undefined;
+  const normalized = raw.trim().normalize('NFD').replace(/\p{M}/gu, '').toUpperCase();
+  if (/^[A-Z]{2}$/.test(normalized)) return normalized;
+  if (['BRASIL', 'BRAZIL'].includes(normalized)) return 'BR';
+  if (['ESTADOS UNIDOS', 'UNITED STATES', 'USA'].includes(normalized)) return 'US';
+  return undefined;
+};
+
 export function normalizeVendepay(raw: unknown, receivedAt = new Date()): VendepayNormalizeResult {
   const parsed = VendepayWebhookSchema.safeParse(raw);
   if (!parsed.success) {
@@ -157,6 +166,21 @@ export function normalizeVendepay(raw: unknown, receivedAt = new Date()): Vendep
     'data.customer.email',
   ])?.toLowerCase();
   const phone = textAt(payload, ['buyer.phone', 'customer.phone', 'data.customer.phone']);
+  const country = countryCode(
+    textAt(payload, [
+      'buyer.country',
+      'buyer.address.country',
+      'customer.country',
+      'customer.country_code',
+      'customer.address.country',
+      'customer.address.country_code',
+      'data.customer.country',
+      'data.customer.country_code',
+      'data.customer.address.country',
+      'billing_address.country',
+      'address.country',
+    ]),
+  );
   const status = normalizeStatus(rawStatus);
   const occurredAt = isoDate(
     get(payload, 'paid_at') ??
@@ -250,6 +274,7 @@ export function normalizeVendepay(raw: unknown, receivedAt = new Date()): Vendep
         ...(buyerName ? { name: buyerName } : {}),
         ...(email ? { email } : {}),
         ...(phone ? { phone } : {}),
+        ...(country ? { country } : {}),
       },
       ...(paymentMethod ? { paymentMethod } : {}),
       product: {

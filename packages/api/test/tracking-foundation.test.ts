@@ -49,7 +49,12 @@ describe('reliable tracking foundation', () => {
       currency: 'BRL',
       createdAt: new Date('2026-07-27T10:00:00.000Z'),
       paidAt: new Date('2026-07-27T10:01:00.000Z'),
-      buyer: { name: 'Maria', email: 'maria@example.com', phone: '5511999999999' },
+      buyer: {
+        name: 'Maria',
+        email: 'maria@example.com',
+        phone: '5511999999999',
+        country: 'us',
+      },
       source: {
         utm_source: 'facebook',
         utm_campaign: 'campanha-a',
@@ -58,6 +63,7 @@ describe('reliable tracking foundation', () => {
     });
     expect(payload.status).toBe('paid');
     expect(payload.commission.totalPriceInCents).toBe(19700);
+    expect(payload.customer.country).toBe('US');
     expect(payload.trackingParameters).toMatchObject({
       utm_source: 'facebook',
       utm_campaign: 'campanha-a',
@@ -86,6 +92,7 @@ describe('reliable tracking foundation', () => {
     expect(payload.isTest).toBe(true);
     expect(payload.status).toBe('waiting_payment');
     expect(payload.approvedDate).toBeNull();
+    expect(payload.customer.country).toBe('BR');
     expect(payload.trackingParameters.utm_content).toBe('initiate_checkout');
   });
 });

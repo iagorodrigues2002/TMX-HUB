@@ -15,7 +15,11 @@ describe('normalizeVendepay', () => {
         product: { id: 'prod-1', name: 'Produto principal' },
         offer: { id: 'offer-1', name: 'Plano anual' },
         metadata: { utm_source: 'facebook', utm_campaign: 'campanha-1' },
-        customer: { name: 'Buyer', email: ' BUYER@EXAMPLE.COM ' },
+        customer: {
+          name: 'Buyer',
+          email: ' BUYER@EXAMPLE.COM ',
+          address: { country: 'Brazil' },
+        },
         paid_at: '2026-07-26T12:00:00.000Z',
       },
       new Date('2026-07-26T13:00:00.000Z'),
@@ -28,7 +32,7 @@ describe('normalizeVendepay', () => {
       amountMinor: 9990,
       currency: 'USD',
       trackingSrc: 'visitor-abc',
-      buyer: { name: 'Buyer', email: 'buyer@example.com' },
+      buyer: { name: 'Buyer', email: 'buyer@example.com', country: 'BR' },
       paymentMethod: 'pix',
       product: {
         id: 'prod-1',

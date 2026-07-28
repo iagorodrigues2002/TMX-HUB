@@ -1518,6 +1518,25 @@ export const apiClient = {
     return request(`/v1/offers/${id}/tracking/attribution${query}`);
   },
 
+  async getTrackingCountries(
+    id: string,
+    date?: string,
+  ): Promise<{
+    date: string;
+    time_zone: string;
+    rows: Array<{
+      country: string;
+      page_views: number;
+      checkouts: number;
+      orders: number;
+      paid_orders: number;
+      paid_revenue_minor: string;
+    }>;
+  }> {
+    const query = date ? `?date=${encodeURIComponent(date)}` : '';
+    return request(`/v1/offers/${id}/tracking/countries${query}`);
+  },
+
   async listMetaDeliveries(id: string): Promise<{
     deliveries: Array<{
       id: string;
