@@ -82,7 +82,7 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
           paidAt: row.paid_at,
           buyer: row.buyer,
           source: row.source,
-          clientIp: row.client_ip,
+          clientIp: row.client_ip ?? (row.provider === 'tmx-test' ? '203.0.113.1' : null),
         });
         const token = decryptSecret(row.api_token_encrypted, env.TRACKING_ENCRYPTION_KEY!);
         const response = await fetch(row.endpoint_url, {
