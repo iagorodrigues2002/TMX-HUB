@@ -1250,6 +1250,10 @@ export const apiClient = {
     domains: Array<{
       id: string;
       hostname: string;
+      kind: 'source' | 'tracking';
+      dns_target?: string;
+      dns_records?: Array<{ hostlabel: string; requiredValue: string }>;
+      dns_verified_at?: string;
       enabled: boolean;
       status: string;
       last_error?: string;
@@ -1268,6 +1272,7 @@ export const apiClient = {
       kind: 'checkout' | 'presell';
       status: string;
       traffic_a: number;
+      redirect_url: string;
       winner_variant_id?: string;
       winner_locked_at?: string;
       deleted_at?: string;
@@ -1280,12 +1285,20 @@ export const apiClient = {
       }>;
     }>;
     vturb: { enabled: boolean; endpoint_url?: string };
+    domain_setup: { record_type: 'CNAME'; target: string; note: string };
   }> {
     return request(`/v1/offers/${id}/tracking/advanced`);
   },
 
-  async addTrackingDomain(id: string, hostname: string): Promise<void> {
-    await request(`/v1/offers/${id}/tracking/domains`, { method: 'POST', body: { hostname } });
+  async addTrackingDomain(
+    id: string,
+    hostname: string,
+    kind: 'source' | 'tracking' = 'source',
+  ): Promise<void> {
+    await request(`/v1/offers/${id}/tracking/domains`, {
+      method: 'POST',
+      body: { hostname, kind },
+    });
   },
 
   async verifyTrackingDomain(

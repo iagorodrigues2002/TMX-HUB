@@ -79,6 +79,7 @@ export function TrackingAdvancedCenter({
 }: { offerId: string; canManage: boolean }) {
   const [section, setSection] = useState<Section>('tracker');
   const [domain, setDomain] = useState('');
+  const [domainKind, setDomainKind] = useState<'source' | 'tracking'>('source');
   const [minimum, setMinimum] = useState('0');
   const [attributedOnly, setAttributedOnly] = useState(true);
   const [testName, setTestName] = useState('');
@@ -102,7 +103,7 @@ export function TrackingAdvancedCenter({
   });
   const refresh = () => qc.invalidateQueries({ queryKey: ['tracking-advanced', offerId] });
   const addDomain = useMutation({
-    mutationFn: () => apiClient.addTrackingDomain(offerId, domain),
+    mutationFn: () => apiClient.addTrackingDomain(offerId, domain, domainKind),
     onSuccess: () => {
       setDomain('');
       void refresh();
@@ -277,11 +278,22 @@ export function TrackingAdvancedCenter({
             description="Cadastre os domínios que recebem o código. Subdomínios passam a ser identificados pelos eventos."
           >
             {canManage && (
-              <div className="flex gap-2">
+              <div className="grid gap-2 md:grid-cols-[190px_minmax(0,1fr)_auto]">
+                <select
+                  aria-label="Tipo de domínio"
+                  value={domainKind}
+                  onChange={(event) => setDomainKind(event.target.value as typeof domainKind)}
+                  className="h-11 rounded-lg border border-cyan-100/[0.14] bg-[#091a24] px-3 text-sm text-white"
+                >
+                  <option value="source">Domínio do funil</option>
+                  <option value="tracking">Tracking first-party</option>
+                </select>
                 <Input
                   value={domain}
                   onChange={(e) => setDomain(e.target.value)}
-                  placeholder="checkout.suaoferta.com"
+                  placeholder={
+                    domainKind === 'tracking' ? 'track.suaempresa.com' : 'checkout.suaoferta.com'
+                  }
                 />
                 <Button
                   disabled={!domain.trim() || addDomain.isPending}
@@ -289,6 +301,16 @@ export function TrackingAdvancedCenter({
                 >
                   Adicionar
                 </Button>
+              </div>
+            )}
+            {domainKind === 'tracking' && (
+              <div className="mt-3 rounded-xl border border-cyan-300/15 bg-cyan-300/[0.04] p-4 text-xs leading-5 text-white/65">
+                Use um subdomínio dedicado. Depois de adicionar, crie um registro{' '}
+                <strong className="text-white">CNAME</strong> apontando para{' '}
+                <code className="break-all text-cyan-200">
+                  {advanced.data?.domain_setup?.target ?? 'o alvo exibido pelo TMX'}
+                </code>
+                . Não altere o DNS da sua landing page ou checkout.
               </div>
             )}
             <div className="mt-4 space-y-2">
@@ -304,12 +326,31 @@ export function TrackingAdvancedCenter({
                         ? 'O TMX recebeu eventos deste domínio.'
                         : item.last_error || 'Instale o script e abra a página para confirmar.'}
                     </p>
+                    {item.kind === 'tracking' && item.dns_target && (
+                      <div className="mt-2 space-y-1 font-mono text-[11px] text-cyan-100/60">
+                        {(item.dns_records?.length
+                          ? item.dns_records
+                          : [{ hostlabel: item.hostname, requiredValue: item.dns_target }]
+                        ).map((record) => (
+                          <p key={`${record.hostlabel}-${record.requiredValue}`}>
+                            {record.requiredValue.includes('verify') ? 'TXT' : 'CNAME'}{' '}
+                            {record.hostlabel} → {record.requiredValue}
+                          </p>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <span
                       className={item.status === 'live' ? 'text-emerald-300' : 'text-amber-300'}
                     >
-                      {item.status === 'live' ? 'ao vivo' : 'aguardando evento'}
+                      {item.status === 'live'
+                        ? 'ao vivo'
+                        : item.status === 'dns_verified'
+                          ? 'DNS confirmado'
+                          : item.kind === 'tracking'
+                            ? 'aguardando DNS'
+                            : 'aguardando evento'}
                     </span>
                     {canManage && (
                       <>
@@ -732,6 +773,7 @@ function AbTestCard({
     kind: 'checkout' | 'presell';
     status: string;
     traffic_a: number;
+    redirect_url: string;
     winner_variant_id?: string;
     variants: Array<{
       id: string;
@@ -843,6 +885,39 @@ function AbTestCard({
             </div>
           );
         })}
+      </div>
+      <div className="mt-4 rounded-xl border border-cyan-300/15 bg-cyan-300/[0.04] p-4">
+        <p className="text-xs font-semibold uppercase tracking-wider text-cyan-200">
+          Link do TMX para o botão de checkout
+        </p>
+        <code className="mt-2 block overflow-x-auto whitespace-nowrap text-xs text-white/70">
+          {test.redirect_url}
+        </code>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            onClick={async () => {
+              await navigator.clipboard.writeText(test.redirect_url);
+              toast.success('Link do teste A/B copiado.');
+            }}
+          >
+            Copiar link
+          </Button>
+          <Button asChild size="sm" variant="outline">
+            <a
+              href={`${test.redirect_url}?tmx_preview=1`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Testar sem contabilizar
+            </a>
+          </Button>
+        </div>
+        <p className="mt-3 text-xs leading-5 text-white/50">
+          Cole esse endereço no CTA. O TMX mantém a variante do visitante, registra o checkout,
+          preserva UTMs, adiciona o <code className="text-cyan-200">src</code> e redireciona para a
+          Vendepay.
+        </p>
       </div>
       {canManage && !test.winner_variant_id && (
         <Button

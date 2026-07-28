@@ -1,6 +1,9 @@
+import { resolveCname, resolveTxt } from 'node:dns/promises';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { ulid } from 'ulid';
 import { z } from 'zod';
+import { env } from '../env.js';
+import { type RailwayDnsRecord, provisionRailwayDomain } from '../integrations/railway/domains.js';
 import { zodToProblem } from '../lib/problem.js';
 
 const databaseUnavailable = {
@@ -15,6 +18,7 @@ const DomainSchema = z.object({
     .toLowerCase()
     .transform((value) => value.replace(/^https?:\/\//, '').split('/')[0] ?? '')
     .pipe(z.string().min(3).max(253)),
+  kind: z.enum(['source', 'tracking']).default('source'),
 });
 const MetaRulesSchema = z.object({
   attributed_only: z.boolean(),
@@ -51,6 +55,9 @@ function parsed<T>(schema: z.ZodSchema<T>, value: unknown): T {
 }
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
+  const cnameTarget = new URL(env.PUBLIC_BASE_URL).hostname;
+  const redirectUrl = (testId: string) =>
+    `${env.PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/r/${testId}`;
   async function project(offerId: string, userId: string, admin: boolean, manage = false) {
     if (manage) await app.offerStore.assertManager(offerId, userId, admin);
     else await app.offerStore.assertAccess(offerId, userId, admin);
@@ -66,7 +73,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!app.db) return reply.code(503).send(databaseUnavailable);
     if (!p) return { configured: false };
     const [domains, gateways, rules, tests, vturb] = await Promise.all([
-      app.db`SELECT id, hostname, enabled, status, last_error, last_checked_at, created_at
+      app.db`SELECT id, hostname, kind, dns_target, dns_records, dns_verified_at, enabled, status,
+                    last_error, last_checked_at, created_at
              FROM tracking_domains WHERE project_id=${p.id} ORDER BY created_at DESC`,
       app.db`SELECT id, provider, propagation_param, enabled, created_at
              FROM tracking_gateway_connections WHERE project_id=${p.id} ORDER BY provider`,
@@ -98,7 +106,15 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         },
       ],
       meta_rules: rules[0] ?? { attributed_only: true, minimum_amount_minor: 0 },
-      ab_tests: tests,
+      ab_tests: tests.map((test) => ({
+        ...test,
+        redirect_url: redirectUrl(String(test.id)),
+      })),
+      domain_setup: {
+        record_type: 'CNAME',
+        target: cnameTarget,
+        note: 'Use um subdomínio dedicado, como track.suaempresa.com.',
+      },
       vturb: vturb[0] ?? { enabled: false, endpoint_url: null },
     };
   });
@@ -108,11 +124,28 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!app.db) return reply.code(503).send(databaseUnavailable);
     if (!p) return reply.code(409).send({ error: 'tracking_not_configured' });
     const body = parsed(DomainSchema, req.body);
+    const kind = body.kind ?? 'source';
+    const provision = kind === 'tracking' ? await provisionRailwayDomain(body.hostname) : null;
+    if (kind === 'tracking' && !provision) {
+      return reply.code(503).send({
+        error: 'custom_domain_provisioning_unavailable',
+        detail:
+          'Configure RAILWAY_PROJECT_TOKEN no serviço da API para ativar domínios first-party com SSL automático.',
+      });
+    }
+    const records = provision?.dnsRecords ?? [];
+    const target =
+      records.find((record) => !record.requiredValue.includes('verify'))?.requiredValue ??
+      (kind === 'tracking' ? cnameTarget : null);
     const [row] = await app.db`
-      INSERT INTO tracking_domains (id, project_id, hostname)
-      VALUES (${ulid()}, ${p.id}, ${body.hostname})
-      ON CONFLICT (project_id, hostname) DO UPDATE SET enabled=true
-      RETURNING id, hostname, enabled, status, created_at`;
+      INSERT INTO tracking_domains
+        (id, project_id, hostname, kind, dns_target, provider_domain_id, dns_records)
+      VALUES (${ulid()}, ${p.id}, ${body.hostname}, ${kind},
+        ${target}, ${provision?.id ?? null}, ${app.db.json(records as never)})
+      ON CONFLICT (project_id, hostname) DO UPDATE SET enabled=true, kind=excluded.kind,
+        dns_target=excluded.dns_target, provider_domain_id=excluded.provider_domain_id,
+        dns_records=excluded.dns_records
+      RETURNING id, hostname, kind, dns_target, dns_records, enabled, status, created_at`;
     return reply.code(201).send(row);
   });
 
@@ -122,9 +155,59 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin', true);
       if (!app.db) return reply.code(503).send(databaseUnavailable);
       if (!p) return reply.code(404).send({ error: 'tracking_not_configured' });
-      const [row] = await app.db<Array<{ hostname: string }>>`
-        SELECT hostname FROM tracking_domains WHERE id=${req.params.domainId} AND project_id=${p.id}`;
+      const [row] = await app.db<
+        Array<{
+          hostname: string;
+          kind: 'source' | 'tracking';
+          dns_target: string | null;
+          dns_records: RailwayDnsRecord[];
+        }>
+      >`
+        SELECT hostname, kind, dns_target, dns_records FROM tracking_domains
+        WHERE id=${req.params.domainId} AND project_id=${p.id}`;
       if (!row) return reply.code(404).send({ error: 'domain_not_found' });
+      if (row.kind === 'tracking') {
+        const checks = await Promise.all(
+          row.dns_records.map(async (record) => {
+            const recordName =
+              record.hostlabel === '@' || record.hostlabel === row.hostname
+                ? row.hostname
+                : record.hostlabel.endsWith(row.hostname)
+                  ? record.hostlabel
+                  : `${record.hostlabel}.${row.hostname}`;
+            const expected = record.requiredValue.replace(/\.$/, '').toLowerCase();
+            try {
+              if (expected.includes('verify')) {
+                const values = (await resolveTxt(recordName)).flat();
+                return values.some((value) => value.toLowerCase() === expected);
+              }
+              const aliases = await resolveCname(recordName);
+              return aliases.some((alias) => alias.replace(/\.$/, '').toLowerCase() === expected);
+            } catch {
+              return false;
+            }
+          }),
+        );
+        const dnsReady = checks.length > 0 && checks.every(Boolean);
+        const seen = await app.db<Array<{ ok: boolean }>>`
+          SELECT EXISTS(
+            SELECT 1 FROM tracking_events
+            WHERE project_id=${p.id}
+              AND lower(event_url) LIKE ${`%://${row.hostname}/%`}
+          ) AS ok`;
+        const live = dnsReady && Boolean(seen[0]?.ok);
+        const status = live ? 'live' : dnsReady ? 'dns_verified' : 'pending_dns';
+        const detail = live
+          ? 'DNS confirmado e domínio recebendo eventos.'
+          : dnsReady
+            ? 'DNS confirmado. Instale o script usando este domínio e abra a página uma vez.'
+            : 'Configure todos os registros CNAME e TXT exibidos pelo TMX.';
+        await app.db`UPDATE tracking_domains SET status=${status},
+          dns_verified_at=${dnsReady ? new Date() : null}, last_checked_at=now(),
+          last_error=${live ? null : detail}
+          WHERE id=${req.params.domainId}`;
+        return { status, detail, dns_records: row.dns_records };
+      }
       const seen = await app.db<Array<{ ok: boolean }>>`
         SELECT EXISTS(
           SELECT 1 FROM tracking_events

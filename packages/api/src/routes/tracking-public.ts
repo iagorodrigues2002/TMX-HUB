@@ -45,6 +45,12 @@ const AbAssignmentSchema = z.object({
 });
 
 const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex');
+const cookieValue = (cookie: string | undefined, name: string) =>
+  cookie
+    ?.split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name}=`))
+    ?.slice(name.length + 1);
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get<{ Querystring: { key?: string } }>('/track/t.js', async (req, reply) => {
@@ -179,6 +185,110 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       kind: test.kind,
       variant: selected,
     };
+  });
+
+  app.get<{
+    Params: { testId: string };
+    Querystring: Record<string, string | undefined>;
+  }>('/r/:testId', async (req, reply) => {
+    if (!app.db) return reply.code(503).send({ error: 'tracking_unavailable' });
+    const [test] = await app.db<
+      Array<{
+        id: string;
+        project_id: string;
+        kind: 'checkout' | 'presell';
+        status: string;
+        traffic_a: number;
+        winner_variant_id: string | null;
+      }>
+    >`
+      SELECT id, project_id, kind, status, traffic_a, winner_variant_id
+      FROM tracking_ab_tests
+      WHERE id=${req.params.testId} AND deleted_at IS NULL
+      LIMIT 1
+    `;
+    if (!test || test.status !== 'active')
+      return reply.code(404).send({ error: 'ab_test_inactive' });
+    const variants = await app.db<
+      Array<{
+        id: string;
+        label: string;
+        destination_url: string | null;
+        position: number;
+      }>
+    >`
+      SELECT id, label, destination_url, position
+      FROM tracking_ab_variants
+      WHERE test_id=${test.id}
+      ORDER BY position
+    `;
+    if (variants.length !== 2) return reply.code(409).send({ error: 'ab_variants_not_configured' });
+    if (req.query.tmx_preview === '1') {
+      return {
+        active: true,
+        test_id: test.id,
+        traffic_a: test.traffic_a,
+        winner_variant_id: test.winner_variant_id,
+        variants,
+      };
+    }
+    const linked = req.query.src ? readTrackingToken(req.query.src, env.WEBHOOK_SECRET) : null;
+    const visitorId =
+      linked?.projectId === test.project_id
+        ? linked.visitorId
+        : cookieValue(req.headers.cookie, '_tmx_redirect_v') || ulid();
+    const journeyId = linked?.projectId === test.project_id ? linked.journeyId : ulid();
+    const existing = await app.db<Array<{ variant_id: string }>>`
+      SELECT variant_id FROM tracking_ab_assignments
+      WHERE test_id=${test.id} AND visitor_id=${visitorId}
+    `;
+    const digest = createHash('sha256').update(`${test.id}|${visitorId}`).digest().readUInt32BE(0);
+    const selectedId =
+      test.winner_variant_id ??
+      existing[0]?.variant_id ??
+      (digest % 100 < test.traffic_a ? variants[0]!.id : variants[1]!.id);
+    const selected = variants.find((variant) => variant.id === selectedId) ?? variants[0]!;
+    if (!selected.destination_url) return reply.code(409).send({ error: 'ab_destination_missing' });
+    await app.db`
+      INSERT INTO tracking_ab_assignments(id, test_id, variant_id, visitor_id)
+      VALUES (${ulid()}, ${test.id}, ${selected.id}, ${visitorId})
+      ON CONFLICT(test_id, visitor_id) DO NOTHING
+    `;
+    const destination = new URL(selected.destination_url);
+    for (const [key, value] of Object.entries(req.query)) {
+      if (!value || key === 'tmx_preview' || key === 'src') continue;
+      if (!destination.searchParams.has(key)) destination.searchParams.set(key, value);
+    }
+    const trackingToken = createTrackingToken(
+      { projectId: test.project_id, visitorId, journeyId },
+      env.WEBHOOK_SECRET,
+    );
+    destination.searchParams.set('src', trackingToken);
+    destination.searchParams.set('tmx_ab', selected.label);
+    await app.db`
+      INSERT INTO tracking_events
+        (id, project_id, visitor_id, journey_id, event_name, event_category,
+         event_url, source, properties, received_at)
+      VALUES
+        (${ulid()}, ${test.project_id}, ${visitorId}, ${journeyId}, 'InitiateCheckout',
+         'commerce', ${`${env.PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/r/${test.id}`},
+         ${app.db.json(
+           Object.fromEntries(
+             Object.entries(req.query).filter(([key, value]) => value && key.startsWith('utm_')),
+           ) as never,
+         )},
+         ${app.db.json({
+           ab_test_id: test.id,
+           ab_variant_id: selected.id,
+           ab_variant: selected.label,
+           redirect: true,
+         } as never)}, now())
+    `;
+    reply.header(
+      'set-cookie',
+      `_tmx_redirect_v=${visitorId}; Path=/; Max-Age=31536000; HttpOnly; Secure; SameSite=Lax`,
+    );
+    return reply.redirect(destination.toString(), 302);
   });
 
   app.post('/track/events', { bodyLimit: 64 * 1024 }, async (req, reply) => {
