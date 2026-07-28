@@ -1176,6 +1176,47 @@ export const apiClient = {
     return request(`/v1/offers/${id}/tracking/vendepay/rotate-token`, { method: 'POST' });
   },
 
+  async previewVendepayWebhook(
+    id: string,
+    payload: unknown,
+  ): Promise<{
+    processable: boolean;
+    diagnostics?: string[];
+    normalized?: {
+      transactionId: string;
+      status: string;
+      trackingSrc?: string;
+      amountMinor?: number;
+      currency?: string;
+      paymentMethod?: string;
+      product: { id?: string; name?: string; planId?: string; planName?: string };
+      source: Record<string, string>;
+    };
+  }> {
+    return request(`/v1/offers/${id}/tracking/vendepay/preview`, {
+      method: 'POST',
+      body: payload,
+    });
+  },
+
+  async listVendepayReceipts(id: string): Promise<{
+    receipts: Array<{
+      id: string;
+      state: string;
+      diagnostics?: string[];
+      received_at: string;
+      processed_at?: string;
+      transaction_id?: string;
+      order_status?: string;
+      amount_minor?: string;
+      currency?: string;
+      payment_method?: string;
+      product?: Record<string, string>;
+    }>;
+  }> {
+    return request(`/v1/offers/${id}/tracking/vendepay/receipts`);
+  },
+
   async getTrackingSummary(id: string): Promise<{
     events: number;
     visitors: number;

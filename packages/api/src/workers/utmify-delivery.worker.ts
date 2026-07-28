@@ -36,6 +36,14 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
         SELECT d.id, u.endpoint_url, u.api_token_encrypted,
                o.external_id, o.provider, o.status, o.amount_minor, o.currency,
                o.buyer, o.occurred_at, o.paid_at,
+               o.attribution_source ||
+               jsonb_strip_nulls(jsonb_build_object(
+                 'payment_method', o.payment_method,
+                 'product_id', o.product->>'id',
+                 'product_name', o.product->>'name',
+                 'plan_id', o.product->>'planId',
+                 'plan_name', o.product->>'planName'
+               )) ||
                COALESCE((
                  SELECT te.source FROM tracking_events te
                  WHERE te.project_id = o.project_id AND te.visitor_id = o.visitor_id

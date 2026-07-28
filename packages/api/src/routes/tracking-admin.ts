@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { ulid } from 'ulid';
 import { z } from 'zod';
 import { env } from '../env.js';
+import { normalizeVendepay } from '../integrations/vendepay/normalize.js';
 import { NotFoundError, zodToProblem } from '../lib/problem.js';
 
 const PaginationSchema = z.object({
@@ -70,6 +71,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           domains: string | null;
           ab_tests: string | null;
           outbox: string | null;
+          vendepay_observability: boolean;
         }>
       >`
         SELECT
@@ -80,7 +82,14 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           to_regclass('public.meta_deliveries')::text AS deliveries,
           to_regclass('public.tracking_domains')::text AS domains,
           to_regclass('public.tracking_ab_tests')::text AS ab_tests,
-          to_regclass('public.tracking_delivery_outbox')::text AS outbox
+          to_regclass('public.tracking_delivery_outbox')::text AS outbox,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'webhook_receipts'
+              AND column_name = 'processed_at'
+          ) AS vendepay_observability
       `,
       app.db<
         Array<{
@@ -114,14 +123,15 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         tables.deliveries &&
         tables.domains &&
         tables.ab_tests &&
-        tables.outbox,
+        tables.outbox &&
+        tables.vendepay_observability,
     );
     return {
       managed: true,
       database: 'ready',
       migrations: schemaReady ? 'ready' : 'updating',
       encryption: env.TRACKING_ENCRYPTION_KEY ? 'ready' : 'unavailable',
-      schema_version: schemaReady ? 4 : null,
+      schema_version: schemaReady ? 5 : null,
       last_event_at: activity[0]?.last_event_at ?? null,
       last_order_at: activity[0]?.last_order_at ?? null,
       meta: {
@@ -245,6 +255,45 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         warning:
           'A URL anterior deixou de funcionar. Esta nova URL é exibida apenas nesta rotação.',
       });
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    '/offers/:id/tracking/vendepay/preview',
+    async (req, reply) => {
+      await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
+      const normalized = normalizeVendepay(req.body);
+      if (normalized.kind === 'quarantined') {
+        return reply.send({
+          processable: false,
+          diagnostics: normalized.diagnostics,
+        });
+      }
+      return {
+        processable: true,
+        normalized: normalized.event,
+      };
+    },
+  );
+
+  app.get<{ Params: { id: string } }>(
+    '/offers/:id/tracking/vendepay/receipts',
+    async (req, reply) => {
+      await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
+      if (!app.db) return reply.code(503).send({ receipts: [] });
+      const receipts = await app.db`
+        SELECT r.id, r.state, r.diagnostics, r.received_at, r.processed_at,
+               o.external_id AS transaction_id, o.status AS order_status,
+               o.amount_minor, o.currency, o.payment_method, o.product
+        FROM webhook_receipts r
+        JOIN vendepay_connections v ON v.id = r.connection_id
+        JOIN tracking_projects p ON p.id = v.project_id
+        LEFT JOIN tracking_orders o ON o.id = r.order_id
+        WHERE p.offer_id = ${req.params.id}
+        ORDER BY r.received_at DESC
+        LIMIT 100
+      `;
+      return { receipts };
     },
   );
 

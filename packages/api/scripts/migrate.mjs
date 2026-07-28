@@ -14,6 +14,7 @@ for (const name of [
   '002_meta_capi.sql',
   '003_tracking_advanced.sql',
   '004_tracking_reliable_foundation.sql',
+  '005_vendepay_observability.sql',
 ]) {
   const migration = await readFile(new URL(`../migrations/${name}`, import.meta.url), 'utf8');
   await sql.unsafe(migration);

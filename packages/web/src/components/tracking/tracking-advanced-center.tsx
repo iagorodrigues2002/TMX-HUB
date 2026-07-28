@@ -24,6 +24,28 @@ import type { LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
+const vendepaySample = JSON.stringify(
+  {
+    event_id: 'evt-homologacao-1',
+    transaction_id: 'tx-homologacao-1',
+    status: 'approved',
+    amount: '99.90',
+    currency: 'BRL',
+    src: 'visitor-id-do-tmx',
+    payment_method: 'pix',
+    product: { id: 'produto-1', name: 'Produto principal' },
+    offer: { id: 'plano-1', name: 'Plano principal' },
+    customer: { name: 'Cliente Teste', email: 'cliente@example.com' },
+    metadata: {
+      utm_source: 'facebook',
+      utm_campaign: 'campanha-teste',
+      utm_content: 'criativo-a',
+    },
+  },
+  null,
+  2,
+);
+
 type Section =
   | 'tracker'
   | 'funnel'
@@ -64,6 +86,7 @@ export function TrackingAdvancedCenter({
   const [armA, setArmA] = useState('A');
   const [armB, setArmB] = useState('B');
   const [vendepayWebhook, setVendepayWebhook] = useState('');
+  const [vendepayPayload, setVendepayPayload] = useState(vendepaySample);
   const [utmifyToken, setUtmifyToken] = useState('');
   const [utmifyEndpoint, setUtmifyEndpoint] = useState(
     'https://api.utmify.com.br/api-credentials/orders',
@@ -157,6 +180,25 @@ export function TrackingAdvancedCenter({
     onSuccess: (result) => {
       setVendepayWebhook(result.vendepay_webhook_url);
       toast.success('URL real gerada. A URL anterior foi desativada.');
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
+  const vendepayReceipts = useQuery({
+    queryKey: ['tracking-vendepay-receipts', offerId],
+    queryFn: () => apiClient.listVendepayReceipts(offerId),
+    enabled: section === 'gateways' && Boolean(config.data?.configured),
+    refetchInterval: 30_000,
+    retry: false,
+  });
+  const previewVendepay = useMutation({
+    mutationFn: () => {
+      let payload: unknown;
+      try {
+        payload = JSON.parse(vendepayPayload);
+      } catch {
+        throw new Error('O payload não é um JSON válido.');
+      }
+      return apiClient.previewVendepayWebhook(offerId, payload);
     },
     onError: (error) => toast.error((error as Error).message),
   });
@@ -286,6 +328,92 @@ export function TrackingAdvancedCenter({
                 )}
               </div>
             )}
+            {canManage && config.data?.configured && (
+              <div className="mt-5 rounded-md border border-white/[0.08] p-4">
+                <p className="text-sm font-medium text-white/80">Homologar payload da Vendepay</p>
+                <p className="mt-1 text-xs leading-5 text-white/45">
+                  Cole um exemplo recebido da Vendepay. O teste apenas normaliza os campos: não cria
+                  pedido, não envia ao Meta e não envia à UTMify.
+                </p>
+                <textarea
+                  aria-label="Payload JSON da Vendepay"
+                  className="mt-3 min-h-72 w-full rounded-md border border-white/[0.1] bg-black/25 p-3 font-mono text-xs leading-5 text-cyan-50 outline-none focus:border-cyan-300/40"
+                  value={vendepayPayload}
+                  onChange={(event) => setVendepayPayload(event.target.value)}
+                  spellCheck={false}
+                />
+                <Button
+                  className="mt-3"
+                  variant="outline"
+                  disabled={previewVendepay.isPending}
+                  onClick={() => previewVendepay.mutate()}
+                >
+                  {previewVendepay.isPending ? 'Validando…' : 'Validar sem criar venda'}
+                </Button>
+                {previewVendepay.data && (
+                  <div
+                    className={cn(
+                      'mt-3 rounded border p-3 text-xs',
+                      previewVendepay.data.processable
+                        ? 'border-emerald-300/20 bg-emerald-300/[0.05] text-emerald-100'
+                        : 'border-red-300/20 bg-red-300/[0.05] text-red-100',
+                    )}
+                  >
+                    <p className="font-medium">
+                      {previewVendepay.data.processable
+                        ? 'Payload reconhecido'
+                        : 'Payload precisa de ajuste'}
+                    </p>
+                    <pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-white/55">
+                      {JSON.stringify(
+                        previewVendepay.data.normalized ??
+                          previewVendepay.data.diagnostics ?? ['Formato não reconhecido'],
+                        null,
+                        2,
+                      )}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="mt-6">
+              <p className="hud-label">Últimos webhooks da Vendepay</p>
+              <div className="mt-3 space-y-2">
+                {(vendepayReceipts.data?.receipts ?? []).slice(0, 20).map((receipt) => (
+                  <div
+                    key={receipt.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded border border-white/[0.07] p-3 text-xs"
+                  >
+                    <div>
+                      <p className="font-mono text-white/70">
+                        {receipt.transaction_id ?? 'Sem transação reconhecida'}
+                      </p>
+                      <p className="mt-1 text-white/35">
+                        {new Date(receipt.received_at).toLocaleString('pt-BR')}
+                        {receipt.payment_method ? ` · ${receipt.payment_method}` : ''}
+                      </p>
+                    </div>
+                    <span
+                      className={
+                        receipt.state === 'processed' || receipt.state === 'duplicate'
+                          ? 'text-emerald-300'
+                          : receipt.state === 'quarantined'
+                            ? 'text-red-300'
+                            : 'text-amber-300'
+                      }
+                    >
+                      {receipt.state}
+                    </span>
+                  </div>
+                ))}
+                {!vendepayReceipts.data?.receipts?.length && (
+                  <p className="rounded border border-dashed border-white/[0.08] p-4 text-sm text-white/35">
+                    Nenhum webhook recebido ainda. Depois de configurar a URL na Vendepay, os
+                    recebimentos aparecerão aqui.
+                  </p>
+                )}
+              </div>
+            </div>
           </Module>
         )}
         {section === 'meta' && (

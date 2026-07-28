@@ -43,6 +43,9 @@ export interface NormalizedVendepayEvent {
   amountMinor?: number;
   currency?: string;
   buyer: { name?: string; email?: string; phone?: string };
+  paymentMethod?: string;
+  product: { id?: string; name?: string; planId?: string; planName?: string };
+  source: Record<string, string>;
   occurredAt: string;
 }
 
@@ -170,6 +173,54 @@ export function normalizeVendepay(raw: unknown, receivedAt = new Date()): Vendep
   );
   const currency = textAt(payload, ['currency', 'data.currency', 'order.currency'])?.toUpperCase();
   const trackingSrc = textAt(payload, ['src', 'metadata.src', 'data.src', 'order.src']);
+  const paymentMethod = textAt(payload, [
+    'payment_method',
+    'paymentMethod',
+    'transaction.payment_method',
+    'data.payment_method',
+    'order.payment_method',
+  ]);
+  const productId = textAt(payload, [
+    'product.id',
+    'data.product.id',
+    'order.product_id',
+    'product_id',
+  ]);
+  const productName = textAt(payload, [
+    'product.name',
+    'data.product.name',
+    'order.product_name',
+    'product_name',
+  ]);
+  const planId = textAt(payload, ['offer.id', 'plan.id', 'data.offer.id', 'offer_id', 'plan_id']);
+  const planName = textAt(payload, [
+    'offer.name',
+    'plan.name',
+    'data.offer.name',
+    'offer_name',
+    'plan_name',
+  ]);
+  const sourceEntries = [
+    'utm_source',
+    'utm_medium',
+    'utm_campaign',
+    'utm_content',
+    'utm_term',
+    'sck',
+    'fbclid',
+  ] as const;
+  const source = Object.fromEntries(
+    sourceEntries.flatMap((key) => {
+      const value = textAt(payload, [
+        key,
+        `metadata.${key}`,
+        `data.${key}`,
+        `tracking.${key}`,
+        `trackingParameters.${key}`,
+      ]);
+      return value ? [[key, value]] : [];
+    }),
+  );
   const dedupeKey = eventId
     ? createHash('sha256').update(`event|${eventId}`).digest('hex')
     : createHash('sha256')
@@ -200,6 +251,14 @@ export function normalizeVendepay(raw: unknown, receivedAt = new Date()): Vendep
         ...(email ? { email } : {}),
         ...(phone ? { phone } : {}),
       },
+      ...(paymentMethod ? { paymentMethod } : {}),
+      product: {
+        ...(productId ? { id: productId } : {}),
+        ...(productName ? { name: productName } : {}),
+        ...(planId ? { planId } : {}),
+        ...(planName ? { planName } : {}),
+      },
+      source,
       occurredAt,
     },
   };
