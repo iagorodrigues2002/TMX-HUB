@@ -8,6 +8,7 @@ export interface RailwayDnsRecord {
 export interface RailwayDomainProvision {
   id: string;
   verificationToken?: string;
+  verificationDnsHost?: string;
   dnsRecords: RailwayDnsRecord[];
 }
 
@@ -27,6 +28,7 @@ export async function provisionRailwayDomain(
           id
           status {
             verificationToken
+            verificationDnsHost
             dnsRecords { hostlabel requiredValue }
           }
         }
@@ -54,7 +56,18 @@ export async function provisionRailwayDomain(
   return {
     id: created.id,
     verificationToken: created.status?.verificationToken,
-    dnsRecords: created.status?.dnsRecords ?? [],
+    verificationDnsHost: created.status?.verificationDnsHost,
+    dnsRecords: [
+      ...(created.status?.dnsRecords ?? []),
+      ...(created.status?.verificationToken && created.status.verificationDnsHost
+        ? [
+            {
+              hostlabel: created.status.verificationDnsHost,
+              requiredValue: created.status.verificationToken,
+            },
+          ]
+        : []),
+    ],
   };
 }
 
