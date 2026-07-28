@@ -194,12 +194,14 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         const [order] = await sql<{ id: string; status: string }[]>`
           INSERT INTO tracking_orders
             (id, project_id, provider, external_id, status, amount_minor, currency,
-             visitor_id, buyer, raw_status, occurred_at, paid_at)
+             visitor_id, buyer, raw_status, occurred_at, paid_at, payment_method,
+             product, attribution_source)
           VALUES
             (${ulid()}, ${connection.project_id}, 'vendepay', ${event.transactionId},
              ${event.status}, ${event.amountMinor ?? null}, ${event.currency ?? null},
              ${attributedVisitorId ?? null}, ${sql.json(event.buyer)}, ${event.rawStatus ?? null},
-             ${event.occurredAt}, ${event.status === 'paid' ? event.occurredAt : null})
+             ${event.occurredAt}, ${event.status === 'paid' ? event.occurredAt : null},
+             ${event.paymentMethod ?? null}, ${sql.json(event.product)}, ${sql.json(event.source)})
           ON CONFLICT (project_id, provider, external_id) DO UPDATE SET
             status = CASE
               WHEN tracking_orders.status IN ('refunded', 'chargeback') THEN tracking_orders.status
@@ -214,6 +216,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             visitor_id = COALESCE(EXCLUDED.visitor_id, tracking_orders.visitor_id),
             buyer = tracking_orders.buyer || EXCLUDED.buyer,
             raw_status = COALESCE(EXCLUDED.raw_status, tracking_orders.raw_status),
+            payment_method = COALESCE(EXCLUDED.payment_method, tracking_orders.payment_method),
+            product = tracking_orders.product || EXCLUDED.product,
+            attribution_source = tracking_orders.attribution_source || EXCLUDED.attribution_source,
             occurred_at = LEAST(tracking_orders.occurred_at, EXCLUDED.occurred_at),
             paid_at = CASE
               WHEN EXCLUDED.status = 'paid' THEN COALESCE(tracking_orders.paid_at, EXCLUDED.paid_at)
@@ -225,6 +230,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         if (!order) {
           return { inserted: true, deliveryIds: [], utmifyDeliveryIds: [] };
         }
+        await sql`
+          UPDATE webhook_receipts
+          SET order_id = ${order.id}, processed_at = now()
+          WHERE id = ${receiptId}
+        `;
         const utmify = await sql<{ id: string }[]>`
           SELECT id FROM tracking_utmify_destinations
           WHERE project_id = ${connection.project_id} AND enabled = true

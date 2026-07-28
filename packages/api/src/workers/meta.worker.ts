@@ -46,11 +46,11 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
                  WHERE te.project_id = o.project_id AND te.visitor_id = o.visitor_id
                  ORDER BY te.received_at DESC LIMIT 1
                ) AS event_url,
-               (
+               o.attribution_source || COALESCE((
                  SELECT te.source FROM tracking_events te
                  WHERE te.project_id = o.project_id AND te.visitor_id = o.visitor_id
                  ORDER BY te.received_at DESC LIMIT 1
-               ) AS source,
+               ), '{}'::jsonb) AS source,
                (
                  SELECT te.client_ip FROM tracking_events te
                  WHERE te.project_id = o.project_id AND te.visitor_id = o.visitor_id
