@@ -1469,6 +1469,17 @@ export const apiClient = {
     });
   },
 
+  async updateMetaTestEventCode(
+    id: string,
+    pixelId: string,
+    testEventCode: string,
+  ): Promise<void> {
+    await request(`/v1/offers/${id}/tracking/meta-pixels/${pixelId}/test-event-code`, {
+      method: 'PATCH',
+      body: { test_event_code: testEventCode },
+    });
+  },
+
   async getTrackingUtmifyDestination(id: string): Promise<{
     configured: boolean;
     destination?: {

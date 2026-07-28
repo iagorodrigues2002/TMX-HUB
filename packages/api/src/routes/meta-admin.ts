@@ -19,6 +19,9 @@ const PixelSchema = z.object({
 const TestEventSchema = z.object({
   event_name: z.enum(['InitiateCheckout', 'Purchase']),
 });
+const TestEventCodeSchema = z.object({
+  test_event_code: z.string().trim().min(1).max(128),
+});
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get<{ Params: { id: string } }>('/offers/:id/tracking/meta-pixels', async (req, reply) => {
@@ -173,6 +176,35 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             ? 'Evento aceito pela Meta. Ele aparecerá em Eventos de Teste.'
             : 'A Meta respondeu sem erro, mas não confirmou events_received.',
       });
+    },
+  );
+
+  app.patch<{ Params: { id: string; pixelId: string } }>(
+    '/offers/:id/tracking/meta-pixels/:pixelId/test-event-code',
+    async (req, reply) => {
+      await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
+      if (!app.db) return reply.code(503).send({ error: 'database_unavailable' });
+      const parsed = TestEventCodeSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply.code(400).send({
+          error: 'invalid_test_event_code',
+          detail: 'Informe o Test Event Code exibido no Gerenciador de Eventos da Meta.',
+        });
+      }
+      const [pixel] = await app.db<
+        Array<{ id: string; pixel_id: string; test_event_code: string }>
+      >`
+        UPDATE meta_pixels mp
+        SET test_event_code = ${parsed.data.test_event_code}
+        FROM tracking_projects tp
+        WHERE mp.id = ${req.params.pixelId}
+          AND mp.project_id = tp.id
+          AND tp.offer_id = ${req.params.id}
+          AND mp.enabled = true
+        RETURNING mp.id, mp.pixel_id, mp.test_event_code
+      `;
+      if (!pixel) return reply.code(404).send({ error: 'pixel_not_found' });
+      return reply.send({ pixel });
     },
   );
 
