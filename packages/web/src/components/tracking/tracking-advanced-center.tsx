@@ -85,6 +85,9 @@ export function TrackingAdvancedCenter({
   const [kind, setKind] = useState<'checkout' | 'presell'>('checkout');
   const [armA, setArmA] = useState('A');
   const [armB, setArmB] = useState('B');
+  const [trafficA, setTrafficA] = useState('50');
+  const [destinationA, setDestinationA] = useState('');
+  const [destinationB, setDestinationB] = useState('');
   const [vendepayWebhook, setVendepayWebhook] = useState('');
   const [vendepayPayload, setVendepayPayload] = useState(vendepaySample);
   const [utmifyToken, setUtmifyToken] = useState('');
@@ -124,14 +127,24 @@ export function TrackingAdvancedCenter({
       apiClient.createTrackingAbTest(offerId, {
         name: testName,
         kind,
-        traffic_a: 50,
+        traffic_a: Number(trafficA),
         variants: [
-          { label: armA, gateway: kind === 'checkout' ? 'vendepay' : undefined },
-          { label: armB, gateway: kind === 'checkout' ? 'cooud' : undefined },
+          {
+            label: armA,
+            gateway: kind === 'checkout' ? 'vendepay' : undefined,
+            destination_url: destinationA,
+          },
+          {
+            label: armB,
+            gateway: kind === 'checkout' ? 'vendepay' : undefined,
+            destination_url: destinationB,
+          },
         ],
       }),
     onSuccess: () => {
       setTestName('');
+      setDestinationA('');
+      setDestinationB('');
       void refresh();
       toast.success('Teste A/B ativado.');
     },
@@ -208,8 +221,8 @@ export function TrackingAdvancedCenter({
   };
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[230px_minmax(0,1fr)]">
-      <aside className="h-fit rounded-lg border border-white/[0.08] bg-black/15 p-3 lg:sticky lg:top-20">
+    <div className="grid min-w-0 gap-5 2xl:grid-cols-[230px_minmax(0,1fr)]">
+      <aside className="h-fit min-w-0 rounded-lg border border-white/[0.08] bg-black/15 p-3 2xl:sticky 2xl:top-20">
         {['Operação', 'Configuração'].map((group) => (
           <div key={group} className="mb-4 last:mb-0">
             <p className="px-3 pb-2 font-mono text-[9px] uppercase tracking-[0.22em] text-white/30">
@@ -559,7 +572,18 @@ export function TrackingAdvancedCenter({
                   <option value="checkout">No checkout</option>
                   <option value="presell">Na presell</option>
                 </select>
-                <div className="text-sm text-white/50 self-center">Divisão 50% / 50%</div>
+                <label className="text-xs text-white/65">
+                  Tráfego da variante A: {trafficA}%
+                  <input
+                    className="mt-3 w-full accent-cyan-300"
+                    type="range"
+                    min="10"
+                    max="90"
+                    step="5"
+                    value={trafficA}
+                    onChange={(event) => setTrafficA(event.target.value)}
+                  />
+                </label>
                 <Input
                   value={armA}
                   onChange={(e) => setArmA(e.target.value)}
@@ -570,9 +594,29 @@ export function TrackingAdvancedCenter({
                   onChange={(e) => setArmB(e.target.value)}
                   placeholder="Braço B"
                 />
+                <Input
+                  value={destinationA}
+                  onChange={(event) => setDestinationA(event.target.value)}
+                  placeholder="URL de destino da variante A"
+                />
+                <Input
+                  value={destinationB}
+                  onChange={(event) => setDestinationB(event.target.value)}
+                  placeholder="URL de destino da variante B"
+                />
+                <div className="md:col-span-2 rounded-xl border border-cyan-300/15 bg-cyan-300/[0.04] p-4 text-xs leading-5 text-white/65">
+                  Cada visitante permanece na mesma variante. O TMX troca o destino dos botões de
+                  checkout, preserva UTMs e <code className="text-cyan-200">src</code>, e mede
+                  visitantes, checkouts, compras e receita.
+                </div>
                 <Button
                   className="md:col-span-2"
-                  disabled={!testName.trim() || createTest.isPending}
+                  disabled={
+                    !testName.trim() ||
+                    !destinationA.startsWith('http') ||
+                    !destinationB.startsWith('http') ||
+                    createTest.isPending
+                  }
                   onClick={() => createTest.mutate()}
                 >
                   Criar e ativar teste
@@ -581,23 +625,13 @@ export function TrackingAdvancedCenter({
             )}
             <div className="mt-5 space-y-2">
               {advanced.data?.ab_tests?.map((test) => (
-                <div key={test.id} className="rounded border border-white/[0.07] p-4">
-                  <div className="flex justify-between">
-                    <div>
-                      <span className="text-xs uppercase text-cyan-300">{test.kind}</span>
-                      <p className="mt-1 text-white/75">{test.name}</p>
-                    </div>
-                    <span
-                      className={test.status === 'active' ? 'text-emerald-300' : 'text-white/35'}
-                    >
-                      {test.status}
-                    </span>
-                  </div>
-                  <p className="mt-3 text-xs text-white/40">
-                    {test.variants.map((v) => v.label).join(' × ')} · {test.traffic_a}% /{' '}
-                    {100 - test.traffic_a}%
-                  </p>
-                </div>
+                <AbTestCard
+                  key={test.id}
+                  offerId={offerId}
+                  test={test}
+                  canManage={canManage}
+                  onUpdated={refresh}
+                />
               ))}
             </div>
           </Module>
@@ -621,6 +655,146 @@ export function TrackingAdvancedCenter({
         )}
       </div>
     </div>
+  );
+}
+
+function AbTestCard({
+  offerId,
+  test,
+  canManage,
+  onUpdated,
+}: {
+  offerId: string;
+  test: {
+    id: string;
+    name: string;
+    kind: 'checkout' | 'presell';
+    status: string;
+    traffic_a: number;
+    winner_variant_id?: string;
+    variants: Array<{
+      id: string;
+      label: string;
+      destination_url?: string;
+      position: number;
+    }>;
+  };
+  canManage: boolean;
+  onUpdated: () => void;
+}) {
+  const qc = useQueryClient();
+  const metrics = useQuery({
+    queryKey: ['tracking-ab-metrics', offerId, test.id],
+    queryFn: () => apiClient.getTrackingAbTestMetrics(offerId, test.id),
+    refetchInterval: test.status === 'active' ? 30_000 : false,
+  });
+  const control = useMutation({
+    mutationFn: (
+      body: { action: 'pause' | 'resume' } | { action: 'select_winner'; variant_id: string },
+    ) => apiClient.controlTrackingAbTest(offerId, test.id, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['tracking-ab-metrics', offerId, test.id] });
+      onUpdated();
+      toast.success('Teste A/B atualizado.');
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
+  return (
+    <article className="rounded-2xl border border-cyan-100/[0.12] bg-black/10 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <span className="text-xs font-semibold uppercase tracking-wider text-cyan-300">
+            {test.kind} · {test.traffic_a}% / {100 - test.traffic_a}%
+          </span>
+          <p className="mt-1 text-base font-semibold text-white/90">{test.name}</p>
+        </div>
+        <span className={test.status === 'active' ? 'text-emerald-300' : 'text-white/55'}>
+          {test.status === 'active' ? 'Em execução' : 'Pausado'}
+        </span>
+      </div>
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        {test.variants.map((variant, index) => {
+          const row = metrics.data?.variants.find((item) => item.id === variant.id);
+          const visitors = Number(row?.visitors ?? 0);
+          const paid = Number(row?.paid_orders ?? 0);
+          const conversion = visitors ? (paid / visitors) * 100 : 0;
+          return (
+            <div
+              key={variant.id}
+              className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-4"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-medium text-white/85">{variant.label}</p>
+                <span className="text-xs text-white/45">
+                  {index === 0 ? test.traffic_a : 100 - test.traffic_a}% do tráfego
+                </span>
+              </div>
+              <p className="mt-2 truncate font-mono text-[11px] text-cyan-100/55">
+                {variant.destination_url ?? 'Destino não informado'}
+              </p>
+              <dl className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <dt className="text-white/45">Visitantes</dt>
+                  <dd className="mt-1 text-base font-semibold text-white">{visitors}</dd>
+                </div>
+                <div>
+                  <dt className="text-white/45">Checkouts</dt>
+                  <dd className="mt-1 text-base font-semibold text-white">
+                    {Number(row?.checkouts ?? 0)}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-white/45">Compras</dt>
+                  <dd className="mt-1 text-base font-semibold text-emerald-300">{paid}</dd>
+                </div>
+                <div>
+                  <dt className="text-white/45">Conversão</dt>
+                  <dd className="mt-1 text-base font-semibold text-cyan-200">
+                    {conversion.toFixed(2)}%
+                  </dd>
+                </div>
+                <div className="col-span-2">
+                  <dt className="text-white/45">Receita atribuída</dt>
+                  <dd className="mt-1 text-base font-semibold text-emerald-300">
+                    {(Number(row?.revenue_minor ?? 0) / 100).toLocaleString('pt-BR', {
+                      style: 'currency',
+                      currency: 'BRL',
+                    })}
+                  </dd>
+                </div>
+              </dl>
+              {canManage && !test.winner_variant_id && (
+                <Button
+                  className="mt-4 w-full"
+                  size="sm"
+                  variant="outline"
+                  disabled={control.isPending}
+                  onClick={() =>
+                    control.mutate({ action: 'select_winner', variant_id: variant.id })
+                  }
+                >
+                  Definir como vencedora
+                </Button>
+              )}
+              {test.winner_variant_id === variant.id && (
+                <p className="mt-4 text-xs font-semibold text-emerald-300">Variante vencedora</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {canManage && !test.winner_variant_id && (
+        <Button
+          className="mt-4"
+          size="sm"
+          variant="ghost"
+          disabled={control.isPending}
+          onClick={() => control.mutate({ action: test.status === 'active' ? 'pause' : 'resume' })}
+        >
+          {test.status === 'active' ? 'Pausar teste' : 'Retomar teste'}
+        </Button>
+      )}
+    </article>
   );
 }
 

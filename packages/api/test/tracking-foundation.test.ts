@@ -24,6 +24,9 @@ describe('reliable tracking foundation', () => {
     expect(script).toContain('_tmx_first');
     expect(script).toContain('InitiateCheckout');
     expect(script).toContain('/track/bootstrap');
+    expect(script).toContain('/track/ab/assign');
+    expect(script).toContain('ab_variant_id');
+    expect(script).toContain("ab?.kind==='checkout'");
     expect(script).toContain('connect.facebook.net');
     expect(script).toContain('123456789');
   });

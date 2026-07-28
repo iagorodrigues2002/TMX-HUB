@@ -126,7 +126,7 @@ export function TrackingWorkspace() {
               qualquer etapa que não esteja entregando dados.
             </p>
           </div>
-          <TrackingHelp />
+          <TrackingHelp offerId={selectedOfferId} />
         </div>
       ) : (
         <div className="space-y-5">

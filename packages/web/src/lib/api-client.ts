@@ -1268,6 +1268,8 @@ export const apiClient = {
       kind: 'checkout' | 'presell';
       status: string;
       traffic_a: number;
+      winner_variant_id?: string;
+      winner_locked_at?: string;
       deleted_at?: string;
       variants: Array<{
         id: string;
@@ -1325,6 +1327,36 @@ export const apiClient = {
 
   async deleteTrackingAbTest(id: string, testId: string): Promise<void> {
     await request(`/v1/offers/${id}/tracking/ab-tests/${testId}`, { method: 'DELETE' });
+  },
+
+  async getTrackingAbTestMetrics(
+    id: string,
+    testId: string,
+  ): Promise<{
+    variants: Array<{
+      id: string;
+      label: string;
+      position: number;
+      destination_url?: string;
+      visitors: number;
+      checkouts: number;
+      orders: number;
+      paid_orders: number;
+      revenue_minor: string;
+    }>;
+  }> {
+    return request(`/v1/offers/${id}/tracking/ab-tests/${testId}/metrics`);
+  },
+
+  async controlTrackingAbTest(
+    id: string,
+    testId: string,
+    body: { action: 'pause' | 'resume' } | { action: 'select_winner'; variant_id: string },
+  ): Promise<void> {
+    await request(`/v1/offers/${id}/tracking/ab-tests/${testId}`, {
+      method: 'PATCH',
+      body,
+    });
   },
 
   async listTrackingEvents(

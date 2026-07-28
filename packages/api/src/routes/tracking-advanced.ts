@@ -38,6 +38,11 @@ const AbSchema = z.object({
     )
     .length(2),
 });
+const AbControlSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('pause') }),
+  z.object({ action: z.literal('resume') }),
+  z.object({ action: z.literal('select_winner'), variant_id: z.string().min(8).max(40) }),
+]);
 
 function parsed<T>(schema: z.ZodSchema<T>, value: unknown): T {
   const result = schema.safeParse(value);
@@ -199,6 +204,84 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     });
     return reply.code(201).send({ id: testId, status: 'active' });
   });
+
+  app.get<{ Params: { id: string; testId: string } }>(
+    '/offers/:id/tracking/ab-tests/:testId/metrics',
+    async (req, reply) => {
+      const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin');
+      if (!app.db) return reply.code(503).send(databaseUnavailable);
+      if (!p) return reply.code(404).send({ error: 'tracking_not_configured' });
+      const rows = await app.db`
+        SELECT v.id, v.label, v.position, v.destination_url,
+               count(DISTINCT a.visitor_id)::int AS visitors,
+               count(DISTINCT a.visitor_id) FILTER (
+                 WHERE EXISTS (
+                   SELECT 1 FROM tracking_events e
+                   WHERE e.project_id=t.project_id
+                     AND e.visitor_id=a.visitor_id
+                     AND e.event_name='InitiateCheckout'
+                 )
+               )::int AS checkouts,
+               (SELECT count(*)::int FROM tracking_orders o
+                WHERE o.project_id=t.project_id
+                  AND o.visitor_id IN (
+                    SELECT aa.visitor_id FROM tracking_ab_assignments aa
+                    WHERE aa.variant_id=v.id
+                  )) AS orders,
+               (SELECT count(*)::int FROM tracking_orders o
+                WHERE o.project_id=t.project_id AND o.status='paid'
+                  AND o.visitor_id IN (
+                    SELECT aa.visitor_id FROM tracking_ab_assignments aa
+                    WHERE aa.variant_id=v.id
+                  )) AS paid_orders,
+               (SELECT COALESCE(sum(o.amount_minor), 0)::bigint FROM tracking_orders o
+                WHERE o.project_id=t.project_id AND o.status='paid'
+                  AND o.visitor_id IN (
+                    SELECT aa.visitor_id FROM tracking_ab_assignments aa
+                    WHERE aa.variant_id=v.id
+                  )) AS revenue_minor
+        FROM tracking_ab_variants v
+        JOIN tracking_ab_tests t ON t.id = v.test_id
+        LEFT JOIN tracking_ab_assignments a ON a.variant_id = v.id
+        WHERE t.id = ${req.params.testId} AND t.project_id = ${p.id}
+        GROUP BY v.id, v.label, v.position, v.destination_url, t.project_id
+        ORDER BY v.position
+      `;
+      return { variants: rows };
+    },
+  );
+
+  app.patch<{ Params: { id: string; testId: string } }>(
+    '/offers/:id/tracking/ab-tests/:testId',
+    async (req, reply) => {
+      const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin', true);
+      if (!app.db) return reply.code(503).send(databaseUnavailable);
+      if (!p) return reply.code(404).send({ error: 'tracking_not_configured' });
+      const body = parsed(AbControlSchema, req.body);
+      if (body.action === 'resume') {
+        await app.db.begin(async (sql) => {
+          await sql`UPDATE tracking_ab_tests SET status='paused'
+            WHERE project_id=${p.id} AND status='active'`;
+          await sql`UPDATE tracking_ab_tests SET status='active'
+            WHERE id=${req.params.testId} AND project_id=${p.id} AND deleted_at IS NULL`;
+        });
+      } else if (body.action === 'pause') {
+        await app.db`UPDATE tracking_ab_tests SET status='paused'
+          WHERE id=${req.params.testId} AND project_id=${p.id}`;
+      } else {
+        const variants = await app.db`
+          SELECT v.id FROM tracking_ab_variants v
+          JOIN tracking_ab_tests t ON t.id=v.test_id
+          WHERE v.id=${body.variant_id} AND t.id=${req.params.testId} AND t.project_id=${p.id}
+        `;
+        if (variants.length === 0) return reply.code(404).send({ error: 'ab_variant_not_found' });
+        await app.db`UPDATE tracking_ab_tests
+          SET winner_variant_id=${body.variant_id}, winner_locked_at=now(), status='paused'
+          WHERE id=${req.params.testId} AND project_id=${p.id}`;
+      }
+      return { updated: true };
+    },
+  );
 
   app.delete<{ Params: { id: string; testId: string } }>(
     '/offers/:id/tracking/ab-tests/:testId',
