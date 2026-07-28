@@ -33,7 +33,7 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
           paid_at: Date | null;
           visitor_id: string | null;
           event_url: string | null;
-          source: { _fbp?: string; _fbc?: string; fbclid?: string };
+          source: { _fbp?: string; _fbc?: string; fbclid?: string; _fbclid_ts?: string };
           client_ip: string | null;
           user_agent: string | null;
         }>
@@ -78,7 +78,9 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
         if (row.source?._fbp) userData.fbp = row.source._fbp;
         if (row.source?._fbc) userData.fbc = row.source._fbc;
         if (!row.source?._fbc && row.source?.fbclid) {
-          userData.fbc = `fb.1.${Math.floor(new Date(row.paid_at).getTime() / 1000)}.${row.source.fbclid}`;
+          const clickTime = Number(row.source._fbclid_ts);
+          const timestamp = Number.isFinite(clickTime) ? clickTime : new Date(row.paid_at).getTime();
+          userData.fbc = `fb.1.${timestamp}.${row.source.fbclid}`;
         }
         if (row.client_ip) userData.client_ip_address = row.client_ip;
         if (row.user_agent) userData.client_user_agent = row.user_agent;

@@ -8,6 +8,9 @@ import { Activity, CheckCircle2, Copy, Loader2, Radio } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
+const META_URL_PARAMETERS =
+  'utm_source={{site_source_name}}&utm_medium=paid_social&utm_campaign={{campaign.name}}&utm_content={{ad.name}}&utm_term={{adset.name}}&campaign_id={{campaign.id}}&adset_id={{adset.id}}&ad_id={{ad.id}}&placement={{placement}}&site_source_name={{site_source_name}}';
+
 export function TrackingPanel({ offerId, canManage }: { offerId: string; canManage: boolean }) {
   const queryClient = useQueryClient();
   const [secretWebhook, setSecretWebhook] = useState('');
@@ -128,6 +131,26 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
                   variant="outline"
                   size="icon"
                   onClick={() => copy(config.data?.project?.install_code ?? '')}
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            <div>
+              <p className="hud-label">Parâmetros da URL · Meta Ads</p>
+              <p className="mt-1 text-xs leading-5 text-white/45">
+                Cole em “Parâmetros da URL” no anúncio. O Meta substituirá as macros e o TMX
+                preservará os valores até a Vendepay.
+              </p>
+              <div className="mt-2 flex gap-2">
+                <code className="min-w-0 flex-1 overflow-x-auto rounded-md bg-black/30 p-3 text-[11px] text-cyan-100">
+                  {META_URL_PARAMETERS}
+                </code>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  aria-label="Copiar parâmetros da URL do Meta"
+                  onClick={() => copy(META_URL_PARAMETERS)}
                 >
                   <Copy className="h-4 w-4" />
                 </Button>
