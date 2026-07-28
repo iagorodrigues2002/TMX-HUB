@@ -376,7 +376,7 @@ export function TrackingHelp({ offerId = '' }: { offerId?: string }) {
           icon={<Code2 className="h-5 w-5" />}
         >
           <CopyBlock label="Exemplo — use o código gerado na oferta" copyable={false}>
-            {'<script async src="https://SUA-API/v1/track/t.js?key=SUA_CHAVE"></script>'}
+            {'<script async src="https://theminex.com/v1/track/t.js?key=SUA_CHAVE"></script>'}
           </CopyBlock>
           <div className="mt-4">
             <CopyBlock label="Parâmetros da URL · Meta Ads">
@@ -433,7 +433,7 @@ export function TrackingHelp({ offerId = '' }: { offerId?: string }) {
           </ol>
           <div className="mt-5">
             <CopyBlock label="Formato ilustrativo — não use esta URL" copyable={false}>
-              {'https://SUA-API/v1/webhooks/vendepay?token=SEU_TOKEN_SECRETO'}
+              {'https://theminex.com/v1/webhooks/vendepay?token=SEU_TOKEN_SECRETO'}
             </CopyBlock>
           </div>
           <p className="mt-4 flex gap-2 text-xs leading-5 text-white/40">

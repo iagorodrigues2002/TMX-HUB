@@ -126,7 +126,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       const eventSourceUrl =
         typeof req.headers.origin === 'string' && /^https?:\/\//.test(req.headers.origin)
           ? `${req.headers.origin}/tracking`
-          : `${env.PUBLIC_BASE_URL.replace(/\/$/, '')}/tracking-test`;
+          : `${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/tracking-test`;
       const payload = {
         data: [
           buildMetaTestEvent({

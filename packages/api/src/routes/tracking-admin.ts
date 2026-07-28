@@ -22,10 +22,10 @@ const databaseUnavailable = {
 };
 
 const webhookUrl = (token: string) =>
-  `${env.PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/webhooks/vendepay?token=${token}`;
+  `${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/webhooks/vendepay?token=${token}`;
 
 const installCode = (publicKey: string) =>
-  `<script async src="${env.PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/track/t.js?key=${publicKey}"></script>`;
+  `<script async src="${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/track/t.js?key=${publicKey}"></script>`;
 
 const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex');
 

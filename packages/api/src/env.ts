@@ -52,6 +52,7 @@ const EnvSchema = z.object({
   // Accept any string so Railway template refs like "https://${{DOMAIN}}"
   // don't crash on startup if the variable isn't resolved yet.
   PUBLIC_BASE_URL: z.string().default('http://localhost:4000'),
+  TRACKING_PUBLIC_BASE_URL: z.string().url().default('https://theminex.com'),
   RAILWAY_PROJECT_TOKEN: z.string().optional(),
   RAILWAY_PROJECT_ID: z.string().default('3704cd93-6011-4e5f-be52-f229b499b018'),
   RAILWAY_ENVIRONMENT_ID: z.string().default('bbb09ce3-96ce-44d4-8a3c-d8c8f25f558b'),
