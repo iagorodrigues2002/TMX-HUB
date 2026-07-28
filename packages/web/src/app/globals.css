@@ -1,4 +1,4 @@
-@import 'tailwindcss';
+@import "tailwindcss";
 
 /* ----------------------------------------------------------------------
  * TMX HUB — Dark Turquoise Terminal Design System
@@ -7,46 +7,46 @@
  * ---------------------------------------------------------------------- */
 @theme {
   /* Base palette */
-  --color-bg-base: #04101A;
-  --color-bg-elevated: #0A1A24;
+  --color-bg-base: #061119;
+  --color-bg-elevated: #0b1c27;
 
   /* Accent */
-  --color-accent-from: #0E7C86;
-  --color-accent-to: #22D3EE;
-  --color-accent-mid: #14B8A6;
-  --color-accent-deep: #0B5057;
+  --color-accent-from: #0e7c86;
+  --color-accent-to: #22d3ee;
+  --color-accent-mid: #14b8a6;
+  --color-accent-deep: #0b5057;
   --color-accent-on: #031516;
 
   /* Status */
-  --color-success: #10B981;
-  --color-warning: #F59E0B;
-  --color-danger: #F43F5E;
-  --color-info: #22D3EE;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #f43f5e;
+  --color-info: #22d3ee;
 
   /* shadcn-style fallbacks (kept for legacy classes still in tree). */
-  --color-border: rgba(255, 255, 255, 0.08);
-  --color-input: rgba(255, 255, 255, 0.12);
+  --color-border: rgba(148, 210, 220, 0.14);
+  --color-input: rgba(148, 210, 220, 0.18);
   --color-ring: rgba(34, 211, 238, 0.4);
-  --color-background: #04101A;
+  --color-background: #04101a;
   --color-foreground: rgba(255, 255, 255, 1);
-  --color-primary: #22D3EE;
+  --color-primary: #22d3ee;
   --color-primary-foreground: #031516;
   --color-secondary: rgba(255, 255, 255, 0.05);
   --color-secondary-foreground: rgba(255, 255, 255, 0.9);
-  --color-destructive: #F43F5E;
+  --color-destructive: #f43f5e;
   --color-destructive-foreground: rgba(255, 255, 255, 1);
   --color-muted: rgba(255, 255, 255, 0.04);
-  --color-muted-foreground: rgba(255, 255, 255, 0.55);
+  --color-muted-foreground: rgba(232, 247, 249, 0.68);
   --color-accent: rgba(34, 211, 238, 0.08);
   --color-accent-foreground: rgba(255, 255, 255, 1);
-  --color-popover: #0A1A24;
+  --color-popover: #0a1a24;
   --color-popover-foreground: rgba(255, 255, 255, 1);
   --color-card: rgba(255, 255, 255, 0.04);
   --color-card-foreground: rgba(255, 255, 255, 1);
   --radius: 14px;
 
   /* Typography */
-  --font-sans: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
 
   /* Radius */
   --radius-sm: 10px;
@@ -66,28 +66,28 @@
  * CSS variable surface (used by raw style={{}} usages)
  * ---------------------------------------------------------------------- */
 :root {
-  --bg-base: #04101A;
-  --bg-elevated: #0A1A24;
+  --bg-base: #061119;
+  --bg-elevated: #0b1c27;
   --bg-overlay: rgba(255, 255, 255, 0.05);
   --bg-overlay-2: rgba(255, 255, 255, 0.07);
 
-  --accent-from: #0E7C86;
-  --accent-to: #22D3EE;
-  --accent-mid: #14B8A6;
-  --accent-deep: #0B5057;
+  --accent-from: #0e7c86;
+  --accent-to: #22d3ee;
+  --accent-mid: #14b8a6;
+  --accent-deep: #0b5057;
   --accent-on: #031516;
-  --accent-gradient: linear-gradient(90deg, #0E7C86 0%, #22D3EE 100%);
+  --accent-gradient: linear-gradient(90deg, #0e7c86 0%, #22d3ee 100%);
 
   --text-100: rgba(255, 255, 255, 1);
-  --text-65: rgba(255, 255, 255, 0.65);
-  --text-55: rgba(255, 255, 255, 0.55);
-  --text-45: rgba(255, 255, 255, 0.45);
-  --text-40: rgba(255, 255, 255, 0.4);
-  --text-30: rgba(255, 255, 255, 0.3);
-  --text-25: rgba(255, 255, 255, 0.25);
+  --text-65: rgba(232, 247, 249, 0.76);
+  --text-55: rgba(224, 242, 245, 0.68);
+  --text-45: rgba(212, 235, 239, 0.58);
+  --text-40: rgba(206, 232, 236, 0.54);
+  --text-30: rgba(198, 225, 230, 0.45);
+  --text-25: rgba(190, 220, 225, 0.38);
 
-  --border-soft: rgba(255, 255, 255, 0.08);
-  --border-input: rgba(255, 255, 255, 0.12);
+  --border-soft: rgba(148, 210, 220, 0.14);
+  --border-input: rgba(148, 210, 220, 0.2);
   --border-accent: rgba(34, 211, 238, 0.35);
 
   --glow-accent: 0 0 12px rgba(34, 211, 238, 0.25);
@@ -115,7 +115,7 @@
   }
 
   body {
-    background: #04101A;
+    background: #061119;
     color: var(--text-100);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
@@ -126,23 +126,23 @@
 
   /* Vignette: top turquoise wash + bottom darken */
   body::before {
-    content: '';
+    content: "";
     position: fixed;
     inset: 0;
-    background:
-      radial-gradient(ellipse at 50% 0%, rgba(20, 184, 166, 0.1) 0%, transparent 60%),
-      radial-gradient(ellipse at 50% 100%, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0) 60%);
+    background: radial-gradient(circle at 18% 0%, rgba(14, 124, 134, 0.14), transparent 32rem),
+      radial-gradient(circle at 82% 12%, rgba(34, 211, 238, 0.07), transparent 28rem),
+      linear-gradient(180deg, rgba(3, 13, 20, 0.04), rgba(2, 9, 14, 0.48));
     pointer-events: none;
     z-index: 0;
   }
 
   /* Cyan grid dots */
   body::after {
-    content: '';
+    content: "";
     position: fixed;
     inset: 0;
-    background-image: radial-gradient(rgba(34, 211, 238, 0.08) 1px, transparent 1px);
-    background-size: 24px 24px;
+    background-image: radial-gradient(rgba(96, 205, 218, 0.075) 1px, transparent 1px);
+    background-size: 28px 28px;
     pointer-events: none;
     z-index: 0;
     -webkit-mask-image: radial-gradient(ellipse at center, black 30%, transparent 80%);
@@ -159,6 +159,19 @@
   ::selection {
     background: rgba(34, 211, 238, 0.35);
     color: #fff;
+  }
+
+  :focus-visible {
+    outline: 2px solid rgba(34, 211, 238, 0.78);
+    outline-offset: 3px;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    -webkit-tap-highlight-color: transparent;
   }
 
   /* Scrollbars */
@@ -215,8 +228,8 @@
   }
 
   .glass-card {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: linear-gradient(145deg, rgba(14, 36, 47, 0.88), rgba(7, 23, 32, 0.82));
+    border: 1px solid rgba(148, 210, 220, 0.14);
     border-radius: 18px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
     backdrop-filter: blur(20px);
@@ -228,7 +241,7 @@
     gap: 12px;
     padding: 12px 16px;
     border-radius: 14px;
-    color: rgba(255, 255, 255, 0.55);
+    color: rgba(224, 242, 245, 0.68);
     font-weight: 500;
     font-size: 13px;
     transition: background 0.15s ease, color 0.15s ease;
@@ -236,20 +249,20 @@
     border-left: 2px solid transparent;
   }
   .nav-item:hover {
-    background: rgba(255, 255, 255, 0.04);
+    background: rgba(148, 210, 220, 0.07);
     color: var(--text-100);
   }
-  .nav-item[aria-current='page'],
+  .nav-item[aria-current="page"],
   .nav-item.active {
-    background: rgba(34, 211, 238, 0.08);
+    background: linear-gradient(90deg, rgba(34, 211, 238, 0.13), rgba(34, 211, 238, 0.035));
     color: var(--text-100);
     border-left: 2px solid #22d3ee;
     box-shadow: inset 0 0 20px rgba(34, 211, 238, 0.05);
   }
 
   .tool-card {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: linear-gradient(145deg, rgba(14, 36, 47, 0.86), rgba(7, 23, 32, 0.78));
+    border: 1px solid rgba(148, 210, 220, 0.14);
     border-radius: 18px;
     padding: 24px;
     cursor: pointer;
@@ -263,11 +276,11 @@
     transform: translateY(-2px);
     box-shadow: 0 0 24px rgba(34, 211, 238, 0.1);
   }
-  .tool-card[data-disabled='true'] {
+  .tool-card[data-disabled="true"] {
     opacity: 0.55;
     cursor: not-allowed;
   }
-  .tool-card[data-disabled='true']:hover {
+  .tool-card[data-disabled="true"]:hover {
     transform: none;
     border-color: rgba(255, 255, 255, 0.08);
     box-shadow: none;
@@ -287,9 +300,9 @@
   .hud-label {
     text-transform: uppercase;
     letter-spacing: 0.18em;
-    font-size: 10px;
-    font-weight: 400;
-    color: var(--text-45);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-55);
   }
   .hud-label-strong {
     text-transform: uppercase;
@@ -297,6 +310,28 @@
     font-size: 11px;
     font-weight: 600;
     color: var(--text-55);
+  }
+
+  .surface-panel {
+    background: linear-gradient(145deg, rgba(14, 36, 47, 0.82), rgba(7, 23, 32, 0.76));
+    border: 1px solid rgba(148, 210, 220, 0.14);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.24);
+    backdrop-filter: blur(18px);
+  }
+
+  .page-title {
+    color: white;
+    font-size: clamp(1.75rem, 3vw, 2.5rem);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.035em;
+  }
+
+  .page-description {
+    max-width: 46rem;
+    color: rgba(224, 242, 245, 0.68);
+    font-size: 0.925rem;
+    line-height: 1.7;
   }
 
   .status-dot {
@@ -314,7 +349,8 @@
   }
 
   @keyframes pulse-dot {
-    0%, 100% {
+    0%,
+    100% {
       opacity: 1;
     }
     50% {
@@ -323,7 +359,7 @@
   }
 
   /* Radix data-state=active applied to TabsTrigger gets gradient */
-  [data-tabs-active-gradient][data-state='active'] {
+  [data-tabs-active-gradient][data-state="active"] {
     background: linear-gradient(90deg, #0e7c86 0%, #22d3ee 100%);
     color: #031516;
   }
@@ -331,7 +367,7 @@
   /* Custom checkbox check icon — paint on :checked. The Tailwind arbitrary
      bg-[url(...)] dropped the data URI because of semicolons, so define here.
      `!important` is required to override Tailwind utility background-color. */
-  input[type='checkbox'][data-tmx-checkbox]:checked {
+  input[type="checkbox"][data-tmx-checkbox]:checked {
     background-color: #22d3ee !important;
     background-image: url("data:image/svg+xml;charset=utf-8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='none' stroke='%23031516' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' d='M3 8l3.5 3.5L13 5'/></svg>") !important;
     background-repeat: no-repeat !important;

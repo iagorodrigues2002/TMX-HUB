@@ -47,9 +47,9 @@ function CopyBlock({
   }
 
   return (
-    <div className="overflow-hidden rounded-md border border-white/[0.08] bg-[#020b12]">
-      <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-2">
-        <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/35">
+    <div className="overflow-hidden rounded-xl border border-cyan-100/[0.12] bg-[#020b12]">
+      <div className="flex items-center justify-between border-b border-cyan-100/[0.09] bg-cyan-100/[0.025] px-3 py-2">
+        <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
           {label}
         </span>
         {copyable ? (
@@ -67,7 +67,7 @@ function CopyBlock({
           </span>
         )}
       </div>
-      <pre className="overflow-x-auto p-4 font-mono text-xs leading-6 text-cyan-100/75">
+      <pre className="overflow-x-auto p-4 font-mono text-xs leading-6 text-cyan-50/85">
         <code>{children}</code>
       </pre>
     </div>
@@ -90,10 +90,7 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section
-      id={id}
-      className="scroll-mt-8 rounded-lg border border-white/[0.07] bg-white/[0.025] p-5 md:p-7"
-    >
+    <section id={id} className="surface-panel scroll-mt-8 rounded-2xl p-5 md:p-7">
       <header className="mb-6 flex items-start gap-4">
         <div className="grid h-11 w-11 shrink-0 place-items-center rounded-md border border-cyan-300/20 bg-cyan-300/[0.06] text-cyan-300">
           {icon}
@@ -101,7 +98,7 @@ function Section({
         <div>
           <p className="hud-label">Etapa {number}</p>
           <h2 className="mt-1 text-xl font-semibold text-white">{title}</h2>
-          <p className="mt-1 text-sm leading-6 text-white/50">{subtitle}</p>
+          <p className="mt-1 text-sm leading-6 text-white/65">{subtitle}</p>
         </div>
       </header>
       {children}
@@ -113,8 +110,8 @@ function Checklist({ items }: { items: Array<{ id: string; content: ReactNode }>
   return (
     <ul className="space-y-3">
       {items.map((item) => (
-        <li key={item.id} className="flex gap-3 text-sm leading-6 text-white/65">
-          <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-emerald-300/80" />
+        <li key={item.id} className="flex gap-3 text-sm leading-6 text-white/75">
+          <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-emerald-300" />
           <span>{item.content}</span>
         </li>
       ))}
@@ -143,22 +140,22 @@ function Result({
       <p className={`text-sm font-medium ${warn ? 'text-amber-200' : 'text-emerald-200'}`}>
         {title}
       </p>
-      <p className="mt-1 text-xs leading-5 text-white/45">{detail}</p>
+      <p className="mt-1 text-xs leading-5 text-white/65">{detail}</p>
     </div>
   );
 }
 
 export function TrackingHelp() {
   return (
-    <div className="grid gap-8 xl:grid-cols-[190px_minmax(0,1fr)]">
+    <div className="grid gap-8 xl:grid-cols-[210px_minmax(0,1fr)]">
       <aside className="hidden xl:block">
-        <nav className="sticky top-6 rounded-lg border border-white/[0.07] bg-white/[0.02] p-3">
+        <nav className="surface-panel sticky top-6 rounded-2xl p-3">
           <p className="hud-label px-2 pb-2">Neste guia</p>
           {steps.map(({ id, label, icon: Icon }) => (
             <a
               key={id}
               href={`#${id}`}
-              className="flex items-center gap-2 rounded-md px-2 py-2 text-xs text-white/45 transition hover:bg-white/[0.04] hover:text-cyan-200"
+              className="flex items-center gap-2 rounded-lg px-2.5 py-2.5 text-xs font-medium text-white/65 transition hover:bg-cyan-100/[0.07] hover:text-cyan-100"
             >
               <Icon className="h-3.5 w-3.5" />
               {label}
@@ -168,12 +165,12 @@ export function TrackingHelp() {
       </aside>
 
       <div className="min-w-0 space-y-5">
-        <div className="rounded-lg border border-cyan-300/15 bg-cyan-300/[0.04] p-5">
+        <div className="rounded-2xl border border-cyan-300/25 bg-cyan-300/[0.07] p-5 shadow-[0_16px_40px_rgba(0,0,0,.16)]">
           <div className="flex gap-3">
             <Radio className="mt-0.5 h-5 w-5 shrink-0 text-cyan-300" />
             <div>
               <p className="text-sm font-medium text-cyan-100">O que estará funcionando no final</p>
-              <p className="mt-1 text-sm leading-6 text-white/55">
+              <p className="mt-1 text-sm leading-6 text-white/75">
                 O TMXHUB identificará o visitante, registrará a entrada na página e no checkout,
                 anexará o identificador ao parâmetro <code className="text-cyan-200">src</code> da
                 Vendepay e associará a venda recebida pelo webhook à jornada correta.
