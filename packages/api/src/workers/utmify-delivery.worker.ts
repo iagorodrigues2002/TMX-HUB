@@ -26,7 +26,13 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
           status: string;
           amount_minor: number | null;
           currency: string | null;
-          buyer: { name?: string; email?: string; phone?: string; document?: string };
+          buyer: {
+            name?: string;
+            email?: string;
+            phone?: string;
+            document?: string;
+            country?: string;
+          };
           occurred_at: Date;
           paid_at: Date | null;
           source: Record<string, string>;

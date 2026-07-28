@@ -1,5 +1,6 @@
 'use client';
 
+import { TrackingCountryMap } from '@/components/tracking/tracking-country-map';
 import { Button } from '@/components/ui/button';
 import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
@@ -99,6 +100,13 @@ export function TrackingLiveConsole({
     queryKey: ['tracking-attribution', offerId, date],
     queryFn: () => apiClient.getTrackingAttribution(offerId, date),
     enabled: activeView === 'attribution',
+    refetchInterval: 30_000,
+    retry: false,
+  });
+  const countries = useQuery({
+    queryKey: ['tracking-countries', offerId, date],
+    queryFn: () => apiClient.getTrackingCountries(offerId, date),
+    enabled: activeView === 'tracker',
     refetchInterval: 30_000,
     retry: false,
   });
@@ -555,6 +563,9 @@ export function TrackingLiveConsole({
                 <p className="mt-1 font-mono text-xl text-white">{value}</p>
               </div>
             ))}
+          </div>
+          <div className="p-3 md:p-4">
+            <TrackingCountryMap rows={countries.data?.rows ?? []} />
           </div>
           <div className="border-b border-white/[0.07] p-3">
             <div className="flex flex-wrap items-center justify-between gap-3">

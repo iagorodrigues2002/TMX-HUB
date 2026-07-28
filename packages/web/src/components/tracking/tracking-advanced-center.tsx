@@ -143,6 +143,7 @@ export function TrackingAdvancedCenter({
           'tracking-page-funnel',
           'tracking-journeys',
           'tracking-attribution',
+          'tracking-countries',
         ].map((key) => qc.invalidateQueries({ queryKey: [key, offerId, trackingDate] })),
       );
       toast.success('Dados do dia atualizados.');

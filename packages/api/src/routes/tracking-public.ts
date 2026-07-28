@@ -52,6 +52,20 @@ const cookieValue = (cookie: string | undefined, name: string) =>
     .find((part) => part.startsWith(`${name}=`))
     ?.slice(name.length + 1);
 
+function requestCountry(headers: Record<string, string | string[] | undefined>) {
+  for (const name of [
+    'cf-ipcountry',
+    'x-vercel-ip-country',
+    'cloudfront-viewer-country',
+    'x-country-code',
+  ]) {
+    const raw = headers[name];
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    if (value && /^[a-z]{2}$/i.test(value)) return value.toUpperCase();
+  }
+  return undefined;
+}
+
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get<{ Querystring: { key?: string } }>('/track/t.js', async (req, reply) => {
     if (!req.query.key || !app.db) return reply.code(404).send();
@@ -90,12 +104,14 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       linkedIdentity?.projectId === project.id ? linkedIdentity.visitorId : input.visitor_id;
     const journeyId =
       linkedIdentity?.projectId === project.id ? linkedIdentity.journeyId : input.journey_id;
+    const country = requestCountry(req.headers);
+    const source = country ? { ...input.source, country } : input.source;
     await app.db.begin(async (sql) => {
       await sql`
         INSERT INTO tracking_visitors
           (project_id, visitor_id, first_source, last_source)
         VALUES
-          (${project.id}, ${visitorId}, ${sql.json(input.source)}, ${sql.json(input.source)})
+          (${project.id}, ${visitorId}, ${sql.json(source)}, ${sql.json(source)})
         ON CONFLICT (project_id, visitor_id) DO UPDATE SET
           last_source = CASE
             WHEN EXCLUDED.last_source = '{}'::jsonb THEN tracking_visitors.last_source
@@ -108,7 +124,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           (project_id, session_id, visitor_id, journey_id, landing_url, referrer, source)
         VALUES
           (${project.id}, ${input.session_id}, ${visitorId}, ${journeyId},
-           ${input.landing_url}, ${input.referrer || null}, ${sql.json(input.source)})
+           ${input.landing_url}, ${input.referrer || null}, ${sql.json(source)})
         ON CONFLICT (project_id, session_id) DO UPDATE SET last_seen_at = now()
       `;
     });
@@ -265,6 +281,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     );
     destination.searchParams.set('src', trackingToken);
     destination.searchParams.set('tmx_ab', selected.label);
+    const redirectCountry = requestCountry(req.headers);
     await app.db`
       INSERT INTO tracking_events
         (id, project_id, visitor_id, journey_id, event_name, event_category,
@@ -272,11 +289,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       VALUES
         (${ulid()}, ${test.project_id}, ${visitorId}, ${journeyId}, 'InitiateCheckout',
          'commerce', ${`${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/r/${test.id}`},
-         ${app.db.json(
-           Object.fromEntries(
+         ${app.db.json({
+           ...Object.fromEntries(
              Object.entries(req.query).filter(([key, value]) => value && key.startsWith('utm_')),
-           ) as never,
-         )},
+           ),
+           ...(redirectCountry ? { country: redirectCountry } : {}),
+         } as never)},
          ${app.db.json({
            ab_test_id: test.id,
            ab_variant_id: selected.id,
@@ -300,6 +318,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       SELECT id, enabled FROM tracking_projects WHERE public_key = ${event.public_key}
     `;
     if (!project?.enabled) return reply.code(404).send({ accepted: false });
+    const country = requestCountry(req.headers);
+    const source = country ? { ...event.source, country } : event.source;
     await app.db`
       INSERT INTO tracking_events
         (id, project_id, visitor_id, session_id, journey_id, event_name, event_category,
@@ -309,7 +329,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         (${event.event_id}, ${project.id}, ${event.visitor_id}, ${event.session_id ?? null},
          ${event.journey_id ?? null}, ${event.event_name}, ${event.event_category},
          ${event.event_url}, ${event.page_title ?? null}, ${event.referrer || null},
-         ${app.db.json(event.source)}, ${app.db.json(event.properties as never)},
+         ${app.db.json(source)}, ${app.db.json(event.properties as never)},
          ${event.consent_state ?? null}, ${req.ip}, ${req.headers['user-agent'] ?? null},
          ${event.client_at ?? null})
       ON CONFLICT (project_id, id) DO NOTHING
@@ -317,8 +337,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     await app.db`
       UPDATE tracking_visitors SET last_seen_at = now(),
         last_source = CASE
-          WHEN ${app.db.json(event.source)} = '{}'::jsonb THEN last_source
-          ELSE last_source || ${app.db.json(event.source)}
+          WHEN ${app.db.json(source)} = '{}'::jsonb THEN last_source
+          ELSE last_source || ${app.db.json(source)}
         END
       WHERE project_id = ${project.id} AND visitor_id = ${event.visitor_id}
     `;
