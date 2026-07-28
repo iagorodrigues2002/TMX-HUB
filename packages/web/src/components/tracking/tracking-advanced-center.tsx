@@ -110,6 +110,23 @@ export function TrackingAdvancedCenter({
     },
     onError: (error) => toast.error((error as Error).message),
   });
+  const verifyDomain = useMutation({
+    mutationFn: (domainId: string) => apiClient.verifyTrackingDomain(offerId, domainId),
+    onSuccess: (result) => {
+      void refresh();
+      if (result.status === 'live') toast.success('Domínio confirmado e recebendo eventos.');
+      else toast.info(result.detail);
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
+  const removeDomain = useMutation({
+    mutationFn: (domainId: string) => apiClient.removeTrackingDomain(offerId, domainId),
+    onSuccess: () => {
+      void refresh();
+      toast.success('Domínio removido.');
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
   const saveRules = useMutation({
     mutationFn: () =>
       apiClient.saveTrackingMetaRules(offerId, {
@@ -278,14 +295,58 @@ export function TrackingAdvancedCenter({
               {advanced.data?.domains?.map((item) => (
                 <div
                   key={item.id}
-                  className="flex items-center justify-between rounded border border-white/[0.07] p-3 text-sm"
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/[0.07] p-3 text-sm"
                 >
-                  <span className="text-white/70">{item.hostname}</span>
-                  <span className={item.status === 'live' ? 'text-emerald-300' : 'text-amber-300'}>
-                    {item.status === 'live' ? 'ao vivo' : 'aguardando evento'}
-                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-white/80">{item.hostname}</p>
+                    <p className="mt-1 text-xs text-white/45">
+                      {item.status === 'live'
+                        ? 'O TMX recebeu eventos deste domínio.'
+                        : item.last_error || 'Instale o script e abra a página para confirmar.'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={item.status === 'live' ? 'text-emerald-300' : 'text-amber-300'}
+                    >
+                      {item.status === 'live' ? 'ao vivo' : 'aguardando evento'}
+                    </span>
+                    {canManage && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={verifyDomain.isPending}
+                          onClick={() => verifyDomain.mutate(item.id)}
+                        >
+                          Verificar
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={removeDomain.isPending}
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `Remover ${item.hostname} desta configuração de tracking?`,
+                              )
+                            )
+                              removeDomain.mutate(item.id);
+                          }}
+                        >
+                          Remover
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </div>
               ))}
+              {!advanced.data?.domains?.length && (
+                <p className="rounded-xl border border-dashed border-white/[0.1] p-4 text-sm text-white/50">
+                  Nenhum domínio cadastrado. Adicione o domínio sem protocolo ou caminho, por
+                  exemplo <code className="text-cyan-200">checkout.suaempresa.com</code>.
+                </p>
+              )}
             </div>
           </Module>
         )}
