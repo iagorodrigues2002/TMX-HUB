@@ -26,20 +26,26 @@ export function HubShell({ children, breadcrumb, topbarRight, fullBleed }: HubSh
   );
   return (
     <AuthGate>
-      {/*
-        h-screen + overflow-hidden no pai trava o layout na viewport.
-        Sidebar fica fixa visualmente; só o <main> rola.
-        MicroFooter posicionado absoluto pra não consumir altura do main scroll.
-      */}
-      <div className="flex h-screen flex-col overflow-hidden">
+      <a
+        href="#conteudo-principal"
+        className="fixed left-4 top-3 z-[100] -translate-y-20 rounded-lg bg-cyan-300 px-4 py-2 text-sm font-semibold text-[#031516] transition focus:translate-y-0"
+      >
+        Pular para o conteúdo
+      </a>
+      <div className="flex h-dvh flex-col overflow-hidden">
         <Topbar breadcrumb={breadcrumb} right={right} />
         <div className="flex flex-1 overflow-hidden">
           <Sidebar />
           {fullBleed ? (
-            <div className="flex-1 overflow-hidden">{children}</div>
+            <div id="conteudo-principal" className="min-w-0 flex-1 overflow-hidden">
+              {children}
+            </div>
           ) : (
-            <main className="flex-1 overflow-y-auto px-4 pb-28 pt-6 sm:px-6 md:px-10 md:py-12 lg:pb-12">
-              <div className="mx-auto w-full max-w-6xl">{children}</div>
+            <main
+              id="conteudo-principal"
+              className="min-w-0 flex-1 scroll-smooth overflow-y-auto px-4 pb-28 pt-6 sm:px-6 md:px-8 md:py-10 lg:pb-12 xl:px-12"
+            >
+              <div className="mx-auto w-full max-w-[1440px]">{children}</div>
               <MicroFooter />
             </main>
           )}

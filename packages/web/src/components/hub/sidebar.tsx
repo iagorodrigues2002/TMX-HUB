@@ -28,7 +28,7 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { label: 'Home', href: '/', icon: Home },
+  { label: 'Visão geral', href: '/', icon: Home },
   { label: 'Ofertas', href: '/ofertas', icon: Target, requiresTool: 'ofertas' },
   {
     label: 'Trackeamento avançado',
@@ -36,8 +36,8 @@ const NAV: NavItem[] = [
     icon: RadioTower,
     requiresTool: 'ofertas',
   },
-  { label: 'Tools', href: '/tools', icon: Wrench },
-  { label: 'Logs', href: '/logs', icon: ScrollText, requiresTool: 'logs' },
+  { label: 'Ferramentas', href: '/tools', icon: Wrench },
+  { label: 'Atividade', href: '/logs', icon: ScrollText, requiresTool: 'logs' },
   { label: 'Admin', href: '/admin', icon: ShieldCheck, adminOnly: true },
   { label: 'Configurações', href: '/settings', icon: Settings, adminOnly: true },
   { label: 'Conta', href: '#', icon: User, disabled: true },
@@ -81,13 +81,13 @@ export function Sidebar() {
     <>
       <aside
         aria-label="Navegação principal"
-        className="hidden w-[240px] shrink-0 flex-col gap-1 border-r border-white/[0.06] bg-[#04101A]/40 p-4 lg:flex"
+        className="hidden w-[252px] shrink-0 flex-col gap-1 border-r border-cyan-100/[0.08] bg-[#061119]/72 p-4 backdrop-blur-xl lg:flex"
       >
         <p className="hud-label px-3 pb-2">Menu</p>
         <nav className="flex flex-col gap-1">{links}</nav>
 
         <div className="mt-auto pt-4">
-          <div className="rounded-md border border-white/[0.06] bg-white/[0.02] p-3">
+          <div className="rounded-xl border border-cyan-100/[0.10] bg-cyan-100/[0.035] p-3.5">
             <p className="hud-label">Build</p>
             <p className="mt-1 font-mono text-[11px] text-white/55">v0.10.0</p>
             <p className="mt-2 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-white/45">
@@ -98,7 +98,7 @@ export function Sidebar() {
       </aside>
       <nav
         aria-label="Navegação móvel"
-        className="fixed inset-x-3 bottom-3 z-50 flex justify-around rounded-2xl border border-white/[0.10] bg-[#07151e]/95 p-1.5 shadow-2xl backdrop-blur-xl lg:hidden"
+        className="fixed inset-x-3 bottom-3 z-50 flex justify-around rounded-2xl border border-cyan-100/[0.14] bg-[#081923]/95 p-1.5 shadow-2xl shadow-black/50 backdrop-blur-2xl lg:hidden"
       >
         {visibleNav
           .filter((item) => !item.disabled && item.label !== 'Conta')
@@ -111,7 +111,7 @@ export function Sidebar() {
                 key={item.label}
                 href={item.href}
                 className={cn(
-                  'flex min-w-14 flex-col items-center gap-1 rounded-xl px-2 py-2 text-[9px] uppercase tracking-wider text-white/45',
+                  'flex min-w-14 flex-col items-center gap-1 rounded-xl px-2 py-2 text-[9px] font-semibold uppercase tracking-wider text-white/60',
                   active && 'bg-cyan-300/[0.10] text-cyan-200',
                 )}
               >

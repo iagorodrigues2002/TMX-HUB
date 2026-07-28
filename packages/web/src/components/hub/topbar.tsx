@@ -13,7 +13,7 @@ interface TopbarProps {
 export function Topbar({ breadcrumb, right }: TopbarProps) {
   return (
     <header
-      className="flex h-16 shrink-0 items-center gap-4 border-b border-white/[0.06] bg-[#04101A]/80 px-6 backdrop-blur-xl"
+      className="flex h-16 shrink-0 items-center gap-4 border-b border-cyan-100/[0.09] bg-[#061119]/88 px-4 shadow-[0_10px_35px_rgba(0,0,0,.18)] backdrop-blur-2xl sm:px-6"
       style={{ position: 'sticky', top: 0, zIndex: 30 }}
     >
       <Link href="/" className="group flex items-center gap-3">
@@ -21,16 +21,24 @@ export function Topbar({ breadcrumb, right }: TopbarProps) {
           aria-hidden
           className="grid h-8 w-8 place-items-center rounded-md border border-cyan-300/30 shadow-glow"
           style={{
-            background:
-              'linear-gradient(135deg, rgba(20,184,166,0.25), rgba(34,211,238,0.05))',
+            background: 'linear-gradient(135deg, rgba(20,184,166,0.25), rgba(34,211,238,0.05))',
           }}
         >
-          <svg viewBox="0 0 24 24" className="h-4 w-4 text-cyan-300" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            className="h-4 w-4 text-cyan-300"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <path d="M3 12h4l3-9 4 18 3-9h4" />
           </svg>
         </span>
         <span className="flex flex-col leading-tight">
-          <span className="text-[20px] font-bold tracking-tight text-white">
+          <span className="text-[18px] font-bold tracking-tight text-white sm:text-[20px]">
             TMX{' '}
             <span
               className="bg-clip-text text-transparent"
@@ -41,7 +49,9 @@ export function Topbar({ breadcrumb, right }: TopbarProps) {
               HUB
             </span>
           </span>
-          <span className="hud-label text-[9px]">TERMINAL DE CONTROLE</span>
+          <span className="hidden text-[9px] font-semibold uppercase tracking-[0.16em] text-white/55 sm:block">
+            TERMINAL DE CONTROLE
+          </span>
         </span>
       </Link>
 
@@ -50,11 +60,17 @@ export function Topbar({ breadcrumb, right }: TopbarProps) {
           aria-label="Breadcrumb"
           className="hidden items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40 md:flex"
         >
-          <span aria-hidden className="text-white/25">/</span>
+          <span aria-hidden className="text-white/40">
+            /
+          </span>
           {breadcrumb.map((crumb, i) => (
-            <span key={`${crumb}-${i}`} className="flex items-center gap-2">
+            <span key={crumb} className="flex items-center gap-2">
               <span className={i === breadcrumb.length - 1 ? 'text-white/70' : ''}>{crumb}</span>
-              {i < breadcrumb.length - 1 && <span aria-hidden className="text-white/25">›</span>}
+              {i < breadcrumb.length - 1 && (
+                <span aria-hidden className="text-white/25">
+                  ›
+                </span>
+              )}
             </span>
           ))}
         </nav>
