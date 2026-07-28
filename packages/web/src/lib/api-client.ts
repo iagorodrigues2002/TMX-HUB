@@ -1154,7 +1154,12 @@ export const apiClient = {
   async getTrackingConfig(id: string): Promise<{
     configured: boolean;
     project?: { id: string; public_key: string; enabled: boolean; install_code: string };
-    vendepay?: { configured: boolean; enabled: boolean; propagation_param: string };
+    vendepay?: {
+      configured: boolean;
+      enabled: boolean;
+      propagation_param: string;
+      signing_secret_configured: boolean;
+    };
   }> {
     return request(`/v1/offers/${id}/tracking`);
   },
@@ -1174,6 +1179,16 @@ export const apiClient = {
     warning: string;
   }> {
     return request(`/v1/offers/${id}/tracking/vendepay/rotate-token`, { method: 'POST' });
+  },
+
+  async saveVendepaySigningSecret(
+    id: string,
+    signingSecret: string,
+  ): Promise<{ configured: boolean; updated_at: string }> {
+    return request(`/v1/offers/${id}/tracking/vendepay/signing-secret`, {
+      method: 'PUT',
+      body: { signing_secret: signingSecret },
+    });
   },
 
   async previewVendepayWebhook(

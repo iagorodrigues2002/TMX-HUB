@@ -106,6 +106,7 @@ export function TrackingAdvancedCenter({
   const [destinationA, setDestinationA] = useState('');
   const [destinationB, setDestinationB] = useState('');
   const [vendepayWebhook, setVendepayWebhook] = useState('');
+  const [vendepaySigningSecret, setVendepaySigningSecret] = useState('');
   const [vendepayPayload, setVendepayPayload] = useState(vendepaySample);
   const [utmifyToken, setUtmifyToken] = useState('');
   const [utmifyEndpoint, setUtmifyEndpoint] = useState(
@@ -227,6 +228,15 @@ export function TrackingAdvancedCenter({
     onSuccess: (result) => {
       setVendepayWebhook(result.vendepay_webhook_url);
       toast.success('URL real gerada. A URL anterior foi desativada.');
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
+  const saveVendepaySigningSecret = useMutation({
+    mutationFn: () => apiClient.saveVendepaySigningSecret(offerId, vendepaySigningSecret),
+    onSuccess: () => {
+      setVendepaySigningSecret('');
+      void qc.invalidateQueries({ queryKey: ['tracking-config', offerId] });
+      toast.success('Secret da Vendepay salvo com criptografia.');
     },
     onError: (error) => toast.error((error as Error).message),
   });
@@ -543,6 +553,44 @@ export function TrackingAdvancedCenter({
                     </code>
                     <Button onClick={copyVendepayWebhook}>Copiar</Button>
                   </div>
+                )}
+              </div>
+            )}
+            {canManage && config.data?.configured && (
+              <div className="mt-5 rounded-md border border-cyan-300/15 bg-cyan-300/[0.03] p-4">
+                <p className="text-sm font-medium text-cyan-100">Secret de assinatura da Vendepay</p>
+                <p className="mt-1 text-xs leading-5 text-white/45">
+                  Salvo criptografado. Depois de salvar, o valor nunca volta ao navegador.
+                </p>
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    aria-label="Secret de assinatura da Vendepay"
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder={
+                      config.data?.vendepay?.signing_secret_configured
+                        ? '•••••••••••••••••••••••• (configurado)'
+                        : 'Cole o secret exibido pela Vendepay'
+                    }
+                    value={vendepaySigningSecret}
+                    onChange={(event) => setVendepaySigningSecret(event.target.value)}
+                  />
+                  <Button
+                    disabled={
+                      vendepaySigningSecret.trim().length < 16 ||
+                      saveVendepaySigningSecret.isPending
+                    }
+                    onClick={() => saveVendepaySigningSecret.mutate()}
+                  >
+                    {saveVendepaySigningSecret.isPending
+                      ? 'Salvando…'
+                      : config.data?.vendepay?.signing_secret_configured
+                        ? 'Substituir secret'
+                        : 'Salvar secret'}
+                  </Button>
+                </div>
+                {config.data?.vendepay?.signing_secret_configured && (
+                  <p className="mt-2 text-xs text-emerald-300">✓ Secret configurado com segurança</p>
                 )}
               </div>
             )}

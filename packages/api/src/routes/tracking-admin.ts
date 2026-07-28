@@ -5,10 +5,15 @@ import { z } from 'zod';
 import { env } from '../env.js';
 import { normalizeVendepay } from '../integrations/vendepay/normalize.js';
 import { NotFoundError, zodToProblem } from '../lib/problem.js';
+import { encryptSecret } from '../lib/secret-box.js';
 
 const PaginationSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   per_page: z.coerce.number().int().min(1).max(100).default(25),
+});
+
+const VendepaySigningSecretSchema = z.object({
+  signing_secret: z.string().trim().min(16).max(4096),
 });
 
 type PaginationQuery = {
@@ -195,12 +200,14 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         vendepay_enabled: boolean | null;
         propagation_param: string | null;
         connection_created_at: Date | null;
+        vendepay_signing_secret_configured: boolean;
       }>
     >`
       SELECT
         p.id, p.public_key, p.enabled, p.created_at, p.updated_at,
         v.id AS connection_id, v.enabled AS vendepay_enabled,
-        v.propagation_param, v.created_at AS connection_created_at
+        v.propagation_param, v.created_at AS connection_created_at,
+        (v.signing_secret_encrypted IS NOT NULL) AS vendepay_signing_secret_configured
       FROM tracking_projects p
       LEFT JOIN vendepay_connections v ON v.project_id = p.id
       WHERE p.offer_id = ${req.params.id}
@@ -229,9 +236,41 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         enabled: project.vendepay_enabled ?? false,
         propagation_param: project.propagation_param ?? 'src',
         created_at: project.connection_created_at,
+        signing_secret_configured: project.vendepay_signing_secret_configured,
       },
     };
   });
+
+  app.put<{ Params: { id: string } }>(
+    '/offers/:id/tracking/vendepay/signing-secret',
+    async (req, reply) => {
+      await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
+      if (!app.db || !env.TRACKING_ENCRYPTION_KEY) {
+        return reply.code(503).send({ error: 'tracking_encryption_unavailable' });
+      }
+      const parsed = VendepaySigningSecretSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: 'invalid_vendepay_signing_secret' });
+      }
+      const updated = await app.db<{ id: string; signing_secret_updated_at: Date }[]>`
+        UPDATE vendepay_connections v
+        SET
+          signing_secret_encrypted =
+            ${encryptSecret(parsed.data.signing_secret, env.TRACKING_ENCRYPTION_KEY)},
+          signing_secret_updated_at = now()
+        FROM tracking_projects p
+        WHERE v.project_id = p.id AND p.offer_id = ${req.params.id}
+        RETURNING v.id, v.signing_secret_updated_at
+      `;
+      if (!updated[0]) {
+        throw new NotFoundError('O tracking Vendepay ainda não foi configurado para esta oferta.');
+      }
+      return reply.send({
+        configured: true,
+        updated_at: updated[0].signing_secret_updated_at,
+      });
+    },
+  );
 
   app.post<{ Params: { id: string } }>(
     '/offers/:id/tracking/vendepay/rotate-token',
