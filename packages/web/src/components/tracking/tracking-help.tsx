@@ -1,5 +1,8 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
+import { apiClient } from '@/lib/api-client';
+import { useMutation } from '@tanstack/react-query';
 import {
   AlertTriangle,
   Check,
@@ -10,7 +13,10 @@ import {
   Code2,
   Database,
   ExternalLink,
+  FlaskConical,
+  Loader2,
   MousePointerClick,
+  PlayCircle,
   Radio,
   RefreshCw,
   Send,
@@ -25,6 +31,7 @@ const steps = [
   { id: 'script', label: 'Script', icon: Code2 },
   { id: 'webhook', label: 'Webhook', icon: Webhook },
   { id: 'meta', label: 'Meta CAPI', icon: Send },
+  { id: 'ab-test', label: 'Teste A/B', icon: FlaskConical },
   { id: 'testes', label: 'Testes', icon: CheckCircle2 },
   { id: 'diagnostico', label: 'Diagnóstico', icon: AlertTriangle },
 ];
@@ -145,26 +152,131 @@ function Result({
   );
 }
 
-export function TrackingHelp() {
+function TestCenter({ offerId }: { offerId: string }) {
+  const test = useMutation({
+    mutationFn: async () => {
+      if (!offerId) throw new Error('Selecione uma oferta para executar os testes.');
+      const [diagnostics, config, advanced, receipts] = await Promise.all([
+        apiClient.getTrackingDiagnostics(offerId),
+        apiClient.getTrackingConfig(offerId),
+        apiClient.getAdvancedTracking(offerId),
+        apiClient.listVendepayReceipts(offerId),
+      ]);
+      const liveDomains = advanced.domains.filter((domain) => domain.status === 'live').length;
+      return [
+        {
+          label: 'Banco e migrations',
+          ok: diagnostics.database === 'ready' && diagnostics.migrations === 'ready',
+          detail:
+            diagnostics.database === 'ready' && diagnostics.migrations === 'ready'
+              ? `Estrutura v${diagnostics.schema_version ?? '?'} pronta`
+              : diagnostics.detail,
+        },
+        {
+          label: 'Criptografia',
+          ok: diagnostics.encryption === 'ready',
+          detail:
+            diagnostics.encryption === 'ready'
+              ? 'Segredos protegidos'
+              : 'Chave de criptografia indisponível',
+        },
+        {
+          label: 'Tracker da oferta',
+          ok: config.configured && Boolean(config.project?.public_key),
+          detail: config.configured ? 'Chave pública e script disponíveis' : 'Tracking não criado',
+        },
+        {
+          label: 'Vendepay',
+          ok: Boolean(config.vendepay?.configured && config.vendepay.enabled),
+          detail: config.vendepay?.configured
+            ? `${receipts.receipts.length} webhook(s) registrado(s)`
+            : 'Webhook ainda não configurado',
+        },
+        {
+          label: 'Domínios',
+          ok: liveDomains > 0,
+          detail:
+            liveDomains > 0
+              ? `${liveDomains} domínio(s) recebendo eventos`
+              : 'Nenhum domínio confirmou PageView',
+        },
+        {
+          label: 'Fila do Meta',
+          ok: diagnostics.meta.failed === 0,
+          detail:
+            diagnostics.meta.failed === 0
+              ? `${diagnostics.meta.pending} entrega(s) pendente(s), nenhuma falha`
+              : `${diagnostics.meta.failed} entrega(s) com falha`,
+        },
+      ];
+    },
+  });
   return (
-    <div className="grid gap-8 xl:grid-cols-[210px_minmax(0,1fr)]">
-      <aside className="hidden xl:block">
-        <nav className="surface-panel sticky top-6 rounded-2xl p-3">
-          <p className="hud-label px-2 pb-2">Neste guia</p>
-          {steps.map(({ id, label, icon: Icon }) => (
-            <a
-              key={id}
-              href={`#${id}`}
-              className="flex items-center gap-2 rounded-lg px-2.5 py-2.5 text-xs font-medium text-white/65 transition hover:bg-cyan-100/[0.07] hover:text-cyan-100"
+    <section className="rounded-2xl border border-emerald-300/20 bg-emerald-300/[0.045] p-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="hud-label text-emerald-200">Central de homologação</p>
+          <h3 className="mt-2 text-lg font-semibold text-white">
+            Testar a instalação automaticamente
+          </h3>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-white/65">
+            Verifica infraestrutura, tracker, Vendepay, domínios e fila do Meta sem criar uma venda
+            real ou disparar conversões.
+          </p>
+        </div>
+        <Button disabled={!offerId || test.isPending} onClick={() => test.mutate()}>
+          {test.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <PlayCircle className="h-4 w-4" />
+          )}
+          Executar diagnóstico
+        </Button>
+      </div>
+      {test.isError && <p className="mt-4 text-sm text-red-200">{test.error.message}</p>}
+      {test.data && (
+        <div className="mt-5 grid gap-3 md:grid-cols-2">
+          {test.data.map((item) => (
+            <div
+              key={item.label}
+              className="flex gap-3 rounded-xl border border-white/[0.08] bg-black/15 p-3"
             >
-              <Icon className="h-3.5 w-3.5" />
-              {label}
-            </a>
+              {item.ok ? (
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />
+              ) : (
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+              )}
+              <div>
+                <p className="text-sm font-medium text-white/85">{item.label}</p>
+                <p className="mt-1 text-xs leading-5 text-white/55">{item.detail}</p>
+              </div>
+            </div>
           ))}
-        </nav>
-      </aside>
+        </div>
+      )}
+    </section>
+  );
+}
+
+export function TrackingHelp({ offerId = '' }: { offerId?: string }) {
+  return (
+    <div className="min-w-0">
+      <nav className="surface-panel sticky top-2 z-20 mb-6 flex max-w-full gap-1 overflow-x-auto rounded-2xl p-2">
+        <p className="hud-label hidden shrink-0 self-center px-2 2xl:block">Neste guia</p>
+        {steps.map(({ id, label, icon: Icon }) => (
+          <a
+            key={id}
+            href={`#${id}`}
+            className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2.5 text-xs font-medium text-white/65 transition hover:bg-cyan-100/[0.07] hover:text-cyan-100"
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {label}
+          </a>
+        ))}
+      </nav>
 
       <div className="min-w-0 space-y-5">
+        <TestCenter offerId={offerId} />
         <div className="rounded-2xl border border-cyan-300/25 bg-cyan-300/[0.07] p-5 shadow-[0_16px_40px_rgba(0,0,0,.16)]">
           <div className="flex gap-3">
             <Radio className="mt-0.5 h-5 w-5 shrink-0 text-cyan-300" />
@@ -356,8 +468,55 @@ export function TrackingHelp() {
         </Section>
 
         <Section
-          id="testes"
+          id="ab-test"
           number="06"
+          title="Criar e validar um teste A/B"
+          subtitle="Distribua visitantes entre dois destinos e compare checkouts, compras, conversão e receita."
+          icon={<FlaskConical className="h-5 w-5" />}
+        >
+          <ol className="space-y-4 text-sm leading-6 text-white/75">
+            <li className="flex gap-3">
+              <span className="font-mono text-cyan-300">01</span>
+              Abra <strong className="text-white">Testes A/B</strong>, dê um nome claro ao
+              experimento e informe as URLs completas das variantes A e B.
+            </li>
+            <li className="flex gap-3">
+              <span className="font-mono text-cyan-300">02</span>
+              Escolha a divisão de tráfego. Comece com 50/50; use uma distribuição diferente apenas
+              quando uma variante representar risco operacional.
+            </li>
+            <li className="flex gap-3">
+              <span className="font-mono text-cyan-300">03</span>
+              Abra a landing em duas janelas anônimas diferentes e clique no checkout. Confirme que
+              cada janela mantém o mesmo destino ao recarregar.
+            </li>
+            <li className="flex gap-3">
+              <span className="font-mono text-cyan-300">04</span>
+              Verifique se as URLs finais preservam UTMs e{' '}
+              <code className="text-cyan-200">src</code>. As métricas começam a aparecer no cartão
+              do experimento.
+            </li>
+            <li className="flex gap-3">
+              <span className="font-mono text-cyan-300">05</span>
+              Não escolha uma vencedora apenas por cliques. Aguarde compras suficientes, compare
+              conversão e receita por visitante e então fixe a variante vencedora.
+            </li>
+          </ol>
+          <div className="mt-5 grid gap-3 md:grid-cols-2">
+            <Result
+              title="Atribuição persistente"
+              detail="O visitante recebe uma variante uma única vez e continua nela durante toda a jornada."
+            />
+            <Result
+              title="Troca segura de checkout"
+              detail="O TMX altera somente o destino do CTA, preservando parâmetros de campanha e identificação."
+            />
+          </div>
+        </Section>
+
+        <Section
+          id="testes"
+          number="07"
           title="Testar a jornada completa"
           subtitle="Faça os testes nesta ordem. Assim, qualquer falha fica localizada em uma etapa."
           icon={<MousePointerClick className="h-5 w-5" />}
@@ -401,7 +560,7 @@ export function TrackingHelp() {
 
         <Section
           id="diagnostico"
-          number="07"
+          number="08"
           title="Status, quarentena e troubleshooting"
           subtitle="Use o estado recebido e o diagnóstico do webhook para encontrar o ponto exato da falha."
           icon={<AlertTriangle className="h-5 w-5" />}

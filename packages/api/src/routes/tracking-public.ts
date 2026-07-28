@@ -39,6 +39,10 @@ const BootstrapSchema = z.object({
   source: z.record(z.string(), z.string().max(2048)).default({}),
   tracking_token: z.string().max(2048).optional(),
 });
+const AbAssignmentSchema = z.object({
+  public_key: z.string().min(8).max(120),
+  visitor_id: z.string().min(8).max(120),
+});
 
 const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex');
 
@@ -110,6 +114,70 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         { projectId: project.id, visitorId, journeyId },
         env.WEBHOOK_SECRET,
       ),
+    };
+  });
+
+  app.post('/track/ab/assign', { bodyLimit: 16 * 1024 }, async (req, reply) => {
+    if (!app.db) return reply.code(503).send({ active: false });
+    const parsed = AbAssignmentSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ active: false });
+    const input = parsed.data;
+    const [test] = await app.db<
+      Array<{
+        id: string;
+        kind: 'checkout' | 'presell';
+        traffic_a: number;
+        winner_variant_id: string | null;
+      }>
+    >`
+      SELECT t.id, t.kind, t.traffic_a, t.winner_variant_id
+      FROM tracking_ab_tests t
+      JOIN tracking_projects p ON p.id = t.project_id
+      WHERE p.public_key = ${input.public_key}
+        AND p.enabled = true
+        AND t.status = 'active'
+        AND t.deleted_at IS NULL
+      LIMIT 1
+    `;
+    if (!test) return { active: false };
+    const variants = await app.db<
+      Array<{
+        id: string;
+        label: string;
+        gateway: string | null;
+        destination_url: string | null;
+        position: number;
+      }>
+    >`
+      SELECT id, label, gateway, destination_url, position
+      FROM tracking_ab_variants
+      WHERE test_id = ${test.id}
+      ORDER BY position
+    `;
+    if (variants.length !== 2) return { active: false };
+    const existing = await app.db<Array<{ variant_id: string }>>`
+      SELECT variant_id FROM tracking_ab_assignments
+      WHERE test_id = ${test.id} AND visitor_id = ${input.visitor_id}
+    `;
+    const digest = createHash('sha256')
+      .update(`${test.id}|${input.visitor_id}`)
+      .digest()
+      .readUInt32BE(0);
+    const selectedId =
+      test.winner_variant_id ??
+      existing[0]?.variant_id ??
+      (digest % 100 < test.traffic_a ? variants[0]!.id : variants[1]!.id);
+    const selected = variants.find((variant) => variant.id === selectedId) ?? variants[0]!;
+    await app.db`
+      INSERT INTO tracking_ab_assignments(id, test_id, variant_id, visitor_id)
+      VALUES (${ulid()}, ${test.id}, ${selected.id}, ${input.visitor_id})
+      ON CONFLICT(test_id, visitor_id) DO NOTHING
+    `;
+    return {
+      active: true,
+      test_id: test.id,
+      kind: test.kind,
+      variant: selected,
     };
   });
 
