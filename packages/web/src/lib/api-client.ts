@@ -2337,6 +2337,7 @@ function uploadMultipart<T>(
     const xhr = new XMLHttpRequest();
     const baseUrl = env.NEXT_PUBLIC_API_URL;
     xhr.open('POST', `${baseUrl}${path}`);
+    xhr.timeout = 20 * 60 * 1000;
     const token = authToken.get();
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     xhr.responseType = 'json';
@@ -2355,6 +2356,13 @@ function uploadMultipart<T>(
       }
     };
     xhr.onerror = () => reject(new ApiError('Falha de rede no upload.', 0));
+    xhr.ontimeout = () =>
+      reject(
+        new ApiError(
+          'O upload excedeu 20 minutos. Verifique a conexão e tente novamente com menos vídeos.',
+          0,
+        ),
+      );
     xhr.send(body);
   });
 }

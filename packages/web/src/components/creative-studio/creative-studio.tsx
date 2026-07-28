@@ -59,7 +59,9 @@ const extensionOptions = [
 
 const MAX_BATCH_FILES = 30;
 const MAX_FILE_BYTES = 500 * 1024 * 1024;
-const UPLOAD_CONCURRENCY = 2;
+// Uploads grandes passam pela API e seguem em streaming para o storage.
+// Serializar evita saturar a conexão/instância e perder o lote inteiro.
+const UPLOAD_CONCURRENCY = 1;
 const MAX_BULK_BYTES = 3 * 1024 * 1024 * 1024;
 
 type UploadItem = {
@@ -569,7 +571,7 @@ export function CreativeStudio({
             </p>
           </div>
           {readyJobs.length > 0 && (
-            <label className="flex cursor-pointer items-center gap-2 text-xs text-white/60">
+            <div className="flex items-center gap-2 text-xs text-white/60">
               <Checkbox
                 checked={readyJobs.every((job) => selectedJobs.has(job.id))}
                 onChange={(event) =>
@@ -579,7 +581,7 @@ export function CreativeStudio({
                 }
               />
               Selecionar todos os prontos
-            </label>
+            </div>
           )}
         </div>
         {selectedReadyJobs.length > 0 && (

@@ -23,6 +23,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       'x-ratelimit-remaining',
       'x-ratelimit-reset',
       'x-content-sha256',
+      'content-disposition',
+      'content-length',
     ],
   });
 };
