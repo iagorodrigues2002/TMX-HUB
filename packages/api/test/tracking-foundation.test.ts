@@ -64,4 +64,28 @@ describe('reliable tracking foundation', () => {
       utm_content: 'criativo-3',
     });
   });
+
+  it('marks a pending checkout test without turning it into an approved sale', () => {
+    const payload = buildUtmifyOrderPayload({
+      isTest: true,
+      orderId: 'TMX-TEST-IC-1',
+      provider: 'tmx-test',
+      status: 'pending',
+      amountMinor: 100,
+      currency: 'BRL',
+      createdAt: new Date('2026-07-28T14:00:00.000Z'),
+      buyer: { name: 'Cliente Teste', email: 'teste@theminex.com' },
+      source: {
+        utm_source: 'tmx',
+        utm_medium: 'integration_test',
+        utm_campaign: 'utmify_checkout_test',
+        utm_content: 'initiate_checkout',
+      },
+    });
+
+    expect(payload.isTest).toBe(true);
+    expect(payload.status).toBe('waiting_payment');
+    expect(payload.approvedDate).toBeNull();
+    expect(payload.trackingParameters.utm_content).toBe('initiate_checkout');
+  });
 });

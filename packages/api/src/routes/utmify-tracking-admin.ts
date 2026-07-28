@@ -114,6 +114,75 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       return reply.code(202).send({ accepted: true });
     },
   );
+
+  app.post<{ Params: { id: string } }>(
+    '/offers/:id/tracking/utmify-test-checkout',
+    async (req, reply) => {
+      await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
+      if (!app.db) return reply.code(503).send({ error: 'database_unavailable' });
+
+      const [project] = await app.db<{ id: string }[]>`
+        SELECT id
+        FROM tracking_projects
+        WHERE offer_id = ${req.params.id} AND enabled = true
+      `;
+      if (!project) return reply.code(409).send({ error: 'tracking_not_configured' });
+
+      const [destination] = await app.db<{ id: string }[]>`
+        SELECT id
+        FROM tracking_utmify_destinations
+        WHERE project_id = ${project.id} AND enabled = true
+      `;
+      if (!destination) return reply.code(409).send({ error: 'utmify_not_configured' });
+
+      const now = new Date();
+      const suffix = ulid();
+      const transactionId = `TMX-TEST-IC-${suffix}`;
+      const orderId = ulid();
+      const deliveryId = ulid();
+      const eventId = `tmx-test:${transactionId}:waiting_payment`;
+
+      await app.db.begin(async (sql) => {
+        await sql`
+          INSERT INTO tracking_orders
+            (id, project_id, provider, external_id, status, amount_minor, currency,
+             visitor_id, buyer, raw_status, occurred_at, paid_at, payment_method,
+             product, attribution_source)
+          VALUES
+            (${orderId}, ${project.id}, 'tmx-test', ${transactionId}, 'pending', 100, 'BRL',
+             NULL, ${sql.json({
+               name: 'Cliente Teste TMX',
+               email: `teste+${suffix.toLowerCase()}@theminex.com`,
+               phone: '5511999999999',
+             })}, 'waiting_payment', ${now}, NULL, 'pix',
+             ${sql.json({ id: 'tmx-test-product', name: 'Checkout de teste TMX' })},
+             ${sql.json({
+               src: `tmx_test_${suffix}`,
+               utm_source: 'tmx',
+               utm_medium: 'integration_test',
+               utm_campaign: 'utmify_checkout_test',
+               utm_content: 'initiate_checkout',
+             })})
+        `;
+        await sql`
+          INSERT INTO tracking_delivery_outbox
+            (id, project_id, destination_kind, destination_id, order_id, event_id, event_type)
+          VALUES
+            (${deliveryId}, ${project.id}, 'utmify', ${destination.id}, ${orderId},
+             ${eventId}, 'order.waiting_payment.test')
+        `;
+      });
+
+      await app.utmifyDeliveryQueue.add('send', { deliveryId });
+      return reply.code(202).send({
+        accepted: true,
+        delivery_id: deliveryId,
+        transaction_id: transactionId,
+        status: 'waiting_payment',
+        is_test: true,
+      });
+    },
+  );
 };
 
 export default plugin;

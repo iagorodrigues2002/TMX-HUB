@@ -1519,11 +1519,7 @@ export const apiClient = {
     });
   },
 
-  async updateMetaTestEventCode(
-    id: string,
-    pixelId: string,
-    testEventCode: string,
-  ): Promise<void> {
+  async updateMetaTestEventCode(id: string, pixelId: string, testEventCode: string): Promise<void> {
     await request(`/v1/offers/${id}/tracking/meta-pixels/${pixelId}/test-event-code`, {
       method: 'PATCH',
       body: { test_event_code: testEventCode },
@@ -1573,6 +1569,18 @@ export const apiClient = {
 
   async retryTrackingUtmifyDelivery(id: string, deliveryId: string): Promise<void> {
     await request(`/v1/offers/${id}/tracking/utmify-deliveries/${deliveryId}/retry`, {
+      method: 'POST',
+    });
+  },
+
+  async sendTrackingUtmifyTestCheckout(id: string): Promise<{
+    accepted: boolean;
+    delivery_id: string;
+    transaction_id: string;
+    status: 'waiting_payment';
+    is_test: true;
+  }> {
+    return request(`/v1/offers/${id}/tracking/utmify-test-checkout`, {
       method: 'POST',
     });
   },

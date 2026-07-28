@@ -223,6 +223,14 @@ export function TrackingAdvancedCenter({
     },
     onError: (error) => toast.error((error as Error).message),
   });
+  const testUtmifyCheckout = useMutation({
+    mutationFn: () => apiClient.sendTrackingUtmifyTestCheckout(offerId),
+    onSuccess: (result) => {
+      void qc.invalidateQueries({ queryKey: ['tracking-utmify-deliveries', offerId] });
+      toast.success(`Checkout de teste enviado: ${result.transaction_id}`);
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
   const rotateVendepay = useMutation({
     mutationFn: () => apiClient.rotateVendepayWebhook(offerId),
     onSuccess: (result) => {
@@ -349,15 +357,17 @@ export function TrackingAdvancedCenter({
                     3. No CNAME, deixe <strong className="text-white">Proxy desativado</strong>{' '}
                     (nuvem cinza / Somente DNS) e TTL em Automático.
                   </li>
-                  <li>4. No TXT, use exatamente o Nome e o Conteúdo mostrados, com TTL Automático.</li>
+                  <li>
+                    4. No TXT, use exatamente o Nome e o Conteúdo mostrados, com TTL Automático.
+                  </li>
                   <li>
                     5. Salve, aguarde a propagação e clique em{' '}
                     <strong className="text-white">Verificar</strong>.
                   </li>
                 </ol>
                 <p className="mt-2 text-amber-100/70">
-                  O TMX sempre usará o subdomínio tmx, como tmx.suaempresa.com. Não crie A/AAAA para ele e
-                  não altere o DNS da landing page ou do checkout.
+                  O TMX sempre usará o subdomínio tmx, como tmx.suaempresa.com. Não crie A/AAAA para
+                  ele e não altere o DNS da landing page ou do checkout.
                 </p>
               </div>
             )}
@@ -558,7 +568,9 @@ export function TrackingAdvancedCenter({
             )}
             {canManage && config.data?.configured && (
               <div className="mt-5 rounded-md border border-cyan-300/15 bg-cyan-300/[0.03] p-4">
-                <p className="text-sm font-medium text-cyan-100">Secret de assinatura da Vendepay</p>
+                <p className="text-sm font-medium text-cyan-100">
+                  Secret de assinatura da Vendepay
+                </p>
                 <p className="mt-1 text-xs leading-5 text-white/45">
                   Salvo criptografado. Depois de salvar, o valor nunca volta ao navegador.
                 </p>
@@ -590,7 +602,9 @@ export function TrackingAdvancedCenter({
                   </Button>
                 </div>
                 {config.data?.vendepay?.signing_secret_configured && (
-                  <p className="mt-2 text-xs text-emerald-300">✓ Secret configurado com segurança</p>
+                  <p className="mt-2 text-xs text-emerald-300">
+                    ✓ Secret configurado com segurança
+                  </p>
                 )}
               </div>
             )}
@@ -755,6 +769,23 @@ export function TrackingAdvancedCenter({
                   onChange={(event) => setUtmifyEndpoint(event.target.value)}
                   placeholder="Endpoint da API de vendas"
                 />
+                <div className="md:col-span-2 rounded border border-cyan-400/20 bg-cyan-400/[0.04] p-4">
+                  <p className="text-sm font-medium text-cyan-100">Testar checkout pendente</p>
+                  <p className="mt-1 text-xs leading-5 text-white/45">
+                    Envia um pedido de R$ 1,00 com status waiting_payment e isTest=true. Ele valida
+                    a conexão sem registrar uma venda aprovada.
+                  </p>
+                  <Button
+                    className="mt-3"
+                    variant="outline"
+                    disabled={!utmify.data?.destination?.enabled || testUtmifyCheckout.isPending}
+                    onClick={() => testUtmifyCheckout.mutate()}
+                  >
+                    {testUtmifyCheckout.isPending
+                      ? 'Enviando checkout de teste...'
+                      : 'Enviar checkout de teste'}
+                  </Button>
+                </div>
               </div>
             )}
             <div className="mt-6">
