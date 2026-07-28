@@ -5,6 +5,7 @@ export const FUNNEL_QUEUE_NAME = 'funnel-queue';
 export const SHIELD_QUEUE_NAME = 'shield-queue';
 export const MEDIA_QUEUE_NAME = 'media-queue';
 export const META_QUEUE_NAME = 'meta-capi-queue';
+export const UTMIFY_DELIVERY_QUEUE_NAME = 'utmify-delivery-queue';
 
 export interface RenderJobData {
   jobId: string;
@@ -36,5 +37,9 @@ export interface MediaJobData {
 }
 
 export interface MetaJobData {
+  deliveryId: string;
+}
+
+export interface UtmifyDeliveryJobData {
   deliveryId: string;
 }

@@ -20,6 +20,7 @@ import trackingAdminRoutes from './tracking-admin.js';
 import trackingAdvancedRoutes from './tracking-advanced.js';
 import trackingPublicRoutes from './tracking-public.js';
 import usersRoutes from './users.js';
+import utmifyTrackingAdminRoutes from './utmify-tracking-admin.js';
 import vslJobsRoutes from './vsl-jobs.js';
 import webhookTestRoutes from './webhook-test.js';
 
@@ -102,6 +103,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         await protectedRoutes.register(shieldJobsRoutes);
         await protectedRoutes.register(mediaJobsRoutes);
         await protectedRoutes.register(metaAdminRoutes);
+        await protectedRoutes.register(utmifyTrackingAdminRoutes);
         await protectedRoutes.register(usersRoutes);
       });
     },

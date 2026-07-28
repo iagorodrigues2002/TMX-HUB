@@ -13,6 +13,7 @@ for (const name of [
   '001_tracking_foundation.sql',
   '002_meta_capi.sql',
   '003_tracking_advanced.sql',
+  '004_tracking_reliable_foundation.sql',
 ]) {
   const migration = await readFile(new URL(`../migrations/${name}`, import.meta.url), 'utf8');
   await sql.unsafe(migration);

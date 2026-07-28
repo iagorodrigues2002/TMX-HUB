@@ -17,6 +17,7 @@ import { createMediaWorker } from './workers/media.worker.js';
 import { createMetaWorker } from './workers/meta.worker.js';
 import { createRenderWorker } from './workers/render.worker.js';
 import { createShieldWorker } from './workers/shield.worker.js';
+import { createUtmifyDeliveryWorker } from './workers/utmify-delivery.worker.js';
 import { createVslWorker } from './workers/vsl.worker.js';
 
 // TODO(auth): Authentication is intentionally skipped for the MVP.
@@ -60,6 +61,19 @@ async function main() {
     await Promise.allSettled(
       pending.map(({ id }) => app.metaQueue.add('send', { deliveryId: id })),
     );
+    const pendingUtmify = await app.db<{ id: string }[]>`
+      SELECT id FROM tracking_delivery_outbox
+      WHERE destination_kind = 'utmify'
+        AND state IN ('pending', 'failed', 'processing')
+        AND next_attempt_at <= now()
+      ORDER BY created_at ASC
+      LIMIT 1000
+    `;
+    await Promise.allSettled(
+      pendingUtmify.map(({ id }) =>
+        app.utmifyDeliveryQueue.add('send', { deliveryId: id }, { jobId: id }),
+      ),
+    );
   }
 
   // NOTE(workers): For dev simplicity we run the workers in the same Node
@@ -99,6 +113,7 @@ async function main() {
     storage: app.storage,
   });
   const metaWorker = createMetaWorker();
+  const utmifyDeliveryWorker = createUtmifyDeliveryWorker();
   app.utmifySync.start();
 
   let shuttingDown = false;
@@ -118,6 +133,7 @@ async function main() {
       await shieldWorker.close();
       await mediaWorker.close();
       await metaWorker?.close();
+      await utmifyDeliveryWorker?.close();
       app.log.info('shutdown complete');
       process.exit(0);
     } catch (err) {
