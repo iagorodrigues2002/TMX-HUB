@@ -271,7 +271,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
          event_url, source, properties, received_at)
       VALUES
         (${ulid()}, ${test.project_id}, ${visitorId}, ${journeyId}, 'InitiateCheckout',
-         'commerce', ${`${env.PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/r/${test.id}`},
+         'commerce', ${`${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/r/${test.id}`},
          ${app.db.json(
            Object.fromEntries(
              Object.entries(req.query).filter(([key, value]) => value && key.startsWith('utm_')),

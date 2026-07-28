@@ -23,6 +23,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # Railway passes service env vars as build args automatically.
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+ARG API_PROXY_TARGET
+ENV API_PROXY_TARGET=${API_PROXY_TARGET}
 RUN pnpm --filter @page-cloner/web build
 
 # ---- runtime stage ----

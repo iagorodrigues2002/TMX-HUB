@@ -24,7 +24,7 @@
           "string": [
             {
               "name": "TMX_API_URL",
-              "value": "https://page-clonerapi-production.up.railway.app"
+              "value": "https://theminex.com"
             },
             {
               "name": "TMX_TOKEN",
