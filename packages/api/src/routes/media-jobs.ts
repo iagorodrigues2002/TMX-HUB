@@ -189,7 +189,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       );
     }
 
-    const archive = archiver('zip', { zlib: { level: 6 } });
+    // Vídeos já são comprimidos. Recomprimi-los gasta CPU sem reduzir o ZIP.
+    // O storage entrega streams para manter o uso de memória constante mesmo
+    // em lotes grandes.
+    const archive = archiver('zip', { store: true });
     const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
     reply.raw.writeHead(200, {
       'content-type': 'application/zip',
@@ -204,7 +207,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
     const usedNames = new Map<string, number>();
     for (const job of jobs) {
-      const object = await app.storage.get(job.outputStorageKey!).catch((error) => {
+      const object = await app.storage.getStream(job.outputStorageKey!).catch((error) => {
         throw new NotFoundError(
           `Falha ao ler o resultado de ${job.inputFilename}: ${(error as Error).message}`,
         );

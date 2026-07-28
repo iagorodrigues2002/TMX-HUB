@@ -1,4 +1,5 @@
 import { Transform, type TransformCallback } from 'node:stream';
+import type { Readable } from 'node:stream';
 import {
   DeleteObjectCommand,
   DeleteObjectsCommand,
@@ -10,12 +11,17 @@ import {
 } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import type { Readable } from 'node:stream';
 import { env } from '../env.js';
 import { BadRequestError, NotFoundError } from '../lib/problem.js';
 
 export interface StorageObject {
   body: Buffer;
+  contentType?: string;
+  contentLength?: number;
+}
+
+export interface StorageStreamObject {
+  body: Readable;
   contentType?: string;
   contentLength?: number;
 }
@@ -87,7 +93,7 @@ export class StorageService {
         Metadata: opts.metadata,
       },
       partSize: opts.partSize ?? 5 * 1024 * 1024, // 5MB
-      queueSize: opts.queueSize ?? 4,             // 4 parts em paralelo
+      queueSize: opts.queueSize ?? 4, // 4 parts em paralelo
       leavePartsOnError: false,
     });
 
@@ -110,6 +116,25 @@ export class StorageService {
       const body = await streamToBuffer(out.Body);
       return {
         body,
+        contentType: out.ContentType,
+        contentLength: out.ContentLength,
+      };
+    } catch (err) {
+      if (isNoSuchKey(err)) {
+        throw new NotFoundError(`Object not found: ${key}`);
+      }
+      throw err;
+    }
+  }
+
+  async getStream(key: string): Promise<StorageStreamObject> {
+    try {
+      const out = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
+      if (!out.Body || typeof (out.Body as Readable).pipe !== 'function') {
+        throw new Error(`Storage object is not streamable: ${key}`);
+      }
+      return {
+        body: out.Body as Readable,
         contentType: out.ContentType,
         contentLength: out.ContentLength,
       };
@@ -193,11 +218,7 @@ class ByteCounterTransform extends Transform {
   override _transform(chunk: Buffer, _enc: BufferEncoding, cb: TransformCallback): void {
     this.bytes += chunk.length;
     if (this.maxBytes !== undefined && this.bytes > this.maxBytes) {
-      cb(
-        new Error(
-          `STREAM_LIMIT_EXCEEDED: arquivo excedeu o limite de ${this.maxBytes} bytes`,
-        ),
-      );
+      cb(new Error(`STREAM_LIMIT_EXCEEDED: arquivo excedeu o limite de ${this.maxBytes} bytes`));
       return;
     }
     cb(null, chunk);
