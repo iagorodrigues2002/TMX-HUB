@@ -802,6 +802,14 @@ function AbTestCard({
     },
     onError: (error) => toast.error((error as Error).message),
   });
+  const remove = useMutation({
+    mutationFn: () => apiClient.deleteTrackingAbTest(offerId, test.id),
+    onSuccess: () => {
+      onUpdated();
+      toast.success('Teste A/B removido.');
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
   return (
     <article className="rounded-2xl border border-cyan-100/[0.12] bg-black/10 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -920,15 +928,28 @@ function AbTestCard({
         </p>
       </div>
       {canManage && !test.winner_variant_id && (
-        <Button
-          className="mt-4"
-          size="sm"
-          variant="ghost"
-          disabled={control.isPending}
-          onClick={() => control.mutate({ action: test.status === 'active' ? 'pause' : 'resume' })}
-        >
-          {test.status === 'active' ? 'Pausar teste' : 'Retomar teste'}
-        </Button>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={control.isPending}
+            onClick={() =>
+              control.mutate({ action: test.status === 'active' ? 'pause' : 'resume' })
+            }
+          >
+            {test.status === 'active' ? 'Pausar teste' : 'Retomar teste'}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={remove.isPending}
+            onClick={() => {
+              if (window.confirm(`Remover o teste A/B "${test.name}"?`)) remove.mutate();
+            }}
+          >
+            Remover teste
+          </Button>
+        </div>
       )}
     </article>
   );
