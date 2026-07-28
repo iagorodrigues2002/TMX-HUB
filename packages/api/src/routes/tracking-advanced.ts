@@ -3,7 +3,11 @@ import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { ulid } from 'ulid';
 import { z } from 'zod';
 import { env } from '../env.js';
-import { type RailwayDnsRecord, provisionRailwayDomain } from '../integrations/railway/domains.js';
+import {
+  type RailwayDnsRecord,
+  deleteRailwayDomain,
+  provisionRailwayDomain,
+} from '../integrations/railway/domains.js';
 import { zodToProblem } from '../lib/problem.js';
 
 const databaseUnavailable = {
@@ -233,8 +237,16 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     async (req, reply) => {
       const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin', true);
       if (!app.db) return reply.code(503).send(databaseUnavailable);
-      if (p)
+      if (p) {
+        const domains = await app.db<Array<{ provider_domain_id: string | null }>>`
+          SELECT provider_domain_id FROM tracking_domains
+          WHERE id=${req.params.domainId} AND project_id=${p.id}
+        `;
+        if (domains[0]?.provider_domain_id) {
+          await deleteRailwayDomain(domains[0].provider_domain_id);
+        }
         await app.db`DELETE FROM tracking_domains WHERE id=${req.params.domainId} AND project_id=${p.id}`;
+      }
       return reply.code(204).send();
     },
   );
