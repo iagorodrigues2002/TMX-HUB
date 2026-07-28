@@ -305,12 +305,10 @@ export function TrackingAdvancedCenter({
             )}
             {domainKind === 'tracking' && (
               <div className="mt-3 rounded-xl border border-cyan-300/15 bg-cyan-300/[0.04] p-4 text-xs leading-5 text-white/65">
-                Use um subdomínio dedicado. Depois de adicionar, crie um registro{' '}
-                <strong className="text-white">CNAME</strong> apontando para{' '}
-                <code className="break-all text-cyan-200">
-                  {advanced.data?.domain_setup?.target ?? 'o alvo exibido pelo TMX'}
-                </code>
-                . Não altere o DNS da sua landing page ou checkout.
+                Use um subdomínio dedicado. Depois de adicionar, o TMX exibirá os registros{' '}
+                <strong className="text-white">CNAME e TXT</strong> exatos fornecidos pelo
+                Railway. Cadastre ambos no seu provedor de DNS e volte aqui para verificar. Não
+                altere o DNS da sua landing page ou checkout.
               </div>
             )}
             <div className="mt-4 space-y-2">
