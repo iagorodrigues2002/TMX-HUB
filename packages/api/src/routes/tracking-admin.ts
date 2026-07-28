@@ -200,6 +200,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   app.get<{ Params: { id: string } }>('/offers/:id/tracking', async (req, reply) => {
     await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
+    reply.header('Cache-Control', 'private, no-store, max-age=0');
     if (!app.db) return reply.code(503).send(databaseUnavailable);
 
     const [project] = await app.db<
