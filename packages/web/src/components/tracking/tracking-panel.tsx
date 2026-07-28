@@ -62,13 +62,17 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
         access_token: pixelToken.trim(),
         ...(testEventCode.trim() ? { test_event_code: testEventCode.trim() } : {}),
       }),
-    onSuccess: () => {
+    onSuccess: (result) => {
       setPixelName('');
       setPixelId('');
       setPixelToken('');
       setTestEventCode('');
       void queryClient.invalidateQueries({ queryKey: ['tracking-meta-pixels', offerId] });
-      toast.success('Pixel Meta validado e salvo.');
+      if (result.verification === 'verified') {
+        toast.success('Pixel Meta validado e salvo.');
+      } else {
+        toast.warning(result.verification_warning ?? 'Pixel salvo. Faça um envio em Test Events.');
+      }
     },
     onError: (error) => toast.error((error as Error).message),
   });
