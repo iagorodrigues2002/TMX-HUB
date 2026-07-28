@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api-client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Activity, CheckCircle2, Copy, Loader2, Radio } from 'lucide-react';
+import { Activity, CheckCircle2, Copy, Loader2, Radio, Send, ShoppingCart } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -74,6 +74,20 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
         toast.warning(result.verification_warning ?? 'Pixel salvo. Faça um envio em Test Events.');
       }
     },
+    onError: (error) => toast.error((error as Error).message),
+  });
+  const sendTestEvent = useMutation({
+    mutationFn: ({
+      pixelId,
+      eventName,
+    }: {
+      pixelId: string;
+      eventName: 'InitiateCheckout' | 'Purchase';
+    }) => apiClient.sendMetaTestEvent(offerId, pixelId, eventName),
+    onSuccess: (result) =>
+      toast.success(
+        `${result.event_name} aceito pela Meta (${result.events_received} evento recebido).`,
+      ),
     onError: (error) => toast.error((error as Error).message),
   });
   const copy = async (value: string) => {
@@ -205,10 +219,57 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
               {pixels.data?.pixels.map((pixel) => (
                 <div
                   key={pixel.id}
-                  className="mt-3 flex items-center justify-between rounded border border-white/[0.06] px-3 py-2 text-xs"
+                  className="mt-3 rounded border border-white/[0.06] px-3 py-3 text-xs"
                 >
-                  <span className="text-white/70">{pixel.name}</span>
-                  <code className="text-cyan-200/70">{pixel.pixel_id}</code>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-white/70">{pixel.name}</span>
+                    <code className="text-cyan-200/70">{pixel.pixel_id}</code>
+                  </div>
+                  {canManage && (
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={!pixel.test_event_code || sendTestEvent.isPending}
+                        onClick={() =>
+                          sendTestEvent.mutate({
+                            pixelId: pixel.id,
+                            eventName: 'InitiateCheckout',
+                          })
+                        }
+                      >
+                        {sendTestEvent.isPending ? (
+                          <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Send className="mr-2 h-3.5 w-3.5" />
+                        )}
+                        Testar Initiate
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={!pixel.test_event_code || sendTestEvent.isPending}
+                        onClick={() =>
+                          sendTestEvent.mutate({
+                            pixelId: pixel.id,
+                            eventName: 'Purchase',
+                          })
+                        }
+                      >
+                        {sendTestEvent.isPending ? (
+                          <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <ShoppingCart className="mr-2 h-3.5 w-3.5" />
+                        )}
+                        Testar venda
+                      </Button>
+                      {!pixel.test_event_code && (
+                        <span className="text-amber-200/65">
+                          Adicione um Test Event Code para habilitar os testes.
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
               {canManage && (

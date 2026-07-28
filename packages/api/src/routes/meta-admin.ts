@@ -2,18 +2,22 @@ import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { ulid } from 'ulid';
 import { z } from 'zod';
 import { env } from '../env.js';
-import { encryptSecret } from '../lib/secret-box.js';
+import { decryptSecret, encryptSecret } from '../lib/secret-box.js';
 import {
   isDefinitelyInvalidMetaToken,
   metaCredentialDetail,
   readMetaGraphError,
 } from '../services/meta-credentials.js';
+import { buildMetaTestEvent } from '../services/meta-test-events.js';
 
 const PixelSchema = z.object({
   name: z.string().trim().min(1).max(80),
   pixel_id: z.string().regex(/^\d{5,32}$/),
   access_token: z.string().min(20).max(4096),
   test_event_code: z.string().trim().max(128).optional(),
+});
+const TestEventSchema = z.object({
+  event_name: z.enum(['InitiateCheckout', 'Purchase']),
 });
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
@@ -83,6 +87,94 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       ...(verificationWarning ? { verification_warning: verificationWarning } : {}),
     });
   });
+
+  app.post<{ Params: { id: string; pixelId: string } }>(
+    '/offers/:id/tracking/meta-pixels/:pixelId/test-event',
+    async (req, reply) => {
+      await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
+      if (!app.db || !env.TRACKING_ENCRYPTION_KEY) {
+        return reply.code(503).send({ error: 'meta_configuration_unavailable' });
+      }
+      const parsed = TestEventSchema.safeParse(req.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'invalid_test_event' });
+      const [pixel] = await app.db<
+        Array<{
+          pixel_id: string;
+          access_token_encrypted: string;
+          test_event_code: string | null;
+        }>
+      >`
+        SELECT mp.pixel_id, mp.access_token_encrypted, mp.test_event_code
+        FROM meta_pixels mp
+        JOIN tracking_projects tp ON tp.id = mp.project_id
+        WHERE mp.id = ${req.params.pixelId}
+          AND tp.offer_id = ${req.params.id}
+          AND mp.enabled = true
+        LIMIT 1
+      `;
+      if (!pixel) return reply.code(404).send({ error: 'pixel_not_found' });
+      if (!pixel.test_event_code) {
+        return reply.code(409).send({
+          error: 'test_event_code_required',
+          detail: 'Adicione o Test Event Code ao Pixel antes de enviar eventos de teste.',
+        });
+      }
+      const eventId = `tmx-test-${ulid()}`;
+      const eventSourceUrl =
+        typeof req.headers.origin === 'string' && /^https?:\/\//.test(req.headers.origin)
+          ? `${req.headers.origin}/tracking`
+          : `${env.PUBLIC_BASE_URL.replace(/\/$/, '')}/tracking-test`;
+      const payload = {
+        data: [
+          buildMetaTestEvent({
+            eventName: parsed.data.event_name,
+            eventId,
+            eventSourceUrl,
+            externalId: `${req.params.id}:${req.user!.sub}:meta-test`,
+            clientIp: req.ip,
+            userAgent: req.headers['user-agent'],
+          }),
+        ],
+        test_event_code: pixel.test_event_code,
+        partner_agent: 'tmxhub-1.0',
+      };
+      const url = new URL(
+        `https://graph.facebook.com/${env.META_GRAPH_API_VERSION}/${pixel.pixel_id}/events`,
+      );
+      url.searchParams.set(
+        'access_token',
+        decryptSecret(pixel.access_token_encrypted, env.TRACKING_ENCRYPTION_KEY),
+      );
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(15_000),
+      });
+      const result = (await response.json().catch(() => null)) as unknown;
+      if (!response.ok) {
+        const graphError = readMetaGraphError(result);
+        return reply.code(422).send({
+          error: 'meta_test_event_rejected',
+          detail: metaCredentialDetail(response.status, graphError),
+        });
+      }
+      const eventsReceived =
+        result && typeof result === 'object' && 'events_received' in result
+          ? Number((result as { events_received?: unknown }).events_received) || 0
+          : 0;
+      return reply.send({
+        accepted: true,
+        event_name: parsed.data.event_name,
+        event_id: eventId,
+        events_received: eventsReceived,
+        detail:
+          eventsReceived > 0
+            ? 'Evento aceito pela Meta. Ele aparecerá em Eventos de Teste.'
+            : 'A Meta respondeu sem erro, mas não confirmou events_received.',
+      });
+    },
+  );
 
   app.delete<{ Params: { id: string; pixelId: string } }>(
     '/offers/:id/tracking/meta-pixels/:pixelId',

@@ -1452,6 +1452,23 @@ export const apiClient = {
     return request(`/v1/offers/${id}/tracking/meta-pixels`, { method: 'POST', body: input });
   },
 
+  async sendMetaTestEvent(
+    id: string,
+    pixelId: string,
+    eventName: 'InitiateCheckout' | 'Purchase',
+  ): Promise<{
+    accepted: boolean;
+    event_name: string;
+    event_id: string;
+    events_received: number;
+    detail: string;
+  }> {
+    return request(`/v1/offers/${id}/tracking/meta-pixels/${pixelId}/test-event`, {
+      method: 'POST',
+      body: { event_name: eventName },
+    });
+  },
+
   async getTrackingUtmifyDestination(id: string): Promise<{
     configured: boolean;
     destination?: {
