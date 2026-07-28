@@ -20,6 +20,7 @@ describe('reliable tracking foundation', () => {
 
   it('generates a tracker with first-touch persistence and public custom events', () => {
     const script = buildTrackerScript('public-key-123456', ['123456789']);
+    expect(() => new Function(script)).not.toThrow();
     expect(script).toContain('window.tmx.track');
     expect(script).toContain('_tmx_first');
     expect(script).toContain('InitiateCheckout');
@@ -29,6 +30,14 @@ describe('reliable tracking foundation', () => {
     expect(script).toContain("ab?.kind==='checkout'");
     expect(script).toContain('connect.facebook.net');
     expect(script).toContain('123456789');
+    expect(script).toContain('campaign_id');
+    expect(script).toContain('adset_id');
+    expect(script).toContain('ad_id');
+    expect(script).toContain('_fbclid_ts');
+    expect(script).toContain("fb.1.'+ts+'.'+out.fbclid");
+    expect(script).toContain('MutationObserver');
+    expect(script).toContain('pushState');
+    expect(script).toContain("if(!redirect)send('InitiateCheckout'");
   });
 
   it('maps a paid order to the UTMify sales contract', () => {

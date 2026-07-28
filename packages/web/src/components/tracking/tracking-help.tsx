@@ -378,6 +378,20 @@ export function TrackingHelp({ offerId = '' }: { offerId?: string }) {
           <CopyBlock label="Exemplo — use o código gerado na oferta" copyable={false}>
             {'<script async src="https://SUA-API/v1/track/t.js?key=SUA_CHAVE"></script>'}
           </CopyBlock>
+          <div className="mt-4">
+            <CopyBlock label="Parâmetros da URL · Meta Ads">
+              {
+                'utm_source={{site_source_name}}&utm_medium=paid_social&utm_campaign={{campaign.name}}&utm_content={{ad.name}}&utm_term={{adset.name}}&campaign_id={{campaign.id}}&adset_id={{adset.id}}&ad_id={{ad.id}}&placement={{placement}}&site_source_name={{site_source_name}}'
+              }
+            </CopyBlock>
+          </div>
+          <p className="mt-3 text-xs leading-5 text-white/50">
+            Cole a linha acima no campo <strong className="text-white/75">Parâmetros da URL</strong>{' '}
+            do anúncio, sem adicionar <code className="text-cyan-200">?</code> no início. O{' '}
+            <code className="text-cyan-200">fbclid</code> é acrescentado automaticamente pelo Meta;
+            o TMX captura esse valor, cria o <code className="text-cyan-200">_fbc</code> e preserva
+            todos os parâmetros no checkout.
+          </p>
           <div className="mt-5 grid gap-3 md:grid-cols-2">
             <Result
               title="PageView"
