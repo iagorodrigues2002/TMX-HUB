@@ -1168,8 +1168,9 @@ export const apiClient = {
     project_id: string;
     public_key: string;
     install_code: string;
-    vendepay_webhook_url: string;
+    vendepay_webhook_url: string | null;
     warning: string;
+    already_configured?: boolean;
   }> {
     return request(`/v1/offers/${id}/tracking/setup`, { method: 'POST' });
   },

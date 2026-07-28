@@ -153,13 +153,26 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
     if (!app.db) return reply.code(503).send(databaseUnavailable);
 
-    const existing = await app.db<Array<{ public_key: string; id: string }>>`
-      SELECT id, public_key FROM tracking_projects WHERE offer_id = ${req.params.id}
+    const existing = await app.db<
+      Array<{ public_key: string; id: string; connection_id: string | null }>
+    >`
+      SELECT p.id, p.public_key, v.id AS connection_id
+      FROM tracking_projects p
+      LEFT JOIN vendepay_connections v ON v.project_id = p.id
+      WHERE p.offer_id = ${req.params.id}
+      ORDER BY v.created_at DESC NULLS LAST
+      LIMIT 1
     `;
     if (existing[0]) {
-      return reply.code(409).send({
-        error: 'tracking_already_configured',
+      return reply.send({
+        already_configured: true,
+        project_id: existing[0].id,
         public_key: existing[0].public_key,
+        install_code: installCode(existing[0].public_key),
+        vendepay_webhook_url: null,
+        warning: existing[0].connection_id
+          ? 'O tracking já estava configurado. Gere uma nova URL somente se precisar substituir o webhook na Vendepay.'
+          : 'O projeto já existia, mas a conexão Vendepay precisa ser reparada.',
       });
     }
     const projectId = ulid();

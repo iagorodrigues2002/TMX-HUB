@@ -40,10 +40,14 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
   const setup = useMutation({
     mutationFn: () => apiClient.setupTracking(offerId),
     onSuccess: (result) => {
-      setSecretWebhook(result.vendepay_webhook_url);
+      if (result.vendepay_webhook_url) setSecretWebhook(result.vendepay_webhook_url);
       void queryClient.invalidateQueries({ queryKey: ['tracking-config', offerId] });
       void queryClient.invalidateQueries({ queryKey: ['tracking-summary', offerId] });
-      toast.success('Tracking Vendepay criado.');
+      toast.success(
+        result.already_configured
+          ? 'Tracking existente recuperado sem criar duplicidade.'
+          : 'Tracking Vendepay criado.',
+      );
     },
     onError: (error) => toast.error((error as Error).message),
   });
@@ -221,12 +225,16 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
             <div className="rounded-md border border-white/[0.08] bg-black/10 p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <p className="hud-label">Meta Conversions API</p>
+                  <p className="hud-label">Meta Conversions API · múltiplos pixels</p>
                   <p className="mt-1 text-xs text-white/40">
                     {pixels.data?.pixels.length ?? 0} pixel(is) ativo(s)
                   </p>
                 </div>
               </div>
+              <p className="mt-2 max-w-3xl text-xs leading-5 text-white/45">
+                Cada evento elegível será disparado no navegador e retroalimentado via CAPI em
+                todos os pixels ativos desta oferta, com o mesmo Event ID para deduplicação.
+              </p>
               {pixels.data?.pixels.map((pixel) => (
                 <div
                   key={pixel.id}
@@ -352,7 +360,11 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
                       savePixel.isPending
                     }
                   >
-                    {savePixel.isPending ? 'Validando no Meta…' : 'Adicionar pixel'}
+                    {savePixel.isPending
+                      ? 'Validando no Meta…'
+                      : (pixels.data?.pixels.length ?? 0) > 0
+                        ? 'Adicionar outro pixel'
+                        : 'Adicionar pixel'}
                   </Button>
                 </div>
               )}
