@@ -1383,6 +1383,7 @@ export const apiClient = {
       session_id?: string;
       event_name: string;
       event_url: string;
+      page_title?: string;
       referrer?: string;
       source: Record<string, string>;
       client_at?: string;
@@ -1391,6 +1392,39 @@ export const apiClient = {
     pagination: { page: number; per_page: number; total: number; total_pages: number };
   }> {
     return request(`/v1/offers/${id}/tracking/events?page=${page}&per_page=${perPage}`);
+  },
+
+  async getTrackingPageFunnel(id: string): Promise<{
+    pages: Array<{
+      page_url: string;
+      page_title: string;
+      views: number;
+      visitors: number;
+      exits: number;
+    }>;
+  }> {
+    return request(`/v1/offers/${id}/tracking/page-funnel`);
+  },
+
+  async listTrackingJourneys(id: string): Promise<{
+    journeys: Array<{
+      visitor_id: string;
+      journey_id: string;
+      last_seen_at: string;
+      pages: Array<{
+        id: string;
+        title: string;
+        url: string;
+        referrer?: string;
+        visited_at: string;
+      }>;
+      events: string[];
+      order_id?: string;
+      order_status?: string;
+      buyer?: Record<string, unknown>;
+    }>;
+  }> {
+    return request(`/v1/offers/${id}/tracking/journeys`);
   },
 
   async listTrackingOrders(
