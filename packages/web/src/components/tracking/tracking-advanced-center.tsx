@@ -12,6 +12,7 @@ import {
   BarChart3,
   Braces,
   Cable,
+  Copy,
   Facebook,
   FlaskConical,
   Globe2,
@@ -237,6 +238,10 @@ export function TrackingAdvancedCenter({
     await navigator.clipboard.writeText(vendepayWebhook);
     toast.success('Webhook real copiado.');
   };
+  const copyDnsValue = async (value: string, label: string) => {
+    await navigator.clipboard.writeText(value);
+    toast.success(`${label} copiado.`);
+  };
 
   return (
     <div className="grid min-w-0 gap-5 2xl:grid-cols-[230px_minmax(0,1fr)]">
@@ -305,10 +310,24 @@ export function TrackingAdvancedCenter({
             )}
             {domainKind === 'tracking' && (
               <div className="mt-3 rounded-xl border border-cyan-300/15 bg-cyan-300/[0.04] p-4 text-xs leading-5 text-white/65">
-                Use um subdomínio dedicado. Depois de adicionar, o TMX exibirá os registros{' '}
-                <strong className="text-white">CNAME e TXT</strong> exatos fornecidos pelo
-                Railway. Cadastre ambos no seu provedor de DNS e volte aqui para verificar. Não
-                altere o DNS da sua landing page ou checkout.
+                <p className="font-medium text-cyan-100">Configuração no Cloudflare</p>
+                <ol className="mt-2 space-y-1.5">
+                  <li>1. Abra o domínio no Cloudflare e entre em DNS → Registros.</li>
+                  <li>2. Adicione cada registro exibido abaixo usando os botões de copiar.</li>
+                  <li>
+                    3. No CNAME, deixe <strong className="text-white">Proxy desativado</strong>{' '}
+                    (nuvem cinza / Somente DNS) e TTL em Automático.
+                  </li>
+                  <li>4. No TXT, use exatamente o Nome e o Conteúdo mostrados, com TTL Automático.</li>
+                  <li>
+                    5. Salve, aguarde a propagação e clique em{' '}
+                    <strong className="text-white">Verificar</strong>.
+                  </li>
+                </ol>
+                <p className="mt-2 text-amber-100/70">
+                  Use um subdomínio dedicado, como track.suaempresa.com. Não crie A/AAAA para ele e
+                  não altere o DNS da landing page ou do checkout.
+                </p>
               </div>
             )}
             <div className="mt-4 space-y-2">
@@ -325,16 +344,81 @@ export function TrackingAdvancedCenter({
                         : item.last_error || 'Instale o script e abra a página para confirmar.'}
                     </p>
                     {item.kind === 'tracking' && item.dns_target && (
-                      <div className="mt-2 space-y-1 font-mono text-[11px] text-cyan-100/60">
+                      <div className="mt-3 space-y-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-[10px] uppercase tracking-wider text-white/35">
+                            Registros para criar
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const records = item.dns_records?.length
+                                ? item.dns_records
+                                : [{ hostlabel: item.hostname, requiredValue: item.dns_target! }];
+                              void copyDnsValue(
+                                records
+                                  .map((record) => {
+                                    const type = record.requiredValue.includes('verify')
+                                      ? 'TXT'
+                                      : 'CNAME';
+                                    return `${type}\t${record.hostlabel}\t${record.requiredValue}`;
+                                  })
+                                  .join('\n'),
+                                'Configuração completa',
+                              );
+                            }}
+                            className="flex items-center gap-1.5 rounded px-2 py-1 text-[10px] text-cyan-200/65 transition hover:bg-white/[0.05] hover:text-cyan-200"
+                          >
+                            <Copy className="h-3.5 w-3.5" /> Copiar tudo
+                          </button>
+                        </div>
                         {(item.dns_records?.length
                           ? item.dns_records
                           : [{ hostlabel: item.hostname, requiredValue: item.dns_target }]
-                        ).map((record) => (
-                          <p key={`${record.hostlabel}-${record.requiredValue}`}>
-                            {record.requiredValue.includes('verify') ? 'TXT' : 'CNAME'}{' '}
-                            {record.hostlabel} → {record.requiredValue}
-                          </p>
-                        ))}
+                        ).map((record) => {
+                          const type = record.requiredValue.includes('verify') ? 'TXT' : 'CNAME';
+                          return (
+                            <div
+                              key={`${record.hostlabel}-${record.requiredValue}`}
+                              className="rounded-lg border border-white/[0.07] bg-black/15 p-3"
+                            >
+                              <div className="grid gap-2 lg:grid-cols-[90px_minmax(0,1fr)_minmax(0,1.4fr)]">
+                                {[
+                                  { label: 'Tipo', value: type },
+                                  { label: 'Nome', value: record.hostlabel },
+                                  {
+                                    label: type === 'TXT' ? 'Conteúdo' : 'Destino',
+                                    value: record.requiredValue,
+                                  },
+                                ].map((field) => (
+                                  <div key={field.label} className="min-w-0">
+                                    <p className="font-mono text-[9px] uppercase tracking-wider text-white/35">
+                                      {field.label}
+                                    </p>
+                                    <div className="mt-1 flex items-center gap-1">
+                                      <code className="min-w-0 flex-1 break-all font-mono text-[11px] text-cyan-100/75">
+                                        {field.value}
+                                      </code>
+                                      <button
+                                        type="button"
+                                        aria-label={`Copiar ${field.label}`}
+                                        onClick={() => copyDnsValue(field.value, field.label)}
+                                        className="rounded p-1.5 text-white/35 transition hover:bg-white/[0.06] hover:text-cyan-200"
+                                      >
+                                        <Copy className="h-3.5 w-3.5" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                              {type === 'CNAME' && (
+                                <p className="mt-2 text-[10px] text-amber-100/60">
+                                  Cloudflare: Proxy desativado (Somente DNS) · TTL Automático
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
