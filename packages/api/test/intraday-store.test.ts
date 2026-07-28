@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { buildIntradaySummary } from '../src/services/intraday-store.js';
+import { buildIntradaySummary, saoPauloParts } from '../src/services/intraday-store.js';
 
 describe('intraday two-hour windows', () => {
+  it('assigns checkpoints near UTC midnight to the São Paulo calendar day', () => {
+    expect(saoPauloParts(new Date('2026-07-28T01:30:00.000Z'))).toEqual({
+      date: '2026-07-27',
+      hour: 22,
+    });
+  });
+
   it('uses cumulative checkpoint deltas for the window metrics', () => {
     const summary = buildIntradaySummary(
       '2026-07-21',
@@ -85,6 +92,7 @@ describe('intraday two-hour windows', () => {
     );
 
     expect(summary.date).toBe('2026-07-21');
+    expect(summary.timeZone).toBe('America/Sao_Paulo');
     expect(summary.currentWindowIndex).toBe(11);
     expect(summary.overall).toMatchObject({ spend: 250, sales: 3, revenue: 600, ic: 5 });
     expect(summary.windows[5]).toMatchObject({

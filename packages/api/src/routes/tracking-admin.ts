@@ -6,11 +6,20 @@ import { env } from '../env.js';
 import { normalizeVendepay } from '../integrations/vendepay/normalize.js';
 import { NotFoundError, zodToProblem } from '../lib/problem.js';
 import { encryptSecret } from '../lib/secret-box.js';
+import { saoPauloParts } from '../services/intraday-store.js';
+import { saoPauloDayRange } from '../services/utmify-sync.js';
 
 const PaginationSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   per_page: z.coerce.number().int().min(1).max(100).default(25),
 });
+const TrackingDateSchema = z.object({
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+});
+const TrackingPaginationSchema = PaginationSchema.merge(TrackingDateSchema);
 
 const VendepaySigningSecretSchema = z.object({
   signing_secret: z.string().trim().min(16).max(4096),
@@ -19,6 +28,7 @@ const VendepaySigningSecretSchema = z.object({
 type PaginationQuery = {
   page?: string | number;
   per_page?: string | number;
+  date?: string;
 };
 
 const databaseUnavailable = {
@@ -35,12 +45,33 @@ const installCode = (publicKey: string) =>
 const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex');
 
 function parsePagination(query: PaginationQuery) {
-  const parsed = PaginationSchema.safeParse(query);
+  const parsed = TrackingPaginationSchema.safeParse(query);
   if (!parsed.success) throw zodToProblem(parsed.error);
   return {
     ...parsed.data,
     offset: (parsed.data.page - 1) * parsed.data.per_page,
   };
+}
+
+function parseTrackingDate(query: { date?: string }) {
+  const parsed = TrackingDateSchema.safeParse(query);
+  if (!parsed.success) throw zodToProblem(parsed.error);
+  const now = new Date();
+  const today = saoPauloParts(now).date;
+  const date = parsed.data.date ?? today;
+  if (date > today) {
+    throw zodToProblem(
+      new z.ZodError([
+        {
+          code: 'custom',
+          path: ['date'],
+          message: 'A data não pode estar no futuro.',
+        },
+      ]),
+    );
+  }
+  const range = saoPauloDayRange(date, now);
+  return { date, from: new Date(range.from), to: new Date(range.to) };
 }
 
 function pagination(page: number, perPage: number, total: number) {
@@ -356,6 +387,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
       if (!app.db) return reply.code(503).send(databaseUnavailable);
       const { page, per_page: perPage, offset } = parsePagination(req.query);
+      const { date, from, to } = parseTrackingDate(req.query);
 
       const [items, totals] = await Promise.all([
         app.db<
@@ -377,6 +409,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           FROM tracking_events e
           JOIN tracking_projects p ON p.id = e.project_id
           WHERE p.offer_id = ${req.params.id}
+            AND e.received_at >= ${from} AND e.received_at < ${to}
           ORDER BY e.received_at DESC, e.id DESC
           LIMIT ${perPage} OFFSET ${offset}
         `,
@@ -385,18 +418,25 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           FROM tracking_events e
           JOIN tracking_projects p ON p.id = e.project_id
           WHERE p.offer_id = ${req.params.id}
+            AND e.received_at >= ${from} AND e.received_at < ${to}
         `,
       ]);
       const total = totals[0]?.total ?? 0;
-      return { items, pagination: pagination(page, perPage, total) };
+      return {
+        date,
+        time_zone: 'America/Sao_Paulo',
+        items,
+        pagination: pagination(page, perPage, total),
+      };
     },
   );
 
-  app.get<{ Params: { id: string } }>(
+  app.get<{ Params: { id: string }; Querystring: { date?: string } }>(
     '/offers/:id/tracking/page-funnel',
     async (req, reply) => {
       await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
       if (!app.db) return reply.code(503).send(databaseUnavailable);
+      const { date, from, to } = parseTrackingDate(req.query);
       const pages = await app.db`
         WITH pageviews AS (
           SELECT
@@ -412,6 +452,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           FROM tracking_events e
           JOIN tracking_projects p ON p.id = e.project_id
           WHERE p.offer_id = ${req.params.id} AND e.event_name = 'PageView'
+            AND e.received_at >= ${from} AND e.received_at < ${to}
         )
         SELECT
           page_url,
@@ -424,15 +465,16 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         ORDER BY visitors DESC, views DESC
         LIMIT 100
       `;
-      return { pages };
+      return { date, time_zone: 'America/Sao_Paulo', pages };
     },
   );
 
-  app.get<{ Params: { id: string } }>(
+  app.get<{ Params: { id: string }; Querystring: { date?: string } }>(
     '/offers/:id/tracking/journeys',
     async (req, reply) => {
       await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
       if (!app.db) return reply.code(503).send(databaseUnavailable);
+      const { date, from, to } = parseTrackingDate(req.query);
       const journeys = await app.db`
         WITH project AS (
           SELECT id FROM tracking_projects WHERE offer_id = ${req.params.id}
@@ -444,6 +486,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             max(e.received_at) AS last_seen_at
           FROM tracking_events e
           WHERE e.project_id = (SELECT id FROM project)
+            AND e.received_at >= ${from} AND e.received_at < ${to}
           GROUP BY e.visitor_id, COALESCE(e.journey_id, e.visitor_id)
           ORDER BY last_seen_at DESC
           LIMIT 50
@@ -465,6 +508,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
               AND e.visitor_id = r.visitor_id
               AND COALESCE(e.journey_id, e.visitor_id) = r.journey_key
               AND e.event_name = 'PageView'
+              AND e.received_at >= ${from} AND e.received_at < ${to}
           ), '[]'::json) AS pages,
           COALESCE((
             SELECT array_agg(DISTINCT e.event_name)
@@ -473,6 +517,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
               AND e.visitor_id = r.visitor_id
               AND COALESCE(e.journey_id, e.visitor_id) = r.journey_key
               AND e.event_name <> 'PageView'
+              AND e.received_at >= ${from} AND e.received_at < ${to}
           ), ARRAY[]::text[]) AS events,
           latest_order.external_id AS order_id,
           latest_order.status AS order_status,
@@ -483,12 +528,13 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           FROM tracking_orders o
           WHERE o.project_id = (SELECT id FROM project)
             AND o.visitor_id = r.visitor_id
+            AND o.occurred_at >= ${from} AND o.occurred_at < ${to}
           ORDER BY o.occurred_at DESC
           LIMIT 1
         ) latest_order ON true
         ORDER BY r.last_seen_at DESC
       `;
-      return { journeys };
+      return { date, time_zone: 'America/Sao_Paulo', journeys };
     },
   );
 
@@ -498,6 +544,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
       if (!app.db) return reply.code(503).send(databaseUnavailable);
       const { page, per_page: perPage, offset } = parsePagination(req.query);
+      const { date, from, to } = parseTrackingDate(req.query);
 
       const [items, totals] = await Promise.all([
         app.db`
@@ -507,6 +554,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           FROM tracking_orders o
           JOIN tracking_projects p ON p.id = o.project_id
           WHERE p.offer_id = ${req.params.id}
+            AND o.occurred_at >= ${from} AND o.occurred_at < ${to}
           ORDER BY o.occurred_at DESC, o.id DESC
           LIMIT ${perPage} OFFSET ${offset}
         `,
@@ -515,10 +563,57 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           FROM tracking_orders o
           JOIN tracking_projects p ON p.id = o.project_id
           WHERE p.offer_id = ${req.params.id}
+            AND o.occurred_at >= ${from} AND o.occurred_at < ${to}
         `,
       ]);
       const total = totals[0]?.total ?? 0;
-      return { items, pagination: pagination(page, perPage, total) };
+      return {
+        date,
+        time_zone: 'America/Sao_Paulo',
+        items,
+        pagination: pagination(page, perPage, total),
+      };
+    },
+  );
+
+  app.get<{ Params: { id: string }; Querystring: { date?: string } }>(
+    '/offers/:id/tracking/attribution',
+    async (req, reply) => {
+      await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
+      if (!app.db) return reply.code(503).send(databaseUnavailable);
+      const { date, from, to } = parseTrackingDate(req.query);
+      const rows = await app.db`
+        SELECT
+          COALESCE(NULLIF(o.attribution_source->>'utm_source', ''),
+                   NULLIF(o.attribution_source->>'site_source_name', ''),
+                   'não identificado') AS source,
+          COALESCE(NULLIF(o.attribution_source->>'utm_campaign', ''),
+                   NULLIF(o.attribution_source->>'campaign_name', ''),
+                   'não identificada') AS campaign_name,
+          NULLIF(o.attribution_source->>'campaign_id', '') AS campaign_id,
+          COALESCE(NULLIF(o.attribution_source->>'utm_term', ''),
+                   NULLIF(o.attribution_source->>'adset_name', ''),
+                   'não identificado') AS adset_name,
+          NULLIF(o.attribution_source->>'adset_id', '') AS adset_id,
+          COALESCE(NULLIF(o.attribution_source->>'utm_content', ''),
+                   NULLIF(o.attribution_source->>'ad_name', ''),
+                   'não identificado') AS ad_name,
+          NULLIF(o.attribution_source->>'ad_id', '') AS ad_id,
+          COALESCE(NULLIF(o.attribution_source->>'placement', ''), 'não identificado') AS placement,
+          count(*)::int AS orders,
+          count(*) FILTER (WHERE o.status = 'paid')::int AS paid_orders,
+          count(*) FILTER (WHERE o.status IN ('refused', 'cancelled'))::int AS refused_orders,
+          COALESCE(sum(o.amount_minor) FILTER (WHERE o.status = 'paid'), 0)::text
+            AS paid_revenue_minor
+        FROM tracking_orders o
+        JOIN tracking_projects p ON p.id = o.project_id
+        WHERE p.offer_id = ${req.params.id}
+          AND o.occurred_at >= ${from} AND o.occurred_at < ${to}
+        GROUP BY 1, 2, 3, 4, 5, 6, 7, 8
+        ORDER BY paid_orders DESC, orders DESC, campaign_name, ad_name
+        LIMIT 500
+      `;
+      return { date, time_zone: 'America/Sao_Paulo', rows };
     },
   );
 
@@ -553,53 +648,67 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     },
   );
 
-  app.get<{ Params: { id: string } }>('/offers/:id/tracking/summary', async (req, reply) => {
-    await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
-    if (!app.db) return reply.code(503).send(databaseUnavailable);
+  app.get<{ Params: { id: string }; Querystring: { date?: string } }>(
+    '/offers/:id/tracking/summary',
+    async (req, reply) => {
+      await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
+      if (!app.db) return reply.code(503).send(databaseUnavailable);
+      const { date, from, to } = parseTrackingDate(req.query);
 
-    const [summary] = await app.db<
-      Array<{
-        events: number;
-        visitors: number;
-        page_views: number;
-        checkouts: number;
-        orders: number;
-        paid_orders: number;
-        orphan_orders: number;
-        paid_revenue_minor: string;
-      }>
-    >`
+      const [summary] = await app.db<
+        Array<{
+          events: number;
+          visitors: number;
+          page_views: number;
+          checkouts: number;
+          orders: number;
+          paid_orders: number;
+          orphan_orders: number;
+          paid_revenue_minor: string;
+        }>
+      >`
       SELECT
-        (SELECT count(*)::int FROM tracking_events e WHERE e.project_id = p.id) AS events,
+        (SELECT count(*)::int FROM tracking_events e WHERE e.project_id = p.id
+          AND e.received_at >= ${from} AND e.received_at < ${to}) AS events,
         (SELECT count(DISTINCT e.visitor_id)::int FROM tracking_events e
-          WHERE e.project_id = p.id) AS visitors,
+          WHERE e.project_id = p.id
+            AND e.received_at >= ${from} AND e.received_at < ${to}) AS visitors,
         (SELECT count(*)::int FROM tracking_events e
-          WHERE e.project_id = p.id AND e.event_name = 'PageView') AS page_views,
+          WHERE e.project_id = p.id AND e.event_name = 'PageView'
+            AND e.received_at >= ${from} AND e.received_at < ${to}) AS page_views,
         (SELECT count(*)::int FROM tracking_events e
-          WHERE e.project_id = p.id AND e.event_name = 'InitiateCheckout') AS checkouts,
-        (SELECT count(*)::int FROM tracking_orders o WHERE o.project_id = p.id) AS orders,
+          WHERE e.project_id = p.id AND e.event_name = 'InitiateCheckout'
+            AND e.received_at >= ${from} AND e.received_at < ${to}) AS checkouts,
+        (SELECT count(*)::int FROM tracking_orders o WHERE o.project_id = p.id
+          AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS orders,
         (SELECT count(*)::int FROM tracking_orders o
-          WHERE o.project_id = p.id AND o.status = 'paid') AS paid_orders,
+          WHERE o.project_id = p.id AND o.status = 'paid'
+            AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS paid_orders,
         (SELECT count(*)::int FROM tracking_orders o
-          WHERE o.project_id = p.id AND NULLIF(trim(o.visitor_id), '') IS NULL) AS orphan_orders,
+          WHERE o.project_id = p.id AND NULLIF(trim(o.visitor_id), '') IS NULL
+            AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS orphan_orders,
         (SELECT COALESCE(sum(o.amount_minor), 0)::text FROM tracking_orders o
-          WHERE o.project_id = p.id AND o.status = 'paid') AS paid_revenue_minor
+          WHERE o.project_id = p.id AND o.status = 'paid'
+            AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS paid_revenue_minor
       FROM tracking_projects p
       WHERE p.offer_id = ${req.params.id}
     `;
-    return (
-      summary ?? {
-        events: 0,
-        visitors: 0,
-        page_views: 0,
-        checkouts: 0,
-        orders: 0,
-        paid_orders: 0,
-        orphan_orders: 0,
-        paid_revenue_minor: '0',
-      }
-    );
-  });
+      return {
+        date,
+        time_zone: 'America/Sao_Paulo',
+        ...(summary ?? {
+          events: 0,
+          visitors: 0,
+          page_views: 0,
+          checkouts: 0,
+          orders: 0,
+          paid_orders: 0,
+          orphan_orders: 0,
+          paid_revenue_minor: '0',
+        }),
+      };
+    },
+  );
 };
 
 export default plugin;
