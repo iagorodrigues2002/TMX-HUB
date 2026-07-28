@@ -17,7 +17,9 @@ import {
   FlaskConical,
   Globe2,
   HelpCircle,
+  Megaphone,
   RadioTower,
+  RefreshCw,
   Send,
   Video,
 } from 'lucide-react';
@@ -62,9 +64,23 @@ const trackingDomainPreview = (value: string) => {
   return `tmx.${parts.slice(-rootSize).join('.')}`;
 };
 
+const SAO_PAULO_TIME_ZONE = 'America/Sao_Paulo';
+
+function saoPauloDate(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: SAO_PAULO_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
+}
+
 type Section =
   | 'tracker'
   | 'funnel'
+  | 'attribution'
   | 'ab'
   | 'vturb'
   | 'pixels'
@@ -78,6 +94,7 @@ type Section =
 const sections: Array<{ id: Section; label: string; icon: LucideIcon; group: string }> = [
   { id: 'tracker', label: 'Tracker', icon: RadioTower, group: 'Operação' },
   { id: 'funnel', label: 'Funil', icon: BarChart3, group: 'Operação' },
+  { id: 'attribution', label: 'Campanhas e anúncios', icon: Megaphone, group: 'Operação' },
   { id: 'ab', label: 'Testes A/B', icon: FlaskConical, group: 'Operação' },
   { id: 'vturb', label: 'Conversões vTurb', icon: Video, group: 'Operação' },
   { id: 'pixels', label: 'Pixels', icon: Facebook, group: 'Configuração' },
@@ -94,6 +111,8 @@ export function TrackingAdvancedCenter({
   canManage,
 }: { offerId: string; canManage: boolean }) {
   const [section, setSection] = useState<Section>('tracker');
+  const [trackingDate, setTrackingDate] = useState(() => saoPauloDate());
+  const [isRefreshingTracking, setIsRefreshingTracking] = useState(false);
   const [domain, setDomain] = useState('');
   const [domainKind, setDomainKind] = useState<'source' | 'tracking'>('source');
   const [minimum, setMinimum] = useState('0');
@@ -113,6 +132,24 @@ export function TrackingAdvancedCenter({
     'https://api.utmify.com.br/api-credentials/orders',
   );
   const qc = useQueryClient();
+  const refreshTracking = async () => {
+    setIsRefreshingTracking(true);
+    try {
+      await Promise.all(
+        [
+          'tracking-summary',
+          'tracking-events',
+          'tracking-orders',
+          'tracking-page-funnel',
+          'tracking-journeys',
+          'tracking-attribution',
+        ].map((key) => qc.invalidateQueries({ queryKey: [key, offerId, trackingDate] })),
+      );
+      toast.success('Dados do dia atualizados.');
+    } finally {
+      setIsRefreshingTracking(false);
+    }
+  };
   const advanced = useQuery({
     queryKey: ['tracking-advanced', offerId],
     queryFn: () => apiClient.getAdvancedTracking(offerId),
@@ -304,8 +341,49 @@ export function TrackingAdvancedCenter({
         ))}
       </aside>
       <div className="min-w-0">
-        {section === 'tracker' && <TrackingLiveConsole offerId={offerId} mode="tracker" />}
-        {section === 'funnel' && <TrackingLiveConsole offerId={offerId} mode="funnel" />}
+        {(['tracker', 'funnel', 'attribution'] as Section[]).includes(section) && (
+          <div className="mb-3 flex flex-wrap items-end justify-between gap-3 rounded-lg border border-white/[0.08] bg-black/15 p-3">
+            <div>
+              <p className="hud-label">Período do trackeamento</p>
+              <p className="mt-1 text-xs text-white/40">
+                Dados históricos separados por dia · horário de São Paulo
+              </p>
+            </div>
+            <div className="flex flex-wrap items-end gap-2">
+              <label htmlFor="tracking-date" className="space-y-1">
+                <span className="hud-label block">Data</span>
+                <Input
+                  id="tracking-date"
+                  type="date"
+                  value={trackingDate}
+                  max={saoPauloDate()}
+                  onChange={(event) => setTrackingDate(event.target.value || saoPauloDate())}
+                  className="h-9 w-[160px]"
+                />
+              </label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 gap-2"
+                disabled={isRefreshingTracking}
+                onClick={() => void refreshTracking()}
+              >
+                <RefreshCw className={cn('h-3.5 w-3.5', isRefreshingTracking && 'animate-spin')} />
+                Atualizar
+              </Button>
+            </div>
+          </div>
+        )}
+        {section === 'tracker' && (
+          <TrackingLiveConsole offerId={offerId} mode="tracker" date={trackingDate} />
+        )}
+        {section === 'funnel' && (
+          <TrackingLiveConsole offerId={offerId} mode="funnel" date={trackingDate} />
+        )}
+        {section === 'attribution' && (
+          <TrackingLiveConsole offerId={offerId} mode="attribution" date={trackingDate} />
+        )}
         {(section === 'pixels' || section === 'code') && (
           <TrackingPanel offerId={offerId} canManage={canManage} />
         )}

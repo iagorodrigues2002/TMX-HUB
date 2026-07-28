@@ -38,6 +38,7 @@ export interface IntradayWindow {
 
 export interface IntradaySummary {
   date: string;
+  timeZone: typeof TIME_ZONE;
   updatedAt?: string;
   overall: SnapshotMetrics;
   overallAds: IntradayAdMetrics[];
@@ -184,6 +185,7 @@ export function buildIntradaySummary(
 
   return {
     date,
+    timeZone: TIME_ZONE,
     ...(latest ? { updatedAt: latest.capturedAt } : {}),
     overall,
     overallAds,

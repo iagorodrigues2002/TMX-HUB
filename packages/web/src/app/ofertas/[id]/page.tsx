@@ -28,12 +28,21 @@ import { use, useMemo, useState } from 'react';
 
 export const dynamic = 'force-dynamic';
 
+const SAO_PAULO_TIME_ZONE = 'America/Sao_Paulo';
+
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: SAO_PAULO_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
 }
 
 function nDaysAgoIso(n: number): string {
-  const d = new Date();
+  const d = new Date(`${todayIso()}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() - n);
   return d.toISOString().slice(0, 10);
 }
@@ -635,6 +644,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
             </div>
             <p className="mt-1 text-[12px] text-white/45">
               Checkpoints a cada 30 minutos · janelas fixas de 2 horas · histórico separado por dia
+              · horário de São Paulo
             </p>
           </div>
           <div className="flex items-end gap-3">
@@ -661,6 +671,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                 {new Date(intraday.updatedAt).toLocaleTimeString('pt-BR', {
                   hour: '2-digit',
                   minute: '2-digit',
+                  timeZone: SAO_PAULO_TIME_ZONE,
                 })}
               </span>
             )}

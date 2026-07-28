@@ -649,6 +649,7 @@ export interface IntradayAdView extends MetricsView {
 
 export interface IntradaySummaryView {
   date: string;
+  timeZone: string;
   updatedAt?: string;
   overall: MetricsView;
   overallAds: IntradayAdView[];
@@ -1233,7 +1234,12 @@ export const apiClient = {
     return request(`/v1/offers/${id}/tracking/vendepay/receipts`);
   },
 
-  async getTrackingSummary(id: string): Promise<{
+  async getTrackingSummary(
+    id: string,
+    date?: string,
+  ): Promise<{
+    date: string;
+    time_zone: string;
     events: number;
     visitors: number;
     page_views: number;
@@ -1243,7 +1249,8 @@ export const apiClient = {
     orphan_orders: number;
     paid_revenue_minor: string;
   }> {
-    return request(`/v1/offers/${id}/tracking/summary`);
+    const query = date ? `?date=${encodeURIComponent(date)}` : '';
+    return request(`/v1/offers/${id}/tracking/summary${query}`);
   },
 
   async getTrackingDiagnostics(id: string): Promise<{
@@ -1392,7 +1399,10 @@ export const apiClient = {
     id: string,
     page = 1,
     perPage = 25,
+    date?: string,
   ): Promise<{
+    date: string;
+    time_zone: string;
     items: Array<{
       id: string;
       visitor_id: string;
@@ -1407,10 +1417,16 @@ export const apiClient = {
     }>;
     pagination: { page: number; per_page: number; total: number; total_pages: number };
   }> {
-    return request(`/v1/offers/${id}/tracking/events?page=${page}&per_page=${perPage}`);
+    const dateQuery = date ? `&date=${encodeURIComponent(date)}` : '';
+    return request(`/v1/offers/${id}/tracking/events?page=${page}&per_page=${perPage}${dateQuery}`);
   },
 
-  async getTrackingPageFunnel(id: string): Promise<{
+  async getTrackingPageFunnel(
+    id: string,
+    date?: string,
+  ): Promise<{
+    date: string;
+    time_zone: string;
     pages: Array<{
       page_url: string;
       page_title: string;
@@ -1419,10 +1435,16 @@ export const apiClient = {
       exits: number;
     }>;
   }> {
-    return request(`/v1/offers/${id}/tracking/page-funnel`);
+    const query = date ? `?date=${encodeURIComponent(date)}` : '';
+    return request(`/v1/offers/${id}/tracking/page-funnel${query}`);
   },
 
-  async listTrackingJourneys(id: string): Promise<{
+  async listTrackingJourneys(
+    id: string,
+    date?: string,
+  ): Promise<{
+    date: string;
+    time_zone: string;
     journeys: Array<{
       visitor_id: string;
       journey_id: string;
@@ -1440,14 +1462,18 @@ export const apiClient = {
       buyer?: Record<string, unknown>;
     }>;
   }> {
-    return request(`/v1/offers/${id}/tracking/journeys`);
+    const query = date ? `?date=${encodeURIComponent(date)}` : '';
+    return request(`/v1/offers/${id}/tracking/journeys${query}`);
   },
 
   async listTrackingOrders(
     id: string,
     page = 1,
     perPage = 25,
+    date?: string,
   ): Promise<{
+    date: string;
+    time_zone: string;
     items: Array<{
       id: string;
       provider: string;
@@ -1463,7 +1489,33 @@ export const apiClient = {
     }>;
     pagination: { page: number; per_page: number; total: number; total_pages: number };
   }> {
-    return request(`/v1/offers/${id}/tracking/orders?page=${page}&per_page=${perPage}`);
+    const dateQuery = date ? `&date=${encodeURIComponent(date)}` : '';
+    return request(`/v1/offers/${id}/tracking/orders?page=${page}&per_page=${perPage}${dateQuery}`);
+  },
+
+  async getTrackingAttribution(
+    id: string,
+    date?: string,
+  ): Promise<{
+    date: string;
+    time_zone: string;
+    rows: Array<{
+      source: string;
+      campaign_name: string;
+      campaign_id?: string;
+      adset_name: string;
+      adset_id?: string;
+      ad_name: string;
+      ad_id?: string;
+      placement: string;
+      orders: number;
+      paid_orders: number;
+      refused_orders: number;
+      paid_revenue_minor: string;
+    }>;
+  }> {
+    const query = date ? `?date=${encodeURIComponent(date)}` : '';
+    return request(`/v1/offers/${id}/tracking/attribution${query}`);
   },
 
   async listMetaDeliveries(id: string): Promise<{

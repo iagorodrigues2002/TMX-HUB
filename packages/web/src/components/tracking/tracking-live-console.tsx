@@ -10,6 +10,7 @@ import {
   Database,
   Filter,
   Loader2,
+  Megaphone,
   RadioTower,
   Search,
   ShoppingCart,
@@ -19,7 +20,7 @@ import {
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
-type View = 'tracker' | 'funnel' | 'infrastructure';
+type View = 'tracker' | 'funnel' | 'attribution' | 'infrastructure';
 
 function money(minor: string | number | undefined, currency = 'BRL') {
   const value = Number(minor ?? 0) / 100;
@@ -39,9 +40,11 @@ function shortId(value?: string) {
 export function TrackingLiveConsole({
   offerId,
   mode,
+  date,
 }: {
   offerId: string;
-  mode?: 'tracker' | 'funnel' | 'infrastructure';
+  mode?: View;
+  date: string;
 }) {
   const [view, setView] = useState<View>('tracker');
   const activeView = mode ?? view;
@@ -49,8 +52,8 @@ export function TrackingLiveConsole({
   const [funnelDetail, setFunnelDetail] = useState<'overview' | 'pages' | 'journeys'>('overview');
   const [search, setSearch] = useState('');
   const summary = useQuery({
-    queryKey: ['tracking-summary', offerId],
-    queryFn: () => apiClient.getTrackingSummary(offerId),
+    queryKey: ['tracking-summary', offerId, date],
+    queryFn: () => apiClient.getTrackingSummary(offerId, date),
     refetchInterval: 30_000,
     retry: false,
   });
@@ -61,14 +64,14 @@ export function TrackingLiveConsole({
     retry: false,
   });
   const events = useQuery({
-    queryKey: ['tracking-events', offerId],
-    queryFn: () => apiClient.listTrackingEvents(offerId, 1, 50),
+    queryKey: ['tracking-events', offerId, date],
+    queryFn: () => apiClient.listTrackingEvents(offerId, 1, 50, date),
     refetchInterval: 30_000,
     retry: false,
   });
   const orders = useQuery({
-    queryKey: ['tracking-orders', offerId],
-    queryFn: () => apiClient.listTrackingOrders(offerId, 1, 50),
+    queryKey: ['tracking-orders', offerId, date],
+    queryFn: () => apiClient.listTrackingOrders(offerId, 1, 50, date),
     refetchInterval: 30_000,
     retry: false,
   });
@@ -79,16 +82,23 @@ export function TrackingLiveConsole({
     retry: false,
   });
   const pageFunnel = useQuery({
-    queryKey: ['tracking-page-funnel', offerId],
-    queryFn: () => apiClient.getTrackingPageFunnel(offerId),
+    queryKey: ['tracking-page-funnel', offerId, date],
+    queryFn: () => apiClient.getTrackingPageFunnel(offerId, date),
     enabled: activeView === 'funnel',
     refetchInterval: 30_000,
     retry: false,
   });
   const journeys = useQuery({
-    queryKey: ['tracking-journeys', offerId],
-    queryFn: () => apiClient.listTrackingJourneys(offerId),
+    queryKey: ['tracking-journeys', offerId, date],
+    queryFn: () => apiClient.listTrackingJourneys(offerId, date),
     enabled: activeView === 'funnel',
+    refetchInterval: 30_000,
+    retry: false,
+  });
+  const attribution = useQuery({
+    queryKey: ['tracking-attribution', offerId, date],
+    queryFn: () => apiClient.getTrackingAttribution(offerId, date),
+    enabled: activeView === 'attribution',
     refetchInterval: 30_000,
     retry: false,
   });
@@ -122,6 +132,7 @@ export function TrackingLiveConsole({
             {[
               { id: 'tracker' as const, label: 'Tracker', icon: RadioTower },
               { id: 'funnel' as const, label: 'Funil', icon: Filter },
+              { id: 'attribution' as const, label: 'Campanhas', icon: Megaphone },
               { id: 'infrastructure' as const, label: 'Saúde automática', icon: Database },
             ].map(({ id, label, icon: Icon }) => (
               <Button
@@ -197,6 +208,80 @@ export function TrackingLiveConsole({
               'O diagnóstico será exibido assim que o tracking da oferta for criado.'}
           </div>
         </div>
+      ) : activeView === 'attribution' ? (
+        <div className="p-5 md:p-6">
+          <div className="mb-5">
+            <p className="hud-label">Atribuição de vendas · first-party</p>
+            <h3 className="mt-2 text-xl font-semibold text-white">Campanhas e anúncios</h3>
+            <p className="mt-2 text-sm text-white/45">
+              Pedidos da Vendepay agrupados pelas UTMs e IDs preservados pelo TMX no clique do
+              checkout.
+            </p>
+          </div>
+          <div className="overflow-x-auto rounded-xl border border-white/[0.08]">
+            <table className="min-w-[980px] w-full text-left text-xs">
+              <thead className="border-b border-white/[0.08] bg-black/20 text-white/35">
+                <tr>
+                  {[
+                    'Campanha',
+                    'Conjunto',
+                    'Anúncio',
+                    'Origem',
+                    'Pedidos',
+                    'Aprovados',
+                    'Aprovação',
+                    'Receita',
+                  ].map((label) => (
+                    <th key={label} className="px-4 py-3 font-medium uppercase tracking-wider">
+                      {label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/[0.06]">
+                {(attribution.data?.rows ?? []).map((row, index) => (
+                  <tr
+                    key={`${row.campaign_id ?? row.campaign_name}-${row.ad_id ?? row.ad_name}-${index}`}
+                    className="bg-black/5"
+                  >
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-white/80">{row.campaign_name}</p>
+                      <p className="mt-1 font-mono text-[10px] text-white/30">
+                        {row.campaign_id ?? 'sem campaign_id'}
+                      </p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="text-white/65">{row.adset_name}</p>
+                      <p className="mt-1 font-mono text-[10px] text-white/30">
+                        {row.adset_id ?? 'sem adset_id'}
+                      </p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="text-white/65">{row.ad_name}</p>
+                      <p className="mt-1 font-mono text-[10px] text-white/30">
+                        {row.ad_id ?? 'sem ad_id'} · {row.placement}
+                      </p>
+                    </td>
+                    <td className="px-4 py-3 text-white/55">{row.source}</td>
+                    <td className="px-4 py-3 font-mono text-white">{row.orders}</td>
+                    <td className="px-4 py-3 font-mono text-emerald-200">{row.paid_orders}</td>
+                    <td className="px-4 py-3 font-mono text-cyan-200">
+                      {percentage(row.paid_orders, row.orders)}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-emerald-300">
+                      {money(row.paid_revenue_minor)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {!attribution.isLoading && !attribution.data?.rows.length && (
+            <p className="mt-4 rounded-xl border border-dashed border-white/[0.08] p-8 text-center text-sm text-white/35">
+              Nenhuma venda com atribuição foi encontrada neste dia.
+            </p>
+          )}
+        </div>
       ) : activeView === 'funnel' ? (
         <div className="p-5 md:p-6">
           <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
@@ -262,33 +347,29 @@ export function TrackingLiveConsole({
                     filter="url(#tmx-funnel-glow)"
                   />
                   {[250, 500, 750].map((x) => (
-                    <line
-                      key={x}
-                      x1={x}
-                      x2={x}
-                      y1="5"
-                      y2="165"
-                      stroke="rgba(255,255,255,.1)"
-                    />
+                    <line key={x} x1={x} x2={x} y1="5" y2="165" stroke="rgba(255,255,255,.1)" />
                   ))}
                 </svg>
                 <div className="grid grid-cols-4 gap-2 text-center">
                   {[
-                    { value: s?.visitors ?? 0, rate: '100%' },
+                    { label: 'Visita', value: s?.visitors ?? 0, rate: '100%' },
                     {
+                      label: 'Checkout',
                       value: s?.checkouts ?? 0,
                       rate: percentage(s?.checkouts ?? 0, s?.visitors ?? 0),
                     },
                     {
+                      label: 'Pedido',
                       value: s?.orders ?? 0,
                       rate: percentage(s?.orders ?? 0, s?.visitors ?? 0),
                     },
                     {
+                      label: 'Comprador',
                       value: buyers,
                       rate: percentage(buyers, s?.visitors ?? 0),
                     },
-                  ].map((stage, index) => (
-                    <div key={index}>
+                  ].map((stage) => (
+                    <div key={stage.label}>
                       <p className="font-mono text-xl font-semibold text-white md:text-3xl">
                         {stage.value.toLocaleString('pt-BR')}
                       </p>
@@ -299,59 +380,62 @@ export function TrackingLiveConsole({
               </div>
               <div className="mt-4 grid gap-3 md:grid-cols-4">
                 {[
-              { label: 'Visita', value: s?.visitors ?? 0, icon: Users, rate: '100%' },
-              {
-                label: 'Checkout',
-                value: s?.checkouts ?? 0,
-                icon: ShoppingCart,
-                rate: percentage(s?.checkouts ?? 0, s?.visitors ?? 0),
-              },
-              {
-                label: 'Pedido',
-                value: s?.orders ?? 0,
-                icon: Activity,
-                rate: percentage(s?.orders ?? 0, s?.visitors ?? 0),
-              },
-              {
-                label: 'Comprador',
-                value: buyers,
-                icon: UserCheck,
-                rate: percentage(buyers, s?.visitors ?? 0),
-              },
+                  { label: 'Visita', value: s?.visitors ?? 0, icon: Users, rate: '100%' },
+                  {
+                    label: 'Checkout',
+                    value: s?.checkouts ?? 0,
+                    icon: ShoppingCart,
+                    rate: percentage(s?.checkouts ?? 0, s?.visitors ?? 0),
+                  },
+                  {
+                    label: 'Pedido',
+                    value: s?.orders ?? 0,
+                    icon: Activity,
+                    rate: percentage(s?.orders ?? 0, s?.visitors ?? 0),
+                  },
+                  {
+                    label: 'Comprador',
+                    value: buyers,
+                    icon: UserCheck,
+                    rate: percentage(buyers, s?.visitors ?? 0),
+                  },
                 ].map(({ label, value, icon: Icon, rate }, index) => (
-              <div
-                key={label}
-                className="relative rounded-md border border-white/[0.07] bg-black/10 p-4"
-              >
-                <Icon className="h-4 w-4 text-cyan-300/70" />
-                <p className="mt-4 hud-label">{label}</p>
-                <p className="mt-1 font-mono text-2xl text-white">{value}</p>
-                <p className="mt-1 text-xs text-cyan-200/65">{rate} do topo</p>
-                {index < 3 && (
-                  <span className="absolute -right-2.5 top-1/2 hidden text-white/20 md:block">
-                    →
-                  </span>
-                )}
-              </div>
+                  <div
+                    key={label}
+                    className="relative rounded-md border border-white/[0.07] bg-black/10 p-4"
+                  >
+                    <Icon className="h-4 w-4 text-cyan-300/70" />
+                    <p className="mt-4 hud-label">{label}</p>
+                    <p className="mt-1 font-mono text-2xl text-white">{value}</p>
+                    <p className="mt-1 text-xs text-cyan-200/65">{rate} do topo</p>
+                    {index < 3 && (
+                      <span className="absolute -right-2.5 top-1/2 hidden text-white/20 md:block">
+                        →
+                      </span>
+                    )}
+                  </div>
                 ))}
               </div>
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-md border border-white/[0.07] p-4">
-              <p className="hud-label">Faturamento aprovado</p>
-              <p className="mt-2 font-mono text-lg text-emerald-300">
-                {money(s?.paid_revenue_minor)}
-              </p>
-            </div>
-            <div className="rounded-md border border-white/[0.07] p-4">
-              <p className="hud-label">Atribuição</p>
-              <p className="mt-2 font-mono text-lg text-cyan-300">
-                {percentage((s?.paid_orders ?? 0) - (s?.orphan_orders ?? 0), s?.paid_orders ?? 0)}
-              </p>
-            </div>
-            <div className="rounded-md border border-white/[0.07] p-4">
-              <p className="hud-label">Vendas órfãs</p>
-              <p className="mt-2 font-mono text-lg text-amber-300">{s?.orphan_orders ?? 0}</p>
-            </div>
+                <div className="rounded-md border border-white/[0.07] p-4">
+                  <p className="hud-label">Faturamento aprovado</p>
+                  <p className="mt-2 font-mono text-lg text-emerald-300">
+                    {money(s?.paid_revenue_minor)}
+                  </p>
+                </div>
+                <div className="rounded-md border border-white/[0.07] p-4">
+                  <p className="hud-label">Atribuição</p>
+                  <p className="mt-2 font-mono text-lg text-cyan-300">
+                    {percentage(
+                      (s?.paid_orders ?? 0) - (s?.orphan_orders ?? 0),
+                      s?.paid_orders ?? 0,
+                    )}
+                  </p>
+                </div>
+                <div className="rounded-md border border-white/[0.07] p-4">
+                  <p className="hud-label">Vendas órfãs</p>
+                  <p className="mt-2 font-mono text-lg text-amber-300">{s?.orphan_orders ?? 0}</p>
+                </div>
               </div>
             </>
           ) : funnelDetail === 'pages' ? (
