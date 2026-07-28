@@ -96,7 +96,10 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
           signal: AbortSignal.timeout(15_000),
         });
         const result = (await response.json().catch(() => ({}))) as object;
-        if (!response.ok) throw new Error(`UTMify HTTP ${response.status}`);
+        if (!response.ok) {
+          const detail = JSON.stringify(result).slice(0, 800);
+          throw new Error(`UTMify HTTP ${response.status}${detail !== '{}' ? `: ${detail}` : ''}`);
+        }
         await db`
           UPDATE tracking_delivery_outbox
           SET state = 'delivered', response_status = ${response.status},

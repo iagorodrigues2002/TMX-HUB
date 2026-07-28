@@ -801,6 +801,11 @@ export function TrackingAdvancedCenter({
                       <p className="mt-1 text-white/35">
                         {delivery.event_type} · {delivery.attempts} tentativa(s)
                       </p>
+                      {delivery.last_error && (
+                        <p className="mt-1 max-w-2xl break-words text-red-200/70">
+                          {delivery.last_error}
+                        </p>
+                      )}
                     </div>
                     <div className="flex items-center gap-3">
                       <span
