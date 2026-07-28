@@ -47,6 +47,21 @@ const vendepaySample = JSON.stringify(
   2,
 );
 
+const trackingDomainPreview = (value: string) => {
+  const hostname = value
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .split('/')[0]
+    ?.replace(/:\d+$/, '');
+  if (!hostname) return null;
+  const parts = hostname.split('.');
+  const compoundSuffix = /\.(com|net|org|gov|edu)\.[a-z]{2}$/.test(hostname);
+  const rootSize = compoundSuffix ? 3 : 2;
+  if (parts.length < rootSize) return null;
+  return `tmx.${parts.slice(-rootSize).join('.')}`;
+};
+
 type Section =
   | 'tracker'
   | 'funnel'
@@ -297,7 +312,7 @@ export function TrackingAdvancedCenter({
                   value={domain}
                   onChange={(e) => setDomain(e.target.value)}
                   placeholder={
-                    domainKind === 'tracking' ? 'track.suaempresa.com' : 'checkout.suaoferta.com'
+                    domainKind === 'tracking' ? 'suaempresa.com' : 'checkout.suaoferta.com'
                   }
                 />
                 <Button
@@ -310,6 +325,12 @@ export function TrackingAdvancedCenter({
             )}
             {domainKind === 'tracking' && (
               <div className="mt-3 rounded-xl border border-cyan-300/15 bg-cyan-300/[0.04] p-4 text-xs leading-5 text-white/65">
+                <div className="mb-3 rounded-lg border border-emerald-300/15 bg-emerald-300/[0.05] px-3 py-2">
+                  <span className="text-white/45">Domínio que será criado: </span>
+                  <code className="font-medium text-emerald-200">
+                    {trackingDomainPreview(domain) ?? 'tmx.suaempresa.com'}
+                  </code>
+                </div>
                 <p className="font-medium text-cyan-100">Configuração no Cloudflare</p>
                 <ol className="mt-2 space-y-1.5">
                   <li>1. Abra o domínio no Cloudflare e entre em DNS → Registros.</li>
@@ -325,7 +346,7 @@ export function TrackingAdvancedCenter({
                   </li>
                 </ol>
                 <p className="mt-2 text-amber-100/70">
-                  Use um subdomínio dedicado, como track.suaempresa.com. Não crie A/AAAA para ele e
+                  O TMX sempre usará o subdomínio tmx, como tmx.suaempresa.com. Não crie A/AAAA para ele e
                   não altere o DNS da landing page ou do checkout.
                 </p>
               </div>

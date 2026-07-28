@@ -9,6 +9,7 @@ import {
   provisionRailwayDomain,
 } from '../integrations/railway/domains.js';
 import { zodToProblem } from '../lib/problem.js';
+import { canonicalTrackingHostname } from '../services/tracking-domain.js';
 
 const databaseUnavailable = {
   error: 'tracking_database_unavailable',
@@ -117,7 +118,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       domain_setup: {
         record_type: 'CNAME',
         target: cnameTarget,
-        note: 'Use um subdomínio dedicado, como track.suaempresa.com.',
+        note: 'O TMX cria automaticamente o subdomínio tmx, como tmx.suaempresa.com.',
       },
       vturb: vturb[0] ?? { enabled: false, endpoint_url: null },
     };
@@ -129,7 +130,15 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!p) return reply.code(409).send({ error: 'tracking_not_configured' });
     const body = parsed(DomainSchema, req.body);
     const kind = body.kind ?? 'source';
-    const provision = kind === 'tracking' ? await provisionRailwayDomain(body.hostname) : null;
+    const hostname =
+      kind === 'tracking' ? canonicalTrackingHostname(body.hostname) : body.hostname;
+    if (!hostname) {
+      return reply.code(400).send({
+        error: 'invalid_tracking_domain',
+        detail: 'Informe um domínio público válido, como suaempresa.com.',
+      });
+    }
+    const provision = kind === 'tracking' ? await provisionRailwayDomain(hostname) : null;
     if (kind === 'tracking' && !provision) {
       return reply.code(503).send({
         error: 'custom_domain_provisioning_unavailable',
@@ -144,7 +153,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const [row] = await app.db`
       INSERT INTO tracking_domains
         (id, project_id, hostname, kind, dns_target, provider_domain_id, dns_records)
-      VALUES (${ulid()}, ${p.id}, ${body.hostname}, ${kind},
+      VALUES (${ulid()}, ${p.id}, ${hostname}, ${kind},
         ${target}, ${provision?.id ?? null}, ${app.db.json(records as never)})
       ON CONFLICT (project_id, hostname) DO UPDATE SET enabled=true, kind=excluded.kind,
         dns_target=excluded.dns_target, provider_domain_id=excluded.provider_domain_id,
