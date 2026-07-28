@@ -276,7 +276,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         `;
         if (variants.length === 0) return reply.code(404).send({ error: 'ab_variant_not_found' });
         await app.db`UPDATE tracking_ab_tests
-          SET winner_variant_id=${body.variant_id}, winner_locked_at=now(), status='paused'
+          SET winner_variant_id=${body.variant_id}, winner_locked_at=now(), status='active'
           WHERE id=${req.params.testId} AND project_id=${p.id}`;
       }
       return { updated: true };
