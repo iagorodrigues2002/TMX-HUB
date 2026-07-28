@@ -1,4 +1,5 @@
 export interface UtmifyOrderInput {
+  isTest?: boolean;
   orderId: string;
   provider: string;
   status: string;
@@ -23,7 +24,7 @@ const statusMap: Record<string, string> = {
 export function buildUtmifyOrderPayload(input: UtmifyOrderInput) {
   const source = input.source ?? {};
   return {
-    isTest: false,
+    isTest: input.isTest ?? false,
     orderId: input.orderId,
     platform: `TMXHUB/${input.provider}`,
     paymentMethod: source.payment_method ?? 'unknown',

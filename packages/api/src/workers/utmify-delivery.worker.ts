@@ -72,6 +72,7 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
           WHERE id = ${row.id}
         `;
         const payload = buildUtmifyOrderPayload({
+          isTest: row.provider === 'tmx-test',
           orderId: row.external_id,
           provider: row.provider,
           status: row.status,
