@@ -1448,8 +1448,8 @@ export const apiClient = {
   async saveMetaPixel(
     id: string,
     input: { name: string; pixel_id: string; access_token: string; test_event_code?: string },
-  ): Promise<void> {
-    await request(`/v1/offers/${id}/tracking/meta-pixels`, { method: 'POST', body: input });
+  ): Promise<{ verification: 'verified' | 'pending_event_test'; verification_warning?: string }> {
+    return request(`/v1/offers/${id}/tracking/meta-pixels`, { method: 'POST', body: input });
   },
 
   async getTrackingUtmifyDestination(id: string): Promise<{

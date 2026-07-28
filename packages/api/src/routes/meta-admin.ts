@@ -3,6 +3,11 @@ import { ulid } from 'ulid';
 import { z } from 'zod';
 import { env } from '../env.js';
 import { encryptSecret } from '../lib/secret-box.js';
+import {
+  isDefinitelyInvalidMetaToken,
+  metaCredentialDetail,
+  readMetaGraphError,
+} from '../services/meta-credentials.js';
 
 const PixelSchema = z.object({
   name: z.string().trim().min(1).max(80),
@@ -46,12 +51,17 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     checkUrl.searchParams.set('fields', 'id,name');
     checkUrl.searchParams.set('access_token', parsed.data.access_token);
     const verification = await fetch(checkUrl, { signal: AbortSignal.timeout(10_000) });
-    if (!verification.ok) {
+    const verificationPayload = (await verification.json().catch(() => null)) as unknown;
+    const verificationError = readMetaGraphError(verificationPayload);
+    if (!verification.ok && isDefinitelyInvalidMetaToken(verificationError)) {
       return reply.code(422).send({
         error: 'meta_credentials_rejected',
-        detail: `O Meta recusou o pixel/token (${verification.status}).`,
+        detail: metaCredentialDetail(verification.status, verificationError),
       });
     }
+    const verificationWarning = !verification.ok
+      ? 'O token CAPI foi salvo, mas não possui permissão para consultar o Pixel via GET. Isso é comum em tokens gerados pelo Events Manager; valide-o enviando um evento com Test Event Code.'
+      : null;
 
     const [pixel] = await app.db`
       INSERT INTO meta_pixels
@@ -67,7 +77,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         enabled = true
       RETURNING id, name, pixel_id, test_event_code, enabled, created_at
     `;
-    return reply.code(201).send({ pixel });
+    return reply.code(201).send({
+      pixel,
+      verification: verification.ok ? 'verified' : 'pending_event_test',
+      ...(verificationWarning ? { verification_warning: verificationWarning } : {}),
+    });
   });
 
   app.delete<{ Params: { id: string; pixelId: string } }>(
