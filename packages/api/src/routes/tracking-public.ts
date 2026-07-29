@@ -812,7 +812,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         }
         const response = await app.inject({
           method: 'POST',
-          url: `/webhooks/vendepay?token=${encodeURIComponent(req.query.token)}`,
+          url: `/v1/webhooks/vendepay?token=${encodeURIComponent(req.query.token)}`,
           payload: receipt.payload as Record<string, unknown>,
         });
         if (response.statusCode >= 200 && response.statusCode < 300) replayed += 1;
