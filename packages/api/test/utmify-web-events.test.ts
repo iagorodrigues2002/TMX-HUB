@@ -54,4 +54,17 @@ describe('UTMify web events', () => {
       }),
     ).toBe(true);
   });
+
+  it('builds fbc from fbclid when the browser cookie is not available', () => {
+    const payload = buildUtmifyWebEventPayload({
+      eventName: 'InitiateCheckout',
+      pixelId: '6a698a76093cf4ea09039541',
+      eventUrl: 'https://example.com/slm/',
+      source: {
+        fbclid: 'meta-click-id',
+        _fbclid_ts: '1785290400000',
+      },
+    });
+    expect(payload.lead.fbc).toBe('fb.1.1785290400000.meta-click-id');
+  });
 });

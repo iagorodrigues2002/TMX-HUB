@@ -232,19 +232,32 @@ export function normalizeVendepay(raw: unknown, receivedAt = new Date()): Vendep
     'utm_term',
     'sck',
     'fbclid',
+    '_fbp',
+    '_fbc',
+    'campaign_id',
+    'campaign_name',
+    'adset_id',
+    'adset_name',
+    'ad_id',
+    'ad_name',
+    'placement',
+    'site_source_name',
   ] as const;
-  const source = Object.fromEntries(
-    sourceEntries.flatMap((key) => {
-      const value = textAt(payload, [
-        key,
-        `metadata.${key}`,
-        `data.${key}`,
-        `tracking.${key}`,
-        `trackingParameters.${key}`,
-      ]);
-      return value ? [[key, value]] : [];
-    }),
-  );
+  const source = {
+    ...Object.fromEntries(
+      sourceEntries.flatMap((key) => {
+        const value = textAt(payload, [
+          key,
+          `metadata.${key}`,
+          `data.${key}`,
+          `tracking.${key}`,
+          `trackingParameters.${key}`,
+        ]);
+        return value ? [[key, value]] : [];
+      }),
+    ),
+    ...(trackingSrc ? { src: trackingSrc } : {}),
+  };
   const dedupeKey = eventId
     ? createHash('sha256').update(`event|${eventId}`).digest('hex')
     : createHash('sha256')

@@ -231,14 +231,40 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!app.db) return reply.code(503).send({ deliveries: [] });
       const deliveries = await app.db`
       SELECT md.id, md.event_id, md.state, md.attempts, md.last_error,
-             md.response, md.created_at, md.delivered_at,
+             md.response, md.response_status,
+             COALESCE(md.provider_event_count, (md.response->>'events_received')::integer, 0)
+               AS provider_event_count,
+             md.created_at, md.delivered_at,
              md.event_name,
              mp.name AS pixel_name, mp.pixel_id,
-             COALESCE(o.external_id, 'TMX-IC-' || md.event_id) AS transaction_id
+             COALESCE(o.external_id, 'TMX-IC-' || md.event_id) AS transaction_id,
+             COALESCE(direct_event.event_url, latest_event.event_url) AS event_url,
+             NULLIF(COALESCE(direct_event.source->>'campaign_id',
+               latest_event.source->>'campaign_id'), '') AS campaign_id,
+             NULLIF(COALESCE(direct_event.source->>'adset_id',
+               latest_event.source->>'adset_id'), '') AS adset_id,
+             NULLIF(COALESCE(direct_event.source->>'ad_id',
+               latest_event.source->>'ad_id'), '') AS ad_id,
+             NULLIF(COALESCE(direct_event.source->>'fbclid',
+               latest_event.source->>'fbclid'), '') IS NOT NULL AS has_fbclid,
+             NULLIF(COALESCE(direct_event.source->>'_fbc',
+               latest_event.source->>'_fbc'), '') IS NOT NULL AS has_fbc,
+             NULLIF(COALESCE(direct_event.source->>'_fbp',
+               latest_event.source->>'_fbp'), '') IS NOT NULL AS has_fbp
       FROM meta_deliveries md
       JOIN tracking_projects tp ON tp.id = md.project_id
       JOIN meta_pixels mp ON mp.id = md.pixel_id
       LEFT JOIN tracking_orders o ON o.id = md.order_id
+      LEFT JOIN tracking_events direct_event
+        ON direct_event.project_id = md.project_id AND direct_event.id = md.event_id
+      LEFT JOIN LATERAL (
+        SELECT te.event_url, te.source
+        FROM tracking_events te
+        WHERE te.project_id = md.project_id
+          AND te.visitor_id = COALESCE(o.visitor_id, direct_event.visitor_id)
+        ORDER BY te.received_at DESC
+        LIMIT 1
+      ) latest_event ON true
       WHERE tp.offer_id = ${req.params.id}
       ORDER BY md.created_at DESC
       LIMIT 100

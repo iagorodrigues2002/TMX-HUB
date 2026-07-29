@@ -14,7 +14,14 @@ describe('normalizeVendepay', () => {
         payment_method: 'pix',
         product: { id: 'prod-1', name: 'Produto principal' },
         offer: { id: 'offer-1', name: 'Plano anual' },
-        metadata: { utm_source: 'facebook', utm_campaign: 'campanha-1' },
+        metadata: {
+          utm_source: 'facebook',
+          utm_campaign: 'campanha-1',
+          campaign_id: '120',
+          adset_id: '456',
+          ad_id: '789',
+          _fbc: 'fb.1.123.click',
+        },
         customer: {
           name: 'Buyer',
           email: ' BUYER@EXAMPLE.COM ',
@@ -40,7 +47,15 @@ describe('normalizeVendepay', () => {
         planId: 'offer-1',
         planName: 'Plano anual',
       },
-      source: { utm_source: 'facebook', utm_campaign: 'campanha-1' },
+      source: {
+        src: 'visitor-abc',
+        utm_source: 'facebook',
+        utm_campaign: 'campanha-1',
+        campaign_id: '120',
+        adset_id: '456',
+        ad_id: '789',
+        _fbc: 'fb.1.123.click',
+      },
     });
   });
 

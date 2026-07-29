@@ -156,15 +156,14 @@ async function enqueueInitiateCheckout(
       if (rows[0]) meta.push(rows[0]);
     }
     const utmify: Array<{ id: string }> = [];
-    const referencePixel = pixels[0];
-    if (project?.utmify_pixel_id && referencePixel) {
+    if (project?.utmify_pixel_id) {
       const webEvents = await sql<{ id: string }[]>`
         INSERT INTO tracking_utmify_web_events
           (id, project_id, pixel_id, external_pixel_id, event_id, event_name)
         VALUES
-          (${ulid()}, ${input.projectId}, ${referencePixel.id}, ${project.utmify_pixel_id},
+          (${ulid()}, ${input.projectId}, NULL, ${project.utmify_pixel_id},
            ${input.eventId}, 'InitiateCheckout')
-        ON CONFLICT (pixel_id, event_id) DO NOTHING
+        ON CONFLICT (project_id, event_id) DO NOTHING
         RETURNING id
       `;
       if (webEvents[0]) utmify.push(webEvents[0]);
@@ -193,7 +192,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     `;
     return reply
       .header('content-type', 'application/javascript; charset=utf-8')
-      .header('cache-control', 'public, max-age=300')
+      // Tracking fixes and pixel changes must reach live funnels immediately.
+      // Cloudflare was overriding the browser TTL to four hours, leaving old
+      // checkout logic active after a deploy.
+      .header('cache-control', 'no-store, no-cache, must-revalidate')
+      .header('cloudflare-cdn-cache-control', 'no-store')
+      .header('cdn-cache-control', 'no-store')
       .send(
         buildTrackerScript(
           req.query.key,

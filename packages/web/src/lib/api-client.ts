@@ -1547,11 +1547,21 @@ export const apiClient = {
       state: 'pending' | 'processing' | 'delivered' | 'failed';
       attempts: number;
       last_error?: string;
+      response_status?: number;
+      provider_event_count: number;
       created_at: string;
       delivered_at?: string;
       pixel_name: string;
       pixel_id: string;
       transaction_id: string;
+      event_name: 'InitiateCheckout' | 'Purchase';
+      event_url?: string;
+      campaign_id?: string;
+      adset_id?: string;
+      ad_id?: string;
+      has_fbclid: boolean;
+      has_fbc: boolean;
+      has_fbp: boolean;
     }>;
   }> {
     return request(`/v1/offers/${id}/tracking/meta-deliveries`);

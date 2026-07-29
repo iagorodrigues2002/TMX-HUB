@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { Worker } from 'bullmq';
 import postgres from 'postgres';
 import { env } from '../env.js';
+import { assertMetaCapiAccepted } from '../integrations/meta/capi-response.js';
 import { logger } from '../lib/logger.js';
 import { makeRedis } from '../lib/redis.js';
 import { decryptSecret } from '../lib/secret-box.js';
@@ -89,6 +90,8 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
         WHERE md.id = ${job.data.deliveryId} AND md.state <> 'delivered'
       `;
       if (!row) return;
+      let responseStatus: number | null = null;
+      let responseResult: Record<string, unknown> = {};
       try {
         if (
           row.event_name === 'Purchase' &&
@@ -151,20 +154,50 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
           body: JSON.stringify(payload),
           signal: AbortSignal.timeout(15_000),
         });
-        const result = (await response.json().catch(() => ({}))) as object;
-        if (!response.ok) throw new Error(`Meta HTTP ${response.status}`);
+        responseStatus = response.status;
+        responseResult = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+        const eventsReceived = assertMetaCapiAccepted(response.status, responseResult);
         await db`
           UPDATE meta_deliveries SET attempts = attempts + 1, state = 'delivered',
-            response = ${db.json(result as never)}, last_error = NULL, delivered_at = now()
+            response_status = ${response.status},
+            provider_event_count = ${eventsReceived},
+            response = ${db.json(responseResult as never)}, last_error = NULL, delivered_at = now()
           WHERE id = ${row.id}
         `;
+        logger.info(
+          {
+            deliveryId: row.id,
+            eventId: row.outgoing_event_id ?? row.event_id,
+            eventName: row.event_name,
+            pixelId: row.pixel_external_id,
+            eventsReceived,
+          },
+          'meta capi event delivered',
+        );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         await db`
           UPDATE meta_deliveries SET attempts = attempts + 1, state = 'failed',
+            response_status = ${responseStatus},
+            response = CASE
+              WHEN ${db.json(responseResult as never)}::jsonb = '{}'::jsonb THEN response
+              ELSE ${db.json(responseResult as never)}
+            END,
+            provider_event_count = 0,
             last_error = ${message}
           WHERE id = ${row.id}
         `;
+        logger.warn(
+          {
+            deliveryId: row.id,
+            eventId: row.outgoing_event_id ?? row.event_id,
+            eventName: row.event_name,
+            pixelId: row.pixel_external_id,
+            responseStatus,
+            error: message,
+          },
+          'meta capi event failed',
+        );
         throw error;
       }
     },

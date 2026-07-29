@@ -242,15 +242,14 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             `;
             if (rows[0]) meta.push(rows[0]);
           }
-          const referencePixel = pixels[0];
-          if (project.utmify_pixel_id && referencePixel) {
+          if (project.utmify_pixel_id) {
             const utmifyRows = await sql<{ id: string }[]>`
                 INSERT INTO tracking_utmify_web_events AS existing
                   (id, project_id, pixel_id, external_pixel_id, event_id, event_name)
                 VALUES
-                  (${ulid()}, ${project.id}, ${referencePixel.id}, ${project.utmify_pixel_id},
+                  (${ulid()}, ${project.id}, NULL, ${project.utmify_pixel_id},
                    ${event.id}, 'InitiateCheckout')
-                ON CONFLICT (pixel_id, event_id) DO UPDATE SET
+                ON CONFLICT (project_id, event_id) DO UPDATE SET
                   external_pixel_id = EXCLUDED.external_pixel_id,
                   state = 'pending',
                   attempts = 0,
@@ -320,7 +319,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         attribution_recovered: result.attributionRecovered,
         events_found: result.eventsFound,
         pixels_enabled: result.pixelCount,
-        utmify_destinations_enabled: result.pixelCount,
+        utmify_destinations_enabled: project.utmify_pixel_id ? 1 : 0,
         meta_queued: result.meta.length,
         utmify_queued: result.utmifyWebEvents.length,
         utmify_legacy_neutralized: result.utmify.length,

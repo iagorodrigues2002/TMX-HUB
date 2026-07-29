@@ -34,6 +34,14 @@ function sourceUrl(value: string) {
   return `${url.protocol}//${url.host}${url.pathname}`.replace(/\/+$/, '');
 }
 
+function facebookClickCookie(source: Record<string, string>) {
+  if (source._fbc) return source._fbc;
+  if (!source.fbclid) return undefined;
+  const candidate = Number(source._fbclid_ts);
+  const timestamp = Number.isFinite(candidate) && candidate > 0 ? candidate : Date.now();
+  return `fb.1.${timestamp}.${source.fbclid}`;
+}
+
 export function buildUtmifyWebEventPayload(input: UtmifyWebEventInput) {
   const source = input.source ?? {};
   const parameters = new URLSearchParams();
@@ -47,7 +55,7 @@ export function buildUtmifyWebEventPayload(input: UtmifyWebEventInput) {
       userAgent: input.userAgent ?? '',
       parameters: parameters.size ? `?${parameters.toString()}` : '',
       ip: input.clientIp ?? undefined,
-      fbc: source._fbc,
+      fbc: facebookClickCookie(source),
       fbp: source._fbp,
       gclid: source.gclid,
       ttclid: source.ttclid,
