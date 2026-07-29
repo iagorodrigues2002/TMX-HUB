@@ -19,6 +19,7 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
       const [row] = await db<
         Array<{
           id: string;
+          event_type: string;
           endpoint_url: string;
           api_token_encrypted: string;
           external_id: string;
@@ -39,7 +40,7 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
           client_ip: string | null;
         }>
       >`
-        SELECT d.id, u.endpoint_url, u.api_token_encrypted,
+        SELECT d.id, d.event_type, u.endpoint_url, u.api_token_encrypted,
                COALESCE(o.external_id, 'TMX-IC-' || d.event_id) AS external_id,
                COALESCE(o.provider, 'tmx') AS provider,
                COALESCE(o.status, 'pending') AS status,
@@ -92,7 +93,8 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
           isTest: row.provider === 'tmx-test',
           orderId: row.external_id,
           provider: row.provider,
-          status: row.status,
+          status:
+            row.event_type === 'event.initiate_checkout.neutralize' ? 'cancelled' : row.status,
           amountMinor: row.amount_minor,
           currency: row.currency,
           createdAt: row.occurred_at,
@@ -109,7 +111,7 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
           headers: {
             'content-type': 'application/json',
             'x-api-token': token,
-            'x-idempotency-key': row.id,
+            'x-idempotency-key': `${row.id}:${row.event_type}`,
           },
           body: JSON.stringify(payload),
           signal: AbortSignal.timeout(15_000),

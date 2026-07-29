@@ -76,10 +76,6 @@ async function enqueueInitiateCheckout(
       SELECT id FROM meta_pixels
       WHERE project_id = ${input.projectId} AND enabled = true
     `;
-    const destinations = await sql<{ id: string }[]>`
-      SELECT id FROM tracking_utmify_destinations
-      WHERE project_id = ${input.projectId} AND enabled = true
-    `;
     const meta: Array<{ id: string }> = [];
     for (const pixel of pixels) {
       const rows = await sql<{ id: string }[]>`
@@ -93,28 +89,12 @@ async function enqueueInitiateCheckout(
       `;
       if (rows[0]) meta.push(rows[0]);
     }
-    const utmify: Array<{ id: string }> = [];
-    for (const destination of destinations) {
-      const rows = await sql<{ id: string }[]>`
-        INSERT INTO tracking_delivery_outbox
-          (id, project_id, destination_kind, destination_id, order_id, event_id, event_type)
-        VALUES
-          (${ulid()}, ${input.projectId}, 'utmify', ${destination.id}, NULL, ${input.eventId},
-           'event.initiate_checkout')
-        ON CONFLICT (destination_kind, destination_id, event_id) DO NOTHING
-        RETURNING id
-      `;
-      if (rows[0]) utmify.push(rows[0]);
-    }
-    return { meta, utmify };
+    return { meta };
   });
-  await Promise.allSettled([
-    ...queued.meta.map((delivery) => app.metaQueue.add('send', { deliveryId: delivery.id })),
-    ...queued.utmify.map((delivery) =>
-      app.utmifyDeliveryQueue.add('send', { deliveryId: delivery.id }),
-    ),
-  ]);
-  return { meta: queued.meta.length, utmify: queued.utmify.length };
+  await Promise.allSettled(
+    queued.meta.map((delivery) => app.metaQueue.add('send', { deliveryId: delivery.id })),
+  );
+  return { meta: queued.meta.length };
 }
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {

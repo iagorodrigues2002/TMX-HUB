@@ -110,12 +110,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           SELECT id FROM meta_pixels
           WHERE project_id = ${project.id} AND enabled = true
         `;
-        const destinations = await sql<{ id: string }[]>`
-          SELECT id FROM tracking_utmify_destinations
-          WHERE project_id = ${project.id} AND enabled = true
-        `;
         const meta: Array<{ id: string }> = [];
-        const utmify: Array<{ id: string }> = [];
         for (const event of events) {
           for (const pixel of pixels) {
             const rows = await sql<{ id: string }[]>`
@@ -133,28 +128,31 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             `;
             if (rows[0]) meta.push(rows[0]);
           }
-          for (const destination of destinations) {
-            const rows = await sql<{ id: string }[]>`
-              INSERT INTO tracking_delivery_outbox AS existing
-                (id, project_id, destination_kind, destination_id, order_id, event_id, event_type)
-              VALUES
-                (${ulid()}, ${project.id}, 'utmify', ${destination.id}, NULL, ${event.id},
-                 'event.initiate_checkout')
-              ON CONFLICT (destination_kind, destination_id, event_id) DO UPDATE SET
-                state = 'pending',
-                attempts = 0,
-                last_error = NULL,
-                next_attempt_at = now()
-              WHERE existing.state <> 'delivered'
-              RETURNING id
-            `;
-            if (rows[0]) utmify.push(rows[0]);
-          }
         }
+        // IC is an analytics event, not an order. Neutralize legacy records that
+        // were incorrectly sent to UTMify as waiting_payment.
+        const utmify = await sql<{ id: string }[]>`
+          UPDATE tracking_delivery_outbox
+          SET event_type = 'event.initiate_checkout.neutralize',
+              state = 'pending',
+              attempts = 0,
+              last_error = NULL,
+              next_attempt_at = now()
+          WHERE project_id = ${project.id}
+            AND destination_kind = 'utmify'
+            AND event_type = 'event.initiate_checkout'
+            AND event_id IN (
+              SELECT id FROM tracking_events
+              WHERE project_id = ${project.id}
+                AND event_name = 'InitiateCheckout'
+                AND received_at >= ${from}
+                AND received_at < ${to}
+            )
+          RETURNING id
+        `;
         return {
           eventsFound: events.length,
           pixelCount: pixels.length,
-          destinationCount: destinations.length,
           meta,
           utmify,
         };
@@ -170,7 +168,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         date,
         events_found: result.eventsFound,
         pixels_enabled: result.pixelCount,
-        utmify_destinations_enabled: result.destinationCount,
+        utmify_destinations_enabled: 0,
         meta_queued: result.meta.length,
         utmify_queued: result.utmify.length,
       });
