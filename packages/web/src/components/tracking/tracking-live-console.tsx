@@ -144,7 +144,7 @@ export function TrackingLiveConsole({
       .map((delivery) => delivery.transaction_id),
   );
   const s = summary.data;
-  const buyers = s?.paid_orders ?? 0;
+  const buyers = s?.paid_buyers ?? 0;
 
   return (
     <section className="overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.02]">
@@ -643,7 +643,10 @@ export function TrackingLiveConsole({
                   : '—',
               ],
               ['Checkouts', `${s?.checkouts ?? 0} únicos · ${s?.checkout_events ?? 0} disparos`],
-              ['Compradores', buyers],
+              [
+                'Compradores',
+                `${buyers} únicos · ${s?.upsell_orders ?? 0} upsells`,
+              ],
               ['Faturamento', money(s?.paid_revenue_minor)],
             ].map(([label, value]) => (
               <div key={label} className="bg-[#06131d] p-4">

@@ -1093,6 +1093,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           checkout_events: number;
           orders: number;
           paid_orders: number;
+          paid_buyers: number;
+          upsell_orders: number;
           orphan_orders: number;
           paid_revenue_minor: string;
         }>
@@ -1134,6 +1136,29 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         (SELECT count(*)::int FROM tracking_orders o
           WHERE o.project_id = p.id AND o.status = 'paid'
             AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS paid_orders,
+        (SELECT count(DISTINCT COALESCE(
+            NULLIF(lower(trim(o.buyer->>'email')), ''),
+            NULLIF(regexp_replace(o.buyer->>'phone', '\D', '', 'g'), ''),
+            NULLIF(regexp_replace(o.buyer->>'document', '\D', '', 'g'), ''),
+            NULLIF(trim(o.visitor_id), ''),
+            o.external_id
+          ))::int
+          FROM tracking_orders o
+          WHERE o.project_id = p.id AND o.status = 'paid'
+            AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS paid_buyers,
+        (SELECT GREATEST(
+            count(*) - count(DISTINCT COALESCE(
+              NULLIF(lower(trim(o.buyer->>'email')), ''),
+              NULLIF(regexp_replace(o.buyer->>'phone', '\D', '', 'g'), ''),
+              NULLIF(regexp_replace(o.buyer->>'document', '\D', '', 'g'), ''),
+              NULLIF(trim(o.visitor_id), ''),
+              o.external_id
+            )),
+            0
+          )::int
+          FROM tracking_orders o
+          WHERE o.project_id = p.id AND o.status = 'paid'
+            AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS upsell_orders,
         (SELECT count(*)::int FROM tracking_orders o
           WHERE o.project_id = p.id AND NULLIF(trim(o.visitor_id), '') IS NULL
             AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS orphan_orders,
@@ -1156,6 +1181,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           checkout_events: 0,
           orders: 0,
           paid_orders: 0,
+          paid_buyers: 0,
+          upsell_orders: 0,
           orphan_orders: 0,
           paid_revenue_minor: '0',
         }),

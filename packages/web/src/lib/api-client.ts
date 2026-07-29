@@ -1249,6 +1249,8 @@ export const apiClient = {
     checkout_events: number;
     orders: number;
     paid_orders: number;
+    paid_buyers: number;
+    upsell_orders: number;
     orphan_orders: number;
     paid_revenue_minor: string;
   }> {
