@@ -37,6 +37,7 @@ describe('reliable tracking foundation', () => {
     expect(script).toContain("fb.1.'+ts+'.'+out.fbclid");
     expect(script).toContain('MutationObserver');
     expect(script).toContain('pushState');
+    expect(script).toContain('isCheckout=a=>isRedirect(a)||');
     expect(script).toContain("if(!redirect)send('InitiateCheckout'");
   });
 

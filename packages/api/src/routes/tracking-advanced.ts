@@ -130,8 +130,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!p) return reply.code(409).send({ error: 'tracking_not_configured' });
     const body = parsed(DomainSchema, req.body);
     const kind = body.kind ?? 'source';
-    const hostname =
-      kind === 'tracking' ? canonicalTrackingHostname(body.hostname) : body.hostname;
+    const hostname = kind === 'tracking' ? canonicalTrackingHostname(body.hostname) : body.hostname;
     if (!hostname) {
       return reply.code(400).send({
         error: 'invalid_tracking_domain',
@@ -318,14 +317,19 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       const rows = await app.db`
         SELECT v.id, v.label, v.position, v.destination_url,
                count(DISTINCT a.visitor_id)::int AS visitors,
-               count(DISTINCT a.visitor_id) FILTER (
-                 WHERE EXISTS (
-                   SELECT 1 FROM tracking_events e
-                   WHERE e.project_id=t.project_id
-                     AND e.visitor_id=a.visitor_id
-                     AND e.event_name='InitiateCheckout'
-                 )
-               )::int AS checkouts,
+               (SELECT count(*)::int FROM tracking_events e
+                WHERE e.project_id=t.project_id
+                  AND e.event_name='InitiateCheckout'
+                  AND (
+                    e.properties->>'ab_variant_id'=v.id
+                    OR (
+                      NOT (e.properties ? 'ab_variant_id')
+                      AND e.visitor_id IN (
+                        SELECT aa.visitor_id FROM tracking_ab_assignments aa
+                        WHERE aa.variant_id=v.id
+                      )
+                    )
+                  )) AS checkouts,
                (SELECT count(*)::int FROM tracking_orders o
                 WHERE o.project_id=t.project_id
                   AND o.visitor_id IN (

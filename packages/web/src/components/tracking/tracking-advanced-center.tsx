@@ -1141,7 +1141,7 @@ function AbTestCard({
                   <dd className="mt-1 text-base font-semibold text-white">{visitors}</dd>
                 </div>
                 <div>
-                  <dt className="text-white/45">Checkouts</dt>
+                  <dt className="text-white/45">Acessos ao checkout</dt>
                   <dd className="mt-1 text-base font-semibold text-white">
                     {Number(row?.checkouts ?? 0)}
                   </dd>
