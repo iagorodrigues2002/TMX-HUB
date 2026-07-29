@@ -84,6 +84,90 @@ function pagination(page: number, perPage: number, total: number) {
 }
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
+  app.post<{ Params: { id: string }; Querystring: { date?: string } }>(
+    '/offers/:id/tracking/initiate-checkout/reconcile',
+    async (req, reply) => {
+      await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
+      if (!app.db) return reply.code(503).send(databaseUnavailable);
+      const { date, from, to } = parseTrackingDate(req.query);
+      const [project] = await app.db<{ id: string }[]>`
+        SELECT id FROM tracking_projects
+        WHERE offer_id = ${req.params.id} AND enabled = true
+      `;
+      if (!project) throw new NotFoundError('Projeto de tracking não encontrado.');
+
+      const result = await app.db.begin(async (sql) => {
+        const events = await sql<{ id: string; received_at: Date }[]>`
+          SELECT id, received_at
+          FROM tracking_events
+          WHERE project_id = ${project.id}
+            AND event_name = 'InitiateCheckout'
+            AND received_at >= ${from}
+            AND received_at < ${to}
+          ORDER BY received_at ASC
+        `;
+        const pixels = await sql<{ id: string }[]>`
+          SELECT id FROM meta_pixels
+          WHERE project_id = ${project.id} AND enabled = true
+        `;
+        const destinations = await sql<{ id: string }[]>`
+          SELECT id FROM tracking_utmify_destinations
+          WHERE project_id = ${project.id} AND enabled = true
+        `;
+        const meta: Array<{ id: string }> = [];
+        const utmify: Array<{ id: string }> = [];
+        for (const event of events) {
+          for (const pixel of pixels) {
+            const rows = await sql<{ id: string }[]>`
+              INSERT INTO meta_deliveries
+                (id, project_id, pixel_id, order_id, event_id, event_name, event_at)
+              VALUES
+                (${ulid()}, ${project.id}, ${pixel.id}, NULL, ${event.id},
+                 'InitiateCheckout', ${event.received_at})
+              ON CONFLICT (pixel_id, event_id) DO NOTHING
+              RETURNING id
+            `;
+            if (rows[0]) meta.push(rows[0]);
+          }
+          for (const destination of destinations) {
+            const rows = await sql<{ id: string }[]>`
+              INSERT INTO tracking_delivery_outbox
+                (id, project_id, destination_kind, destination_id, order_id, event_id, event_type)
+              VALUES
+                (${ulid()}, ${project.id}, 'utmify', ${destination.id}, NULL, ${event.id},
+                 'event.initiate_checkout')
+              ON CONFLICT (destination_kind, destination_id, event_id) DO NOTHING
+              RETURNING id
+            `;
+            if (rows[0]) utmify.push(rows[0]);
+          }
+        }
+        return {
+          eventsFound: events.length,
+          pixelCount: pixels.length,
+          destinationCount: destinations.length,
+          meta,
+          utmify,
+        };
+      });
+
+      await Promise.allSettled([
+        ...result.meta.map(({ id }) => app.metaQueue.add('send', { deliveryId: id })),
+        ...result.utmify.map(({ id }) =>
+          app.utmifyDeliveryQueue.add('send', { deliveryId: id }, { jobId: id }),
+        ),
+      ]);
+      return reply.code(202).send({
+        date,
+        events_found: result.eventsFound,
+        pixels_enabled: result.pixelCount,
+        utmify_destinations_enabled: result.destinationCount,
+        meta_queued: result.meta.length,
+        utmify_queued: result.utmify.length,
+      });
+    },
+  );
+
   app.get<{ Params: { id: string } }>('/offers/:id/tracking/diagnostics', async (req, reply) => {
     await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
     if (!app.db) {

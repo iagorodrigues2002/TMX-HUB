@@ -66,6 +66,57 @@ function requestCountry(headers: Record<string, string | string[] | undefined>) 
   return undefined;
 }
 
+async function enqueueInitiateCheckout(
+  app: FastifyInstance,
+  input: { projectId: string; eventId: string; eventAt: Date },
+) {
+  if (!app.db) return { meta: 0, utmify: 0 };
+  const queued = await app.db.begin(async (sql) => {
+    const pixels = await sql<{ id: string }[]>`
+      SELECT id FROM meta_pixels
+      WHERE project_id = ${input.projectId} AND enabled = true
+    `;
+    const destinations = await sql<{ id: string }[]>`
+      SELECT id FROM tracking_utmify_destinations
+      WHERE project_id = ${input.projectId} AND enabled = true
+    `;
+    const meta: Array<{ id: string }> = [];
+    for (const pixel of pixels) {
+      const rows = await sql<{ id: string }[]>`
+        INSERT INTO meta_deliveries
+          (id, project_id, pixel_id, order_id, event_id, event_name, event_at)
+        VALUES
+          (${ulid()}, ${input.projectId}, ${pixel.id}, NULL, ${input.eventId},
+           'InitiateCheckout', ${input.eventAt})
+        ON CONFLICT (pixel_id, event_id) DO NOTHING
+        RETURNING id
+      `;
+      if (rows[0]) meta.push(rows[0]);
+    }
+    const utmify: Array<{ id: string }> = [];
+    for (const destination of destinations) {
+      const rows = await sql<{ id: string }[]>`
+        INSERT INTO tracking_delivery_outbox
+          (id, project_id, destination_kind, destination_id, order_id, event_id, event_type)
+        VALUES
+          (${ulid()}, ${input.projectId}, 'utmify', ${destination.id}, NULL, ${input.eventId},
+           'event.initiate_checkout')
+        ON CONFLICT (destination_kind, destination_id, event_id) DO NOTHING
+        RETURNING id
+      `;
+      if (rows[0]) utmify.push(rows[0]);
+    }
+    return { meta, utmify };
+  });
+  await Promise.allSettled([
+    ...queued.meta.map((delivery) => app.metaQueue.add('send', { deliveryId: delivery.id })),
+    ...queued.utmify.map((delivery) =>
+      app.utmifyDeliveryQueue.add('send', { deliveryId: delivery.id }),
+    ),
+  ]);
+  return { meta: queued.meta.length, utmify: queued.utmify.length };
+}
+
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get<{ Querystring: { key?: string } }>('/track/t.js', async (req, reply) => {
     if (!req.query.key || !app.db) return reply.code(404).send();
@@ -282,12 +333,14 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     destination.searchParams.set('src', trackingToken);
     destination.searchParams.set('tmx_ab', selected.label);
     const redirectCountry = requestCountry(req.headers);
+    const redirectEventId = ulid();
+    const redirectEventAt = new Date();
     await app.db`
       INSERT INTO tracking_events
         (id, project_id, visitor_id, journey_id, event_name, event_category,
          event_url, source, properties, received_at)
       VALUES
-        (${ulid()}, ${test.project_id}, ${visitorId}, ${journeyId}, 'InitiateCheckout',
+        (${redirectEventId}, ${test.project_id}, ${visitorId}, ${journeyId}, 'InitiateCheckout',
          'commerce', ${`${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/r/${test.id}`},
          ${app.db.json({
            ...Object.fromEntries(
@@ -300,8 +353,13 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
            ab_variant_id: selected.id,
            ab_variant: selected.label,
            redirect: true,
-         } as never)}, now())
+         } as never)}, ${redirectEventAt})
     `;
+    await enqueueInitiateCheckout(app, {
+      projectId: test.project_id,
+      eventId: redirectEventId,
+      eventAt: redirectEventAt,
+    });
     reply.header(
       'set-cookie',
       `_tmx_redirect_v=${visitorId}; Path=/; Max-Age=31536000; HttpOnly; Secure; SameSite=Lax`,
@@ -320,7 +378,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!project?.enabled) return reply.code(404).send({ accepted: false });
     const country = requestCountry(req.headers);
     const source = country ? { ...event.source, country } : event.source;
-    await app.db`
+    const inserted = await app.db<{ id: string; received_at: Date }[]>`
       INSERT INTO tracking_events
         (id, project_id, visitor_id, session_id, journey_id, event_name, event_category,
          event_url, page_title, referrer, source, properties, consent_state,
@@ -333,6 +391,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
          ${event.consent_state ?? null}, ${req.ip}, ${req.headers['user-agent'] ?? null},
          ${event.client_at ?? null})
       ON CONFLICT (project_id, id) DO NOTHING
+      RETURNING id, received_at
     `;
     await app.db`
       UPDATE tracking_visitors SET last_seen_at = now(),
@@ -342,6 +401,13 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         END
       WHERE project_id = ${project.id} AND visitor_id = ${event.visitor_id}
     `;
+    if (event.event_name === 'InitiateCheckout' && inserted[0]) {
+      await enqueueInitiateCheckout(app, {
+        projectId: project.id,
+        eventId: inserted[0].id,
+        eventAt: inserted[0].received_at,
+      });
+    }
     return reply.code(202).send({ accepted: true });
   });
 
