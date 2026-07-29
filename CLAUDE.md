@@ -17,6 +17,8 @@ Deploy: Railway (api + web + Redis) + Cloudflare R2. Deploy automático via push
 
 **IMPORTANTE: sempre que fizermos alterações no código, faça commit e push para `main` para que o deploy no Railway seja disparado.** Não deixar mudanças pendentes sem subir, a menos que o usuário peça explicitamente para não subir ainda.
 
+**IMPORTANTE: ao final de todo commit, confirme que o push funcionou corretamente (ex.: `git status`/`git log` mostrando o commit no remoto) e entregue um resumo em tópicos do que foi implementado naquele commit.**
+
 - Lint/format: **Biome** (`pnpm lint`, `pnpm format`). Aspas simples, vírgula final, semicolons, indent 2 espaços, lineWidth 100.
 - TypeScript estrito, ESM puro (`"type": "module"`), Node `>=22`.
 - `useImportType: error` — sempre `import type { ... }` para tipos.
