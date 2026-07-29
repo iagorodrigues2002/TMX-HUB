@@ -25,7 +25,21 @@ type View = 'tracker' | 'funnel' | 'attribution' | 'infrastructure';
 
 function money(minor: string | number | undefined, currency = 'BRL') {
   const value = Number(minor ?? 0) / 100;
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(value);
+  const normalizedCurrency = /^[A-Z]{3}$/.test(currency.trim().toUpperCase())
+    ? currency.trim().toUpperCase()
+    : 'BRL';
+
+  try {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: normalizedCurrency,
+    }).format(Number.isFinite(value) ? value : 0);
+  } catch {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }).format(Number.isFinite(value) ? value : 0);
+  }
 }
 
 function percentage(value: number, total: number) {
