@@ -95,6 +95,16 @@ export function validBrowserEventId(value: string | undefined) {
   return value && /^[A-Za-z0-9_-]{8,128}$/.test(value) ? value : undefined;
 }
 
+export function safeEventSourceUrl(value: string | undefined) {
+  if (!value || value.length > 4096) return undefined;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 const cookieValue = (cookie: string | undefined, name: string) =>
   cookie
     ?.split(';')
@@ -404,7 +414,14 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     `;
     const destination = new URL(selected.destination_url);
     for (const [key, value] of Object.entries(req.query)) {
-      if (!value || key === 'tmx_preview' || key === 'src' || key === 'tmx_event_id') continue;
+      if (
+        !value ||
+        key === 'tmx_preview' ||
+        key === 'src' ||
+        key === 'tmx_event_id' ||
+        key === 'tmx_source_url'
+      )
+        continue;
       if (!destination.searchParams.has(key)) destination.searchParams.set(key, value);
     }
     const trackingToken = createTrackingToken(
@@ -415,6 +432,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     destination.searchParams.set('tmx_ab', selected.label);
     const redirectCountry = requestCountry(req.headers);
     const redirectEventId = validBrowserEventId(req.query.tmx_event_id) ?? ulid();
+    const redirectEventUrl =
+      safeEventSourceUrl(req.query.tmx_source_url) ??
+      safeEventSourceUrl(req.headers.referer) ??
+      `${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/r/${test.id}`;
     const redirectEventAt = new Date();
     await app.db`
       INSERT INTO tracking_events
@@ -422,7 +443,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
          event_url, source, properties, client_ip, user_agent, received_at)
       VALUES
         (${redirectEventId}, ${test.project_id}, ${visitorId}, ${journeyId}, 'InitiateCheckout',
-         'commerce', ${`${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/r/${test.id}`},
+         'commerce', ${redirectEventUrl},
          ${app.db.json({
            ...(recentTouch?.source ?? {}),
            ...redirectAttribution,

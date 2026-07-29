@@ -4,6 +4,7 @@ import { createTrackingToken, readTrackingToken } from '../src/lib/tracking-toke
 import {
   extractAttributionQuery,
   hasCampaignAttribution,
+  safeEventSourceUrl,
   validBrowserEventId,
 } from '../src/routes/tracking-public.js';
 import { buildTrackerScript } from '../src/services/tracker-script.js';
@@ -46,6 +47,7 @@ describe('reliable tracking foundation', () => {
     expect(script).toMatch(/isRedirect=.*\(r\|link\)/);
     expect(script).toContain('composedPath');
     expect(script).toContain('tmx_event_id');
+    expect(script).toContain('tmx_source_url');
     expect(script).toContain('_fbp');
     expect(script).toContain('_fbc');
   });
@@ -88,6 +90,14 @@ describe('reliable tracking foundation', () => {
     );
     expect(validBrowserEventId('short')).toBeUndefined();
     expect(validBrowserEventId('<script>alert(1)</script>')).toBeUndefined();
+  });
+
+  it('uses only safe landing URLs as the server event source', () => {
+    expect(safeEventSourceUrl('https://retratogemela.com/slm/?utm_campaign=SLM_ESP')).toBe(
+      'https://retratogemela.com/slm/?utm_campaign=SLM_ESP',
+    );
+    expect(safeEventSourceUrl('javascript:alert(1)')).toBeUndefined();
+    expect(safeEventSourceUrl('not-a-url')).toBeUndefined();
   });
 
   it('maps a paid order to the UTMify sales contract', () => {
