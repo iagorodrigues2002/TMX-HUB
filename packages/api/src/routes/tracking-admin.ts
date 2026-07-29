@@ -1087,6 +1087,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           events: number;
           visitors: number;
           page_views: number;
+          ad_clicks: number;
+          connected_clicks: number;
           checkouts: number;
           checkout_events: number;
           orders: number;
@@ -1104,6 +1106,23 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         (SELECT count(*)::int FROM tracking_events e
           WHERE e.project_id = p.id AND e.event_name = 'PageView'
             AND e.received_at >= ${from} AND e.received_at < ${to}) AS page_views,
+        (SELECT count(DISTINCT e.visitor_id)::int FROM tracking_events e
+          WHERE e.project_id = p.id AND e.event_name = 'AdClick'
+            AND e.received_at >= ${from} AND e.received_at < ${to}) AS ad_clicks,
+        (SELECT count(DISTINCT click.visitor_id)::int
+          FROM tracking_events click
+          WHERE click.project_id = p.id
+            AND click.event_name = 'AdClick'
+            AND click.received_at >= ${from} AND click.received_at < ${to}
+            AND EXISTS (
+              SELECT 1
+              FROM tracking_events page
+              WHERE page.project_id = click.project_id
+                AND page.visitor_id = click.visitor_id
+                AND page.event_name = 'PageView'
+                AND page.received_at >= click.received_at
+                AND page.received_at < click.received_at + interval '30 minutes'
+            )) AS connected_clicks,
         (SELECT count(DISTINCT e.visitor_id)::int FROM tracking_events e
           WHERE e.project_id = p.id AND e.event_name = 'InitiateCheckout'
             AND e.received_at >= ${from} AND e.received_at < ${to}) AS checkouts,
@@ -1131,6 +1150,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           events: 0,
           visitors: 0,
           page_views: 0,
+          ad_clicks: 0,
+          connected_clicks: 0,
           checkouts: 0,
           checkout_events: 0,
           orders: 0,

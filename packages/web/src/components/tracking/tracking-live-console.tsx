@@ -619,9 +619,15 @@ export function TrackingLiveConsole({
         </div>
       ) : (
         <div>
-          <div className="grid gap-px bg-white/[0.06] sm:grid-cols-4">
+          <div className="grid gap-px bg-white/[0.06] sm:grid-cols-2 xl:grid-cols-5">
             {[
               ['Visitas', s?.visitors ?? 0],
+              [
+                'Connect Rate',
+                s?.ad_clicks
+                  ? `${((s.connected_clicks / s.ad_clicks) * 100).toFixed(1).replace('.', ',')}%`
+                  : '—',
+              ],
               ['Checkouts', `${s?.checkouts ?? 0} únicos · ${s?.checkout_events ?? 0} disparos`],
               ['Compradores', buyers],
               ['Faturamento', money(s?.paid_revenue_minor)],

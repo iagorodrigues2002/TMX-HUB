@@ -1243,6 +1243,8 @@ export const apiClient = {
     events: number;
     visitors: number;
     page_views: number;
+    ad_clicks: number;
+    connected_clicks: number;
     checkouts: number;
     checkout_events: number;
     orders: number;
