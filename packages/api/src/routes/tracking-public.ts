@@ -361,7 +361,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
               AND event_name = 'PageView'
               AND client_ip = ${req.ip}
               AND user_agent = ${userAgent}
-              AND received_at >= now() - interval '2 hours'
+              AND received_at >= now() - interval '24 hours'
               AND (
                 NULLIF(source->>'campaign_id', '') IS NOT NULL
                 OR NULLIF(source->>'campaign_name', '') IS NOT NULL

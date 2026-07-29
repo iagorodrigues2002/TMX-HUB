@@ -113,7 +113,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                 AND candidate.client_ip = checkout.client_ip
                 AND candidate.user_agent = checkout.user_agent
                 AND candidate.received_at <= checkout.received_at
-                AND candidate.received_at >= checkout.received_at - interval '2 hours'
+                AND candidate.received_at >= checkout.received_at - interval '24 hours'
                 AND (
                   NULLIF(candidate.source->>'campaign_id', '') IS NOT NULL
                   OR NULLIF(candidate.source->>'campaign_name', '') IS NOT NULL
@@ -137,7 +137,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
               journey_id = COALESCE(matches.journey_id, checkout.journey_id),
               source = matches.source || checkout.source,
               properties = checkout.properties ||
-                '{"attribution_recovered":"recent_pageview_ip_ua"}'::jsonb
+                '{"attribution_recovered":"same_day_pageview_ip_ua"}'::jsonb
           FROM matches
           WHERE checkout.project_id = ${project.id}
             AND checkout.id = matches.id
