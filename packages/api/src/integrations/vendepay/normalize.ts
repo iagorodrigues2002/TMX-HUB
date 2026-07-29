@@ -6,22 +6,25 @@ const scalarId = z.union([
   z.number().finite().transform(String),
 ]);
 const looseRecord = z.record(z.string(), z.unknown());
+const nullableText = z.string().max(512).nullish();
+const nullableId = scalarId.nullish();
+const nullableRecord = looseRecord.nullish();
 
 export const VendepayWebhookSchema = z
   .object({
-    id: scalarId.optional(),
-    event: z.string().max(256).optional(),
-    type: z.string().max(256).optional(),
-    status: z.string().max(256).optional(),
-    transaction_id: scalarId.optional(),
-    order_id: scalarId.optional(),
-    src: z.string().trim().max(512).optional(),
-    data: looseRecord.optional(),
-    order: looseRecord.optional(),
-    transaction: looseRecord.optional(),
-    metadata: looseRecord.optional(),
-    customer: looseRecord.optional(),
-    buyer: looseRecord.optional(),
+    id: nullableId,
+    event: nullableText,
+    type: nullableText,
+    status: z.union([z.string().max(256), z.number().finite()]).nullish(),
+    transaction_id: nullableId,
+    order_id: nullableId,
+    src: nullableText,
+    data: nullableRecord,
+    order: nullableRecord,
+    transaction: nullableRecord,
+    metadata: nullableRecord,
+    customer: nullableRecord,
+    buyer: nullableRecord,
   })
   .passthrough();
 
@@ -78,17 +81,43 @@ const normalizeStatus = (raw = ''): VendepayStatus => {
     .replace(/\p{M}/gu, '')
     .replace(/[\s-]+/g, '_');
   if (
-    ['paid', 'approved', 'approved_payment', 'complete', 'completed', 'pago', 'aprovado'].includes(
-      status,
-    )
+    [
+      'paid',
+      'approved',
+      'approved_payment',
+      'complete',
+      'completed',
+      'pago',
+      'aprovado',
+      'compra.aprovada',
+    ].includes(status)
   )
     return 'paid';
   if (['pending', 'waiting', 'processing', 'pendente'].includes(status)) return 'pending';
   if (['refused', 'declined', 'failed', 'recusado'].includes(status)) return 'refused';
   if (['refunded', 'refund', 'reembolsado'].includes(status)) return 'refunded';
   if (['chargeback', 'dispute'].includes(status)) return 'chargeback';
-  if (['cancelled', 'canceled', 'cancelado'].includes(status)) return 'cancelled';
+  if (['cancelled', 'canceled', 'cancelado', 'carrinho.abandonado'].includes(status))
+    return 'cancelled';
   return 'unknown';
+};
+
+const statusAt = (
+  value: Record<string, unknown>,
+): { status: VendepayStatus; rawStatus?: string } => {
+  const candidates = [
+    'status',
+    'transaction.status',
+    'order.status',
+    'data.status',
+    'event',
+    'type',
+  ]
+    .map((path) => textAt(value, [path]))
+    .filter((candidate): candidate is string => Boolean(candidate));
+  const recognized = candidates.find((candidate) => normalizeStatus(candidate) !== 'unknown');
+  const rawStatus = recognized ?? candidates[0];
+  return { status: normalizeStatus(rawStatus), ...(rawStatus ? { rawStatus } : {}) };
 };
 
 const amountToMinor = (raw: unknown): number | undefined => {
@@ -140,15 +169,11 @@ export function normalizeVendepay(raw: unknown, receivedAt = new Date()): Vendep
     'data.transaction_id',
     'data.order_id',
     'order_id',
+    'id',
+    'checkoutId',
+    'checkout.id',
   ]);
-  const rawStatus = textAt(payload, [
-    'status',
-    'transaction.status',
-    'order.status',
-    'data.status',
-    'event',
-    'type',
-  ]);
+  const { status, rawStatus } = statusAt(payload);
   const eventId = textAt(payload, ['event_id', 'data.event_id', 'webhook_id']);
   const fallbackKey = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
   if (!transactionId) {
@@ -159,13 +184,29 @@ export function normalizeVendepay(raw: unknown, receivedAt = new Date()): Vendep
       dedupeKey: eventId ?? fallbackKey,
     };
   }
-  const buyerName = textAt(payload, ['buyer.name', 'customer.name', 'data.customer.name']);
+  const buyerName = textAt(payload, [
+    'buyer.name',
+    'customer.name',
+    'data.customer.name',
+    'nomeComprador',
+    'comprador.nome',
+    'comprador.name',
+  ]);
   const email = textAt(payload, [
     'buyer.email',
     'customer.email',
     'data.customer.email',
+    'emailComprador',
+    'comprador.email',
   ])?.toLowerCase();
-  const phone = textAt(payload, ['buyer.phone', 'customer.phone', 'data.customer.phone']);
+  const phone = textAt(payload, [
+    'buyer.phone',
+    'customer.phone',
+    'data.customer.phone',
+    'telefoneComprador',
+    'comprador.telefone',
+    'comprador.phone',
+  ]);
   const country = countryCode(
     textAt(payload, [
       'buyer.country',
@@ -179,42 +220,64 @@ export function normalizeVendepay(raw: unknown, receivedAt = new Date()): Vendep
       'data.customer.address.country',
       'billing_address.country',
       'address.country',
+      'endereco.pais',
+      'comprador.pais',
+      'checkout.pais',
     ]),
   );
-  const status = normalizeStatus(rawStatus);
   const occurredAt = isoDate(
     get(payload, 'paid_at') ??
       get(payload, 'updated_at') ??
       get(payload, 'created_at') ??
-      get(payload, 'data.created_at'),
+      get(payload, 'data.created_at') ??
+      get(payload, 'createdAt'),
     receivedAt,
   );
   const amountMinor = amountToMinor(
     get(payload, 'amount') ??
       get(payload, 'total') ??
       get(payload, 'value') ??
-      get(payload, 'data.amount'),
+      get(payload, 'data.amount') ??
+      get(payload, 'valorPago') ??
+      get(payload, 'checkout.total') ??
+      get(payload, 'checkout.valor'),
   );
-  const currency = textAt(payload, ['currency', 'data.currency', 'order.currency'])?.toUpperCase();
-  const trackingSrc = textAt(payload, ['src', 'metadata.src', 'data.src', 'order.src']);
+  const currency = textAt(payload, [
+    'currency',
+    'data.currency',
+    'order.currency',
+    'moeda',
+    'checkout.moeda',
+  ])?.toUpperCase();
+  const trackingSrc = textAt(payload, [
+    'src',
+    'metadata.src',
+    'data.src',
+    'order.src',
+    'urlParams.src',
+  ]);
   const paymentMethod = textAt(payload, [
     'payment_method',
     'paymentMethod',
     'transaction.payment_method',
     'data.payment_method',
     'order.payment_method',
+    'metodoPagamento',
   ]);
   const productId = textAt(payload, [
     'product.id',
     'data.product.id',
     'order.product_id',
     'product_id',
+    'produtoId',
+    'checkout.produtoId',
   ]);
   const productName = textAt(payload, [
     'product.name',
     'data.product.name',
     'order.product_name',
     'product_name',
+    'nomeProduto',
   ]);
   const planId = textAt(payload, ['offer.id', 'plan.id', 'data.offer.id', 'offer_id', 'plan_id']);
   const planName = textAt(payload, [
@@ -252,6 +315,15 @@ export function normalizeVendepay(raw: unknown, receivedAt = new Date()): Vendep
           `data.${key}`,
           `tracking.${key}`,
           `trackingParameters.${key}`,
+          `urlParams.${key}`,
+          ...(key.startsWith('utm_')
+            ? [
+                key.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase()),
+                `urlParams.${key.replace(/_([a-z])/g, (_, letter: string) =>
+                  letter.toUpperCase(),
+                )}`,
+              ]
+            : []),
         ]);
         return value ? [[key, value]] : [];
       }),

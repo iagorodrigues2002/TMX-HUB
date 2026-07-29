@@ -75,6 +75,72 @@ describe('normalizeVendepay', () => {
     expect(result.event.trackingSrc).toBe('visitor-nested');
   });
 
+  it('normaliza o payload real em português da Vendepay mesmo com campos nulos', () => {
+    const result = normalizeVendepay({
+      id: 'charge-123',
+      checkoutId: 'checkout-123',
+      event: 'compra.aprovada',
+      status: 2,
+      valorPago: '25.18',
+      moeda: 'brl',
+      src: 'visitor-signed-token',
+      metodoPagamento: 'pix',
+      produtoId: 'product-123',
+      nomeProduto: 'Produto principal',
+      nomeComprador: 'Maria',
+      emailComprador: ' MARIA@EXAMPLE.COM ',
+      telefoneComprador: null,
+      cpfComprador: null,
+      utmSource: 'facebook',
+      utmCampaign: 'campanha-real',
+      createdAt: '2026-07-29T16:57:40.000Z',
+    });
+
+    expect(result.kind).toBe('processable');
+    if (result.kind !== 'processable') return;
+    expect(result.event).toMatchObject({
+      transactionId: 'charge-123',
+      status: 'paid',
+      amountMinor: 2518,
+      currency: 'BRL',
+      trackingSrc: 'visitor-signed-token',
+      buyer: { name: 'Maria', email: 'maria@example.com' },
+      paymentMethod: 'pix',
+      product: { id: 'product-123', name: 'Produto principal' },
+      source: {
+        src: 'visitor-signed-token',
+        utm_source: 'facebook',
+        utm_campaign: 'campanha-real',
+      },
+    });
+  });
+
+  it('aceita evento de carrinho no envelope atual da Vendepay', () => {
+    const result = normalizeVendepay({
+      event: 'carrinho.abandonado',
+      checkoutId: 'checkout-456',
+      checkout: {
+        id: 'checkout-456',
+        status: 'abandonado',
+        moeda: 'BRL',
+        total: '47.00',
+        produtoId: 'product-456',
+      },
+      comprador: null,
+      trackeamentoId: 'track-456',
+    });
+
+    expect(result.kind).toBe('processable');
+    if (result.kind !== 'processable') return;
+    expect(result.event).toMatchObject({
+      transactionId: 'checkout-456',
+      status: 'cancelled',
+      amountMinor: 4700,
+      currency: 'BRL',
+      product: { id: 'product-456' },
+    });
+  });
+
   it('coloca payload sem transação em quarentena', () => {
     const result = normalizeVendepay({ event: 'something', status: 'unknown' });
     expect(result.kind).toBe('quarantined');
