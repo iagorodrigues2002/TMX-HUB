@@ -126,8 +126,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                  'InitiateCheckout', ${event.received_at})
               ON CONFLICT (pixel_id, event_id) DO UPDATE SET
                 state = 'pending',
+                attempts = 0,
                 last_error = NULL
-              WHERE existing.state <> 'delivered' AND existing.attempts < 8
+              WHERE existing.state <> 'delivered'
               RETURNING id
             `;
             if (rows[0]) meta.push(rows[0]);
@@ -141,9 +142,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                  'event.initiate_checkout')
               ON CONFLICT (destination_kind, destination_id, event_id) DO UPDATE SET
                 state = 'pending',
+                attempts = 0,
                 last_error = NULL,
                 next_attempt_at = now()
-              WHERE existing.state <> 'delivered' AND existing.attempts < 8
+              WHERE existing.state <> 'delivered'
               RETURNING id
             `;
             if (rows[0]) utmify.push(rows[0]);
