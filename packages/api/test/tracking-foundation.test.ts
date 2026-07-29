@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { buildUtmifyOrderPayload } from '../src/integrations/utmify/sales.js';
 import { createTrackingToken, readTrackingToken } from '../src/lib/tracking-token.js';
-import { extractAttributionQuery, hasCampaignAttribution } from '../src/routes/tracking-public.js';
+import {
+  extractAttributionQuery,
+  hasCampaignAttribution,
+  validBrowserEventId,
+} from '../src/routes/tracking-public.js';
 import { buildTrackerScript } from '../src/services/tracker-script.js';
 
 describe('reliable tracking foundation', () => {
@@ -40,7 +44,10 @@ describe('reliable tracking foundation', () => {
     expect(script).toContain('pushState');
     expect(script).toContain('isCheckout=a=>isRedirect(a)||');
     expect(script).toMatch(/isRedirect=.*\(r\|link\)/);
-    expect(script).toContain("if(!redirect)send('InitiateCheckout'");
+    expect(script).toContain('composedPath');
+    expect(script).toContain('tmx_event_id');
+    expect(script).toContain('_fbp');
+    expect(script).toContain('_fbc');
   });
 
   it('preserves ad attribution on an A/B checkout redirect', () => {
@@ -52,6 +59,8 @@ describe('reliable tracking foundation', () => {
         ad_id: '120250707424480457',
         placement: 'Instagram_Feed',
         fbclid: 'click-id',
+        _fbp: 'fb.1.browser',
+        _fbc: 'fb.1.click-id',
         src: 'signed-tracking-token',
         unknown: 'discarded',
       }),
@@ -62,6 +71,8 @@ describe('reliable tracking foundation', () => {
       ad_id: '120250707424480457',
       placement: 'Instagram_Feed',
       fbclid: 'click-id',
+      _fbp: 'fb.1.browser',
+      _fbc: 'fb.1.click-id',
     });
   });
 
@@ -69,6 +80,14 @@ describe('reliable tracking foundation', () => {
     expect(hasCampaignAttribution({ campaign_id: '120', ad_id: '456' })).toBe(true);
     expect(hasCampaignAttribution({ utm_campaign: 'SLM_ESP' })).toBe(true);
     expect(hasCampaignAttribution({ placement: 'Instagram_Reels' })).toBe(false);
+  });
+
+  it('accepts only safe browser event IDs for Pixel and CAPI deduplication', () => {
+    expect(validBrowserEventId('51d478ab-6981-42e4-a380-192591856d80')).toBe(
+      '51d478ab-6981-42e4-a380-192591856d80',
+    );
+    expect(validBrowserEventId('short')).toBeUndefined();
+    expect(validBrowserEventId('<script>alert(1)</script>')).toBeUndefined();
   });
 
   it('maps a paid order to the UTMify sales contract', () => {

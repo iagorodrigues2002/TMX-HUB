@@ -35,7 +35,13 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
           paid_at: Date | null;
           visitor_id: string | null;
           event_url: string | null;
-          source: { _fbp?: string; _fbc?: string; fbclid?: string; _fbclid_ts?: string };
+          source: {
+            _fbp?: string;
+            _fbc?: string;
+            fbclid?: string;
+            _fbclid_ts?: string;
+            country?: string;
+          };
           client_ip: string | null;
           user_agent: string | null;
         }>
@@ -105,6 +111,9 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
         }
         if (row.client_ip) userData.client_ip_address = row.client_ip;
         if (row.user_agent) userData.client_user_agent = row.user_agent;
+        if (row.source?.country && /^[a-z]{2}$/i.test(row.source.country)) {
+          userData.country = [hash(row.source.country)];
+        }
         const payload: Record<string, unknown> = {
           data: [
             {
@@ -123,6 +132,8 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
                     }
                   : {
                       content_name: 'Checkout',
+                      content_category: 'checkout',
+                      content_type: 'product',
                       currency: row.currency,
                     },
             },

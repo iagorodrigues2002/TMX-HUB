@@ -68,6 +68,9 @@ const attributionQueryKeys = new Set([
   'ad_name',
   'placement',
   'site_source_name',
+  '_fbp',
+  '_fbc',
+  '_fbclid_ts',
 ]);
 
 export function extractAttributionQuery(query: Record<string, string | undefined>) {
@@ -86,6 +89,10 @@ const campaignAttributionKeys = [
 
 export function hasCampaignAttribution(source: Record<string, string>) {
   return campaignAttributionKeys.some((key) => Boolean(source[key]?.trim()));
+}
+
+export function validBrowserEventId(value: string | undefined) {
+  return value && /^[A-Za-z0-9_-]{8,128}$/.test(value) ? value : undefined;
 }
 
 const cookieValue = (cookie: string | undefined, name: string) =>
@@ -397,7 +404,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     `;
     const destination = new URL(selected.destination_url);
     for (const [key, value] of Object.entries(req.query)) {
-      if (!value || key === 'tmx_preview' || key === 'src') continue;
+      if (!value || key === 'tmx_preview' || key === 'src' || key === 'tmx_event_id') continue;
       if (!destination.searchParams.has(key)) destination.searchParams.set(key, value);
     }
     const trackingToken = createTrackingToken(
@@ -407,7 +414,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     destination.searchParams.set('src', trackingToken);
     destination.searchParams.set('tmx_ab', selected.label);
     const redirectCountry = requestCountry(req.headers);
-    const redirectEventId = ulid();
+    const redirectEventId = validBrowserEventId(req.query.tmx_event_id) ?? ulid();
     const redirectEventAt = new Date();
     await app.db`
       INSERT INTO tracking_events
