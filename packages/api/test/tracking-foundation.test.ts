@@ -38,6 +38,7 @@ describe('reliable tracking foundation', () => {
     expect(script).toContain('MutationObserver');
     expect(script).toContain('pushState');
     expect(script).toContain('isCheckout=a=>isRedirect(a)||');
+    expect(script).toMatch(/isRedirect=.*\(r\|link\)/);
     expect(script).toContain("if(!redirect)send('InitiateCheckout'");
   });
 

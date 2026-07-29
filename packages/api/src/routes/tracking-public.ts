@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import type { FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { ulid } from 'ulid';
 import { z } from 'zod';
 import { env } from '../env.js';
@@ -43,6 +43,10 @@ const AbAssignmentSchema = z.object({
   public_key: z.string().min(8).max(120),
   visitor_id: z.string().min(8).max(120),
 });
+type AbRedirectRequest = FastifyRequest<{
+  Params: { testId: string };
+  Querystring: Record<string, string | undefined>;
+}>;
 
 const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex');
 const cookieValue = (cookie: string | undefined, name: string) =>
@@ -234,10 +238,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     };
   });
 
-  app.get<{
-    Params: { testId: string };
-    Querystring: Record<string, string | undefined>;
-  }>('/r/:testId', async (req, reply) => {
+  const abRedirectHandler = async (req: AbRedirectRequest, reply: FastifyReply) => {
     if (!app.db) return reply.code(503).send({ error: 'tracking_unavailable' });
     const [test] = await app.db<
       Array<{
@@ -318,7 +319,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     await app.db`
       INSERT INTO tracking_events
         (id, project_id, visitor_id, journey_id, event_name, event_category,
-         event_url, source, properties, received_at)
+         event_url, source, properties, client_ip, user_agent, received_at)
       VALUES
         (${redirectEventId}, ${test.project_id}, ${visitorId}, ${journeyId}, 'InitiateCheckout',
          'commerce', ${`${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/r/${test.id}`},
@@ -333,7 +334,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
            ab_variant_id: selected.id,
            ab_variant: selected.label,
            redirect: true,
-         } as never)}, ${redirectEventAt})
+         } as never)}, ${req.ip}, ${req.headers['user-agent'] ?? null}, ${redirectEventAt})
     `;
     await enqueueInitiateCheckout(app, {
       projectId: test.project_id,
@@ -345,7 +346,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       `_tmx_redirect_v=${visitorId}; Path=/; Max-Age=31536000; HttpOnly; Secure; SameSite=Lax`,
     );
     return reply.redirect(destination.toString(), 302);
-  });
+  };
+  app.get('/r/:testId', abRedirectHandler);
+  app.get('/link/:testId', abRedirectHandler);
 
   app.post('/track/events', { bodyLimit: 64 * 1024 }, async (req, reply) => {
     if (!app.db) return reply.code(503).send({ accepted: false });

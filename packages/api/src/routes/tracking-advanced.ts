@@ -62,7 +62,7 @@ function parsed<T>(schema: z.ZodSchema<T>, value: unknown): T {
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   const cnameTarget = new URL(env.PUBLIC_BASE_URL).hostname;
   const redirectUrl = (testId: string) =>
-    `${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/r/${testId}`;
+    `${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/link/${testId}`;
   async function project(offerId: string, userId: string, admin: boolean, manage = false) {
     if (manage) await app.offerStore.assertManager(offerId, userId, admin);
     else await app.offerStore.assertAccess(offerId, userId, admin);
