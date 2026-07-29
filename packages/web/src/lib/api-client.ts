@@ -1554,6 +1554,23 @@ export const apiClient = {
     return request(`/v1/offers/${id}/tracking/meta-deliveries`);
   },
 
+  async reconcileInitiateCheckouts(
+    id: string,
+    date: string,
+  ): Promise<{
+    date: string;
+    events_found: number;
+    pixels_enabled: number;
+    utmify_destinations_enabled: number;
+    meta_queued: number;
+    utmify_queued: number;
+  }> {
+    return request(
+      `/v1/offers/${id}/tracking/initiate-checkout/reconcile?date=${encodeURIComponent(date)}`,
+      { method: 'POST' },
+    );
+  },
+
   async listMetaPixels(id: string): Promise<{
     pixels: Array<{
       id: string;

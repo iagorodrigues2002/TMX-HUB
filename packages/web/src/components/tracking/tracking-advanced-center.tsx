@@ -157,6 +157,19 @@ export function TrackingAdvancedCenter({
     retry: false,
   });
   const refresh = () => qc.invalidateQueries({ queryKey: ['tracking-advanced', offerId] });
+  const reconcileInitiateCheckouts = useMutation({
+    mutationFn: () => apiClient.reconcileInitiateCheckouts(offerId, trackingDate),
+    onSuccess: (result) => {
+      void Promise.all([
+        qc.invalidateQueries({ queryKey: ['tracking-meta-deliveries', offerId] }),
+        qc.invalidateQueries({ queryKey: ['tracking-utmify-deliveries', offerId] }),
+      ]);
+      toast.success(
+        `${result.events_found} ICs conferidos · ${result.meta_queued} Meta e ${result.utmify_queued} UTMify reenfileirados.`,
+      );
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
   const addDomain = useMutation({
     mutationFn: () => apiClient.addTrackingDomain(offerId, domain, domainKind),
     onSuccess: () => {
@@ -373,6 +386,19 @@ export function TrackingAdvancedCenter({
                 <RefreshCw className={cn('h-3.5 w-3.5', isRefreshingTracking && 'animate-spin')} />
                 Atualizar
               </Button>
+              {canManage && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-9 gap-2"
+                  disabled={reconcileInitiateCheckouts.isPending}
+                  onClick={() => reconcileInitiateCheckouts.mutate()}
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  Reconciliar ICs
+                </Button>
+              )}
             </div>
           </div>
         )}
