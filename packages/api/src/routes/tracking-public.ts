@@ -367,33 +367,41 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const linkedIdentity = linked?.projectId === test.project_id ? linked : null;
     const redirectAttribution = extractAttributionQuery(req.query);
     const userAgent = req.headers['user-agent'] ?? null;
-    const [recentTouch] =
-      !linkedIdentity && !hasCampaignAttribution(redirectAttribution) && userAgent
-        ? await app.db<
-            Array<{
-              visitor_id: string;
-              journey_id: string | null;
-              source: Record<string, string>;
-            }>
-          >`
-            SELECT visitor_id, journey_id, source
+    type RecentTouch = {
+      visitor_id: string;
+      journey_id: string | null;
+      source: Record<string, string>;
+      event_url: string;
+    };
+    // Typebot opens the checkout link from a cross-origin iframe. In that flow the
+    // browser cannot decorate the link with src/tmx_source_url, so recover the
+    // complete ad touch on the server even when the redirect already carries only
+    // a partial UTM such as utm_campaign.
+    const recentTouches = linkedIdentity
+      ? await app.db<RecentTouch[]>`
+          SELECT visitor_id, journey_id, source, event_url
+          FROM tracking_events
+          WHERE project_id = ${test.project_id}
+            AND visitor_id = ${linkedIdentity.visitorId}
+            AND event_name = 'PageView'
+            AND received_at >= now() - interval '30 days'
+          ORDER BY received_at DESC, id DESC
+          LIMIT 1
+        `
+      : userAgent
+        ? await app.db<RecentTouch[]>`
+            SELECT visitor_id, journey_id, source, event_url
             FROM tracking_events
             WHERE project_id = ${test.project_id}
               AND event_name = 'PageView'
               AND client_ip = ${req.ip}
               AND user_agent = ${userAgent}
-              AND received_at >= now() - interval '24 hours'
-              AND (
-                NULLIF(source->>'campaign_id', '') IS NOT NULL
-                OR NULLIF(source->>'campaign_name', '') IS NOT NULL
-                OR NULLIF(source->>'utm_campaign', '') IS NOT NULL
-                OR NULLIF(source->>'adset_id', '') IS NOT NULL
-                OR NULLIF(source->>'ad_id', '') IS NOT NULL
-              )
+              AND received_at >= now() - interval '4 hours'
             ORDER BY received_at DESC, id DESC
             LIMIT 1
           `
         : [];
+    const recentTouch = recentTouches[0];
     const visitorId = linkedIdentity
       ? linkedIdentity.visitorId
       : recentTouch?.visitor_id
@@ -438,6 +446,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const redirectEventId = validBrowserEventId(req.query.tmx_event_id) ?? ulid();
     const redirectEventUrl =
       safeEventSourceUrl(req.query.tmx_source_url) ??
+      safeEventSourceUrl(recentTouch?.event_url) ??
       safeEventSourceUrl(req.headers.referer) ??
       `${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/r/${test.id}`;
     const redirectEventAt = new Date();
