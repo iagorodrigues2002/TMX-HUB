@@ -128,6 +128,7 @@ export function TrackingAdvancedCenter({
   const [vendepaySigningSecret, setVendepaySigningSecret] = useState('');
   const [vendepayPayload, setVendepayPayload] = useState(vendepaySample);
   const [utmifyToken, setUtmifyToken] = useState('');
+  const [utmifyPixelId, setUtmifyPixelId] = useState('');
   const [utmifyEndpoint, setUtmifyEndpoint] = useState(
     'https://api.utmify.com.br/api-credentials/orders',
   );
@@ -163,6 +164,7 @@ export function TrackingAdvancedCenter({
       void Promise.all([
         qc.invalidateQueries({ queryKey: ['tracking-meta-deliveries', offerId] }),
         qc.invalidateQueries({ queryKey: ['tracking-utmify-deliveries', offerId] }),
+        qc.invalidateQueries({ queryKey: ['tracking-utmify-web-events', offerId] }),
         qc.invalidateQueries({ queryKey: ['tracking-attribution', offerId] }),
       ]);
       toast.success(
@@ -247,6 +249,17 @@ export function TrackingAdvancedCenter({
     queryFn: () => apiClient.getTrackingUtmifyDestination(offerId),
     retry: false,
   });
+  const utmifyPixel = useQuery({
+    queryKey: ['tracking-utmify-pixel', offerId],
+    queryFn: () => apiClient.getTrackingUtmifyPixel(offerId),
+    retry: false,
+  });
+  const utmifyWebEvents = useQuery({
+    queryKey: ['tracking-utmify-web-events', offerId, trackingDate],
+    queryFn: () => apiClient.listTrackingUtmifyWebEvents(offerId, trackingDate),
+    refetchInterval: 30_000,
+    retry: false,
+  });
   const utmifyDeliveries = useQuery({
     queryKey: ['tracking-utmify-deliveries', offerId],
     queryFn: () => apiClient.listTrackingUtmifyDeliveries(offerId),
@@ -264,6 +277,15 @@ export function TrackingAdvancedCenter({
       setUtmifyToken('');
       void qc.invalidateQueries({ queryKey: ['tracking-utmify-destination', offerId] });
       toast.success('Destino UTMify configurado.');
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
+  const saveUtmifyPixel = useMutation({
+    mutationFn: () => apiClient.saveTrackingUtmifyPixel(offerId, utmifyPixelId),
+    onSuccess: (result) => {
+      setUtmifyPixelId('');
+      void qc.invalidateQueries({ queryKey: ['tracking-utmify-pixel', offerId] });
+      toast.success(`Pixel UTMify ${result.pixel_id} salvo. Reconcilie os ICs do dia.`);
     },
     onError: (error) => toast.error((error as Error).message),
   });
@@ -835,8 +857,36 @@ export function TrackingAdvancedCenter({
         {section === 'utmify' && (
           <Module
             title="Envio à UTMify"
-            description="Replica cada mudança do pedido na API de vendas da UTMify, preservando UTMs e mantendo uma fila auditável."
+            description="Envia ICs ao Pixel UTMify e replica mudanças dos pedidos na API de vendas, com filas auditáveis separadas."
           >
+            <div className="mb-5 rounded border border-cyan-400/20 bg-cyan-400/[0.04] p-4">
+              <p className="text-sm font-medium text-cyan-100">Pixel UTMify para PageView e IC</p>
+              <p className="mt-1 text-xs leading-5 text-white/45">
+                Use o ID de 24 caracteres exibido em UTMify → Integrações → Pixel. Não use o ID
+                numérico do Pixel Meta.
+              </p>
+              <p className="mt-2 font-mono text-xs text-white/65">
+                Atual: {utmifyPixel.data?.pixel_id ?? 'não configurado'}
+              </p>
+              {canManage && (
+                <div className="mt-3 grid gap-3 md:grid-cols-[1fr_auto]">
+                  <Input
+                    value={utmifyPixelId}
+                    onChange={(event) => setUtmifyPixelId(event.target.value)}
+                    placeholder="Ex.: 6a698a76093cf4ea09039541"
+                    maxLength={24}
+                  />
+                  <Button
+                    disabled={
+                      !/^[a-f0-9]{24}$/i.test(utmifyPixelId.trim()) || saveUtmifyPixel.isPending
+                    }
+                    onClick={() => saveUtmifyPixel.mutate()}
+                  >
+                    Salvar Pixel UTMify
+                  </Button>
+                </div>
+              )}
+            </div>
             <div className="mb-5 flex items-center justify-between rounded border border-white/[0.07] p-4">
               <div>
                 <p className="text-sm text-white/75">Destino de vendas</p>
@@ -895,7 +945,46 @@ export function TrackingAdvancedCenter({
               </div>
             )}
             <div className="mt-6">
-              <p className="hud-label">Últimas entregas</p>
+              <p className="hud-label">Entregas de InitiateCheckout ao Pixel UTMify</p>
+              <div className="mt-3 space-y-2">
+                {(utmifyWebEvents.data?.deliveries ?? []).slice(0, 20).map((delivery) => (
+                  <div
+                    key={delivery.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded border border-white/[0.07] p-3 text-xs"
+                  >
+                    <div>
+                      <p className="font-mono text-white/70">{delivery.event_id}</p>
+                      <p className="mt-1 text-white/35">
+                        Pixel {delivery.pixel_id} · {delivery.attempts} tentativa(s)
+                      </p>
+                      {delivery.last_error && (
+                        <p className="mt-1 max-w-2xl break-words text-red-200/70">
+                          {delivery.last_error}
+                        </p>
+                      )}
+                    </div>
+                    <span
+                      className={
+                        delivery.state === 'delivered'
+                          ? 'text-emerald-300'
+                          : delivery.state === 'failed' || delivery.state === 'dead'
+                            ? 'text-red-300'
+                            : 'text-amber-300'
+                      }
+                    >
+                      {delivery.state}
+                    </span>
+                  </div>
+                ))}
+                {!utmifyWebEvents.data?.deliveries?.length && (
+                  <p className="rounded border border-dashed border-white/[0.08] p-4 text-sm text-white/35">
+                    Nenhum IC enviado neste dia.
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="mt-6">
+              <p className="hud-label">Últimas entregas de pedidos</p>
               <div className="mt-3 space-y-2">
                 {(utmifyDeliveries.data?.deliveries ?? []).slice(0, 20).map((delivery) => (
                   <div

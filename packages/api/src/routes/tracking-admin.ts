@@ -24,6 +24,12 @@ const TrackingPaginationSchema = PaginationSchema.merge(TrackingDateSchema);
 const VendepaySigningSecretSchema = z.object({
   signing_secret: z.string().trim().min(16).max(4096),
 });
+const UtmifyPixelSchema = z.object({
+  pixel_id: z
+    .string()
+    .trim()
+    .regex(/^[a-f0-9]{24}$/i, 'Use o ID de 24 caracteres exibido no Pixel da UTMify.'),
+});
 
 type PaginationQuery = {
   page?: string | number;
@@ -84,6 +90,58 @@ function pagination(page: number, perPage: number, total: number) {
 }
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
+  app.get<{ Params: { id: string } }>('/offers/:id/tracking/utmify-pixel', async (req, reply) => {
+    await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
+    if (!app.db) return reply.code(503).send(databaseUnavailable);
+    const [project] = await app.db<{ utmify_pixel_id: string | null }[]>`
+        SELECT utmify_pixel_id
+        FROM tracking_projects
+        WHERE offer_id = ${req.params.id} AND enabled = true
+      `;
+    if (!project) throw new NotFoundError('Projeto de tracking não encontrado.');
+    return reply.send({
+      configured: Boolean(project.utmify_pixel_id),
+      pixel_id: project.utmify_pixel_id,
+    });
+  });
+
+  app.put<{ Params: { id: string } }>('/offers/:id/tracking/utmify-pixel', async (req, reply) => {
+    await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
+    if (!app.db) return reply.code(503).send(databaseUnavailable);
+    const parsed = UtmifyPixelSchema.safeParse(req.body);
+    if (!parsed.success) throw zodToProblem(parsed.error);
+    const rows = await app.db<{ id: string }[]>`
+      UPDATE tracking_projects
+      SET utmify_pixel_id = ${parsed.data.pixel_id}, updated_at = now()
+      WHERE offer_id = ${req.params.id} AND enabled = true
+      RETURNING id
+    `;
+    if (!rows[0]) throw new NotFoundError('Projeto de tracking não encontrado.');
+    return reply.send({ configured: true, pixel_id: parsed.data.pixel_id });
+  });
+
+  app.get<{ Params: { id: string }; Querystring: { date?: string } }>(
+    '/offers/:id/tracking/utmify-web-events',
+    async (req, reply) => {
+      await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
+      if (!app.db) return reply.code(503).send(databaseUnavailable);
+      const { date, from, to } = parseTrackingDate(req.query);
+      const rows = await app.db`
+        SELECT ue.id, ue.event_id, ue.external_pixel_id AS pixel_id, ue.state, ue.attempts,
+               ue.response_status, ue.last_error, ue.created_at, ue.delivered_at
+        FROM tracking_utmify_web_events ue
+        JOIN tracking_projects p ON p.id = ue.project_id
+        JOIN tracking_events te ON te.project_id = ue.project_id AND te.id = ue.event_id
+        WHERE p.offer_id = ${req.params.id}
+          AND te.received_at >= ${from}
+          AND te.received_at < ${to}
+        ORDER BY ue.created_at DESC
+        LIMIT 100
+      `;
+      return reply.send({ date, deliveries: rows });
+    },
+  );
+
   app.post<{ Params: { id: string }; Querystring: { date?: string } }>(
     '/offers/:id/tracking/initiate-checkout/reconcile',
     async (req, reply) => {

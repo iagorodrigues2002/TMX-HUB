@@ -58,3 +58,9 @@ export function buildUtmifyWebEventPayload(input: UtmifyWebEventInput) {
     },
   };
 }
+
+export function isUtmifyWebEventAccepted(result: Record<string, unknown>) {
+  const lead = result.lead as Record<string, unknown> | undefined;
+  const event = result.event as Record<string, unknown> | undefined;
+  return typeof lead?._id === 'string' && typeof event?._id === 'string';
+}

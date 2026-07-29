@@ -1631,6 +1631,43 @@ export const apiClient = {
     return request(`/v1/offers/${id}/tracking/utmify-destination`);
   },
 
+  async getTrackingUtmifyPixel(id: string): Promise<{
+    configured: boolean;
+    pixel_id: string | null;
+  }> {
+    return request(`/v1/offers/${id}/tracking/utmify-pixel`);
+  },
+
+  async saveTrackingUtmifyPixel(
+    id: string,
+    pixelId: string,
+  ): Promise<{ configured: true; pixel_id: string }> {
+    return request(`/v1/offers/${id}/tracking/utmify-pixel`, {
+      method: 'PUT',
+      body: { pixel_id: pixelId },
+    });
+  },
+
+  async listTrackingUtmifyWebEvents(
+    id: string,
+    date: string,
+  ): Promise<{
+    date: string;
+    deliveries: Array<{
+      id: string;
+      event_id: string;
+      pixel_id: string;
+      state: 'pending' | 'processing' | 'delivered' | 'failed' | 'dead';
+      attempts: number;
+      response_status?: number;
+      last_error?: string;
+      created_at: string;
+      delivered_at?: string;
+    }>;
+  }> {
+    return request(`/v1/offers/${id}/tracking/utmify-web-events?date=${encodeURIComponent(date)}`);
+  },
+
   async saveTrackingUtmifyDestination(
     id: string,
     input: { name: string; api_token: string; endpoint_url?: string },

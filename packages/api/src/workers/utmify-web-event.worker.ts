@@ -1,7 +1,10 @@
 import { Worker } from 'bullmq';
 import postgres from 'postgres';
 import { env } from '../env.js';
-import { buildUtmifyWebEventPayload } from '../integrations/utmify/web-events.js';
+import {
+  buildUtmifyWebEventPayload,
+  isUtmifyWebEventAccepted,
+} from '../integrations/utmify/web-events.js';
 import { logger } from '../lib/logger.js';
 import { makeRedis } from '../lib/redis.js';
 import { UTMIFY_WEB_EVENT_QUEUE_NAME, type UtmifyWebEventJobData } from '../queues/index.js';
@@ -77,12 +80,23 @@ export function createUtmifyWebEventWorker(): Worker<UtmifyWebEventJobData> | nu
             `UTMify Events HTTP ${response.status}: ${JSON.stringify(result).slice(0, 800)}`,
           );
         }
+        if (!isUtmifyWebEventAccepted(result)) {
+          throw new Error(
+            `UTMify rejeitou o Pixel ID ou não registrou o evento: ${JSON.stringify(result).slice(0, 800)}`,
+          );
+        }
+        const lead = result.lead as Record<string, unknown>;
+        const event = result.event as Record<string, unknown>;
         await db`
           UPDATE tracking_utmify_web_events
           SET state = 'delivered', response_status = ${response.status},
               response = ${db.json(result as never)}, last_error = NULL, delivered_at = now()
           WHERE id = ${row.id}
         `;
+        logger.info(
+          { deliveryId: row.id, eventId: event._id, leadId: lead._id },
+          'utmify web event delivered',
+        );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         await db`
@@ -92,6 +106,7 @@ export function createUtmifyWebEventWorker(): Worker<UtmifyWebEventJobData> | nu
               next_attempt_at = now() + make_interval(secs => LEAST(3600, 5 * power(2, attempts)))
           WHERE id = ${row.id}
         `;
+        logger.warn({ deliveryId: row.id, error: message }, 'utmify web event failed');
         throw error;
       }
     },
