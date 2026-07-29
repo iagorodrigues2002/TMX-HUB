@@ -150,6 +150,25 @@ const countryCode = (raw: string | undefined): string | undefined => {
   return undefined;
 };
 
+const currencyCode = (raw: string | undefined): string | undefined => {
+  if (!raw) return undefined;
+  const normalized = raw.trim().toUpperCase();
+  if (normalized === '1') return 'BRL';
+  if (normalized === '2') return 'USD';
+  return /^[A-Z]{3}$/.test(normalized) ? normalized : undefined;
+};
+
+const paymentMethodCode = (raw: string | undefined): string | undefined => {
+  if (!raw) return undefined;
+  const normalized = raw.trim().toLowerCase();
+  if (['1', 'pix'].includes(normalized)) return 'pix';
+  if (['2', 'boleto'].includes(normalized)) return 'boleto';
+  if (['3', 'card', 'credit_card', 'cartao', 'cartão'].includes(normalized))
+    return 'credit_card';
+  if (['paypal', 'free_price', 'unknown'].includes(normalized)) return normalized;
+  return 'unknown';
+};
+
 export function normalizeVendepay(raw: unknown, receivedAt = new Date()): VendepayNormalizeResult {
   const parsed = VendepayWebhookSchema.safeParse(raw);
   if (!parsed.success) {
@@ -242,13 +261,9 @@ export function normalizeVendepay(raw: unknown, receivedAt = new Date()): Vendep
       get(payload, 'checkout.total') ??
       get(payload, 'checkout.valor'),
   );
-  const currency = textAt(payload, [
-    'currency',
-    'data.currency',
-    'order.currency',
-    'moeda',
-    'checkout.moeda',
-  ])?.toUpperCase();
+  const currency = currencyCode(
+    textAt(payload, ['currency', 'data.currency', 'order.currency', 'moeda', 'checkout.moeda']),
+  );
   const trackingSrc = textAt(payload, [
     'src',
     'metadata.src',
@@ -256,14 +271,16 @@ export function normalizeVendepay(raw: unknown, receivedAt = new Date()): Vendep
     'order.src',
     'urlParams.src',
   ]);
-  const paymentMethod = textAt(payload, [
-    'payment_method',
-    'paymentMethod',
-    'transaction.payment_method',
-    'data.payment_method',
-    'order.payment_method',
-    'metodoPagamento',
-  ]);
+  const paymentMethod = paymentMethodCode(
+    textAt(payload, [
+      'payment_method',
+      'paymentMethod',
+      'transaction.payment_method',
+      'data.payment_method',
+      'order.payment_method',
+      'metodoPagamento',
+    ]),
+  );
   const productId = textAt(payload, [
     'product.id',
     'data.product.id',
