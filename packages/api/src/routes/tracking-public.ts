@@ -403,6 +403,36 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           `
         : [];
     const recentTouch = recentTouches[0];
+    const mergedRecentSource = {
+      ...(recentTouch?.source ?? {}),
+      ...redirectAttribution,
+    };
+    // A landing can reopen in another browser context and lose its URL/local
+    // storage while keeping the same network and user agent. If the exact
+    // visitor touch is empty, prefer the latest attributed touch from that
+    // browser instead of emitting an unattributed checkout.
+    const [attributedBrowserTouch] =
+      userAgent && !hasCampaignAttribution(mergedRecentSource)
+        ? await app.db<RecentTouch[]>`
+            SELECT visitor_id, journey_id, source, event_url
+            FROM tracking_events
+            WHERE project_id = ${test.project_id}
+              AND event_name = 'PageView'
+              AND client_ip = ${req.ip}
+              AND user_agent = ${userAgent}
+              AND received_at >= now() - interval '4 hours'
+              AND (
+                NULLIF(source->>'campaign_id', '') IS NOT NULL
+                OR NULLIF(source->>'campaign_name', '') IS NOT NULL
+                OR NULLIF(source->>'utm_campaign', '') IS NOT NULL
+                OR NULLIF(source->>'adset_id', '') IS NOT NULL
+                OR NULLIF(source->>'ad_id', '') IS NOT NULL
+              )
+            ORDER BY received_at DESC, id DESC
+            LIMIT 1
+          `
+        : [];
+    const attributionTouch = attributedBrowserTouch ?? recentTouch;
     const visitorId = linkedIdentity
       ? linkedIdentity.visitorId
       : recentTouch?.visitor_id
@@ -447,7 +477,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const redirectEventId = validBrowserEventId(req.query.tmx_event_id) ?? ulid();
     const redirectEventUrl =
       safeEventSourceUrl(req.query.tmx_source_url) ??
-      safeEventSourceUrl(recentTouch?.event_url) ??
+      safeEventSourceUrl(attributionTouch?.event_url) ??
       safeEventSourceUrl(req.headers.referer) ??
       `${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/r/${test.id}`;
     const redirectEventAt = new Date();
@@ -459,7 +489,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         (${redirectEventId}, ${test.project_id}, ${visitorId}, ${journeyId}, 'InitiateCheckout',
          'commerce', ${redirectEventUrl},
          ${app.db.json({
-           ...(recentTouch?.source ?? {}),
+           ...(attributionTouch?.source ?? {}),
            ...redirectAttribution,
            ...(redirectCountry ? { country: redirectCountry } : {}),
          } as never)},
