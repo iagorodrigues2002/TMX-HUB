@@ -379,7 +379,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       });
     }
 
-    const [schema, activity] = await Promise.all([
+    const [schema, activity, utmify] = await Promise.all([
       app.db<
         Array<{
           projects: string | null;
@@ -432,6 +432,52 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             JOIN tracking_projects p ON p.id = d.project_id
             WHERE p.offer_id = ${req.params.id} AND d.state = 'failed') AS failed_meta
       `,
+      app.db<
+        Array<{
+          destination_configured: boolean;
+          destination_enabled: boolean | null;
+          pending: number;
+          failed: number;
+          dead: number;
+          delivered: number;
+          last_delivered_at: Date | null;
+          last_error: string | null;
+        }>
+      >`
+        SELECT
+          EXISTS (
+            SELECT 1 FROM tracking_utmify_destinations u
+            JOIN tracking_projects p ON p.id = u.project_id
+            WHERE p.offer_id = ${req.params.id}
+          ) AS destination_configured,
+          (SELECT u.enabled FROM tracking_utmify_destinations u
+            JOIN tracking_projects p ON p.id = u.project_id
+            WHERE p.offer_id = ${req.params.id} LIMIT 1) AS destination_enabled,
+          (SELECT count(*)::int FROM tracking_delivery_outbox d
+            JOIN tracking_projects p ON p.id = d.project_id
+            WHERE p.offer_id = ${req.params.id} AND d.destination_kind = 'utmify'
+              AND d.state IN ('pending', 'processing')) AS pending,
+          (SELECT count(*)::int FROM tracking_delivery_outbox d
+            JOIN tracking_projects p ON p.id = d.project_id
+            WHERE p.offer_id = ${req.params.id} AND d.destination_kind = 'utmify'
+              AND d.state = 'failed') AS failed,
+          (SELECT count(*)::int FROM tracking_delivery_outbox d
+            JOIN tracking_projects p ON p.id = d.project_id
+            WHERE p.offer_id = ${req.params.id} AND d.destination_kind = 'utmify'
+              AND d.state = 'dead') AS dead,
+          (SELECT count(*)::int FROM tracking_delivery_outbox d
+            JOIN tracking_projects p ON p.id = d.project_id
+            WHERE p.offer_id = ${req.params.id} AND d.destination_kind = 'utmify'
+              AND d.state = 'delivered') AS delivered,
+          (SELECT max(d.delivered_at) FROM tracking_delivery_outbox d
+            JOIN tracking_projects p ON p.id = d.project_id
+            WHERE p.offer_id = ${req.params.id} AND d.destination_kind = 'utmify') AS last_delivered_at,
+          (SELECT d.last_error FROM tracking_delivery_outbox d
+            JOIN tracking_projects p ON p.id = d.project_id
+            WHERE p.offer_id = ${req.params.id} AND d.destination_kind = 'utmify'
+              AND d.last_error IS NOT NULL
+            ORDER BY d.created_at DESC LIMIT 1) AS last_error
+      `,
     ]);
     const tables = schema[0];
     const schemaReady = Boolean(
@@ -456,6 +502,28 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       meta: {
         pending: activity[0]?.pending_meta ?? 0,
         failed: activity[0]?.failed_meta ?? 0,
+      },
+      utmify: {
+        destination_configured: utmify[0]?.destination_configured ?? false,
+        destination_enabled: utmify[0]?.destination_enabled ?? false,
+        worker_running: Boolean(env.TRACKING_ENCRYPTION_KEY),
+        pending: utmify[0]?.pending ?? 0,
+        failed: utmify[0]?.failed ?? 0,
+        dead: utmify[0]?.dead ?? 0,
+        delivered: utmify[0]?.delivered ?? 0,
+        last_delivered_at: utmify[0]?.last_delivered_at ?? null,
+        last_error: utmify[0]?.last_error ?? null,
+        hint: !utmify[0]?.destination_configured
+          ? 'Nenhum destino UTMify configurado para esta oferta — configure em Tracking > Configuração e testes.'
+          : !utmify[0]?.destination_enabled
+            ? 'Destino UTMify configurado mas desabilitado.'
+            : !env.TRACKING_ENCRYPTION_KEY
+              ? 'TRACKING_ENCRYPTION_KEY ausente no serviço da API — o worker de entrega para UTMify não inicia. Configure essa variável no Railway.'
+              : (utmify[0]?.pending ?? 0) > 0 && !utmify[0]?.delivered
+                ? 'Há entregas pendentes mas nenhuma foi entregue ainda — verifique se o worker está no ar (logs do serviço api no Railway).'
+                : (utmify[0]?.dead ?? 0) > 0
+                  ? 'Há entregas mortas (excederam as tentativas) — veja last_error e use o retry manual.'
+                  : null,
       },
       detail: schemaReady
         ? 'Banco, migrations e criptografia são gerenciados automaticamente pelo TMXHUB.'
@@ -1095,8 +1163,13 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           paid_orders: number;
           paid_buyers: number;
           upsell_orders: number;
+          unmapped_paid_orders: number;
           orphan_orders: number;
           paid_revenue_minor: string;
+          webhooks_received: number;
+          webhooks_quarantined: number;
+          utmify_deliveries_attempted: number;
+          utmify_deliveries_lost: number;
         }>
       >`
       SELECT
@@ -1136,35 +1209,42 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         (SELECT count(*)::int FROM tracking_orders o
           WHERE o.project_id = p.id AND o.status = 'paid'
             AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS paid_orders,
-        (SELECT count(DISTINCT COALESCE(
-            NULLIF(lower(trim(o.buyer->>'email')), ''),
-            NULLIF(regexp_replace(o.buyer->>'phone', '\D', '', 'g'), ''),
-            NULLIF(regexp_replace(o.buyer->>'document', '\D', '', 'g'), ''),
-            NULLIF(trim(o.visitor_id), ''),
-            o.external_id
-          ))::int
-          FROM tracking_orders o
-          WHERE o.project_id = p.id AND o.status = 'paid'
+        -- Front vs. upsell is marked explicitly per order (tracking_orders.order_kind),
+        -- set from the tracking_product_kinds mapping at webhook time — not inferred
+        -- from "repeat buyer within this window", which broke across date boundaries.
+        (SELECT count(*)::int FROM tracking_orders o
+          WHERE o.project_id = p.id AND o.status = 'paid' AND o.order_kind = 'front'
             AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS paid_buyers,
-        (SELECT GREATEST(
-            count(*) - count(DISTINCT COALESCE(
-              NULLIF(lower(trim(o.buyer->>'email')), ''),
-              NULLIF(regexp_replace(o.buyer->>'phone', '\D', '', 'g'), ''),
-              NULLIF(regexp_replace(o.buyer->>'document', '\D', '', 'g'), ''),
-              NULLIF(trim(o.visitor_id), ''),
-              o.external_id
-            )),
-            0
-          )::int
-          FROM tracking_orders o
-          WHERE o.project_id = p.id AND o.status = 'paid'
+        (SELECT count(*)::int FROM tracking_orders o
+          WHERE o.project_id = p.id AND o.status = 'paid' AND o.order_kind = 'upsell'
             AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS upsell_orders,
+        (SELECT count(*)::int FROM tracking_orders o
+          WHERE o.project_id = p.id AND o.status = 'paid' AND o.order_kind = 'unknown'
+            AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS unmapped_paid_orders,
         (SELECT count(*)::int FROM tracking_orders o
           WHERE o.project_id = p.id AND NULLIF(trim(o.visitor_id), '') IS NULL
             AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS orphan_orders,
         (SELECT COALESCE(sum(o.amount_minor), 0)::text FROM tracking_orders o
           WHERE o.project_id = p.id AND o.status = 'paid'
-            AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS paid_revenue_minor
+            AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS paid_revenue_minor,
+        -- Data loss rate: webhooks the Vendepay gateway sent us that we could not turn
+        -- into an order (quarantined) — i.e. sales that never entered the pipeline at all.
+        (SELECT count(*)::int FROM webhook_receipts r
+          JOIN vendepay_connections v ON v.id = r.connection_id
+          WHERE v.project_id = p.id
+            AND r.received_at >= ${from} AND r.received_at < ${to}) AS webhooks_received,
+        (SELECT count(*)::int FROM webhook_receipts r
+          JOIN vendepay_connections v ON v.id = r.connection_id
+          WHERE v.project_id = p.id AND r.state = 'quarantined'
+            AND r.received_at >= ${from} AND r.received_at < ${to}) AS webhooks_quarantined,
+        -- Second half of data loss: orders we DID create but that never reached UTMify
+        -- (destination never configured/enabled, or delivery exhausted its retries).
+        (SELECT count(*)::int FROM tracking_delivery_outbox d
+          WHERE d.project_id = p.id AND d.destination_kind = 'utmify'
+            AND d.created_at >= ${from} AND d.created_at < ${to}) AS utmify_deliveries_attempted,
+        (SELECT count(*)::int FROM tracking_delivery_outbox d
+          WHERE d.project_id = p.id AND d.destination_kind = 'utmify' AND d.state = 'dead'
+            AND d.created_at >= ${from} AND d.created_at < ${to}) AS utmify_deliveries_lost
       FROM tracking_projects p
       WHERE p.offer_id = ${req.params.id}
     `;
@@ -1183,8 +1263,13 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           paid_orders: 0,
           paid_buyers: 0,
           upsell_orders: 0,
+          unmapped_paid_orders: 0,
           orphan_orders: 0,
           paid_revenue_minor: '0',
+          webhooks_received: 0,
+          webhooks_quarantined: 0,
+          utmify_deliveries_attempted: 0,
+          utmify_deliveries_lost: 0,
         }),
       };
     },

@@ -229,6 +229,38 @@ export function TrackingLiveConsole({
             {diagnostics.data?.detail ??
               'O diagnóstico será exibido assim que o tracking da oferta for criado.'}
           </div>
+          <div className="mt-5">
+            <p className="hud-label">Entrega para UTMify</p>
+            <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                [
+                  'Destino configurado',
+                  diagnostics.data?.utmify.destination_configured ? 'sim' : 'não',
+                ],
+                ['Worker no ar', diagnostics.data?.utmify.worker_running ? 'sim' : 'não'],
+                [
+                  'Pendentes / falhas / mortas',
+                  `${diagnostics.data?.utmify.pending ?? 0} / ${diagnostics.data?.utmify.failed ?? 0} / ${diagnostics.data?.utmify.dead ?? 0}`,
+                ],
+                ['Entregues', diagnostics.data?.utmify.delivered ?? 0],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-md border border-white/[0.07] bg-black/10 p-3">
+                  <p className="text-[10px] uppercase tracking-wider text-white/35">{label}</p>
+                  <p className="mt-1 font-mono text-sm text-white">{value}</p>
+                </div>
+              ))}
+            </div>
+            {diagnostics.data?.utmify.hint && (
+              <div className="mt-3 rounded-md border border-amber-300/20 bg-amber-300/[0.04] p-4 text-xs leading-5 text-amber-100/80">
+                {diagnostics.data.utmify.hint}
+              </div>
+            )}
+            {diagnostics.data?.utmify.last_error && (
+              <div className="mt-2 rounded-md border border-red-300/20 bg-red-300/[0.04] p-4 text-xs leading-5 text-red-200/70">
+                Último erro: {diagnostics.data.utmify.last_error}
+              </div>
+            )}
+          </div>
         </div>
       ) : activeView === 'attribution' ? (
         <div className="p-5 md:p-6">
@@ -633,7 +665,7 @@ export function TrackingLiveConsole({
         </div>
       ) : (
         <div>
-          <div className="grid gap-px bg-white/[0.06] sm:grid-cols-2 xl:grid-cols-5">
+          <div className="grid gap-px bg-white/[0.06] sm:grid-cols-2 xl:grid-cols-6">
             {[
               ['Visitas', s?.visitors ?? 0],
               [
@@ -645,9 +677,22 @@ export function TrackingLiveConsole({
               ['Checkouts', `${s?.checkouts ?? 0} únicos · ${s?.checkout_events ?? 0} disparos`],
               [
                 'Compradores',
-                `${buyers} únicos · ${s?.upsell_orders ?? 0} upsells`,
+                `${buyers} front · ${s?.upsell_orders ?? 0} upsell${
+                  s?.unmapped_paid_orders ? ` · ${s.unmapped_paid_orders} não mapeados` : ''
+                }`,
               ],
               ['Faturamento', money(s?.paid_revenue_minor)],
+              [
+                'Perda de dados',
+                s?.webhooks_received
+                  ? `${((s.webhooks_quarantined / s.webhooks_received) * 100)
+                      .toFixed(1)
+                      .replace(
+                        '.',
+                        ',',
+                      )}% · ${s.webhooks_quarantined}/${s.webhooks_received} webhooks`
+                  : '—',
+              ],
             ].map(([label, value]) => (
               <div key={label} className="bg-[#06131d] p-4">
                 <p className="hud-label">{label}</p>

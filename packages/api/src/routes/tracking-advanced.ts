@@ -56,6 +56,11 @@ const EntryLinkSchema = z.object({
   name: z.string().trim().min(2).max(120),
   destination_url: z.string().url().max(4096),
 });
+const ProductKindSchema = z.object({
+  product_id: z.string().trim().min(1).max(256),
+  kind: z.enum(['front', 'upsell']),
+  label: z.string().trim().max(120).nullable().optional(),
+});
 
 function parsed<T>(schema: z.ZodSchema<T>, value: unknown): T {
   const result = schema.safeParse(value);
@@ -165,6 +170,83 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         WHERE id=${req.params.linkId} AND project_id=${p.id}
       `;
       return reply.code(204).send();
+    },
+  );
+
+  app.get<{ Params: { id: string } }>('/offers/:id/tracking/product-kinds', async (req, reply) => {
+    const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin');
+    if (!app.db) return reply.code(503).send(databaseUnavailable);
+    if (!p) return { configured: false, mapped: [], unmapped: [] };
+    const [mapped, unmapped] = await Promise.all([
+      app.db`
+        SELECT id, product_id, kind, label, created_at, updated_at
+        FROM tracking_product_kinds
+        WHERE project_id = ${p.id}
+        ORDER BY updated_at DESC`,
+      app.db`
+        SELECT o.product->>'id' AS product_id,
+               max(o.product->>'name') AS product_name,
+               count(*)::int AS orders,
+               max(o.occurred_at) AS last_seen_at
+        FROM tracking_orders o
+        WHERE o.project_id = ${p.id}
+          AND o.order_kind = 'unknown'
+          AND NULLIF(o.product->>'id', '') IS NOT NULL
+        GROUP BY o.product->>'id'
+        ORDER BY max(o.occurred_at) DESC
+        LIMIT 50`,
+    ]);
+    return { configured: true, mapped, unmapped };
+  });
+
+  app.put<{ Params: { id: string } }>('/offers/:id/tracking/product-kinds', async (req, reply) => {
+    const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin', true);
+    if (!app.db) return reply.code(503).send(databaseUnavailable);
+    if (!p) return reply.code(409).send({ error: 'tracking_not_configured' });
+    const body = parsed(ProductKindSchema, req.body);
+    const [row] = await app.db`
+      INSERT INTO tracking_product_kinds (id, project_id, product_id, kind, label)
+      VALUES (${ulid()}, ${p.id}, ${body.product_id}, ${body.kind}, ${body.label ?? null})
+      ON CONFLICT (project_id, product_id) DO UPDATE SET
+        kind = EXCLUDED.kind, label = EXCLUDED.label, updated_at = now()
+      RETURNING id, product_id, kind, label, created_at, updated_at
+    `;
+    return reply.code(201).send(row);
+  });
+
+  app.delete<{ Params: { id: string; productId: string } }>(
+    '/offers/:id/tracking/product-kinds/:productId',
+    async (req, reply) => {
+      const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin', true);
+      if (!app.db) return reply.code(503).send(databaseUnavailable);
+      if (!p) return reply.code(404).send({ error: 'tracking_not_configured' });
+      await app.db`
+        DELETE FROM tracking_product_kinds
+        WHERE project_id = ${p.id} AND product_id = ${req.params.productId}
+      `;
+      return reply.code(204).send();
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    '/offers/:id/tracking/product-kinds/recompute',
+    async (req, reply) => {
+      const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin', true);
+      if (!app.db) return reply.code(503).send(databaseUnavailable);
+      if (!p) return reply.code(409).send({ error: 'tracking_not_configured' });
+      // Backfills existing orders whose product was mapped to front/upsell *after*
+      // the order was first recorded (the webhook path only classifies at insert time).
+      const updated = await app.db`
+        UPDATE tracking_orders o
+        SET order_kind = k.kind, updated_at = now()
+        FROM tracking_product_kinds k
+        WHERE o.project_id = ${p.id}
+          AND k.project_id = o.project_id
+          AND k.product_id = o.product->>'id'
+          AND o.order_kind <> k.kind
+        RETURNING o.id
+      `;
+      return reply.send({ updated: updated.length });
     },
   );
 

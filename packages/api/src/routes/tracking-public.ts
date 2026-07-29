@@ -665,17 +665,25 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           trackingIdentity?.projectId === connection.project_id
             ? trackingIdentity.visitorId
             : event.trackingSrc;
+        const [productKind] = event.product.id
+          ? await sql<{ kind: string }[]>`
+              SELECT kind FROM tracking_product_kinds
+              WHERE project_id = ${connection.project_id} AND product_id = ${event.product.id}
+            `
+          : [];
+        const orderKind = productKind?.kind ?? 'unknown';
         const [order] = await sql<{ id: string; status: string }[]>`
           INSERT INTO tracking_orders
             (id, project_id, provider, external_id, status, amount_minor, currency,
              visitor_id, buyer, raw_status, occurred_at, paid_at, payment_method,
-             product, attribution_source)
+             product, attribution_source, order_kind)
           VALUES
             (${ulid()}, ${connection.project_id}, 'vendepay', ${event.transactionId},
              ${event.status}, ${event.amountMinor ?? null}, ${event.currency ?? null},
              ${attributedVisitorId ?? null}, ${sql.json(event.buyer)}, ${event.rawStatus ?? null},
              ${event.occurredAt}, ${event.status === 'paid' ? event.occurredAt : null},
-             ${event.paymentMethod ?? null}, ${sql.json(event.product)}, ${sql.json(event.source)})
+             ${event.paymentMethod ?? null}, ${sql.json(event.product)}, ${sql.json(event.source)},
+             ${orderKind})
           ON CONFLICT (project_id, provider, external_id) DO UPDATE SET
             status = CASE
               WHEN tracking_orders.status IN ('refunded', 'chargeback') THEN tracking_orders.status
@@ -697,6 +705,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             paid_at = CASE
               WHEN EXCLUDED.status = 'paid' THEN COALESCE(tracking_orders.paid_at, EXCLUDED.paid_at)
               ELSE tracking_orders.paid_at
+            END,
+            -- A mapping added after the order first arrived should still "heal" it on the
+            -- next webhook (e.g. pending -> paid); never downgrade an already-known kind.
+            order_kind = CASE
+              WHEN EXCLUDED.order_kind <> 'unknown' THEN EXCLUDED.order_kind
+              ELSE tracking_orders.order_kind
             END,
             updated_at = now()
           RETURNING id, status

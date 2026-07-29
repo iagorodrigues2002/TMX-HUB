@@ -1251,8 +1251,13 @@ export const apiClient = {
     paid_orders: number;
     paid_buyers: number;
     upsell_orders: number;
+    unmapped_paid_orders: number;
     orphan_orders: number;
     paid_revenue_minor: string;
+    webhooks_received: number;
+    webhooks_quarantined: number;
+    utmify_deliveries_attempted: number;
+    utmify_deliveries_lost: number;
   }> {
     const query = date ? `?date=${encodeURIComponent(date)}` : '';
     return request(`/v1/offers/${id}/tracking/summary${query}`);
@@ -1267,9 +1272,61 @@ export const apiClient = {
     last_event_at?: string;
     last_order_at?: string;
     meta: { pending: number; failed: number };
+    utmify: {
+      destination_configured: boolean;
+      destination_enabled: boolean;
+      worker_running: boolean;
+      pending: number;
+      failed: number;
+      dead: number;
+      delivered: number;
+      last_delivered_at: string | null;
+      last_error: string | null;
+      hint: string | null;
+    };
     detail: string;
   }> {
     return request(`/v1/offers/${id}/tracking/diagnostics`);
+  },
+
+  async getTrackingProductKinds(id: string): Promise<{
+    configured: boolean;
+    mapped: Array<{
+      id: string;
+      product_id: string;
+      kind: 'front' | 'upsell';
+      label: string | null;
+      created_at: string;
+      updated_at: string;
+    }>;
+    unmapped: Array<{
+      product_id: string;
+      product_name: string | null;
+      orders: number;
+      last_seen_at: string;
+    }>;
+  }> {
+    return request(`/v1/offers/${id}/tracking/product-kinds`);
+  },
+
+  async setTrackingProductKind(
+    id: string,
+    body: { product_id: string; kind: 'front' | 'upsell'; label?: string | null },
+  ): Promise<{ id: string; product_id: string; kind: string; label: string | null }> {
+    return request(`/v1/offers/${id}/tracking/product-kinds`, {
+      method: 'PUT',
+      body,
+    });
+  },
+
+  async deleteTrackingProductKind(id: string, productId: string): Promise<void> {
+    await request(`/v1/offers/${id}/tracking/product-kinds/${encodeURIComponent(productId)}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async recomputeTrackingProductKinds(id: string): Promise<{ updated: number }> {
+    return request(`/v1/offers/${id}/tracking/product-kinds/recompute`, { method: 'POST' });
   },
 
   async getAdvancedTracking(id: string): Promise<{

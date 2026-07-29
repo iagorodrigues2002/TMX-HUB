@@ -145,6 +145,26 @@ async function main() {
   const metaWorker = createMetaWorker();
   const utmifyDeliveryWorker = createUtmifyDeliveryWorker();
   const utmifyWebEventWorker = createUtmifyWebEventWorker();
+  const missingEnv = {
+    DATABASE_URL: Boolean(env.DATABASE_URL),
+    TRACKING_ENCRYPTION_KEY: Boolean(env.TRACKING_ENCRYPTION_KEY),
+  };
+  // These workers return null instead of throwing when required env vars are
+  // missing (so the API can still boot for non-tracking routes) — but a silent
+  // null here means queued deliveries (Meta CAPI / UTMify orders) pile up in
+  // Redis and are NEVER processed, with nothing in the logs to explain why.
+  if (!metaWorker)
+    app.log.error({ ...missingEnv }, 'meta worker did not start — deliveries will not be sent');
+  if (!utmifyDeliveryWorker)
+    app.log.error(
+      { ...missingEnv },
+      'utmify delivery worker did not start — sales will not be sent to UTMify',
+    );
+  if (!utmifyWebEventWorker)
+    app.log.error(
+      { DATABASE_URL: missingEnv.DATABASE_URL },
+      'utmify web event worker did not start — InitiateCheckout leads will not be sent to UTMify',
+    );
   app.utmifySync.start();
 
   let shuttingDown = false;

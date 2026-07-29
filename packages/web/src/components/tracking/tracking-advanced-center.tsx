@@ -134,6 +134,9 @@ export function TrackingAdvancedCenter({
   const [utmifyEndpoint, setUtmifyEndpoint] = useState(
     'https://api.utmify.com.br/api-credentials/orders',
   );
+  const [productKindSelection, setProductKindSelection] = useState<
+    Record<string, 'front' | 'upsell'>
+  >({});
   const qc = useQueryClient();
   const refreshTracking = async () => {
     setIsRefreshingTracking(true);
@@ -340,6 +343,43 @@ export function TrackingAdvancedCenter({
     onSuccess: (result) => {
       void qc.invalidateQueries({ queryKey: ['tracking-utmify-deliveries', offerId] });
       toast.success(`Checkout de teste enviado: ${result.transaction_id}`);
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
+  const productKinds = useQuery({
+    queryKey: ['tracking-product-kinds', offerId],
+    queryFn: () => apiClient.getTrackingProductKinds(offerId),
+    refetchInterval: 30_000,
+    retry: false,
+  });
+  const saveProductKind = useMutation({
+    mutationFn: (input: { product_id: string; kind: 'front' | 'upsell'; label?: string | null }) =>
+      apiClient.setTrackingProductKind(offerId, input),
+    onSuccess: (_result, variables) => {
+      setProductKindSelection((prev) => {
+        const next = { ...prev };
+        delete next[variables.product_id];
+        return next;
+      });
+      void qc.invalidateQueries({ queryKey: ['tracking-product-kinds', offerId] });
+      toast.success('Produto classificado.');
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
+  const removeProductKind = useMutation({
+    mutationFn: (productId: string) => apiClient.deleteTrackingProductKind(offerId, productId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['tracking-product-kinds', offerId] });
+      toast.success('Mapeamento removido.');
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
+  const recomputeProductKinds = useMutation({
+    mutationFn: () => apiClient.recomputeTrackingProductKinds(offerId),
+    onSuccess: (result) => {
+      void qc.invalidateQueries({ queryKey: ['tracking-product-kinds', offerId] });
+      void refreshTracking();
+      toast.success(`${result.updated} pedido(s) reclassificado(s).`);
     },
     onError: (error) => toast.error((error as Error).message),
   });
@@ -1183,6 +1223,115 @@ export function TrackingAdvancedCenter({
                 {!utmifyDeliveries.data?.deliveries?.length && (
                   <p className="rounded border border-dashed border-white/[0.08] p-4 text-sm text-white/35">
                     As entregas aparecerão aqui quando o primeiro pedido for recebido.
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="mt-6">
+              <p className="hud-label">Produtos: front ou upsell?</p>
+              <p className="mt-1 max-w-2xl text-xs text-white/45">
+                Cada produto da Vendepay precisa ser marcado como venda front (novo comprador) ou
+                upsell (compra adicional do mesmo comprador). Sem isso o pedido fica &quot;não
+                mapeado&quot; e não entra corretamente nos números de front/upsell do resumo.
+              </p>
+              {(productKinds.data?.unmapped ?? []).length > 0 && (
+                <div className="mt-3 space-y-2">
+                  <p className="text-[10px] uppercase tracking-wider text-amber-300/70">
+                    Produtos vistos em pedidos mas ainda não classificados
+                  </p>
+                  {(productKinds.data?.unmapped ?? []).map((product) => (
+                    <div
+                      key={product.product_id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded border border-amber-300/15 bg-amber-300/[0.03] p-3 text-xs"
+                    >
+                      <div>
+                        <p className="font-mono text-white/70">{product.product_id}</p>
+                        <p className="mt-1 text-white/40">
+                          {product.product_name ?? 'sem nome'} · {product.orders} pedido(s)
+                        </p>
+                      </div>
+                      {canManage && (
+                        <div className="flex items-center gap-2">
+                          <select
+                            className="rounded border border-white/10 bg-black/20 px-2 py-1 text-xs text-white/80"
+                            value={productKindSelection[product.product_id] ?? 'front'}
+                            onChange={(event) =>
+                              setProductKindSelection((prev) => ({
+                                ...prev,
+                                [product.product_id]: event.target.value as 'front' | 'upsell',
+                              }))
+                            }
+                          >
+                            <option value="front">Front</option>
+                            <option value="upsell">Upsell</option>
+                          </select>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={saveProductKind.isPending}
+                            onClick={() =>
+                              saveProductKind.mutate({
+                                product_id: product.product_id,
+                                kind: productKindSelection[product.product_id] ?? 'front',
+                                label: product.product_name,
+                              })
+                            }
+                          >
+                            Classificar
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="mt-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] uppercase tracking-wider text-white/35">
+                    Mapeamentos salvos
+                  </p>
+                  {canManage && (productKinds.data?.mapped ?? []).length > 0 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={recomputeProductKinds.isPending}
+                      onClick={() => recomputeProductKinds.mutate()}
+                    >
+                      Reclassificar pedidos existentes
+                    </Button>
+                  )}
+                </div>
+                {(productKinds.data?.mapped ?? []).map((mapping) => (
+                  <div
+                    key={mapping.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded border border-white/[0.07] p-3 text-xs"
+                  >
+                    <div>
+                      <p className="font-mono text-white/70">{mapping.product_id}</p>
+                      {mapping.label && <p className="mt-1 text-white/40">{mapping.label}</p>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={mapping.kind === 'front' ? 'text-emerald-300' : 'text-cyan-300'}
+                      >
+                        {mapping.kind === 'front' ? 'Front' : 'Upsell'}
+                      </span>
+                      {canManage && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={removeProductKind.isPending}
+                          onClick={() => removeProductKind.mutate(mapping.product_id)}
+                        >
+                          Remover
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {!productKinds.data?.mapped?.length && (
+                  <p className="rounded border border-dashed border-white/[0.08] p-4 text-sm text-white/35">
+                    Nenhum produto classificado ainda.
                   </p>
                 )}
               </div>
