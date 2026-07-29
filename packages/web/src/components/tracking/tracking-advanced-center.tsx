@@ -163,9 +163,10 @@ export function TrackingAdvancedCenter({
       void Promise.all([
         qc.invalidateQueries({ queryKey: ['tracking-meta-deliveries', offerId] }),
         qc.invalidateQueries({ queryKey: ['tracking-utmify-deliveries', offerId] }),
+        qc.invalidateQueries({ queryKey: ['tracking-attribution', offerId] }),
       ]);
       toast.success(
-        `${result.events_found} ICs conferidos · ${result.meta_queued} Meta reenfileirados · ${result.utmify_queued} ICs reenfileirados na UTMify.`,
+        `${result.events_found} ICs conferidos · ${result.attribution_recovered} atribuídos às campanhas · ${result.meta_queued} Meta reenfileirados · ${result.utmify_queued} UTMify.`,
       );
     },
     onError: (error) => toast.error((error as Error).message),

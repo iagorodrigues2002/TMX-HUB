@@ -97,6 +97,52 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!project) throw new NotFoundError('Projeto de tracking não encontrado.');
 
       const result = await app.db.begin(async (sql) => {
+        const recovered = await sql<{ id: string }[]>`
+          WITH matches AS (
+            SELECT
+              checkout.id,
+              page.visitor_id,
+              page.journey_id,
+              page.source
+            FROM tracking_events checkout
+            JOIN LATERAL (
+              SELECT candidate.visitor_id, candidate.journey_id, candidate.source
+              FROM tracking_events candidate
+              WHERE candidate.project_id = checkout.project_id
+                AND candidate.event_name = 'PageView'
+                AND candidate.client_ip = checkout.client_ip
+                AND candidate.user_agent = checkout.user_agent
+                AND candidate.received_at <= checkout.received_at
+                AND candidate.received_at >= checkout.received_at - interval '2 hours'
+                AND (
+                  NULLIF(candidate.source->>'campaign_id', '') IS NOT NULL
+                  OR NULLIF(candidate.source->>'campaign_name', '') IS NOT NULL
+                  OR NULLIF(candidate.source->>'utm_campaign', '') IS NOT NULL
+                  OR NULLIF(candidate.source->>'adset_id', '') IS NOT NULL
+                  OR NULLIF(candidate.source->>'ad_id', '') IS NOT NULL
+                )
+              ORDER BY candidate.received_at DESC, candidate.id DESC
+              LIMIT 1
+            ) page ON true
+            WHERE checkout.project_id = ${project.id}
+              AND checkout.event_name = 'InitiateCheckout'
+              AND checkout.received_at >= ${from}
+              AND checkout.received_at < ${to}
+              AND NULLIF(checkout.source->>'campaign_id', '') IS NULL
+              AND NULLIF(checkout.source->>'campaign_name', '') IS NULL
+              AND NULLIF(checkout.source->>'utm_campaign', '') IS NULL
+          )
+          UPDATE tracking_events checkout
+          SET visitor_id = matches.visitor_id,
+              journey_id = COALESCE(matches.journey_id, checkout.journey_id),
+              source = matches.source || checkout.source,
+              properties = checkout.properties ||
+                '{"attribution_recovered":"recent_pageview_ip_ua"}'::jsonb
+          FROM matches
+          WHERE checkout.project_id = ${project.id}
+            AND checkout.id = matches.id
+          RETURNING checkout.id
+        `;
         const events = await sql<{ id: string; received_at: Date }[]>`
           SELECT id, received_at
           FROM tracking_events
@@ -185,6 +231,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           RETURNING id
         `;
         return {
+          attributionRecovered: recovered.length,
           eventsFound: events.length,
           pixelCount: pixels.length,
           meta,
@@ -212,6 +259,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       ]);
       return reply.code(202).send({
         date,
+        attribution_recovered: result.attributionRecovered,
         events_found: result.eventsFound,
         pixels_enabled: result.pixelCount,
         utmify_destinations_enabled: result.pixelCount,

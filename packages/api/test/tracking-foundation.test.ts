@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildUtmifyOrderPayload } from '../src/integrations/utmify/sales.js';
 import { createTrackingToken, readTrackingToken } from '../src/lib/tracking-token.js';
-import { extractAttributionQuery } from '../src/routes/tracking-public.js';
+import { extractAttributionQuery, hasCampaignAttribution } from '../src/routes/tracking-public.js';
 import { buildTrackerScript } from '../src/services/tracker-script.js';
 
 describe('reliable tracking foundation', () => {
@@ -63,6 +63,12 @@ describe('reliable tracking foundation', () => {
       placement: 'Instagram_Feed',
       fbclid: 'click-id',
     });
+  });
+
+  it('recognizes campaign attribution from Meta URL parameters', () => {
+    expect(hasCampaignAttribution({ campaign_id: '120', ad_id: '456' })).toBe(true);
+    expect(hasCampaignAttribution({ utm_campaign: 'SLM_ESP' })).toBe(true);
+    expect(hasCampaignAttribution({ placement: 'Instagram_Reels' })).toBe(false);
   });
 
   it('maps a paid order to the UTMify sales contract', () => {

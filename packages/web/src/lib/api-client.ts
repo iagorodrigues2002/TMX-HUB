@@ -1562,6 +1562,7 @@ export const apiClient = {
     date: string,
   ): Promise<{
     date: string;
+    attribution_recovered: number;
     events_found: number;
     pixels_enabled: number;
     utmify_destinations_enabled: number;

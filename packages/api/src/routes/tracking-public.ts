@@ -76,6 +76,18 @@ export function extractAttributionQuery(query: Record<string, string | undefined
   ) as Record<string, string>;
 }
 
+const campaignAttributionKeys = [
+  'campaign_id',
+  'campaign_name',
+  'utm_campaign',
+  'adset_id',
+  'ad_id',
+] as const;
+
+export function hasCampaignAttribution(source: Record<string, string>) {
+  return campaignAttributionKeys.some((key) => Boolean(source[key]?.trim()));
+}
+
 const cookieValue = (cookie: string | undefined, name: string) =>
   cookie
     ?.split(';')
@@ -331,11 +343,42 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       };
     }
     const linked = req.query.src ? readTrackingToken(req.query.src, env.WEBHOOK_SECRET) : null;
-    const visitorId =
-      linked?.projectId === test.project_id
-        ? linked.visitorId
+    const linkedIdentity = linked?.projectId === test.project_id ? linked : null;
+    const redirectAttribution = extractAttributionQuery(req.query);
+    const userAgent = req.headers['user-agent'] ?? null;
+    const [recentTouch] =
+      !linkedIdentity && !hasCampaignAttribution(redirectAttribution) && userAgent
+        ? await app.db<
+            Array<{
+              visitor_id: string;
+              journey_id: string | null;
+              source: Record<string, string>;
+            }>
+          >`
+            SELECT visitor_id, journey_id, source
+            FROM tracking_events
+            WHERE project_id = ${test.project_id}
+              AND event_name = 'PageView'
+              AND client_ip = ${req.ip}
+              AND user_agent = ${userAgent}
+              AND received_at >= now() - interval '2 hours'
+              AND (
+                NULLIF(source->>'campaign_id', '') IS NOT NULL
+                OR NULLIF(source->>'campaign_name', '') IS NOT NULL
+                OR NULLIF(source->>'utm_campaign', '') IS NOT NULL
+                OR NULLIF(source->>'adset_id', '') IS NOT NULL
+                OR NULLIF(source->>'ad_id', '') IS NOT NULL
+              )
+            ORDER BY received_at DESC, id DESC
+            LIMIT 1
+          `
+        : [];
+    const visitorId = linkedIdentity
+      ? linkedIdentity.visitorId
+      : recentTouch?.visitor_id
+        ? recentTouch.visitor_id
         : cookieValue(req.headers.cookie, '_tmx_redirect_v') || ulid();
-    const journeyId = linked?.projectId === test.project_id ? linked.journeyId : ulid();
+    const journeyId = linkedIdentity?.journeyId ?? recentTouch?.journey_id ?? ulid();
     const existing = await app.db<Array<{ variant_id: string }>>`
       SELECT variant_id FROM tracking_ab_assignments
       WHERE test_id=${test.id} AND visitor_id=${visitorId}
@@ -374,7 +417,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         (${redirectEventId}, ${test.project_id}, ${visitorId}, ${journeyId}, 'InitiateCheckout',
          'commerce', ${`${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/r/${test.id}`},
          ${app.db.json({
-           ...extractAttributionQuery(req.query),
+           ...(recentTouch?.source ?? {}),
+           ...redirectAttribution,
            ...(redirectCountry ? { country: redirectCountry } : {}),
          } as never)},
          ${app.db.json({
