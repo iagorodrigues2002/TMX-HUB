@@ -119,24 +119,31 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         for (const event of events) {
           for (const pixel of pixels) {
             const rows = await sql<{ id: string }[]>`
-              INSERT INTO meta_deliveries
+              INSERT INTO meta_deliveries AS existing
                 (id, project_id, pixel_id, order_id, event_id, event_name, event_at)
               VALUES
                 (${ulid()}, ${project.id}, ${pixel.id}, NULL, ${event.id},
                  'InitiateCheckout', ${event.received_at})
-              ON CONFLICT (pixel_id, event_id) DO NOTHING
+              ON CONFLICT (pixel_id, event_id) DO UPDATE SET
+                state = 'pending',
+                last_error = NULL
+              WHERE existing.state <> 'delivered' AND existing.attempts < 8
               RETURNING id
             `;
             if (rows[0]) meta.push(rows[0]);
           }
           for (const destination of destinations) {
             const rows = await sql<{ id: string }[]>`
-              INSERT INTO tracking_delivery_outbox
+              INSERT INTO tracking_delivery_outbox AS existing
                 (id, project_id, destination_kind, destination_id, order_id, event_id, event_type)
               VALUES
                 (${ulid()}, ${project.id}, 'utmify', ${destination.id}, NULL, ${event.id},
                  'event.initiate_checkout')
-              ON CONFLICT (destination_kind, destination_id, event_id) DO NOTHING
+              ON CONFLICT (destination_kind, destination_id, event_id) DO UPDATE SET
+                state = 'pending',
+                last_error = NULL,
+                next_attempt_at = now()
+              WHERE existing.state <> 'delivered' AND existing.attempts < 8
               RETURNING id
             `;
             if (rows[0]) utmify.push(rows[0]);

@@ -99,7 +99,9 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
           paidAt: row.paid_at,
           buyer: row.buyer,
           source: row.source,
-          clientIp: row.client_ip ?? (row.provider === 'tmx-test' ? '203.0.113.1' : null),
+          // UTMify rejects checkout records without an IP. Legacy ICs created before IP
+          // persistence use a documentation-only address; new events keep the real req.ip.
+          clientIp: row.client_ip ?? '203.0.113.1',
         });
         const token = decryptSecret(row.api_token_encrypted, env.TRACKING_ENCRYPTION_KEY!);
         const response = await fetch(row.endpoint_url, {
