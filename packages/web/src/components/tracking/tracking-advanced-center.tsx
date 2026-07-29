@@ -174,7 +174,7 @@ export function TrackingAdvancedCenter({
         qc.invalidateQueries({ queryKey: ['tracking-attribution', offerId] }),
       ]);
       toast.success(
-        `${result.events_found} ICs conferidos · ${result.attribution_recovered} atribuídos às campanhas · ${result.meta_queued} Meta reenfileirados · ${result.utmify_queued} UTMify.`,
+        `${result.events_found} ICs conferidos · ${result.attribution_recovered} enriquecidos com os PageViews · ${result.meta_queued} Meta reenfileirados · ${result.utmify_queued} UTMify.`,
       );
     },
     onError: (error) => toast.error((error as Error).message),

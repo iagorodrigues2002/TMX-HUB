@@ -161,10 +161,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
               checkout.id,
               page.visitor_id,
               page.journey_id,
-              page.source
+              page.source,
+              page.event_url
             FROM tracking_events checkout
             JOIN LATERAL (
-              SELECT candidate.visitor_id, candidate.journey_id, candidate.source
+              SELECT candidate.visitor_id, candidate.journey_id, candidate.source,
+                     candidate.event_url
               FROM tracking_events candidate
               WHERE candidate.project_id = checkout.project_id
                 AND candidate.event_name = 'PageView'
@@ -186,19 +188,30 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
               AND checkout.event_name = 'InitiateCheckout'
               AND checkout.received_at >= ${from}
               AND checkout.received_at < ${to}
-              AND NULLIF(checkout.source->>'campaign_id', '') IS NULL
-              AND NULLIF(checkout.source->>'campaign_name', '') IS NULL
-              AND NULLIF(checkout.source->>'utm_campaign', '') IS NULL
           )
           UPDATE tracking_events checkout
           SET visitor_id = matches.visitor_id,
               journey_id = COALESCE(matches.journey_id, checkout.journey_id),
               source = matches.source || checkout.source,
+              event_url = CASE
+                WHEN checkout.event_url ~ '^https?://([^/]+\\.)?(theminex\\.com|page-clonerapi-production\\.up\\.railway\\.app)/v1/(r|link)/'
+                  THEN matches.event_url
+                ELSE checkout.event_url
+              END,
               properties = checkout.properties ||
-                '{"attribution_recovered":"same_day_pageview_ip_ua"}'::jsonb
+                '{"attribution_recovered":"pageview_ip_ua_enrichment"}'::jsonb
           FROM matches
           WHERE checkout.project_id = ${project.id}
             AND checkout.id = matches.id
+            AND (
+              checkout.visitor_id IS DISTINCT FROM matches.visitor_id
+              OR checkout.journey_id IS DISTINCT FROM COALESCE(matches.journey_id, checkout.journey_id)
+              OR checkout.source IS DISTINCT FROM matches.source || checkout.source
+              OR (
+                checkout.event_url ~ '^https?://([^/]+\\.)?(theminex\\.com|page-clonerapi-production\\.up\\.railway\\.app)/v1/(r|link)/'
+                AND checkout.event_url IS DISTINCT FROM matches.event_url
+              )
+            )
           RETURNING checkout.id
         `;
         const events = await sql<{ id: string; received_at: Date }[]>`
@@ -217,7 +230,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         `;
         const meta: Array<{ id: string }> = [];
         const utmifyWebEvents: Array<{ id: string }> = [];
+        const enrichedEventIds = new Set(recovered.map(({ id }) => id));
         for (const event of events) {
+          const enriched = enrichedEventIds.has(event.id);
           for (const pixel of pixels) {
             const productionReplayId = `${event.id}-prod-${ulid()}`;
             const rows = await sql<{ id: string }[]>`
@@ -238,6 +253,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                 END
               WHERE existing.state <> 'delivered'
                  OR existing.outgoing_event_id IS NULL
+                 OR ${enriched}
               RETURNING id
             `;
             if (rows[0]) meta.push(rows[0]);
@@ -257,6 +273,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                   next_attempt_at = now()
                 WHERE existing.state <> 'delivered'
                    OR existing.external_pixel_id <> EXCLUDED.external_pixel_id
+                   OR ${enriched}
                 RETURNING id
               `;
             if (utmifyRows[0]) utmifyWebEvents.push(utmifyRows[0]);
