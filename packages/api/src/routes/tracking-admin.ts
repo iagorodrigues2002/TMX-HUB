@@ -170,8 +170,13 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
               FROM tracking_events candidate
               WHERE candidate.project_id = checkout.project_id
                 AND candidate.event_name = 'PageView'
-                AND candidate.client_ip = checkout.client_ip
-                AND candidate.user_agent = checkout.user_agent
+                AND (
+                  candidate.visitor_id = checkout.visitor_id
+                  OR (
+                    candidate.client_ip = checkout.client_ip
+                    AND candidate.user_agent = checkout.user_agent
+                  )
+                )
                 AND candidate.received_at <= checkout.received_at
                 AND candidate.received_at >= checkout.received_at - interval '24 hours'
                 AND (
@@ -181,7 +186,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                   OR NULLIF(candidate.source->>'adset_id', '') IS NOT NULL
                   OR NULLIF(candidate.source->>'ad_id', '') IS NOT NULL
                 )
-              ORDER BY candidate.received_at DESC, candidate.id DESC
+              ORDER BY
+                (candidate.visitor_id = checkout.visitor_id) DESC,
+                candidate.received_at DESC,
+                candidate.id DESC
               LIMIT 1
             ) page ON true
             WHERE checkout.project_id = ${project.id}
