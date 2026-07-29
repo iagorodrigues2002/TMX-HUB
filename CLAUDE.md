@@ -9,11 +9,13 @@ Hub de ferramentas internas TMX (domínio principal `theminex.com`). Monorepo pn
 
 Módulos: Page Cloner (`/cloner`), Cloaker URLs (`/cloaker-urls`), Video Shield (AssemblyAI + jobs BullMQ + envio em massa).
 
-Deploy: Railway (api + web + Redis) + Cloudflare R2.
+Deploy: Railway (api + web + Redis) + Cloudflare R2. Deploy automático via push em `main` (Railway observa `packages/api/**`, `packages/web/**`, `packages/shared/**` conforme Watch Paths configurados).
 
 ## Regras de comunicação e convenções
 
 **IMPORTANTE: SEMPRE responda em português brasileiro (pt-BR).**
+
+**IMPORTANTE: sempre que fizermos alterações no código, faça commit e push para `main` para que o deploy no Railway seja disparado.** Não deixar mudanças pendentes sem subir, a menos que o usuário peça explicitamente para não subir ainda.
 
 - Lint/format: **Biome** (`pnpm lint`, `pnpm format`). Aspas simples, vírgula final, semicolons, indent 2 espaços, lineWidth 100.
 - TypeScript estrito, ESM puro (`"type": "module"`), Node `>=22`.
@@ -56,6 +58,7 @@ Deploy: Railway (api + web + Redis) + Cloudflare R2.
 | `packages/web` (estilos Tailwind v4 + shadcn) | `@tailwind-css-expert` | tokens Tailwind v4, variantes shadcn, `components.json` |
 | `packages/api` (Fastify + plugins + rotas) | `@backend-developer` | Fastify v5, plugins (`@fastify/multipart`, swagger, rate-limit), BullMQ workers, S3/R2 |
 | `packages/api` (design de endpoints / contratos) | `@api-architect` | versionamento, schemas Zod, OpenAPI via `@fastify/swagger` |
+| Tracking (Vendepay webhooks, Utmify events, atribuição, connect rate, dedup, replay) | `@tracking-specialist` | **Domain lead** — desenha a solução (idempotência, quarantine/replay, dedup por `event_id`, atribuição first-party vs click-id) e delega implementação para `@backend-developer`/`@api-architect` |
 | `packages/core` (lib TS pura: Playwright, cheerio, postcss, archiver) | `@backend-developer` | TS puro Node, sem framework; manter peerDeps opcionais |
 | `packages/shared` (Zod + tipos) | `@api-architect` | contrato único entre `api` e `web` |
 | Frontend genérico / acessibilidade / UX | `@frontend-developer` | fallback quando não for específico de React |
@@ -77,6 +80,7 @@ Deploy: Railway (api + web + Redis) + Cloudflare R2.
 | "Revisar PR" | `@code-reviewer` |
 | "Feature nova cross-package" | `@tech-lead-orchestrator` divide → especialistas |
 | "Entender módulo existente" | `@code-archaeologist` |
+| "Melhorar/depurar tracking (Vendepay, Utmify, atribuição, connect rate, webhook)" | `@tracking-specialist` lidera → `@backend-developer` implementa → `@performance-optimizer` se tocar BullMQ/throughput → `@code-reviewer` obrigatório |
 
 ### Exemplo de uso
 
