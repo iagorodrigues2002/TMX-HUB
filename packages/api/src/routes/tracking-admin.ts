@@ -165,7 +165,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       await Promise.allSettled([
         ...result.meta.map(({ id }) => app.metaQueue.add('send', { deliveryId: id })),
         ...result.utmify.map(({ id }) =>
-          app.utmifyDeliveryQueue.add('send', { deliveryId: id }, { jobId: id }),
+          app.utmifyDeliveryQueue.add(
+            'send',
+            { deliveryId: id },
+            { jobId: `${id}-manual-${Date.now()}` },
+          ),
         ),
       ]);
       return reply.code(202).send({

@@ -73,7 +73,11 @@ async function main() {
     `;
     await Promise.allSettled(
       pendingUtmify.map(({ id }) =>
-        app.utmifyDeliveryQueue.add('send', { deliveryId: id }, { jobId: id }),
+        app.utmifyDeliveryQueue.add(
+          'send',
+          { deliveryId: id },
+          { jobId: `${id}-recovery-${Math.floor(Date.now() / 30_000)}` },
+        ),
       ),
     );
   };
