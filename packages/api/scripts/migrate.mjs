@@ -19,6 +19,7 @@ for (const name of [
   '007_vendepay_signing_secret.sql',
   '008_initiate_checkout_deliveries.sql',
   '009_meta_production_replay.sql',
+  '010_utmify_web_events.sql',
 ]) {
   const migration = await readFile(new URL(`../migrations/${name}`, import.meta.url), 'utf8');
   await sql.unsafe(migration);

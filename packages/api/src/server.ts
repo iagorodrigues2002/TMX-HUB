@@ -18,6 +18,7 @@ import { createMetaWorker } from './workers/meta.worker.js';
 import { createRenderWorker } from './workers/render.worker.js';
 import { createShieldWorker } from './workers/shield.worker.js';
 import { createUtmifyDeliveryWorker } from './workers/utmify-delivery.worker.js';
+import { createUtmifyWebEventWorker } from './workers/utmify-web-event.worker.js';
 import { createVslWorker } from './workers/vsl.worker.js';
 
 // TODO(auth): Authentication is intentionally skipped for the MVP.
@@ -80,6 +81,22 @@ async function main() {
         ),
       ),
     );
+    const pendingUtmifyWebEvents = await app.db<{ id: string }[]>`
+      SELECT id FROM tracking_utmify_web_events
+      WHERE state IN ('pending', 'failed', 'processing')
+        AND next_attempt_at <= now()
+      ORDER BY created_at ASC
+      LIMIT 1000
+    `;
+    await Promise.allSettled(
+      pendingUtmifyWebEvents.map(({ id }) =>
+        app.utmifyWebEventQueue.add(
+          'send',
+          { deliveryId: id },
+          { jobId: `${id}-recovery-${Math.floor(Date.now() / 30_000)}` },
+        ),
+      ),
+    );
   };
   await recoverTrackingDeliveries();
   const trackingRecoveryTimer = setInterval(() => {
@@ -127,6 +144,7 @@ async function main() {
   });
   const metaWorker = createMetaWorker();
   const utmifyDeliveryWorker = createUtmifyDeliveryWorker();
+  const utmifyWebEventWorker = createUtmifyWebEventWorker();
   app.utmifySync.start();
 
   let shuttingDown = false;
@@ -148,6 +166,7 @@ async function main() {
       await mediaWorker.close();
       await metaWorker?.close();
       await utmifyDeliveryWorker?.close();
+      await utmifyWebEventWorker?.close();
       app.log.info('shutdown complete');
       process.exit(0);
     } catch (err) {

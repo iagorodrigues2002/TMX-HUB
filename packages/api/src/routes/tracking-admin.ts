@@ -111,6 +111,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           WHERE project_id = ${project.id} AND enabled = true
         `;
         const meta: Array<{ id: string }> = [];
+        const utmifyWebEvents: Array<{ id: string }> = [];
         for (const event of events) {
           for (const pixel of pixels) {
             const productionReplayId = `${event.id}-prod-${ulid()}`;
@@ -135,6 +136,20 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
               RETURNING id
             `;
             if (rows[0]) meta.push(rows[0]);
+            const utmifyRows = await sql<{ id: string }[]>`
+              INSERT INTO tracking_utmify_web_events AS existing
+                (id, project_id, pixel_id, event_id, event_name)
+              VALUES
+                (${ulid()}, ${project.id}, ${pixel.id}, ${event.id}, 'InitiateCheckout')
+              ON CONFLICT (pixel_id, event_id) DO UPDATE SET
+                state = 'pending',
+                attempts = 0,
+                last_error = NULL,
+                next_attempt_at = now()
+              WHERE existing.state <> 'delivered'
+              RETURNING id
+            `;
+            if (utmifyRows[0]) utmifyWebEvents.push(utmifyRows[0]);
           }
         }
         // IC is an analytics event, not an order. Neutralize legacy records that
@@ -167,11 +182,19 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           pixelCount: pixels.length,
           meta,
           utmify,
+          utmifyWebEvents,
         };
       });
 
       await Promise.allSettled([
         ...result.meta.map(({ id }) => app.metaQueue.add('send', { deliveryId: id })),
+        ...result.utmifyWebEvents.map(({ id }) =>
+          app.utmifyWebEventQueue.add(
+            'send',
+            { deliveryId: id },
+            { jobId: `${id}-manual-${Date.now()}` },
+          ),
+        ),
         ...result.utmify.map(({ id }) =>
           app.utmifyDeliveryQueue.add(
             'send',
@@ -184,9 +207,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         date,
         events_found: result.eventsFound,
         pixels_enabled: result.pixelCount,
-        utmify_destinations_enabled: 0,
+        utmify_destinations_enabled: result.pixelCount,
         meta_queued: result.meta.length,
-        utmify_queued: result.utmify.length,
+        utmify_queued: result.utmifyWebEvents.length,
+        utmify_legacy_neutralized: result.utmify.length,
       });
     },
   );

@@ -6,6 +6,7 @@ export const SHIELD_QUEUE_NAME = 'shield-queue';
 export const MEDIA_QUEUE_NAME = 'media-queue';
 export const META_QUEUE_NAME = 'meta-capi-queue';
 export const UTMIFY_DELIVERY_QUEUE_NAME = 'utmify-delivery-queue';
+export const UTMIFY_WEB_EVENT_QUEUE_NAME = 'utmify-web-event-queue';
 
 export interface RenderJobData {
   jobId: string;
@@ -41,5 +42,9 @@ export interface MetaJobData {
 }
 
 export interface UtmifyDeliveryJobData {
+  deliveryId: string;
+}
+
+export interface UtmifyWebEventJobData {
   deliveryId: string;
 }

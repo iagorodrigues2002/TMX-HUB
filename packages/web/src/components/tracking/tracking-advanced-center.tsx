@@ -165,7 +165,7 @@ export function TrackingAdvancedCenter({
         qc.invalidateQueries({ queryKey: ['tracking-utmify-deliveries', offerId] }),
       ]);
       toast.success(
-        `${result.events_found} ICs conferidos · ${result.meta_queued} Meta reenfileirados · ${result.utmify_queued} pedidos incorretos neutralizados na UTMify.`,
+        `${result.events_found} ICs conferidos · ${result.meta_queued} Meta reenfileirados · ${result.utmify_queued} ICs reenfileirados na UTMify.`,
       );
     },
     onError: (error) => toast.error((error as Error).message),
