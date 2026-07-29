@@ -56,6 +56,7 @@ describe('reliable tracking foundation', () => {
     expect(
       extractAttributionQuery({
         utm_campaign: 'SLM_ESP',
+        utm_id: '120250707424500457',
         campaign_id: '120250707424500457',
         adset_id: '120250707424490457',
         ad_id: '120250707424480457',
@@ -68,6 +69,7 @@ describe('reliable tracking foundation', () => {
       }),
     ).toEqual({
       utm_campaign: 'SLM_ESP',
+      utm_id: '120250707424500457',
       campaign_id: '120250707424500457',
       adset_id: '120250707424490457',
       ad_id: '120250707424480457',

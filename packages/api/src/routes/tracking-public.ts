@@ -55,6 +55,7 @@ const attributionQueryKeys = new Set([
   'utm_campaign',
   'utm_content',
   'utm_term',
+  'utm_id',
   'sck',
   'fbclid',
   'gclid',

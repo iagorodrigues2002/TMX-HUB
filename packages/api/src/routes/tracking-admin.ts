@@ -238,11 +238,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         `;
         const meta: Array<{ id: string }> = [];
         const utmifyWebEvents: Array<{ id: string }> = [];
-        const enrichedEventIds = new Set(recovered.map(({ id }) => id));
         for (const event of events) {
-          const enriched = enrichedEventIds.has(event.id);
           for (const pixel of pixels) {
-            const productionReplayId = `${event.id}-prod-${ulid()}`;
             const rows = await sql<{ id: string }[]>`
               INSERT INTO meta_deliveries AS existing
                 (id, project_id, pixel_id, order_id, event_id, event_name, event_at,
@@ -253,15 +250,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
               ON CONFLICT (pixel_id, event_id) DO UPDATE SET
                 state = 'pending',
                 attempts = 0,
-                last_error = NULL,
-                outgoing_event_id = CASE
-                  WHEN existing.state = 'delivered'
-                    THEN ${productionReplayId}
-                  ELSE existing.outgoing_event_id
-                END
+                last_error = NULL
               WHERE existing.state <> 'delivered'
-                 OR existing.outgoing_event_id IS NULL
-                 OR ${enriched}
               RETURNING id
             `;
             if (rows[0]) meta.push(rows[0]);
@@ -281,7 +271,6 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                   next_attempt_at = now()
                 WHERE existing.state <> 'delivered'
                    OR existing.external_pixel_id <> EXCLUDED.external_pixel_id
-                   OR ${enriched}
                 RETURNING id
               `;
             if (utmifyRows[0]) utmifyWebEvents.push(utmifyRows[0]);
