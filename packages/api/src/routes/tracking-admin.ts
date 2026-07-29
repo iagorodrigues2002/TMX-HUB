@@ -140,7 +140,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
               next_attempt_at = now()
           WHERE project_id = ${project.id}
             AND destination_kind = 'utmify'
-            AND event_type = 'event.initiate_checkout'
+            AND event_type IN (
+              'event.initiate_checkout',
+              'event.initiate_checkout.neutralize'
+            )
+            AND state <> 'delivered'
             AND event_id IN (
               SELECT id FROM tracking_events
               WHERE project_id = ${project.id}
