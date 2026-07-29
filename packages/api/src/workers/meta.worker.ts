@@ -32,6 +32,7 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
           external_id: string;
           amount_minor: number | null;
           currency: string | null;
+          order_kind: string | null;
           buyer: { email?: string; phone?: string };
           paid_at: Date | null;
           visitor_id: string | null;
@@ -55,6 +56,7 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
                COALESCE(o.external_id, 'TMX-IC-' || md.event_id) AS external_id,
                COALESCE(o.amount_minor, 0) AS amount_minor,
                COALESCE(o.currency, 'BRL') AS currency,
+               o.order_kind,
                COALESCE(o.buyer, '{}'::jsonb) AS buyer, o.paid_at,
                COALESCE(o.visitor_id, direct_event.visitor_id) AS visitor_id,
                COALESCE(direct_event.event_url, (
@@ -90,6 +92,22 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
         WHERE md.id = ${job.data.deliveryId} AND md.state <> 'delivered'
       `;
       if (!row) return;
+      // Second gate for upsells: the webhook route already skips creating Purchase
+      // deliveries for mapped upsells, but a delivery queued while the product was
+      // still 'unknown' (or re-enqueued after a recompute) would otherwise slip
+      // through here once the mapping lands.
+      if (row.event_name === 'Purchase' && row.order_kind === 'upsell') {
+        await db`
+          UPDATE meta_deliveries
+          SET state = 'skipped', last_error = 'Pedido classificado como upsell; Meta recebe apenas vendas front.'
+          WHERE id = ${row.id}
+        `;
+        logger.info(
+          { deliveryId: row.id, eventId: row.outgoing_event_id ?? row.event_id },
+          'meta capi purchase skipped: upsell order',
+        );
+        return;
+      }
       let responseStatus: number | null = null;
       let responseResult: Record<string, unknown> = {};
       try {

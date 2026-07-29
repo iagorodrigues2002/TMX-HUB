@@ -672,7 +672,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             `
           : [];
         const orderKind = productKind?.kind ?? 'unknown';
-        const [order] = await sql<{ id: string; status: string }[]>`
+        const [order] = await sql<{ id: string; status: string; order_kind: string }[]>`
           INSERT INTO tracking_orders
             (id, project_id, provider, external_id, status, amount_minor, currency,
              visitor_id, buyer, raw_status, occurred_at, paid_at, payment_method,
@@ -713,7 +713,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
               ELSE tracking_orders.order_kind
             END,
             updated_at = now()
-          RETURNING id, status
+          RETURNING id, status, order_kind
         `;
         if (!order) {
           return { inserted: true, deliveryIds: [], utmifyDeliveryIds: [] };
@@ -742,6 +742,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           if (rows[0]) utmifyDeliveryIds.push(rows[0].id);
         }
         if (order.status !== 'paid') {
+          return { inserted: true, deliveryIds: [], utmifyDeliveryIds };
+        }
+        // Meta receives only front-end sales. Upsell purchases would double-count
+        // the same buyer/click and distort campaign CPA, so they stop here —
+        // UTMify (above) still receives every order regardless of kind.
+        if (order.order_kind === 'upsell') {
           return { inserted: true, deliveryIds: [], utmifyDeliveryIds };
         }
         const [rules] = await sql<
