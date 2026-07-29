@@ -1698,9 +1698,21 @@ export const apiClient = {
       last_error?: string;
       created_at: string;
       delivered_at?: string;
+      campaign_id?: string;
+      adset_id?: string;
+      ad_id?: string;
+      placement?: string;
+      utmify_lead_id?: string;
+      utmify_event_id?: string;
     }>;
   }> {
     return request(`/v1/offers/${id}/tracking/utmify-web-events?date=${encodeURIComponent(date)}`);
+  },
+
+  async retryTrackingUtmifyWebEvent(id: string, deliveryId: string): Promise<void> {
+    await request(`/v1/offers/${id}/tracking/utmify-web-events/${deliveryId}/retry`, {
+      method: 'POST',
+    });
   },
 
   async saveTrackingUtmifyDestination(

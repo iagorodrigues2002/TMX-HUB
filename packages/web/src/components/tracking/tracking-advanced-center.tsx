@@ -296,6 +296,14 @@ export function TrackingAdvancedCenter({
     refetchInterval: 30_000,
     retry: false,
   });
+  const retryUtmifyWebEvent = useMutation({
+    mutationFn: (deliveryId: string) => apiClient.retryTrackingUtmifyWebEvent(offerId, deliveryId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['tracking-utmify-web-events', offerId] });
+      toast.success('IC reenfileirado para a UTMify.');
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
   const saveUtmify = useMutation({
     mutationFn: () =>
       apiClient.saveTrackingUtmifyDestination(offerId, {
@@ -1082,23 +1090,44 @@ export function TrackingAdvancedCenter({
                       <p className="mt-1 text-white/35">
                         Pixel {delivery.pixel_id} · {delivery.attempts} tentativa(s)
                       </p>
+                      <p className="mt-1 font-mono text-[10px] text-white/30">
+                        {delivery.campaign_id ?? 'sem campanha'} · {delivery.ad_id ?? 'sem anúncio'}{' '}
+                        · {delivery.placement ?? 'sem posicionamento'}
+                      </p>
+                      {delivery.utmify_event_id && (
+                        <p className="mt-1 font-mono text-[10px] text-emerald-200/45">
+                          Recibo UTMify: {delivery.utmify_event_id}
+                        </p>
+                      )}
                       {delivery.last_error && (
                         <p className="mt-1 max-w-2xl break-words text-red-200/70">
                           {delivery.last_error}
                         </p>
                       )}
                     </div>
-                    <span
-                      className={
-                        delivery.state === 'delivered'
-                          ? 'text-emerald-300'
-                          : delivery.state === 'failed' || delivery.state === 'dead'
-                            ? 'text-red-300'
-                            : 'text-amber-300'
-                      }
-                    >
-                      {delivery.state}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={
+                          delivery.state === 'delivered'
+                            ? 'text-emerald-300'
+                            : delivery.state === 'failed' || delivery.state === 'dead'
+                              ? 'text-red-300'
+                              : 'text-amber-300'
+                        }
+                      >
+                        {delivery.state}
+                      </span>
+                      {canManage && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={retryUtmifyWebEvent.isPending}
+                          onClick={() => retryUtmifyWebEvent.mutate(delivery.id)}
+                        >
+                          Reenviar
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 ))}
                 {!utmifyWebEvents.data?.deliveries?.length && (
