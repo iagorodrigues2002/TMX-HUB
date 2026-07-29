@@ -779,6 +779,54 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       });
     },
   );
+
+  app.post<{ Querystring: { token?: string } }>(
+    '/webhooks/vendepay/replay-quarantine',
+    { bodyLimit: 1024, logLevel: 'silent' },
+    async (req, reply) => {
+      if (!app.db || !req.query.token) return reply.code(404).send({ accepted: false });
+      const candidate = tokenHash(req.query.token);
+      const [connection] = await app.db<Array<{ id: string }>>`
+        SELECT id
+        FROM vendepay_connections
+        WHERE token_hash = ${candidate} AND enabled = true
+        LIMIT 1
+      `;
+      if (!connection) return reply.code(404).send({ accepted: false });
+
+      const receipts = await app.db<Array<{ id: string; payload: unknown }>>`
+        SELECT id, payload
+        FROM webhook_receipts
+        WHERE connection_id = ${connection.id}
+          AND state = 'quarantined'
+        ORDER BY received_at ASC
+        LIMIT 500
+      `;
+      let replayed = 0;
+      let stillQuarantined = 0;
+      let failed = 0;
+      for (const receipt of receipts) {
+        if (normalizeVendepay(receipt.payload).kind !== 'processable') {
+          stillQuarantined += 1;
+          continue;
+        }
+        const response = await app.inject({
+          method: 'POST',
+          url: `/webhooks/vendepay?token=${encodeURIComponent(req.query.token)}`,
+          payload: receipt.payload as Record<string, unknown>,
+        });
+        if (response.statusCode >= 200 && response.statusCode < 300) replayed += 1;
+        else failed += 1;
+      }
+      return reply.send({
+        accepted: true,
+        inspected: receipts.length,
+        replayed,
+        still_quarantined: stillQuarantined,
+        failed,
+      });
+    },
+  );
 };
 
 export default plugin;
