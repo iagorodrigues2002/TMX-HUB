@@ -236,16 +236,23 @@ export function TrackingLiveConsole({
                 ).size,
               },
               {
-                label: 'Visitantes',
+                label: 'Cliques TMX',
+                value: (attribution.data?.rows ?? []).reduce(
+                  (total, row) => total + row.unique_ad_clicks,
+                  0,
+                ),
+              },
+              {
+                label: 'Conectados',
                 value: (attribution.data?.rows ?? []).reduce(
                   (total, row) => total + row.visitors,
                   0,
                 ),
               },
               {
-                label: 'Checkouts',
+                label: 'ICs únicos',
                 value: (attribution.data?.rows ?? []).reduce(
-                  (total, row) => total + row.checkouts,
+                  (total, row) => total + row.unique_checkouts,
                   0,
                 ),
               },
@@ -277,7 +284,9 @@ export function TrackingLiveConsole({
                     'Conjunto',
                     'Anúncio',
                     'Origem',
+                    'Cliques',
                     'Visitas',
+                    'Connect Rate',
                     'IC',
                     'Conv. IC',
                     'Pedidos',
@@ -316,12 +325,22 @@ export function TrackingLiveConsole({
                     </td>
                     <td className="px-4 py-3 text-white/55">{row.source}</td>
                     <td className="px-4 py-3">
+                      <p className="font-mono text-white">{row.unique_ad_clicks}</p>
+                      <p className="mt-1 text-[10px] text-white/30">{row.ad_clicks} totais</p>
+                    </td>
+                    <td className="px-4 py-3">
                       <p className="font-mono text-white">{row.visitors}</p>
                       <p className="mt-1 text-[10px] text-white/30">{row.page_views} pageviews</p>
                     </td>
-                    <td className="px-4 py-3 font-mono text-cyan-200">{row.checkouts}</td>
+                    <td className="px-4 py-3 font-mono text-emerald-200">
+                      {percentage(row.visitors, row.unique_ad_clicks)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="font-mono text-cyan-200">{row.unique_checkouts}</p>
+                      <p className="mt-1 text-[10px] text-white/30">{row.checkouts} disparos</p>
+                    </td>
                     <td className="px-4 py-3 font-mono text-cyan-200">
-                      {percentage(row.checkouts, row.visitors)}
+                      {percentage(row.unique_checkouts, row.visitors)}
                     </td>
                     <td className="px-4 py-3 font-mono text-white">{row.orders}</td>
                     <td className="px-4 py-3 font-mono text-emerald-200">{row.paid_orders}</td>
@@ -603,7 +622,7 @@ export function TrackingLiveConsole({
           <div className="grid gap-px bg-white/[0.06] sm:grid-cols-4">
             {[
               ['Visitas', s?.visitors ?? 0],
-              ['Checkouts', s?.checkouts ?? 0],
+              ['Checkouts', `${s?.checkouts ?? 0} únicos · ${s?.checkout_events ?? 0} disparos`],
               ['Compradores', buyers],
               ['Faturamento', money(s?.paid_revenue_minor)],
             ].map(([label, value]) => (

@@ -1244,6 +1244,7 @@ export const apiClient = {
     visitors: number;
     page_views: number;
     checkouts: number;
+    checkout_events: number;
     orders: number;
     paid_orders: number;
     orphan_orders: number;
@@ -1307,6 +1308,16 @@ export const apiClient = {
         position: number;
       }>;
     }>;
+    entry_links: Array<{
+      id: string;
+      name: string;
+      slug: string;
+      destination_url: string;
+      tracking_url: string;
+      enabled: boolean;
+      created_at: string;
+      updated_at: string;
+    }>;
     vturb: { enabled: boolean; endpoint_url?: string };
     domain_setup: { record_type: 'CNAME'; target: string; note: string };
   }> {
@@ -1359,6 +1370,17 @@ export const apiClient = {
     },
   ): Promise<void> {
     await request(`/v1/offers/${id}/tracking/ab-tests`, { method: 'POST', body });
+  },
+
+  async createTrackingEntryLink(
+    id: string,
+    body: { name: string; destination_url: string },
+  ): Promise<void> {
+    await request(`/v1/offers/${id}/tracking/entry-links`, { method: 'POST', body });
+  },
+
+  async deleteTrackingEntryLink(id: string, linkId: string): Promise<void> {
+    await request(`/v1/offers/${id}/tracking/entry-links/${linkId}`, { method: 'DELETE' });
   },
 
   async deleteTrackingAbTest(id: string, testId: string): Promise<void> {
@@ -1508,9 +1530,12 @@ export const apiClient = {
       ad_name: string;
       ad_id?: string;
       placement: string;
+      ad_clicks: number;
+      unique_ad_clicks: number;
       page_views: number;
       visitors: number;
       checkouts: number;
+      unique_checkouts: number;
       orders: number;
       paid_orders: number;
       refused_orders: number;

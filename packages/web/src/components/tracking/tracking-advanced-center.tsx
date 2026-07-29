@@ -124,6 +124,8 @@ export function TrackingAdvancedCenter({
   const [trafficA, setTrafficA] = useState('50');
   const [destinationA, setDestinationA] = useState('');
   const [destinationB, setDestinationB] = useState('');
+  const [entryLinkName, setEntryLinkName] = useState('');
+  const [entryDestination, setEntryDestination] = useState('');
   const [vendepayWebhook, setVendepayWebhook] = useState('');
   const [vendepaySigningSecret, setVendepaySigningSecret] = useState('');
   const [vendepayPayload, setVendepayPayload] = useState(vendepaySample);
@@ -242,6 +244,28 @@ export function TrackingAdvancedCenter({
       setDestinationB('');
       void refresh();
       toast.success('Teste A/B ativado.');
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
+  const createEntryLink = useMutation({
+    mutationFn: () =>
+      apiClient.createTrackingEntryLink(offerId, {
+        name: entryLinkName,
+        destination_url: entryDestination,
+      }),
+    onSuccess: () => {
+      setEntryLinkName('');
+      setEntryDestination('');
+      void refresh();
+      toast.success('Link de entrada criado.');
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
+  const removeEntryLink = useMutation({
+    mutationFn: (linkId: string) => apiClient.deleteTrackingEntryLink(offerId, linkId),
+    onSuccess: () => {
+      void refresh();
+      toast.success('Link de entrada removido.');
     },
     onError: (error) => toast.error((error as Error).message),
   });
@@ -896,9 +920,7 @@ export function TrackingAdvancedCenter({
                           </p>
                           <p className="mt-1 text-white/35">
                             Pixel {delivery.pixel_id} · {delivery.attempts} tentativa(s)
-                            {delivery.response_status
-                              ? ` · HTTP ${delivery.response_status}`
-                              : ''}
+                            {delivery.response_status ? ` · HTTP ${delivery.response_status}` : ''}
                           </p>
                         </div>
                         <span
@@ -1140,9 +1162,101 @@ export function TrackingAdvancedCenter({
         )}
         {section === 'ab' && (
           <Module
-            title="Testes A/B"
-            description="Divide o tráfego e elege o braço com maior receita por visitante. Apenas um teste fica ativo por oferta."
+            title="Links e testes A/B"
+            description="Mede a conexão entre o clique do anúncio e o carregamento real, além de dividir o tráfego entre variantes."
           >
+            <div className="mb-6 rounded-2xl border border-emerald-300/15 bg-emerald-300/[0.035] p-4">
+              <p className="hud-label text-emerald-200">Connect Rate · 100% TMX</p>
+              <h3 className="mt-2 text-base font-semibold text-white">
+                Link de entrada do anúncio
+              </h3>
+              <p className="mt-2 text-xs leading-5 text-white/55">
+                Use este link como destino no anúncio. O TMX registra o clique antes do
+                redirecionamento, preserva todos os parâmetros e confirma a conexão quando o script
+                envia o PageView.
+              </p>
+              {canManage && (
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <Input
+                    value={entryLinkName}
+                    onChange={(event) => setEntryLinkName(event.target.value)}
+                    placeholder="Nome, ex.: Entrada PJR"
+                  />
+                  <Input
+                    value={entryDestination}
+                    onChange={(event) => setEntryDestination(event.target.value)}
+                    placeholder="URL final da landing page"
+                  />
+                  <Button
+                    className="md:col-span-2"
+                    disabled={
+                      entryLinkName.trim().length < 2 ||
+                      !entryDestination.startsWith('http') ||
+                      createEntryLink.isPending
+                    }
+                    onClick={() => createEntryLink.mutate()}
+                  >
+                    Criar link de entrada
+                  </Button>
+                </div>
+              )}
+              <div className="mt-4 space-y-3">
+                {(advanced.data?.entry_links ?? []).map((link) => (
+                  <div
+                    key={link.id}
+                    className="rounded-xl border border-white/[0.08] bg-black/10 p-4"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-medium text-white/85">{link.name}</p>
+                        <p className="mt-1 truncate text-xs text-white/40">
+                          Destino: {link.destination_url}
+                        </p>
+                      </div>
+                      <span className="text-xs text-emerald-300">Ativo</span>
+                    </div>
+                    <code className="mt-3 block overflow-x-auto whitespace-nowrap rounded-lg bg-black/20 p-3 text-xs text-cyan-100/75">
+                      {link.tracking_url}
+                    </code>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        onClick={async () => {
+                          await navigator.clipboard.writeText(link.tracking_url);
+                          toast.success('Link de entrada copiado.');
+                        }}
+                      >
+                        <Copy className="mr-2 h-3.5 w-3.5" />
+                        Copiar para o anúncio
+                      </Button>
+                      <Button asChild size="sm" variant="outline">
+                        <a
+                          href={`${link.tracking_url}?tmx_preview=1`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Testar sem contabilizar
+                        </a>
+                      </Button>
+                      {canManage && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={removeEntryLink.isPending}
+                          onClick={() => {
+                            if (window.confirm(`Remover o link "${link.name}"?`)) {
+                              removeEntryLink.mutate(link.id);
+                            }
+                          }}
+                        >
+                          Remover
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
             {canManage && (
               <div className="grid gap-3 md:grid-cols-2">
                 <Input

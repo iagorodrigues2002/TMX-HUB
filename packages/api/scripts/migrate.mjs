@@ -22,6 +22,7 @@ for (const name of [
   '010_utmify_web_events.sql',
   '011_utmify_pixel_mapping.sql',
   '012_delivery_evidence.sql',
+  '013_tracking_entry_links.sql',
 ]) {
   const migration = await readFile(new URL(`../migrations/${name}`, import.meta.url), 'utf8');
   await sql.unsafe(migration);

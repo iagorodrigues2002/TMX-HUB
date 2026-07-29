@@ -52,6 +52,10 @@ const AbControlSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('resume') }),
   z.object({ action: z.literal('select_winner'), variant_id: z.string().min(8).max(40) }),
 ]);
+const EntryLinkSchema = z.object({
+  name: z.string().trim().min(2).max(120),
+  destination_url: z.string().url().max(4096),
+});
 
 function parsed<T>(schema: z.ZodSchema<T>, value: unknown): T {
   const result = schema.safeParse(value);
@@ -63,6 +67,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   const cnameTarget = new URL(env.PUBLIC_BASE_URL).hostname;
   const redirectUrl = (testId: string) =>
     `${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/link/${testId}`;
+  const entryUrl = (slug: string) =>
+    `${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/c/${slug}`;
   async function project(offerId: string, userId: string, admin: boolean, manage = false) {
     if (manage) await app.offerStore.assertManager(offerId, userId, admin);
     else await app.offerStore.assertAccess(offerId, userId, admin);
@@ -77,7 +83,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin');
     if (!app.db) return reply.code(503).send(databaseUnavailable);
     if (!p) return { configured: false };
-    const [domains, gateways, rules, tests, vturb] = await Promise.all([
+    const [domains, gateways, rules, tests, entryLinks, vturb] = await Promise.all([
       app.db`SELECT id, hostname, kind, dns_target, dns_records, dns_verified_at, enabled, status,
                     last_error, last_checked_at, created_at
              FROM tracking_domains WHERE project_id=${p.id} ORDER BY created_at DESC`,
@@ -95,6 +101,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         FROM tracking_ab_tests t LEFT JOIN tracking_ab_variants v ON v.test_id=t.id
         WHERE t.project_id=${p.id}
         GROUP BY t.id ORDER BY t.created_at DESC`,
+      app.db`
+        SELECT id, name, slug, destination_url, enabled, created_at, updated_at
+        FROM tracking_entry_links
+        WHERE project_id=${p.id}
+        ORDER BY created_at DESC`,
       app.db`SELECT enabled, endpoint_url, updated_at FROM vturb_integrations WHERE project_id=${p.id}`,
     ]);
     return {
@@ -115,6 +126,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         ...test,
         redirect_url: redirectUrl(String(test.id)),
       })),
+      entry_links: entryLinks.map((link) => ({
+        ...link,
+        tracking_url: entryUrl(String(link.slug)),
+      })),
       domain_setup: {
         record_type: 'CNAME',
         target: cnameTarget,
@@ -123,6 +138,35 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       vturb: vturb[0] ?? { enabled: false, endpoint_url: null },
     };
   });
+
+  app.post<{ Params: { id: string } }>('/offers/:id/tracking/entry-links', async (req, reply) => {
+    const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin', true);
+    if (!app.db) return reply.code(503).send(databaseUnavailable);
+    if (!p) return reply.code(409).send({ error: 'tracking_not_configured' });
+    const body = parsed(EntryLinkSchema, req.body);
+    const slug = ulid().toLowerCase();
+    const [row] = await app.db`
+        INSERT INTO tracking_entry_links
+          (id, project_id, name, slug, destination_url)
+        VALUES (${ulid()}, ${p.id}, ${body.name}, ${slug}, ${body.destination_url})
+        RETURNING id, name, slug, destination_url, enabled, created_at, updated_at
+      `;
+    return reply.code(201).send({ ...row, tracking_url: entryUrl(slug) });
+  });
+
+  app.delete<{ Params: { id: string; linkId: string } }>(
+    '/offers/:id/tracking/entry-links/:linkId',
+    async (req, reply) => {
+      const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin', true);
+      if (!app.db) return reply.code(503).send(databaseUnavailable);
+      if (!p) return reply.code(404).send({ error: 'tracking_not_configured' });
+      await app.db`
+        DELETE FROM tracking_entry_links
+        WHERE id=${req.params.linkId} AND project_id=${p.id}
+      `;
+      return reply.code(204).send();
+    },
+  );
 
   app.post<{ Params: { id: string } }>('/offers/:id/tracking/domains', async (req, reply) => {
     const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin', true);

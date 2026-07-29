@@ -852,7 +852,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           JOIN tracking_projects p ON p.id = e.project_id
           WHERE p.offer_id = ${req.params.id}
             AND e.received_at >= ${from} AND e.received_at < ${to}
-            AND e.event_name IN ('PageView', 'InitiateCheckout')
+            AND e.event_name IN ('AdClick', 'PageView', 'InitiateCheckout')
           GROUP BY 1
         ),
         order_counts AS (
@@ -997,7 +997,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           placement,
           count(*) FILTER (WHERE event_name = 'PageView')::int AS page_views,
           count(DISTINCT visitor_id) FILTER (WHERE event_name = 'PageView')::int AS visitors,
+          count(*) FILTER (WHERE event_name = 'AdClick')::int AS ad_clicks,
+          count(DISTINCT visitor_id) FILTER (WHERE event_name = 'AdClick')::int
+            AS unique_ad_clicks,
           count(*) FILTER (WHERE event_name = 'InitiateCheckout')::int AS checkouts,
+          count(DISTINCT visitor_id) FILTER (WHERE event_name = 'InitiateCheckout')::int
+            AS unique_checkouts,
           count(*) FILTER (WHERE order_status IS NOT NULL)::int AS orders,
           count(*) FILTER (WHERE order_status = 'paid')::int AS paid_orders,
           count(*) FILTER (WHERE order_status IN ('refused', 'cancelled'))::int
@@ -1057,6 +1062,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           visitors: number;
           page_views: number;
           checkouts: number;
+          checkout_events: number;
           orders: number;
           paid_orders: number;
           orphan_orders: number;
@@ -1072,9 +1078,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         (SELECT count(*)::int FROM tracking_events e
           WHERE e.project_id = p.id AND e.event_name = 'PageView'
             AND e.received_at >= ${from} AND e.received_at < ${to}) AS page_views,
-        (SELECT count(*)::int FROM tracking_events e
+        (SELECT count(DISTINCT e.visitor_id)::int FROM tracking_events e
           WHERE e.project_id = p.id AND e.event_name = 'InitiateCheckout'
             AND e.received_at >= ${from} AND e.received_at < ${to}) AS checkouts,
+        (SELECT count(*)::int FROM tracking_events e
+          WHERE e.project_id = p.id AND e.event_name = 'InitiateCheckout'
+            AND e.received_at >= ${from} AND e.received_at < ${to}) AS checkout_events,
         (SELECT count(*)::int FROM tracking_orders o WHERE o.project_id = p.id
           AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS orders,
         (SELECT count(*)::int FROM tracking_orders o
@@ -1097,6 +1106,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           visitors: 0,
           page_views: 0,
           checkouts: 0,
+          checkout_events: 0,
           orders: 0,
           paid_orders: 0,
           orphan_orders: 0,

@@ -47,6 +47,10 @@ type AbRedirectRequest = FastifyRequest<{
   Params: { testId: string };
   Querystring: Record<string, string | undefined>;
 }>;
+type EntryRedirectRequest = FastifyRequest<{
+  Params: { slug: string };
+  Querystring: Record<string, string | undefined>;
+}>;
 
 const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex');
 const attributionQueryKeys = new Set([
@@ -191,20 +195,22 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       SELECT pixel_id FROM meta_pixels
       WHERE project_id = ${project.id} AND enabled = true
     `;
-    return reply
-      .header('content-type', 'application/javascript; charset=utf-8')
-      // Tracking fixes and pixel changes must reach live funnels immediately.
-      // Cloudflare was overriding the browser TTL to four hours, leaving old
-      // checkout logic active after a deploy.
-      .header('cache-control', 'no-store, no-cache, must-revalidate')
-      .header('cloudflare-cdn-cache-control', 'no-store')
-      .header('cdn-cache-control', 'no-store')
-      .send(
-        buildTrackerScript(
-          req.query.key,
-          pixels.map((pixel) => pixel.pixel_id),
-        ),
-      );
+    return (
+      reply
+        .header('content-type', 'application/javascript; charset=utf-8')
+        // Tracking fixes and pixel changes must reach live funnels immediately.
+        // Cloudflare was overriding the browser TTL to four hours, leaving old
+        // checkout logic active after a deploy.
+        .header('cache-control', 'no-store, no-cache, must-revalidate')
+        .header('cloudflare-cdn-cache-control', 'no-store')
+        .header('cdn-cache-control', 'no-store')
+        .send(
+          buildTrackerScript(
+            req.query.key,
+            pixels.map((pixel) => pixel.pixel_id),
+          ),
+        )
+    );
   });
 
   app.post('/track/bootstrap', { bodyLimit: 64 * 1024 }, async (req, reply) => {
@@ -320,6 +326,60 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       kind: test.kind,
       variant: selected,
     };
+  });
+
+  app.get('/c/:slug', async (req: EntryRedirectRequest, reply: FastifyReply) => {
+    if (!app.db) return reply.code(503).send({ error: 'tracking_unavailable' });
+    const [link] = await app.db<
+      Array<{ id: string; project_id: string; destination_url: string; enabled: boolean }>
+    >`
+      SELECT id, project_id, destination_url, enabled
+      FROM tracking_entry_links
+      WHERE slug=${req.params.slug}
+      LIMIT 1
+    `;
+    if (!link?.enabled) return reply.code(404).send({ error: 'entry_link_inactive' });
+    const destination = new URL(link.destination_url);
+    for (const [key, value] of Object.entries(req.query)) {
+      if (!value || key === 'tmx_preview') continue;
+      destination.searchParams.set(key, value);
+    }
+    const visitorId = cookieValue(req.headers.cookie, '_tmx_entry_v') || ulid();
+    const journeyId = ulid();
+    const source = extractAttributionQuery(req.query);
+    const country = requestCountry(req.headers);
+    const userAgent = req.headers['user-agent'] ?? '';
+    const previewOrBot =
+      req.query.tmx_preview === '1' ||
+      /facebookexternalhit|facebot|meta-externalagent|meta-externalfetcher|bot|crawler|spider|preview/i.test(
+        userAgent,
+      );
+    if (!previewOrBot) {
+      await app.db`
+        INSERT INTO tracking_events
+          (id, project_id, visitor_id, journey_id, event_name, event_category,
+           event_url, source, properties, client_ip, user_agent, received_at)
+        VALUES
+          (${ulid()}, ${link.project_id}, ${visitorId}, ${journeyId}, 'AdClick', 'acquisition',
+           ${`${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/c/${req.params.slug}`},
+           ${app.db.json({
+             ...source,
+             ...(country ? { country } : {}),
+           } as never)},
+           ${app.db.json({ entry_link_id: link.id } as never)},
+           ${req.ip}, ${userAgent || null}, now())
+      `;
+    }
+    const trackingToken = createTrackingToken(
+      { projectId: link.project_id, visitorId, journeyId },
+      env.WEBHOOK_SECRET,
+    );
+    destination.searchParams.set('src', trackingToken);
+    reply.header(
+      'set-cookie',
+      `_tmx_entry_v=${visitorId}; Path=/; Max-Age=31536000; HttpOnly; Secure; SameSite=Lax`,
+    );
+    return reply.redirect(destination.toString(), 302);
   });
 
   const abRedirectHandler = async (req: AbRedirectRequest, reply: FastifyReply) => {
@@ -489,8 +549,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         (${redirectEventId}, ${test.project_id}, ${visitorId}, ${journeyId}, 'InitiateCheckout',
          'commerce', ${redirectEventUrl},
          ${app.db.json({
-           ...(attributionTouch?.source ?? {}),
            ...redirectAttribution,
+           // The landing is the authoritative ad touch. Static UTMs pasted into a
+           // checkout button must not overwrite the real campaign/ad that brought
+           // the visitor to the funnel.
+           ...(attributionTouch?.source ?? {}),
            ...(redirectCountry ? { country: redirectCountry } : {}),
          } as never)},
          ${app.db.json({
