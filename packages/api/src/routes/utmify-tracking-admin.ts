@@ -81,10 +81,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       const deliveries = await app.db`
         SELECT d.id, d.event_id, d.event_type, d.state, d.attempts,
                d.response_status, d.last_error, d.created_at, d.delivered_at,
-               o.external_id AS transaction_id, o.status AS order_status
+               COALESCE(o.external_id, 'TMX-IC-' || d.event_id) AS transaction_id,
+               COALESCE(o.status, 'pending') AS order_status
         FROM tracking_delivery_outbox d
         JOIN tracking_projects p ON p.id = d.project_id
-        JOIN tracking_orders o ON o.id = d.order_id
+        LEFT JOIN tracking_orders o ON o.id = d.order_id
         WHERE p.offer_id = ${req.params.id} AND d.destination_kind = 'utmify'
         ORDER BY d.created_at DESC
         LIMIT 100

@@ -40,29 +40,40 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
         }>
       >`
         SELECT d.id, u.endpoint_url, u.api_token_encrypted,
-               o.external_id, o.provider, o.status, o.amount_minor, o.currency,
-               o.buyer, o.occurred_at, o.paid_at,
-               o.attribution_source ||
+               COALESCE(o.external_id, 'TMX-IC-' || d.event_id) AS external_id,
+               COALESCE(o.provider, 'tmx') AS provider,
+               COALESCE(o.status, 'pending') AS status,
+               COALESCE(o.amount_minor, 0) AS amount_minor,
+               COALESCE(o.currency, 'BRL') AS currency,
+               COALESCE(o.buyer, '{}'::jsonb) AS buyer,
+               COALESCE(o.occurred_at, direct_event.received_at, d.created_at) AS occurred_at,
+               o.paid_at,
+               COALESCE(o.attribution_source, '{}'::jsonb) ||
                jsonb_strip_nulls(jsonb_build_object(
-                 'payment_method', o.payment_method,
+                 'payment_method', COALESCE(o.payment_method, 'pix'),
                  'product_id', o.product->>'id',
                  'product_name', o.product->>'name',
                  'plan_id', o.product->>'planId',
                  'plan_name', o.product->>'planName'
                )) ||
+               COALESCE(direct_event.source, '{}'::jsonb) ||
                COALESCE((
                  SELECT te.source FROM tracking_events te
-                 WHERE te.project_id = o.project_id AND te.visitor_id = o.visitor_id
+                 WHERE te.project_id = d.project_id
+                   AND te.visitor_id = COALESCE(o.visitor_id, direct_event.visitor_id)
                  ORDER BY te.received_at DESC LIMIT 1
                ), '{}'::jsonb) AS source,
-               (
+               COALESCE(direct_event.client_ip, (
                  SELECT te.client_ip FROM tracking_events te
-                 WHERE te.project_id = o.project_id AND te.visitor_id = o.visitor_id
+                 WHERE te.project_id = d.project_id
+                   AND te.visitor_id = COALESCE(o.visitor_id, direct_event.visitor_id)
                  ORDER BY te.received_at DESC LIMIT 1
-               ) AS client_ip
+               )) AS client_ip
         FROM tracking_delivery_outbox d
         JOIN tracking_utmify_destinations u ON u.id = d.destination_id AND u.enabled = true
-        JOIN tracking_orders o ON o.id = d.order_id
+        LEFT JOIN tracking_orders o ON o.id = d.order_id
+        LEFT JOIN tracking_events direct_event
+          ON direct_event.project_id = d.project_id AND direct_event.id = d.event_id
         WHERE d.id = ${job.data.deliveryId}
           AND d.destination_kind = 'utmify'
           AND d.state <> 'delivered'

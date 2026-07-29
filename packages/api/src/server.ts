@@ -51,10 +51,12 @@ export async function buildApp() {
 
 async function main() {
   const app = await buildApp();
-  if (app.db) {
+  const recoverTrackingDeliveries = async () => {
+    if (!app.db) return;
     const pending = await app.db<{ id: string }[]>`
       SELECT id FROM meta_deliveries
       WHERE state IN ('pending', 'failed')
+        AND attempts < 8
       ORDER BY created_at ASC
       LIMIT 1000
     `;
@@ -74,7 +76,14 @@ async function main() {
         app.utmifyDeliveryQueue.add('send', { deliveryId: id }, { jobId: id }),
       ),
     );
-  }
+  };
+  await recoverTrackingDeliveries();
+  const trackingRecoveryTimer = setInterval(() => {
+    void recoverTrackingDeliveries().catch((error) =>
+      app.log.error({ error }, 'tracking delivery recovery failed'),
+    );
+  }, 30_000);
+  trackingRecoveryTimer.unref();
 
   // NOTE(workers): For dev simplicity we run the workers in the same Node
   // process as the HTTP server. In production these should run as separate
@@ -122,6 +131,7 @@ async function main() {
     shuttingDown = true;
     app.log.info({ signal }, 'shutdown initiated');
     try {
+      clearInterval(trackingRecoveryTimer);
       app.utmifySync.stop();
       // Stop accepting new requests first.
       await app.close();

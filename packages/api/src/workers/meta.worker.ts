@@ -23,6 +23,8 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
         Array<{
           id: string;
           event_id: string;
+          event_name: 'InitiateCheckout' | 'Purchase';
+          event_at: Date;
           pixel_external_id: string;
           access_token_encrypted: string;
           test_event_code: string | null;
@@ -38,37 +40,53 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
           user_agent: string | null;
         }>
       >`
-        SELECT md.id, md.event_id, mp.pixel_id AS pixel_external_id,
+        SELECT md.id, md.event_id, md.event_name, COALESCE(md.event_at, direct_event.received_at,
+                 o.paid_at, o.occurred_at) AS event_at,
+               mp.pixel_id AS pixel_external_id,
                mp.access_token_encrypted, mp.test_event_code,
-               o.external_id, o.amount_minor, o.currency, o.buyer, o.paid_at, o.visitor_id,
-               (
+               COALESCE(o.external_id, 'TMX-IC-' || md.event_id) AS external_id,
+               COALESCE(o.amount_minor, 0) AS amount_minor,
+               COALESCE(o.currency, 'BRL') AS currency,
+               COALESCE(o.buyer, '{}'::jsonb) AS buyer, o.paid_at,
+               COALESCE(o.visitor_id, direct_event.visitor_id) AS visitor_id,
+               COALESCE(direct_event.event_url, (
                  SELECT te.event_url FROM tracking_events te
-                 WHERE te.project_id = o.project_id AND te.visitor_id = o.visitor_id
+                 WHERE te.project_id = md.project_id
+                   AND te.visitor_id = COALESCE(o.visitor_id, direct_event.visitor_id)
                  ORDER BY te.received_at DESC LIMIT 1
-               ) AS event_url,
-               o.attribution_source || COALESCE((
+               )) AS event_url,
+               COALESCE(o.attribution_source, '{}'::jsonb) ||
+               COALESCE(direct_event.source, '{}'::jsonb) || COALESCE((
                  SELECT te.source FROM tracking_events te
-                 WHERE te.project_id = o.project_id AND te.visitor_id = o.visitor_id
+                 WHERE te.project_id = md.project_id
+                   AND te.visitor_id = COALESCE(o.visitor_id, direct_event.visitor_id)
                  ORDER BY te.received_at DESC LIMIT 1
                ), '{}'::jsonb) AS source,
-               (
+               COALESCE(direct_event.client_ip, (
                  SELECT te.client_ip FROM tracking_events te
-                 WHERE te.project_id = o.project_id AND te.visitor_id = o.visitor_id
+                 WHERE te.project_id = md.project_id
+                   AND te.visitor_id = COALESCE(o.visitor_id, direct_event.visitor_id)
                  ORDER BY te.received_at DESC LIMIT 1
-               ) AS client_ip,
-               (
+               )) AS client_ip,
+               COALESCE(direct_event.user_agent, (
                  SELECT te.user_agent FROM tracking_events te
-                 WHERE te.project_id = o.project_id AND te.visitor_id = o.visitor_id
+                 WHERE te.project_id = md.project_id
+                   AND te.visitor_id = COALESCE(o.visitor_id, direct_event.visitor_id)
                  ORDER BY te.received_at DESC LIMIT 1
-               ) AS user_agent
+               )) AS user_agent
         FROM meta_deliveries md
         JOIN meta_pixels mp ON mp.id = md.pixel_id AND mp.enabled = true
-        JOIN tracking_orders o ON o.id = md.order_id
+        LEFT JOIN tracking_orders o ON o.id = md.order_id
+        LEFT JOIN tracking_events direct_event
+          ON direct_event.project_id = md.project_id AND direct_event.id = md.event_id
         WHERE md.id = ${job.data.deliveryId} AND md.state <> 'delivered'
       `;
       if (!row) return;
       try {
-        if (row.amount_minor === null || !row.currency || !row.paid_at) {
+        if (
+          row.event_name === 'Purchase' &&
+          (row.amount_minor === null || !row.currency || !row.paid_at)
+        ) {
           throw new Error('Purchase incompleto: valor, moeda ou data de pagamento ausente.');
         }
         const userData: Record<string, string | string[]> = {};
@@ -79,7 +97,9 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
         if (row.source?._fbc) userData.fbc = row.source._fbc;
         if (!row.source?._fbc && row.source?.fbclid) {
           const clickTime = Number(row.source._fbclid_ts);
-          const timestamp = Number.isFinite(clickTime) ? clickTime : new Date(row.paid_at).getTime();
+          const timestamp = Number.isFinite(clickTime)
+            ? clickTime
+            : new Date(row.event_at).getTime();
           userData.fbc = `fb.1.${timestamp}.${row.source.fbclid}`;
         }
         if (row.client_ip) userData.client_ip_address = row.client_ip;
@@ -87,17 +107,23 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
         const payload: Record<string, unknown> = {
           data: [
             {
-              event_name: 'Purchase',
-              event_time: Math.floor(new Date(row.paid_at).getTime() / 1000),
+              event_name: row.event_name,
+              event_time: Math.floor(new Date(row.event_at).getTime() / 1000),
               event_id: row.event_id,
               action_source: 'website',
               ...(row.event_url ? { event_source_url: row.event_url } : {}),
               user_data: userData,
-              custom_data: {
-                order_id: row.external_id,
-                value: row.amount_minor / 100,
-                currency: row.currency,
-              },
+              custom_data:
+                row.event_name === 'Purchase'
+                  ? {
+                      order_id: row.external_id,
+                      value: (row.amount_minor ?? 0) / 100,
+                      currency: row.currency,
+                    }
+                  : {
+                      content_name: 'Checkout',
+                      currency: row.currency,
+                    },
             },
           ],
           ...(row.test_event_code ? { test_event_code: row.test_event_code } : {}),

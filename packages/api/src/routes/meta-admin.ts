@@ -232,12 +232,13 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       const deliveries = await app.db`
       SELECT md.id, md.event_id, md.state, md.attempts, md.last_error,
              md.response, md.created_at, md.delivered_at,
+             md.event_name,
              mp.name AS pixel_name, mp.pixel_id,
-             o.external_id AS transaction_id
+             COALESCE(o.external_id, 'TMX-IC-' || md.event_id) AS transaction_id
       FROM meta_deliveries md
       JOIN tracking_projects tp ON tp.id = md.project_id
       JOIN meta_pixels mp ON mp.id = md.pixel_id
-      JOIN tracking_orders o ON o.id = md.order_id
+      LEFT JOIN tracking_orders o ON o.id = md.order_id
       WHERE tp.offer_id = ${req.params.id}
       ORDER BY md.created_at DESC
       LIMIT 100
