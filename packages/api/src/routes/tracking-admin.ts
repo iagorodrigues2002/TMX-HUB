@@ -718,6 +718,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!app.db) return reply.code(503).send({ receipts: [] });
       const receipts = await app.db`
         SELECT r.id, r.state, r.diagnostics, r.received_at, r.processed_at,
+               r.payload,
                o.external_id AS transaction_id, o.status AS order_status,
                o.amount_minor, o.currency, o.payment_method, o.product
         FROM webhook_receipts r
