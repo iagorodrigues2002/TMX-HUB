@@ -29,14 +29,14 @@ export function createUtmifyWebEventWorker(): Worker<UtmifyWebEventJobData> | nu
           user_agent: string | null;
         }>
       >`
-        SELECT ue.id, ue.event_name, mp.pixel_id AS pixel_external_id,
+        SELECT ue.id, ue.event_name, ue.external_pixel_id AS pixel_external_id,
                te.event_url, te.page_title, te.source, te.client_ip, te.user_agent
         FROM tracking_utmify_web_events ue
-        JOIN meta_pixels mp ON mp.id = ue.pixel_id AND mp.enabled = true
         JOIN tracking_events te
           ON te.project_id = ue.project_id AND te.id = ue.event_id
         WHERE ue.id = ${job.data.deliveryId}
           AND ue.state <> 'delivered'
+          AND ue.external_pixel_id IS NOT NULL
       `;
       if (!row) return;
       try {

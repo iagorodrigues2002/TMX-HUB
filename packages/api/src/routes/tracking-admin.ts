@@ -90,8 +90,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
       if (!app.db) return reply.code(503).send(databaseUnavailable);
       const { date, from, to } = parseTrackingDate(req.query);
-      const [project] = await app.db<{ id: string }[]>`
-        SELECT id FROM tracking_projects
+      const [project] = await app.db<{ id: string; utmify_pixel_id: string | null }[]>`
+        SELECT id, utmify_pixel_id FROM tracking_projects
         WHERE offer_id = ${req.params.id} AND enabled = true
       `;
       if (!project) throw new NotFoundError('Projeto de tracking não encontrado.');
@@ -109,6 +109,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         const pixels = await sql<{ id: string }[]>`
           SELECT id FROM meta_pixels
           WHERE project_id = ${project.id} AND enabled = true
+          ORDER BY created_at ASC
         `;
         const meta: Array<{ id: string }> = [];
         const utmifyWebEvents: Array<{ id: string }> = [];
@@ -136,19 +137,25 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
               RETURNING id
             `;
             if (rows[0]) meta.push(rows[0]);
+          }
+          const referencePixel = pixels[0];
+          if (project.utmify_pixel_id && referencePixel) {
             const utmifyRows = await sql<{ id: string }[]>`
-              INSERT INTO tracking_utmify_web_events AS existing
-                (id, project_id, pixel_id, event_id, event_name)
-              VALUES
-                (${ulid()}, ${project.id}, ${pixel.id}, ${event.id}, 'InitiateCheckout')
-              ON CONFLICT (pixel_id, event_id) DO UPDATE SET
-                state = 'pending',
-                attempts = 0,
-                last_error = NULL,
-                next_attempt_at = now()
-              WHERE existing.state <> 'delivered'
-              RETURNING id
-            `;
+                INSERT INTO tracking_utmify_web_events AS existing
+                  (id, project_id, pixel_id, external_pixel_id, event_id, event_name)
+                VALUES
+                  (${ulid()}, ${project.id}, ${referencePixel.id}, ${project.utmify_pixel_id},
+                   ${event.id}, 'InitiateCheckout')
+                ON CONFLICT (pixel_id, event_id) DO UPDATE SET
+                  external_pixel_id = EXCLUDED.external_pixel_id,
+                  state = 'pending',
+                  attempts = 0,
+                  last_error = NULL,
+                  next_attempt_at = now()
+                WHERE existing.state <> 'delivered'
+                   OR existing.external_pixel_id <> EXCLUDED.external_pixel_id
+                RETURNING id
+              `;
             if (utmifyRows[0]) utmifyWebEvents.push(utmifyRows[0]);
           }
         }

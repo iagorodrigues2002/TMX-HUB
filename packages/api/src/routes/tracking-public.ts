@@ -103,12 +103,17 @@ async function enqueueInitiateCheckout(
 ) {
   if (!app.db) return { meta: 0, utmify: 0 };
   const queued = await app.db.begin(async (sql) => {
+    const [project] = await sql<{ utmify_pixel_id: string | null }[]>`
+      SELECT utmify_pixel_id
+      FROM tracking_projects
+      WHERE id = ${input.projectId}
+    `;
     const pixels = await sql<{ id: string }[]>`
       SELECT id FROM meta_pixels
       WHERE project_id = ${input.projectId} AND enabled = true
+      ORDER BY created_at ASC
     `;
     const meta: Array<{ id: string }> = [];
-    const utmify: Array<{ id: string }> = [];
     for (const pixel of pixels) {
       const rows = await sql<{ id: string }[]>`
         INSERT INTO meta_deliveries
@@ -120,11 +125,16 @@ async function enqueueInitiateCheckout(
         RETURNING id
       `;
       if (rows[0]) meta.push(rows[0]);
+    }
+    const utmify: Array<{ id: string }> = [];
+    const referencePixel = pixels[0];
+    if (project?.utmify_pixel_id && referencePixel) {
       const webEvents = await sql<{ id: string }[]>`
         INSERT INTO tracking_utmify_web_events
-          (id, project_id, pixel_id, event_id, event_name)
+          (id, project_id, pixel_id, external_pixel_id, event_id, event_name)
         VALUES
-          (${ulid()}, ${input.projectId}, ${pixel.id}, ${input.eventId}, 'InitiateCheckout')
+          (${ulid()}, ${input.projectId}, ${referencePixel.id}, ${project.utmify_pixel_id},
+           ${input.eventId}, 'InitiateCheckout')
         ON CONFLICT (pixel_id, event_id) DO NOTHING
         RETURNING id
       `;
