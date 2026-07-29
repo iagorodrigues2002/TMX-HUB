@@ -1508,6 +1508,9 @@ export const apiClient = {
       ad_name: string;
       ad_id?: string;
       placement: string;
+      page_views: number;
+      visitors: number;
+      checkouts: number;
       orders: number;
       paid_orders: number;
       refused_orders: number;

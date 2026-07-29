@@ -113,17 +113,25 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         const meta: Array<{ id: string }> = [];
         for (const event of events) {
           for (const pixel of pixels) {
+            const productionReplayId = `${event.id}-prod-${ulid()}`;
             const rows = await sql<{ id: string }[]>`
               INSERT INTO meta_deliveries AS existing
-                (id, project_id, pixel_id, order_id, event_id, event_name, event_at)
+                (id, project_id, pixel_id, order_id, event_id, event_name, event_at,
+                 outgoing_event_id)
               VALUES
                 (${ulid()}, ${project.id}, ${pixel.id}, NULL, ${event.id},
-                 'InitiateCheckout', ${event.received_at})
+                 'InitiateCheckout', ${event.received_at}, NULL)
               ON CONFLICT (pixel_id, event_id) DO UPDATE SET
                 state = 'pending',
                 attempts = 0,
-                last_error = NULL
+                last_error = NULL,
+                outgoing_event_id = CASE
+                  WHEN existing.state = 'delivered'
+                    THEN ${productionReplayId}
+                  ELSE existing.outgoing_event_id
+                END
               WHERE existing.state <> 'delivered'
+                 OR existing.outgoing_event_id IS NULL
               RETURNING id
             `;
             if (rows[0]) meta.push(rows[0]);
@@ -751,34 +759,104 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!app.db) return reply.code(503).send(databaseUnavailable);
       const { date, from, to } = parseTrackingDate(req.query);
       const rows = await app.db`
+        WITH project AS (
+          SELECT id FROM tracking_projects WHERE offer_id = ${req.params.id}
+        ),
+        event_facts AS (
+          SELECT
+            e.visitor_id,
+            e.event_name,
+            COALESCE(previous_page.source, '{}'::jsonb) || COALESCE(e.source, '{}'::jsonb)
+              AS attribution,
+            NULL::text AS order_status,
+            NULL::bigint AS amount_minor
+          FROM tracking_events e
+          LEFT JOIN LATERAL (
+            SELECT page.source
+            FROM tracking_events page
+            WHERE page.project_id = e.project_id
+              AND page.visitor_id = e.visitor_id
+              AND page.event_name = 'PageView'
+              AND page.received_at <= e.received_at
+            ORDER BY page.received_at DESC, page.id DESC
+            LIMIT 1
+          ) previous_page ON e.event_name = 'InitiateCheckout'
+          WHERE e.project_id = (SELECT id FROM project)
+            AND e.received_at >= ${from} AND e.received_at < ${to}
+            AND e.event_name IN ('PageView', 'InitiateCheckout')
+        ),
+        order_facts AS (
+          SELECT
+            o.visitor_id,
+            NULL::text AS event_name,
+            COALESCE(previous_page.source, '{}'::jsonb) ||
+              COALESCE(o.attribution_source, '{}'::jsonb) AS attribution,
+            o.status AS order_status,
+            o.amount_minor::bigint AS amount_minor
+          FROM tracking_orders o
+          LEFT JOIN LATERAL (
+            SELECT page.source
+            FROM tracking_events page
+            WHERE page.project_id = o.project_id
+              AND page.visitor_id = o.visitor_id
+              AND page.event_name = 'PageView'
+              AND page.received_at <= o.occurred_at
+            ORDER BY page.received_at DESC, page.id DESC
+            LIMIT 1
+          ) previous_page ON true
+          WHERE o.project_id = (SELECT id FROM project)
+            AND o.occurred_at >= ${from} AND o.occurred_at < ${to}
+        ),
+        facts AS (
+          SELECT * FROM event_facts
+          UNION ALL
+          SELECT * FROM order_facts
+        ),
+        dimensions AS (
+          SELECT
+            visitor_id,
+            event_name,
+            order_status,
+            amount_minor,
+            COALESCE(NULLIF(attribution->>'utm_source', ''),
+                     NULLIF(attribution->>'site_source_name', ''),
+                     'não identificado') AS source,
+            COALESCE(NULLIF(attribution->>'utm_campaign', ''),
+                     NULLIF(attribution->>'campaign_name', ''),
+                     'não identificada') AS campaign_name,
+            NULLIF(attribution->>'campaign_id', '') AS campaign_id,
+            COALESCE(NULLIF(attribution->>'utm_term', ''),
+                     NULLIF(attribution->>'adset_name', ''),
+                     'não identificado') AS adset_name,
+            NULLIF(attribution->>'adset_id', '') AS adset_id,
+            COALESCE(NULLIF(attribution->>'utm_content', ''),
+                     NULLIF(attribution->>'ad_name', ''),
+                     'não identificado') AS ad_name,
+            NULLIF(attribution->>'ad_id', '') AS ad_id,
+            COALESCE(NULLIF(attribution->>'placement', ''), 'não identificado') AS placement
+          FROM facts
+        )
         SELECT
-          COALESCE(NULLIF(o.attribution_source->>'utm_source', ''),
-                   NULLIF(o.attribution_source->>'site_source_name', ''),
-                   'não identificado') AS source,
-          COALESCE(NULLIF(o.attribution_source->>'utm_campaign', ''),
-                   NULLIF(o.attribution_source->>'campaign_name', ''),
-                   'não identificada') AS campaign_name,
-          NULLIF(o.attribution_source->>'campaign_id', '') AS campaign_id,
-          COALESCE(NULLIF(o.attribution_source->>'utm_term', ''),
-                   NULLIF(o.attribution_source->>'adset_name', ''),
-                   'não identificado') AS adset_name,
-          NULLIF(o.attribution_source->>'adset_id', '') AS adset_id,
-          COALESCE(NULLIF(o.attribution_source->>'utm_content', ''),
-                   NULLIF(o.attribution_source->>'ad_name', ''),
-                   'não identificado') AS ad_name,
-          NULLIF(o.attribution_source->>'ad_id', '') AS ad_id,
-          COALESCE(NULLIF(o.attribution_source->>'placement', ''), 'não identificado') AS placement,
-          count(*)::int AS orders,
-          count(*) FILTER (WHERE o.status = 'paid')::int AS paid_orders,
-          count(*) FILTER (WHERE o.status IN ('refused', 'cancelled'))::int AS refused_orders,
-          COALESCE(sum(o.amount_minor) FILTER (WHERE o.status = 'paid'), 0)::text
+          source,
+          campaign_name,
+          campaign_id,
+          adset_name,
+          adset_id,
+          ad_name,
+          ad_id,
+          placement,
+          count(*) FILTER (WHERE event_name = 'PageView')::int AS page_views,
+          count(DISTINCT visitor_id) FILTER (WHERE event_name = 'PageView')::int AS visitors,
+          count(*) FILTER (WHERE event_name = 'InitiateCheckout')::int AS checkouts,
+          count(*) FILTER (WHERE order_status IS NOT NULL)::int AS orders,
+          count(*) FILTER (WHERE order_status = 'paid')::int AS paid_orders,
+          count(*) FILTER (WHERE order_status IN ('refused', 'cancelled'))::int
+            AS refused_orders,
+          COALESCE(sum(amount_minor) FILTER (WHERE order_status = 'paid'), 0)::text
             AS paid_revenue_minor
-        FROM tracking_orders o
-        JOIN tracking_projects p ON p.id = o.project_id
-        WHERE p.offer_id = ${req.params.id}
-          AND o.occurred_at >= ${from} AND o.occurred_at < ${to}
-        GROUP BY 1, 2, 3, 4, 5, 6, 7, 8
-        ORDER BY paid_orders DESC, orders DESC, campaign_name, ad_name
+        FROM dimensions
+        GROUP BY source, campaign_name, campaign_id, adset_name, adset_id, ad_name, ad_id, placement
+        ORDER BY paid_orders DESC, checkouts DESC, visitors DESC, campaign_name, ad_name
         LIMIT 500
       `;
       return { date, time_zone: 'America/Sao_Paulo', rows };

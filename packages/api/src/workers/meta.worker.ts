@@ -23,11 +23,11 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
         Array<{
           id: string;
           event_id: string;
+          outgoing_event_id: string | null;
           event_name: 'InitiateCheckout' | 'Purchase';
           event_at: Date;
           pixel_external_id: string;
           access_token_encrypted: string;
-          test_event_code: string | null;
           external_id: string;
           amount_minor: number | null;
           currency: string | null;
@@ -40,10 +40,11 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
           user_agent: string | null;
         }>
       >`
-        SELECT md.id, md.event_id, md.event_name, COALESCE(md.event_at, direct_event.received_at,
+        SELECT md.id, md.event_id, md.outgoing_event_id, md.event_name,
+               COALESCE(md.event_at, direct_event.received_at,
                  o.paid_at, o.occurred_at) AS event_at,
                mp.pixel_id AS pixel_external_id,
-               mp.access_token_encrypted, mp.test_event_code,
+               mp.access_token_encrypted,
                COALESCE(o.external_id, 'TMX-IC-' || md.event_id) AS external_id,
                COALESCE(o.amount_minor, 0) AS amount_minor,
                COALESCE(o.currency, 'BRL') AS currency,
@@ -109,7 +110,7 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
             {
               event_name: row.event_name,
               event_time: Math.floor(new Date(row.event_at).getTime() / 1000),
-              event_id: row.event_id,
+              event_id: row.outgoing_event_id ?? row.event_id,
               action_source: 'website',
               ...(row.event_url ? { event_source_url: row.event_url } : {}),
               user_data: userData,
@@ -126,7 +127,6 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
                     },
             },
           ],
-          ...(row.test_event_code ? { test_event_code: row.test_event_code } : {}),
           partner_agent: 'tmxhub-1.0',
         };
         const token = decryptSecret(row.access_token_encrypted, env.TRACKING_ENCRYPTION_KEY!);

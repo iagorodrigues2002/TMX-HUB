@@ -49,6 +49,33 @@ type AbRedirectRequest = FastifyRequest<{
 }>;
 
 const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex');
+const attributionQueryKeys = new Set([
+  'utm_source',
+  'utm_medium',
+  'utm_campaign',
+  'utm_content',
+  'utm_term',
+  'sck',
+  'fbclid',
+  'gclid',
+  'ttclid',
+  'msclkid',
+  'campaign_id',
+  'campaign_name',
+  'adset_id',
+  'adset_name',
+  'ad_id',
+  'ad_name',
+  'placement',
+  'site_source_name',
+]);
+
+export function extractAttributionQuery(query: Record<string, string | undefined>) {
+  return Object.fromEntries(
+    Object.entries(query).filter(([key, value]) => Boolean(value) && attributionQueryKeys.has(key)),
+  ) as Record<string, string>;
+}
+
 const cookieValue = (cookie: string | undefined, name: string) =>
   cookie
     ?.split(';')
@@ -324,9 +351,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         (${redirectEventId}, ${test.project_id}, ${visitorId}, ${journeyId}, 'InitiateCheckout',
          'commerce', ${`${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/r/${test.id}`},
          ${app.db.json({
-           ...Object.fromEntries(
-             Object.entries(req.query).filter(([key, value]) => value && key.startsWith('utm_')),
-           ),
+           ...extractAttributionQuery(req.query),
            ...(redirectCountry ? { country: redirectCountry } : {}),
          } as never)},
          ${app.db.json({

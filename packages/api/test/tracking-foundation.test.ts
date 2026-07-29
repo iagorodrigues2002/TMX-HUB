@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildUtmifyOrderPayload } from '../src/integrations/utmify/sales.js';
 import { createTrackingToken, readTrackingToken } from '../src/lib/tracking-token.js';
+import { extractAttributionQuery } from '../src/routes/tracking-public.js';
 import { buildTrackerScript } from '../src/services/tracker-script.js';
 
 describe('reliable tracking foundation', () => {
@@ -40,6 +41,28 @@ describe('reliable tracking foundation', () => {
     expect(script).toContain('isCheckout=a=>isRedirect(a)||');
     expect(script).toMatch(/isRedirect=.*\(r\|link\)/);
     expect(script).toContain("if(!redirect)send('InitiateCheckout'");
+  });
+
+  it('preserves ad attribution on an A/B checkout redirect', () => {
+    expect(
+      extractAttributionQuery({
+        utm_campaign: 'SLM_ESP',
+        campaign_id: '120250707424500457',
+        adset_id: '120250707424490457',
+        ad_id: '120250707424480457',
+        placement: 'Instagram_Feed',
+        fbclid: 'click-id',
+        src: 'signed-tracking-token',
+        unknown: 'discarded',
+      }),
+    ).toEqual({
+      utm_campaign: 'SLM_ESP',
+      campaign_id: '120250707424500457',
+      adset_id: '120250707424490457',
+      ad_id: '120250707424480457',
+      placement: 'Instagram_Feed',
+      fbclid: 'click-id',
+    });
   });
 
   it('maps a paid order to the UTMify sales contract', () => {

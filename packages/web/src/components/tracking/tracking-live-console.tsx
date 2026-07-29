@@ -219,15 +219,57 @@ export function TrackingLiveConsole({
       ) : activeView === 'attribution' ? (
         <div className="p-5 md:p-6">
           <div className="mb-5">
-            <p className="hud-label">Atribuição de vendas · first-party</p>
+            <p className="hud-label">Atribuição completa · first-party</p>
             <h3 className="mt-2 text-xl font-semibold text-white">Campanhas e anúncios</h3>
             <p className="mt-2 text-sm text-white/45">
-              Pedidos da Vendepay agrupados pelas UTMs e IDs preservados pelo TMX no clique do
-              checkout.
+              Visitas, checkouts e vendas agrupados pelas UTMs e IDs preservados pelo TMX.
             </p>
           </div>
+          <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              {
+                label: 'Campanhas',
+                value: new Set(
+                  (attribution.data?.rows ?? [])
+                    .map((row) => row.campaign_id ?? row.campaign_name)
+                    .filter((value) => value !== 'não identificada'),
+                ).size,
+              },
+              {
+                label: 'Visitantes',
+                value: (attribution.data?.rows ?? []).reduce(
+                  (total, row) => total + row.visitors,
+                  0,
+                ),
+              },
+              {
+                label: 'Checkouts',
+                value: (attribution.data?.rows ?? []).reduce(
+                  (total, row) => total + row.checkouts,
+                  0,
+                ),
+              },
+              {
+                label: 'Vendas',
+                value: (attribution.data?.rows ?? []).reduce(
+                  (total, row) => total + row.paid_orders,
+                  0,
+                ),
+              },
+            ].map((metric) => (
+              <div
+                key={metric.label}
+                className="rounded-lg border border-white/[0.07] bg-black/10 px-4 py-3"
+              >
+                <p className="hud-label">{metric.label}</p>
+                <p className="mt-2 font-mono text-2xl text-white">
+                  {metric.value.toLocaleString('pt-BR')}
+                </p>
+              </div>
+            ))}
+          </div>
           <div className="overflow-x-auto rounded-xl border border-white/[0.08]">
-            <table className="min-w-[980px] w-full text-left text-xs">
+            <table className="min-w-[1280px] w-full text-left text-xs">
               <thead className="border-b border-white/[0.08] bg-black/20 text-white/35">
                 <tr>
                   {[
@@ -235,9 +277,11 @@ export function TrackingLiveConsole({
                     'Conjunto',
                     'Anúncio',
                     'Origem',
+                    'Visitas',
+                    'IC',
+                    'Conv. IC',
                     'Pedidos',
-                    'Aprovados',
-                    'Aprovação',
+                    'Vendas',
                     'Receita',
                   ].map((label) => (
                     <th key={label} className="px-4 py-3 font-medium uppercase tracking-wider">
@@ -271,11 +315,16 @@ export function TrackingLiveConsole({
                       </p>
                     </td>
                     <td className="px-4 py-3 text-white/55">{row.source}</td>
+                    <td className="px-4 py-3">
+                      <p className="font-mono text-white">{row.visitors}</p>
+                      <p className="mt-1 text-[10px] text-white/30">{row.page_views} pageviews</p>
+                    </td>
+                    <td className="px-4 py-3 font-mono text-cyan-200">{row.checkouts}</td>
+                    <td className="px-4 py-3 font-mono text-cyan-200">
+                      {percentage(row.checkouts, row.visitors)}
+                    </td>
                     <td className="px-4 py-3 font-mono text-white">{row.orders}</td>
                     <td className="px-4 py-3 font-mono text-emerald-200">{row.paid_orders}</td>
-                    <td className="px-4 py-3 font-mono text-cyan-200">
-                      {percentage(row.paid_orders, row.orders)}
-                    </td>
                     <td className="px-4 py-3 font-mono text-emerald-300">
                       {money(row.paid_revenue_minor)}
                     </td>
@@ -286,7 +335,7 @@ export function TrackingLiveConsole({
           </div>
           {!attribution.isLoading && !attribution.data?.rows.length && (
             <p className="mt-4 rounded-xl border border-dashed border-white/[0.08] p-8 text-center text-sm text-white/35">
-              Nenhuma venda com atribuição foi encontrada neste dia.
+              Nenhuma visita, checkout ou venda com atribuição foi encontrada neste dia.
             </p>
           )}
         </div>
