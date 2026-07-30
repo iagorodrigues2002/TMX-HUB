@@ -47,6 +47,7 @@
 
   /* Typography */
   --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", "Menlo", monospace;
 
   /* Radius */
   --radius-sm: 10px;
@@ -373,5 +374,189 @@
     background-repeat: no-repeat !important;
     background-position: center !important;
     background-size: 100% 100% !important;
+  }
+}
+
+/* ----------------------------------------------------------------------
+ * Tracking module — cyber-organic tokens and primitives
+ *
+ * Everything under [data-surface="tracking"] uses these tokens so the rest
+ * of the app is untouched. OKLCH-first, with sRGB fallbacks via @supports
+ * for the rare browser without OKLCH (Safari <15.4, Firefox <113).
+ * --------------------------------------------------------------------- */
+[data-surface="tracking"] {
+  --surface-void: oklch(0.15 0.015 210);
+  --surface-plate: oklch(0.21 0.022 210);
+  --surface-inset: oklch(0.19 0.018 210);
+  --surface-scrim: oklch(0.13 0.015 210 / 0.72);
+
+  --signal-100: oklch(0.94 0.05 195);
+  --signal-300: oklch(0.82 0.13 195);
+  --signal-500: oklch(0.73 0.16 195);
+  --signal-700: oklch(0.55 0.11 195);
+  --signal-900: oklch(0.36 0.07 195);
+
+  --pulse-lush: oklch(0.72 0.16 155);
+  --pulse-ember: oklch(0.76 0.15 65);
+  --pulse-scar: oklch(0.65 0.2 20);
+
+  --ink-primary: oklch(0.97 0.008 210);
+  --ink-secondary: oklch(0.82 0.012 210);
+  --ink-muted: oklch(0.62 0.012 210);
+  --ink-faint: oklch(0.44 0.01 210);
+
+  --hairline: oklch(0.75 0.05 195 / 0.1);
+  --hairline-strong: oklch(0.75 0.08 195 / 0.22);
+
+  --motion-brisk: 160ms;
+  --motion-standard: 220ms;
+  --motion-flow: 280ms;
+  --motion-slow: 440ms;
+  --ease-signal: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@supports not (color: oklch(0% 0 0)) {
+  [data-surface="tracking"] {
+    --surface-void: #061119;
+    --surface-plate: #0b1c27;
+    --surface-inset: #09161f;
+    --surface-scrim: rgba(6, 17, 25, 0.72);
+
+    --signal-100: #d7f5fa;
+    --signal-300: #7ce0ed;
+    --signal-500: #22d3ee;
+    --signal-700: #0e7c86;
+    --signal-900: #0b3c43;
+
+    --pulse-lush: #14c78a;
+    --pulse-ember: #f0a34a;
+    --pulse-scar: #ef4e5b;
+
+    --ink-primary: #f5fbfd;
+    --ink-secondary: #bcd0d6;
+    --ink-muted: #7a8f95;
+    --ink-faint: #4f6167;
+
+    --hairline: rgba(148, 210, 220, 0.1);
+    --hairline-strong: rgba(148, 210, 220, 0.22);
+  }
+}
+
+/* Machine-voice text: IDs, timestamps, deltas, raw values. */
+[data-surface="tracking"] .mono-num,
+[data-surface="tracking"] .font-mono {
+  font-family: var(--font-jetbrains-mono), var(--font-mono);
+  font-feature-settings: "tnum" 1, "zero" 1;
+  font-variant-numeric: tabular-nums slashed-zero;
+  letter-spacing: -0.01em;
+}
+
+/* Live-signal pulse for a status dot when new data arrives.
+   Opacity + transform only, no layout paint. */
+[data-surface="tracking"] .pulse-dot {
+  position: relative;
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--pulse-lush);
+}
+[data-surface="tracking"] .pulse-dot::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  color: var(--pulse-lush);
+  opacity: 0;
+  transform: scale(0.6);
+  animation: tmx-pulse 1400ms var(--ease-signal) infinite;
+}
+[data-surface="tracking"] .pulse-dot[data-tone="ember"] {
+  background: var(--pulse-ember);
+}
+[data-surface="tracking"] .pulse-dot[data-tone="ember"]::after {
+  color: var(--pulse-ember);
+}
+[data-surface="tracking"] .pulse-dot[data-tone="scar"] {
+  background: var(--pulse-scar);
+}
+[data-surface="tracking"] .pulse-dot[data-tone="scar"]::after {
+  color: var(--pulse-scar);
+}
+[data-surface="tracking"] .pulse-dot[data-tone="signal"] {
+  background: var(--signal-500);
+}
+[data-surface="tracking"] .pulse-dot[data-tone="signal"]::after {
+  color: var(--signal-500);
+}
+
+@keyframes tmx-pulse {
+  0% {
+    opacity: 0.55;
+    transform: scale(0.6);
+  }
+  70% {
+    opacity: 0;
+    transform: scale(1.8);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.8);
+  }
+}
+
+/* Horizontal scanline used in loading states (replaces the SaaS spinner). */
+[data-surface="tracking"] .scan-strip {
+  position: relative;
+  overflow: hidden;
+}
+[data-surface="tracking"] .scan-strip::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in oklch, var(--signal-500) 45%, transparent) 50%,
+    transparent 100%
+  );
+  transform: translate3d(-100%, 0, 0);
+  animation: tmx-scan 1800ms var(--ease-signal) infinite;
+  will-change: transform;
+}
+@keyframes tmx-scan {
+  0% {
+    transform: translate3d(-100%, 0, 0);
+  }
+  100% {
+    transform: translate3d(100%, 0, 0);
+  }
+}
+
+/* Reveal-on-load: the module fades in fast on first mount without moving layout. */
+[data-surface="tracking"] .signal-reveal {
+  animation: tmx-reveal var(--motion-flow) var(--ease-signal) both;
+}
+@keyframes tmx-reveal {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 4px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-surface="tracking"] .pulse-dot::after,
+  [data-surface="tracking"] .scan-strip::before,
+  [data-surface="tracking"] .signal-reveal {
+    animation: none;
+  }
+  [data-surface="tracking"] .signal-reveal {
+    opacity: 1;
+    transform: none;
   }
 }

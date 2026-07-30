@@ -45,7 +45,7 @@ export function TrackingWorkspace() {
   const selectedOffer = offers.data?.find((offer) => offer.id === selectedOfferId);
 
   return (
-    <div className="space-y-6">
+    <div data-surface="tracking" className="signal-reveal space-y-6">
       <header className="overflow-hidden rounded-xl border border-cyan-300/15 bg-gradient-to-br from-cyan-300/[0.08] via-white/[0.025] to-transparent p-6 md:p-8">
         <div className="flex flex-wrap items-start justify-between gap-6">
           <div className="max-w-3xl">
