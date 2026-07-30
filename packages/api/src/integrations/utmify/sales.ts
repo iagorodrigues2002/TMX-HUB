@@ -27,6 +27,43 @@ const statusMap: Record<string, string> = {
   cancelled: 'canceled',
 };
 
+// UTMify canonicalizes the "source" side: their Meta connector matches
+// facebook / instagram (uppercase, short) and rejects other spellings as
+// "UTMs inválidas". The Meta URL template macro {{site_source_name}}
+// returns "fb"/"ig"/"an"/"msg" — normalize to what UTMify expects.
+const UTM_SOURCE_ALIASES: Record<string, string> = {
+  fb: 'FB',
+  facebook: 'FB',
+  ig: 'IG',
+  instagram: 'IG',
+  an: 'AN',
+  msg: 'MSG',
+  google: 'GOOGLE',
+  tiktok: 'TIKTOK',
+};
+
+function normalizeUtmSource(raw: string | undefined): string | null {
+  if (!raw) return null;
+  const key = raw.trim().toLowerCase();
+  return UTM_SOURCE_ALIASES[key] ?? raw.trim().toUpperCase();
+}
+
+// UTMify's campaigns tab matches a sale to a Meta campaign by parsing
+// `<name>|<id>` from utm_campaign / utm_medium / utm_content. Their docs
+// example uses exactly this format ("CAMPANHA_5|761832537749495"). If we
+// send only the name, UTMify falls back to "UTMs inválidas" because it
+// can't resolve the campaign row. Vendepay hands us the numeric IDs in a
+// separate URL param (campaign_id / adset_id / ad_id / placement) that we
+// already stitch into `source`, so we can compose the expected shape.
+function withId(nameLike: string | undefined, id: string | undefined): string | null {
+  const name = nameLike?.trim();
+  const rawId = id?.trim();
+  if (!name && !rawId) return null;
+  if (name?.includes('|')) return name; // already in name|id format
+  if (name && rawId) return `${name}|${rawId}`;
+  return name ?? rawId ?? null;
+}
+
 export function buildUtmifyOrderPayload(input: UtmifyOrderInput) {
   const source = input.source ?? {};
   const countryCandidate = input.buyer.country ?? source.country ?? 'BR';
@@ -63,11 +100,19 @@ export function buildUtmifyOrderPayload(input: UtmifyOrderInput) {
     trackingParameters: {
       src: source.src ?? null,
       sck: source.sck ?? null,
-      utm_source: source.utm_source ?? null,
-      utm_campaign: source.utm_campaign ?? null,
-      utm_medium: source.utm_medium ?? null,
-      utm_content: source.utm_content ?? null,
-      utm_term: source.utm_term ?? null,
+      // Canonicalized to what UTMify's Meta connector recognizes. `fb` from
+      // Meta's {{site_source_name}} macro becomes `FB`, etc.
+      utm_source: normalizeUtmSource(source.utm_source),
+      // `<name>|<id>` shape, per UTMify docs. Falls back to whatever we
+      // have if the numeric id is missing.
+      utm_campaign: withId(source.utm_campaign ?? source.campaign_name, source.campaign_id),
+      utm_medium: withId(source.adset_name ?? source.utm_medium, source.adset_id),
+      utm_content: withId(source.ad_name ?? source.utm_content, source.ad_id),
+      // Meta URL template usually points utm_term at the adset name, but
+      // UTMify's example puts placement here. Prefer placement when we have
+      // it (their pixel captures it separately), fall back to whatever the
+      // ad URL provided.
+      utm_term: source.placement ?? source.utm_term ?? null,
     },
     commission: {
       totalPriceInCents: input.amountMinor,
