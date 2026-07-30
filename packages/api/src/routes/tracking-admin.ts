@@ -1167,6 +1167,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           unmapped_paid_orders: number;
           orphan_orders: number;
           paid_revenue_minor: string;
+          paid_revenue_brl_minor: string;
+          unconverted_paid_orders: number;
           webhooks_received: number;
           webhooks_quarantined: number;
           utmify_deliveries_attempted: number;
@@ -1225,9 +1227,20 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         (SELECT count(*)::int FROM tracking_orders o
           WHERE o.project_id = p.id AND NULLIF(trim(o.visitor_id), '') IS NULL
             AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS orphan_orders,
+        -- Original currency (mixed): kept for backward compatibility and for
+        -- reconciliation reports. The BRL-converted total is what the UI uses.
         (SELECT COALESCE(sum(o.amount_minor), 0)::text FROM tracking_orders o
           WHERE o.project_id = p.id AND o.status = 'paid'
             AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS paid_revenue_minor,
+        (SELECT COALESCE(sum(o.amount_brl_minor), 0)::text FROM tracking_orders o
+          WHERE o.project_id = p.id AND o.status = 'paid'
+            AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS paid_revenue_brl_minor,
+        -- Orders that arrived but couldn't be converted (rate service down at
+        -- ingestion and currency never cached). Surfaced so ops can replay.
+        (SELECT count(*)::int FROM tracking_orders o
+          WHERE o.project_id = p.id AND o.status = 'paid'
+            AND o.amount_minor IS NOT NULL AND o.amount_brl_minor IS NULL
+            AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS unconverted_paid_orders,
         -- Data loss rate: webhooks the Vendepay gateway sent us that we could not turn
         -- into an order (quarantined) — i.e. sales that never entered the pipeline at all.
         (SELECT count(*)::int FROM webhook_receipts r
@@ -1267,6 +1280,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           unmapped_paid_orders: 0,
           orphan_orders: 0,
           paid_revenue_minor: '0',
+          paid_revenue_brl_minor: '0',
+          unconverted_paid_orders: 0,
           webhooks_received: 0,
           webhooks_quarantined: 0,
           utmify_deliveries_attempted: 0,

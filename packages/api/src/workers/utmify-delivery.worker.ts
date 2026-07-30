@@ -27,6 +27,7 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
           status: string;
           amount_minor: number | null;
           currency: string | null;
+          amount_brl_minor: number | null;
           buyer: {
             name?: string;
             email?: string;
@@ -46,6 +47,7 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
                COALESCE(o.status, 'pending') AS status,
                COALESCE(o.amount_minor, 0) AS amount_minor,
                COALESCE(o.currency, 'BRL') AS currency,
+               o.amount_brl_minor,
                COALESCE(o.buyer, '{}'::jsonb) AS buyer,
                COALESCE(o.occurred_at, direct_event.received_at, d.created_at) AS occurred_at,
                o.paid_at,
@@ -89,13 +91,20 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
           SET state = 'processing', attempts = attempts + 1
           WHERE id = ${row.id}
         `;
+        // Always report in BRL when the ingestion converted successfully.
+        // UTMify aggregates in one currency per dashboard, and the operator's
+        // dashboards are all BRL. If conversion didn't happen (rate unknown),
+        // we fall back to the original amount + currency.
+        const useBrl = row.amount_brl_minor != null;
+        const outboundMinor = useBrl ? row.amount_brl_minor! : row.amount_minor;
+        const outboundCurrency = useBrl ? 'BRL' : row.currency;
         const payload = buildUtmifyOrderPayload({
           isTest: row.provider === 'tmx-test',
           orderId: row.external_id,
           provider: row.provider,
           status: row.event_type === 'event.initiate_checkout.neutralize' ? 'refused' : row.status,
-          amountMinor: row.amount_minor,
-          currency: row.currency,
+          amountMinor: outboundMinor,
+          currency: outboundCurrency,
           createdAt: row.occurred_at,
           paidAt: row.paid_at,
           buyer: row.buyer,

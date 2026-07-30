@@ -24,13 +24,21 @@ function buildPurchaseCustomData(row: {
   external_id: string;
   amount_minor: number | null;
   currency: string | null;
+  amount_brl_minor: number | null;
   product: { id?: string; name?: string; planId?: string; planName?: string } | null;
 }): Record<string, unknown> {
-  const value = Number(((row.amount_minor ?? 0) / 100).toFixed(2));
+  // Always report in BRL when the ingestion converted successfully, so Meta's
+  // ROAS lines up with the ad account (which runs in BRL). Fall back to the
+  // original amount + currency only if conversion didn't happen (rate unknown
+  // and never cached). This preserves the value → Meta always sees a number,
+  // just occasionally in the original currency.
+  const useBrl = row.amount_brl_minor != null;
+  const minor = useBrl ? row.amount_brl_minor! : (row.amount_minor ?? 0);
+  const value = Number((minor / 100).toFixed(2));
   const base: Record<string, unknown> = {
     order_id: row.external_id,
     value,
-    currency: row.currency,
+    currency: useBrl ? 'BRL' : row.currency,
   };
   // Prefer offer/plan id when present (an "offer" in Vendepay is a specific
   // price plan, closer to a SKU); fall back to the product id.
@@ -72,6 +80,7 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
           external_id: string;
           amount_minor: number | null;
           currency: string | null;
+          amount_brl_minor: number | null;
           order_kind: string | null;
           product: { id?: string; name?: string; planId?: string; planName?: string } | null;
           buyer: { email?: string; phone?: string };
@@ -97,6 +106,7 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
                COALESCE(o.external_id, 'TMX-IC-' || md.event_id) AS external_id,
                COALESCE(o.amount_minor, 0) AS amount_minor,
                COALESCE(o.currency, 'BRL') AS currency,
+               o.amount_brl_minor,
                o.order_kind,
                o.product,
                COALESCE(o.buyer, '{}'::jsonb) AS buyer, o.paid_at,

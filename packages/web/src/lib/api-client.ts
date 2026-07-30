@@ -1254,6 +1254,8 @@ export const apiClient = {
     unmapped_paid_orders: number;
     orphan_orders: number;
     paid_revenue_minor: string;
+    paid_revenue_brl_minor: string;
+    unconverted_paid_orders: number;
     webhooks_received: number;
     webhooks_quarantined: number;
     utmify_deliveries_attempted: number;

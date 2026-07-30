@@ -150,11 +150,23 @@ const countryCode = (raw: string | undefined): string | undefined => {
   return undefined;
 };
 
+// Vendepay uses proprietary numeric currency codes on the moeda field.
+// Cross-referenced against checkout.pais on live payloads (see analysis
+// notes in DESIGN.md). Extend this map here as new codes are observed.
+const VENDEPAY_CURRENCY_CODES: Record<string, string> = {
+  '1': 'BRL',
+  '2': 'USD',
+  '3': 'EUR',
+  '8': 'CAD',
+  '10': 'GBP',
+  '13': 'SEK',
+};
+
 const currencyCode = (raw: string | undefined): string | undefined => {
   if (!raw) return undefined;
   const normalized = raw.trim().toUpperCase();
-  if (normalized === '1') return 'BRL';
-  if (normalized === '2') return 'USD';
+  const mapped = VENDEPAY_CURRENCY_CODES[normalized];
+  if (mapped) return mapped;
   return /^[A-Z]{3}$/.test(normalized) ? normalized : undefined;
 };
 
@@ -163,8 +175,7 @@ const paymentMethodCode = (raw: string | undefined): string | undefined => {
   const normalized = raw.trim().toLowerCase();
   if (['1', 'pix'].includes(normalized)) return 'pix';
   if (['2', 'boleto'].includes(normalized)) return 'boleto';
-  if (['3', 'card', 'credit_card', 'cartao', 'cartão'].includes(normalized))
-    return 'credit_card';
+  if (['3', 'card', 'credit_card', 'cartao', 'cartão'].includes(normalized)) return 'credit_card';
   if (['paypal', 'free_price', 'unknown'].includes(normalized)) return normalized;
   return 'unknown';
 };

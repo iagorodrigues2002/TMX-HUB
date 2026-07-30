@@ -24,6 +24,8 @@ type Summary = {
   upsell_orders: number;
   unmapped_paid_orders: number;
   paid_revenue_minor: string;
+  paid_revenue_brl_minor: string;
+  unconverted_paid_orders: number;
   webhooks_received: number;
   webhooks_quarantined: number;
 };
@@ -50,7 +52,16 @@ export function TrackerKpiRow({ summary }: { summary?: Summary }) {
   const buyersFront = s?.paid_buyers ?? 0;
   const upsells = s?.upsell_orders ?? 0;
   const unmapped = s?.unmapped_paid_orders ?? 0;
-  const revenue = money(s?.paid_revenue_minor);
+  // Faturamento is always displayed in BRL now, because ingestion converts
+  // every non-BRL sale at the current AwesomeAPI rate. Fall back to the raw
+  // sum only if the ingestion couldn't convert (rate unavailable) — in that
+  // case the raw sum is a mix of currencies and technically wrong, but at
+  // least it's non-zero so the operator knows sales are happening.
+  const revenue = money(
+    s?.paid_revenue_brl_minor && Number(s.paid_revenue_brl_minor) > 0
+      ? s.paid_revenue_brl_minor
+      : s?.paid_revenue_minor,
+  );
   const connectRate = s?.ad_clicks ? percent(s.connected_clicks, s.ad_clicks) : null;
   const lossRate = s?.webhooks_received
     ? percent(s.webhooks_quarantined, s.webhooks_received)

@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { env } from '../env.js';
 import { normalizeVendepay } from '../integrations/vendepay/normalize.js';
 import { createTrackingToken, readTrackingToken } from '../lib/tracking-token.js';
+import { convertToBrlMinor } from '../services/exchange-rate.js';
 import { buildTrackerScript } from '../services/tracker-script.js';
 
 const EventSchema = z.object({
@@ -640,6 +641,29 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
       const normalized = normalizeVendepay(req.body);
       const receiptId = ulid();
+      // Convert to BRL before opening the DB transaction: the rate fetch can
+      // hit the network, and we don't want to hold a Postgres tx open during
+      // an outbound HTTP call. If the rate service is down and this currency
+      // has never been cached, amount_brl_minor stays NULL and a later replay
+      // can fill it in.
+      let ingestBrlMinor: number | null = null;
+      let ingestExchangeRate: number | null = null;
+      if (
+        normalized.kind === 'processable' &&
+        normalized.event.amountMinor != null &&
+        normalized.event.currency
+      ) {
+        const converted = await convertToBrlMinor(
+          normalized.event.amountMinor,
+          normalized.event.currency,
+          app.db,
+        );
+        if (converted) {
+          ingestBrlMinor = converted.brlMinor;
+          ingestExchangeRate = converted.rate;
+        }
+      }
+      const ingestConvertedAt = ingestBrlMinor != null ? new Date() : null;
       const outcome = await app.db.begin(async (sql) => {
         const receipts = await sql<{ id: string }[]>`
           INSERT INTO webhook_receipts
@@ -672,14 +696,21 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             `
           : [];
         const orderKind = productKind?.kind ?? 'unknown';
+        // BRL figures were computed before the transaction (see above) — the
+        // rate lookup may make a network call and shouldn't hold a tx open.
+        const amountBrlMinor = ingestBrlMinor;
+        const exchangeRate = ingestExchangeRate;
+        const convertedAt = ingestConvertedAt;
         const [order] = await sql<{ id: string; status: string; order_kind: string }[]>`
           INSERT INTO tracking_orders
             (id, project_id, provider, external_id, status, amount_minor, currency,
+             amount_brl_minor, exchange_rate, converted_at,
              visitor_id, buyer, raw_status, occurred_at, paid_at, payment_method,
              product, attribution_source, order_kind)
           VALUES
             (${ulid()}, ${connection.project_id}, 'vendepay', ${event.transactionId},
              ${event.status}, ${event.amountMinor ?? null}, ${event.currency ?? null},
+             ${amountBrlMinor}, ${exchangeRate}, ${convertedAt},
              ${attributedVisitorId ?? null}, ${sql.json(event.buyer)}, ${event.rawStatus ?? null},
              ${event.occurredAt}, ${event.status === 'paid' ? event.occurredAt : null},
              ${event.paymentMethod ?? null}, ${sql.json(event.product)}, ${sql.json(event.source)},
@@ -695,6 +726,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             END,
             amount_minor = COALESCE(EXCLUDED.amount_minor, tracking_orders.amount_minor),
             currency = COALESCE(EXCLUDED.currency, tracking_orders.currency),
+            amount_brl_minor = COALESCE(EXCLUDED.amount_brl_minor, tracking_orders.amount_brl_minor),
+            exchange_rate = COALESCE(EXCLUDED.exchange_rate, tracking_orders.exchange_rate),
+            converted_at = COALESCE(EXCLUDED.converted_at, tracking_orders.converted_at),
             visitor_id = COALESCE(EXCLUDED.visitor_id, tracking_orders.visitor_id),
             buyer = tracking_orders.buyer || EXCLUDED.buyer,
             raw_status = COALESCE(EXCLUDED.raw_status, tracking_orders.raw_status),
