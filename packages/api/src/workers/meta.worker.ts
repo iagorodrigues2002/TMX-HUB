@@ -11,6 +11,46 @@ import { META_QUEUE_NAME, type MetaJobData } from '../queues/index.js';
 const hash = (value: string) =>
   createHash('sha256').update(value.trim().toLowerCase()).digest('hex');
 
+/**
+ * Builds Meta CAPI custom_data for a Purchase event.
+ * Always includes value/currency/order_id (the essentials). Adds catalog
+ * fields (content_ids, contents, num_items, content_type, content_name)
+ * whenever the Vendepay payload gave us a product id, so Advantage+ / DPA
+ * campaigns can match this purchase back to a product in the catalog.
+ * Falls back gracefully when product data is missing: essentials still
+ * ship, catalog fields are simply absent.
+ */
+function buildPurchaseCustomData(row: {
+  external_id: string;
+  amount_minor: number | null;
+  currency: string | null;
+  product: { id?: string; name?: string; planId?: string; planName?: string } | null;
+}): Record<string, unknown> {
+  const value = Number(((row.amount_minor ?? 0) / 100).toFixed(2));
+  const base: Record<string, unknown> = {
+    order_id: row.external_id,
+    value,
+    currency: row.currency,
+  };
+  // Prefer offer/plan id when present (an "offer" in Vendepay is a specific
+  // price plan, closer to a SKU); fall back to the product id.
+  const contentId = row.product?.planId?.trim() || row.product?.id?.trim();
+  if (!contentId) return base;
+  base.content_type = 'product';
+  base.content_ids = [contentId];
+  base.contents = [
+    {
+      id: contentId,
+      quantity: 1,
+      item_price: value,
+    },
+  ];
+  base.num_items = 1;
+  const name = row.product?.planName?.trim() || row.product?.name?.trim();
+  if (name) base.content_name = name;
+  return base;
+}
+
 export function createMetaWorker(): Worker<MetaJobData> | null {
   if (!env.DATABASE_URL || !env.TRACKING_ENCRYPTION_KEY) return null;
   const db = postgres(env.DATABASE_URL, {
@@ -33,6 +73,7 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
           amount_minor: number | null;
           currency: string | null;
           order_kind: string | null;
+          product: { id?: string; name?: string; planId?: string; planName?: string } | null;
           buyer: { email?: string; phone?: string };
           paid_at: Date | null;
           visitor_id: string | null;
@@ -57,6 +98,7 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
                COALESCE(o.amount_minor, 0) AS amount_minor,
                COALESCE(o.currency, 'BRL') AS currency,
                o.order_kind,
+               o.product,
                COALESCE(o.buyer, '{}'::jsonb) AS buyer, o.paid_at,
                COALESCE(o.visitor_id, direct_event.visitor_id) AS visitor_id,
                COALESCE(direct_event.event_url, (
@@ -146,11 +188,7 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
               user_data: userData,
               custom_data:
                 row.event_name === 'Purchase'
-                  ? {
-                      order_id: row.external_id,
-                      value: (row.amount_minor ?? 0) / 100,
-                      currency: row.currency,
-                    }
+                  ? buildPurchaseCustomData(row)
                   : {
                       content_name: 'Checkout',
                       content_category: 'checkout',
