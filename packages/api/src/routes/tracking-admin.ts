@@ -1232,14 +1232,34 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         (SELECT COALESCE(sum(o.amount_minor), 0)::text FROM tracking_orders o
           WHERE o.project_id = p.id AND o.status = 'paid'
             AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS paid_revenue_minor,
-        (SELECT COALESCE(sum(o.amount_brl_minor), 0)::text FROM tracking_orders o
+        -- BRL total. Uses the persisted amount_brl_minor when the webhook
+        -- converted at ingestion; falls back to a read-time conversion from
+        -- exchange_rate_cache when the order is older than the conversion
+        -- feature (or the rate service was down at ingestion). Only orders
+        -- for currencies that have never been quoted appear as 0 here —
+        -- those are counted in unconverted_paid_orders so the UI can flag.
+        (SELECT COALESCE(sum(
+            CASE
+              WHEN o.amount_brl_minor IS NOT NULL THEN o.amount_brl_minor
+              WHEN o.currency = 'BRL' THEN o.amount_minor
+              WHEN rc.rate IS NOT NULL THEN (o.amount_minor * rc.rate)::bigint
+              ELSE 0
+            END
+          ), 0)::text
+          FROM tracking_orders o
+          LEFT JOIN exchange_rate_cache rc
+            ON rc.base_currency = o.currency AND rc.target_currency = 'BRL'
           WHERE o.project_id = p.id AND o.status = 'paid'
             AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS paid_revenue_brl_minor,
-        -- Orders that arrived but couldn't be converted (rate service down at
-        -- ingestion and currency never cached). Surfaced so ops can replay.
+        -- Orders that arrived but couldn't be converted at all (rate unknown
+        -- and never cached). Zero once the rate service has quoted the
+        -- currency once, even if the persisted column stays NULL.
         (SELECT count(*)::int FROM tracking_orders o
+          LEFT JOIN exchange_rate_cache rc
+            ON rc.base_currency = o.currency AND rc.target_currency = 'BRL'
           WHERE o.project_id = p.id AND o.status = 'paid'
             AND o.amount_minor IS NOT NULL AND o.amount_brl_minor IS NULL
+            AND o.currency <> 'BRL' AND rc.rate IS NULL
             AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS unconverted_paid_orders,
         -- Data loss rate: webhooks the Vendepay gateway sent us that we could not turn
         -- into an order (quarantined) — i.e. sales that never entered the pipeline at all.

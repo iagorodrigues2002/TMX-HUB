@@ -82,6 +82,24 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
           AND d.state <> 'delivered'
       `;
       if (!row) return;
+      // UTMify rejects any status outside {waiting_payment, paid, refused,
+      // refunded, chargedback} with HTTP 400. Cancelled orders (Vendepay's
+      // "carrinho.abandonado") don't have a receipient status, so instead
+      // of burning 8 retry attempts hitting a wall, mark the delivery as
+      // skipped up front. Refunded/chargeback still flow.
+      if (row.status === 'cancelled') {
+        await db`
+          UPDATE tracking_delivery_outbox
+          SET state = 'skipped',
+              last_error = 'Status cancelled não é aceito pela UTMify (aceita apenas waiting_payment, paid, refused, refunded, chargedback).'
+          WHERE id = ${row.id}
+        `;
+        logger.info(
+          { deliveryId: row.id, transactionId: row.external_id },
+          'utmify delivery skipped: cancelled status not accepted by UTMify',
+        );
+        return;
+      }
       try {
         if (row.amount_minor === null || !row.currency) {
           throw new Error('Pedido sem valor ou moeda para envio à UTMify.');
