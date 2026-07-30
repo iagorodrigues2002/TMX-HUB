@@ -1,5 +1,6 @@
 'use client';
 
+import { TrackerKpiRow } from '@/components/tracking/tracker-kpi-row';
 import { TrackingCountryMap } from '@/components/tracking/tracking-country-map';
 import { Button } from '@/components/ui/button';
 import { apiClient } from '@/lib/api-client';
@@ -665,41 +666,7 @@ export function TrackingLiveConsole({
         </div>
       ) : (
         <div>
-          <div className="grid gap-px bg-white/[0.06] sm:grid-cols-2 xl:grid-cols-6">
-            {[
-              ['Visitas', s?.visitors ?? 0],
-              [
-                'Connect Rate',
-                s?.ad_clicks
-                  ? `${((s.connected_clicks / s.ad_clicks) * 100).toFixed(1).replace('.', ',')}%`
-                  : '—',
-              ],
-              ['Checkouts', `${s?.checkouts ?? 0} únicos · ${s?.checkout_events ?? 0} disparos`],
-              [
-                'Compradores',
-                `${buyers} front · ${s?.upsell_orders ?? 0} upsell${
-                  s?.unmapped_paid_orders ? ` · ${s.unmapped_paid_orders} não mapeados` : ''
-                }`,
-              ],
-              ['Faturamento', money(s?.paid_revenue_minor)],
-              [
-                'Perda de dados',
-                s?.webhooks_received
-                  ? `${((s.webhooks_quarantined / s.webhooks_received) * 100)
-                      .toFixed(1)
-                      .replace(
-                        '.',
-                        ',',
-                      )}% · ${s.webhooks_quarantined}/${s.webhooks_received} webhooks`
-                  : '—',
-              ],
-            ].map(([label, value]) => (
-              <div key={label} className="bg-[#06131d] p-4">
-                <p className="hud-label">{label}</p>
-                <p className="mt-1 font-mono text-xl text-white">{value}</p>
-              </div>
-            ))}
-          </div>
+          <TrackerKpiRow summary={s} />
           <div className="p-3 md:p-4">
             <TrackingCountryMap rows={countries.data?.rows ?? []} />
           </div>

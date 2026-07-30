@@ -637,3 +637,176 @@
     opacity: 0.14;
   }
 }
+
+/* ----------------------------------------------------------------------
+ * Tracker KPI row — two-tier signal HUD
+ *
+ * Tier 1: two hero readings side by side (buyers front, revenue) with
+ * generous scale and a small satellite line for context.
+ * Tier 2: a full-width HUD strip with four supporting readings; each cell
+ * carries a pulse dot toned by its own reading (lush / signal / ember /
+ * scar / muted).
+ * --------------------------------------------------------------------- */
+[data-surface="tracking"] .tmx-kpi {
+  border-top: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--hairline);
+}
+
+[data-surface="tracking"] .tmx-kpi-tier1 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1px;
+  background: var(--hairline);
+}
+@media (min-width: 720px) {
+  [data-surface="tracking"] .tmx-kpi-tier1 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+[data-surface="tracking"] .tmx-kpi-hero {
+  background: var(--surface-plate);
+  padding: 24px 28px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+  overflow: hidden;
+}
+[data-surface="tracking"] .tmx-kpi-hero::after {
+  /* Faint corner accent — a diagonal signal gleam. Decorative, low-opacity. */
+  content: "";
+  position: absolute;
+  right: -40px;
+  top: -40px;
+  width: 160px;
+  height: 160px;
+  background: radial-gradient(
+    circle at center,
+    color-mix(in oklch, var(--signal-500) 20%, transparent) 0%,
+    transparent 65%
+  );
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+[data-surface="tracking"] .tmx-kpi-hero-eyebrow {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--ink-muted);
+  font-weight: 500;
+}
+
+[data-surface="tracking"] .tmx-kpi-hero-value {
+  font-size: 48px;
+  line-height: 1.02;
+  font-weight: 500;
+  color: var(--ink-primary);
+  letter-spacing: -0.03em;
+  margin-top: 4px;
+}
+[data-surface="tracking"] .tmx-kpi-hero-value-currency {
+  font-size: 40px;
+}
+
+[data-surface="tracking"] .tmx-kpi-hero-sat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--ink-secondary);
+  flex-wrap: wrap;
+}
+
+[data-surface="tracking"] .tmx-kpi-sat-tag {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink-faint);
+  font-weight: 500;
+}
+[data-surface="tracking"] .tmx-kpi-sat-tag-warn {
+  color: var(--pulse-ember);
+}
+[data-surface="tracking"] .tmx-kpi-sat-value {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink-primary);
+}
+[data-surface="tracking"] .tmx-kpi-sat-sep {
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--ink-faint);
+  display: inline-block;
+}
+
+[data-surface="tracking"] .tmx-kpi-tier2 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1px;
+  background: var(--hairline);
+  border-top: 1px solid var(--hairline);
+}
+@media (min-width: 600px) {
+  [data-surface="tracking"] .tmx-kpi-tier2 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (min-width: 1080px) {
+  [data-surface="tracking"] .tmx-kpi-tier2 {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+[data-surface="tracking"] .tmx-kpi-strip-cell {
+  background: var(--surface-inset);
+  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: background var(--motion-brisk) var(--ease-signal);
+}
+[data-surface="tracking"] .tmx-kpi-strip-cell:hover {
+  background: color-mix(in oklch, var(--surface-inset) 82%, var(--signal-500));
+}
+
+[data-surface="tracking"] .tmx-kpi-strip-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-surface="tracking"] .tmx-kpi-strip-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink-muted);
+  font-weight: 500;
+}
+
+[data-surface="tracking"] .tmx-kpi-strip-value {
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--ink-primary);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+[data-surface="tracking"] .tmx-kpi-strip-detail {
+  font-size: 11px;
+  color: var(--ink-faint);
+  font-family: var(--font-jetbrains-mono), var(--font-mono);
+  font-variant-numeric: tabular-nums slashed-zero;
+  letter-spacing: -0.005em;
+}
+
+[data-surface="tracking"] .tmx-kpi-dot-muted {
+  background: var(--ink-faint) !important;
+}
+[data-surface="tracking"] .tmx-kpi-dot-muted::after {
+  animation: none !important;
+  display: none;
+}
