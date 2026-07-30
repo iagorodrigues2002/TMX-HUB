@@ -125,11 +125,16 @@ export async function convertToBrlMinor(
 export async function warmupBrlRates(
   currencies: string[],
   sql: Sql,
-): Promise<{ cached: Record<string, number>; failed: string[] }> {
+): Promise<{
+  cached: Record<string, number>;
+  failed: string[];
+  errors: string[];
+}> {
   const toFetch = currencies.map((c) => c.toUpperCase()).filter((c) => c !== 'BRL');
-  if (toFetch.length === 0) return { cached: {}, failed: [] };
+  if (toFetch.length === 0) return { cached: {}, failed: [], errors: [] };
   const cached: Record<string, number> = {};
   const failed: string[] = [];
+  const errors: string[] = [];
   try {
     const bulk = await fetchLiveRates(toFetch);
     for (const code of toFetch) {
@@ -139,13 +144,13 @@ export async function warmupBrlRates(
         cached[code] = rate;
       } else {
         failed.push(code);
+        errors.push(`${code}: bulk fetch returned no rate`);
       }
     }
   } catch (error) {
-    logger.warn(
-      { error: error instanceof Error ? error.message : String(error) },
-      'exchange rate warmup bulk fetch failed, will try one at a time',
-    );
+    const errMsg = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+    errors.push(`bulk fetch threw: ${errMsg}`);
+    logger.warn({ error: errMsg }, 'exchange rate warmup bulk fetch failed, trying per-currency');
     for (const code of toFetch) {
       try {
         const single = await fetchLiveRates([code]);
@@ -155,11 +160,17 @@ export async function warmupBrlRates(
           cached[code] = rate;
         } else {
           failed.push(code);
+          errors.push(`${code}: single fetch returned no rate`);
         }
-      } catch {
+      } catch (singleError) {
         failed.push(code);
+        const singleMsg =
+          singleError instanceof Error
+            ? `${singleError.name}: ${singleError.message}`
+            : String(singleError);
+        errors.push(`${code}: ${singleMsg}`);
       }
     }
   }
-  return { cached, failed };
+  return { cached, failed, errors };
 }

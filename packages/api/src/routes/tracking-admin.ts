@@ -1348,6 +1348,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         supported_currencies: SUPPORTED_CURRENCIES,
         cached: result.cached,
         failed: result.failed,
+        errors: result.errors,
       });
     },
   );
