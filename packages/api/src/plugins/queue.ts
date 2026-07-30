@@ -10,6 +10,7 @@ import type {
   FunnelJobData,
   MediaJobData,
   MetaJobData,
+  PushcutJobData,
   RenderJobData,
   ShieldJobData,
   UtmifyDeliveryJobData,
@@ -18,6 +19,7 @@ import type {
 } from '../queues/index.js';
 import { createMediaQueue } from '../queues/media.queue.js';
 import { createMetaQueue } from '../queues/meta.queue.js';
+import { createPushcutQueue } from '../queues/pushcut.queue.js';
 import { createRenderQueue } from '../queues/render.queue.js';
 import { createShieldQueue } from '../queues/shield.queue.js';
 import { createUtmifyDeliveryQueue } from '../queues/utmify-delivery.queue.js';
@@ -36,6 +38,7 @@ declare module 'fastify' {
     metaQueue: Queue<MetaJobData>;
     utmifyDeliveryQueue: Queue<UtmifyDeliveryJobData>;
     utmifyWebEventQueue: Queue<UtmifyWebEventJobData>;
+    pushcutQueue: Queue<PushcutJobData>;
   }
 }
 
@@ -65,6 +68,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   const metaQueue = createMetaQueue(env.REDIS_URL);
   const utmifyDeliveryQueue = createUtmifyDeliveryQueue(env.REDIS_URL);
   const utmifyWebEventQueue = createUtmifyWebEventQueue(env.REDIS_URL);
+  const pushcutQueue = createPushcutQueue(env.REDIS_URL);
 
   app.decorate('redis', redis);
   app.decorate('renderQueue', renderQueue);
@@ -76,6 +80,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.decorate('metaQueue', metaQueue);
   app.decorate('utmifyDeliveryQueue', utmifyDeliveryQueue);
   app.decorate('utmifyWebEventQueue', utmifyWebEventQueue);
+  app.decorate('pushcutQueue', pushcutQueue);
 
   app.addHook('onClose', async () => {
     await renderQueue.close();
@@ -87,6 +92,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     await metaQueue.close();
     await utmifyDeliveryQueue.close();
     await utmifyWebEventQueue.close();
+    await pushcutQueue.close();
     await redis.quit();
   });
 };

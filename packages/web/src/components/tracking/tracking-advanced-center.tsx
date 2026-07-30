@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   BarChart3,
+  BellRing,
   Braces,
   Cable,
   Copy,
@@ -89,6 +90,7 @@ type Section =
   | 'gateways'
   | 'meta'
   | 'utmify'
+  | 'pushcut'
   | 'help';
 
 const sections: Array<{ id: Section; label: string; icon: LucideIcon; group: string }> = [
@@ -103,6 +105,7 @@ const sections: Array<{ id: Section; label: string; icon: LucideIcon; group: str
   { id: 'gateways', label: 'Gateways', icon: Cable, group: 'Configuração' },
   { id: 'meta', label: 'Envio ao Meta', icon: Send, group: 'Configuração' },
   { id: 'utmify', label: 'Envio à UTMify', icon: Cable, group: 'Configuração' },
+  { id: 'pushcut', label: 'Notificações Pushcut', icon: BellRing, group: 'Configuração' },
   { id: 'help', label: 'Ajuda e testes', icon: HelpCircle, group: 'Configuração' },
 ];
 
@@ -137,6 +140,11 @@ export function TrackingAdvancedCenter({
   const [productKindSelection, setProductKindSelection] = useState<
     Record<string, 'front' | 'upsell'>
   >({});
+  const [pushcutName, setPushcutName] = useState('');
+  const [pushcutSecret, setPushcutSecret] = useState('');
+  const [pushcutFrontNotification, setPushcutFrontNotification] = useState('');
+  const [pushcutUpsellNotification, setPushcutUpsellNotification] = useState('');
+  const [pushcutDevices, setPushcutDevices] = useState('');
   const qc = useQueryClient();
   const refreshTracking = async () => {
     setIsRefreshingTracking(true);
@@ -380,6 +388,74 @@ export function TrackingAdvancedCenter({
       void qc.invalidateQueries({ queryKey: ['tracking-product-kinds', offerId] });
       void refreshTracking();
       toast.success(`${result.updated} pedido(s) reclassificado(s).`);
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
+  const pushcutDestinations = useQuery({
+    queryKey: ['tracking-pushcut-destinations', offerId],
+    queryFn: () => apiClient.getTrackingPushcutDestinations(offerId),
+    retry: false,
+  });
+  const pushcutDeliveries = useQuery({
+    queryKey: ['tracking-pushcut-deliveries', offerId],
+    queryFn: () => apiClient.listTrackingPushcutDeliveries(offerId),
+    refetchInterval: 30_000,
+    retry: false,
+  });
+  const createPushcutDestination = useMutation({
+    mutationFn: () =>
+      apiClient.createTrackingPushcutDestination(offerId, {
+        name: pushcutName,
+        secret: pushcutSecret,
+        front_notification_name: pushcutFrontNotification,
+        upsell_notification_name: pushcutUpsellNotification || null,
+        devices: pushcutDevices
+          .split(',')
+          .map((d) => d.trim())
+          .filter(Boolean),
+      }),
+    onSuccess: () => {
+      setPushcutName('');
+      setPushcutSecret('');
+      setPushcutFrontNotification('');
+      setPushcutUpsellNotification('');
+      setPushcutDevices('');
+      void qc.invalidateQueries({ queryKey: ['tracking-pushcut-destinations', offerId] });
+      toast.success('Destino Pushcut adicionado.');
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
+  const togglePushcutDestination = useMutation({
+    mutationFn: (input: { destinationId: string; enabled: boolean }) =>
+      apiClient.setTrackingPushcutDestinationEnabled(offerId, input.destinationId, input.enabled),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['tracking-pushcut-destinations', offerId] });
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
+  const removePushcutDestination = useMutation({
+    mutationFn: (destinationId: string) =>
+      apiClient.deleteTrackingPushcutDestination(offerId, destinationId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['tracking-pushcut-destinations', offerId] });
+      toast.success('Destino Pushcut removido.');
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
+  const testPushcutDestination = useMutation({
+    mutationFn: (destinationId: string) =>
+      apiClient.testTrackingPushcutDestination(offerId, destinationId),
+    onSuccess: (result) => {
+      if (result.accepted) toast.success('Notificação de teste enviada. Confira seu dispositivo.');
+      else toast.error(result.error ?? `Pushcut respondeu com erro (HTTP ${result.status}).`);
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
+  const retryPushcutDelivery = useMutation({
+    mutationFn: (deliveryId: string) => apiClient.retryTrackingPushcutDelivery(offerId, deliveryId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['tracking-pushcut-deliveries', offerId] });
+      toast.success('Reenvio colocado na fila.');
     },
     onError: (error) => toast.error((error as Error).message),
   });
@@ -1332,6 +1408,233 @@ export function TrackingAdvancedCenter({
                 {!productKinds.data?.mapped?.length && (
                   <p className="rounded border border-dashed border-white/[0.08] p-4 text-sm text-white/35">
                     Nenhum produto classificado ainda.
+                  </p>
+                )}
+              </div>
+            </div>
+          </Module>
+        )}
+        {section === 'pushcut' && (
+          <Module
+            title="Notificações Pushcut"
+            description="Receba uma notificação push no iPhone/iPad sempre que uma venda front ou upsell for aprovada. Cada destino é uma conta Pushcut (app) diferente — configure quantas precisar."
+          >
+            <div className="rounded border border-white/[0.07] bg-black/10 p-4 text-xs leading-5 text-white/50">
+              No app Pushcut, crie uma notificação em{' '}
+              <span className="font-mono">Notifications</span> (ex.: "Venda Aprovada") e outra pra
+              upsell se quiser sons diferentes. Copie o <span className="font-mono">secret</span> da
+              sua conta (aparece na URL do webhook,{' '}
+              <span className="font-mono">api.pushcut.io/[secret]/notifications/...</span>) e o nome
+              exato de cada notificação (ou o Reference ID, em Settings → Shortcuts).
+            </div>
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <div>
+                <label htmlFor="pushcut-name" className="block text-xs text-white/45">
+                  Nome do destino (ex.: iPhone do Iago)
+                </label>
+                <Input
+                  id="pushcut-name"
+                  className="mt-2"
+                  value={pushcutName}
+                  onChange={(e) => setPushcutName(e.target.value)}
+                />
+              </div>
+              <div>
+                <label htmlFor="pushcut-secret" className="block text-xs text-white/45">
+                  Secret da conta Pushcut
+                </label>
+                <Input
+                  id="pushcut-secret"
+                  className="mt-2"
+                  type="password"
+                  value={pushcutSecret}
+                  onChange={(e) => setPushcutSecret(e.target.value)}
+                />
+              </div>
+              <div>
+                <label htmlFor="pushcut-front" className="block text-xs text-white/45">
+                  Nome da notificação · venda front
+                </label>
+                <Input
+                  id="pushcut-front"
+                  className="mt-2"
+                  value={pushcutFrontNotification}
+                  onChange={(e) => setPushcutFrontNotification(e.target.value)}
+                  placeholder="Venda Aprovada"
+                />
+              </div>
+              <div>
+                <label htmlFor="pushcut-upsell" className="block text-xs text-white/45">
+                  Nome da notificação · upsell (opcional)
+                </label>
+                <Input
+                  id="pushcut-upsell"
+                  className="mt-2"
+                  value={pushcutUpsellNotification}
+                  onChange={(e) => setPushcutUpsellNotification(e.target.value)}
+                  placeholder="Deixe em branco pra não notificar upsell"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label htmlFor="pushcut-devices" className="block text-xs text-white/45">
+                  Dispositivos específicos (opcional, separados por vírgula)
+                </label>
+                <Input
+                  id="pushcut-devices"
+                  className="mt-2"
+                  value={pushcutDevices}
+                  onChange={(e) => setPushcutDevices(e.target.value)}
+                  placeholder="iPhone de Iago, iPad"
+                />
+              </div>
+            </div>
+            {canManage && (
+              <Button
+                className="mt-4"
+                disabled={
+                  createPushcutDestination.isPending ||
+                  !pushcutName ||
+                  !pushcutSecret ||
+                  !pushcutFrontNotification
+                }
+                onClick={() => createPushcutDestination.mutate()}
+              >
+                Adicionar destino
+              </Button>
+            )}
+
+            <div className="mt-7 border-t border-white/[0.07] pt-6">
+              <p className="hud-label">Destinos configurados</p>
+              <div className="mt-3 space-y-2">
+                {(pushcutDestinations.data?.destinations ?? []).map((destination) => (
+                  <div
+                    key={destination.id}
+                    className="rounded border border-white/[0.07] bg-black/10 p-3 text-xs"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-white/85">{destination.name}</p>
+                        <p className="mt-1 text-white/40">
+                          Front:{' '}
+                          <span className="font-mono">{destination.front_notification_name}</span>
+                          {destination.upsell_notification_name && (
+                            <>
+                              {' '}
+                              · Upsell:{' '}
+                              <span className="font-mono">
+                                {destination.upsell_notification_name}
+                              </span>
+                            </>
+                          )}
+                        </p>
+                        {destination.devices.length > 0 && (
+                          <p className="mt-1 text-white/30">
+                            Dispositivos: {destination.devices.join(', ')}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={destination.enabled ? 'text-emerald-300' : 'text-white/30'}
+                        >
+                          {destination.enabled ? 'ativo' : 'desativado'}
+                        </span>
+                        {canManage && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={testPushcutDestination.isPending}
+                              onClick={() => testPushcutDestination.mutate(destination.id)}
+                            >
+                              Testar
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={togglePushcutDestination.isPending}
+                              onClick={() =>
+                                togglePushcutDestination.mutate({
+                                  destinationId: destination.id,
+                                  enabled: !destination.enabled,
+                                })
+                              }
+                            >
+                              {destination.enabled ? 'Desativar' : 'Ativar'}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={removePushcutDestination.isPending}
+                              onClick={() => removePushcutDestination.mutate(destination.id)}
+                            >
+                              Remover
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {!pushcutDestinations.data?.destinations?.length && (
+                  <p className="rounded border border-dashed border-white/[0.08] p-4 text-sm text-white/35">
+                    Nenhum destino Pushcut configurado ainda.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-7 border-t border-white/[0.07] pt-6">
+              <p className="hud-label">Últimas entregas</p>
+              <div className="mt-3 space-y-2">
+                {(pushcutDeliveries.data?.deliveries ?? []).slice(0, 30).map((delivery) => (
+                  <div
+                    key={delivery.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded border border-white/[0.07] p-3 text-xs"
+                  >
+                    <div>
+                      <p className="font-mono text-white/70">{delivery.transaction_id}</p>
+                      <p className="mt-1 text-white/35">
+                        {delivery.destination_name ?? 'destino removido'} · {delivery.order_kind} ·{' '}
+                        {delivery.attempts} tentativa(s)
+                        {delivery.response_status ? ` · HTTP ${delivery.response_status}` : ''}
+                      </p>
+                      {delivery.last_error && (
+                        <p className="mt-1 max-w-2xl break-words text-red-200/70">
+                          {delivery.last_error}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={
+                          delivery.state === 'delivered'
+                            ? 'text-emerald-300'
+                            : delivery.state === 'failed' || delivery.state === 'dead'
+                              ? 'text-red-300'
+                              : delivery.state === 'skipped'
+                                ? 'text-white/30'
+                                : 'text-amber-300'
+                        }
+                      >
+                        {delivery.state}
+                      </span>
+                      {canManage && (delivery.state === 'failed' || delivery.state === 'dead') && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => retryPushcutDelivery.mutate(delivery.id)}
+                        >
+                          Reenviar
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {!pushcutDeliveries.data?.deliveries?.length && (
+                  <p className="rounded border border-dashed border-white/[0.08] p-4 text-sm text-white/35">
+                    As entregas aparecerão aqui quando o primeiro pedido pago chegar.
                   </p>
                 )}
               </div>

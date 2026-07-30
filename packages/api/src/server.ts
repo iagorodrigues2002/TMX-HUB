@@ -15,6 +15,7 @@ import { createBundleWorker } from './workers/bundle.worker.js';
 import { createFunnelWorker } from './workers/funnel.worker.js';
 import { createMediaWorker } from './workers/media.worker.js';
 import { createMetaWorker } from './workers/meta.worker.js';
+import { createPushcutDeliveryWorker } from './workers/pushcut-delivery.worker.js';
 import { createRenderWorker } from './workers/render.worker.js';
 import { createShieldWorker } from './workers/shield.worker.js';
 import { createUtmifyDeliveryWorker } from './workers/utmify-delivery.worker.js';
@@ -97,6 +98,23 @@ async function main() {
         ),
       ),
     );
+    const pendingPushcut = await app.db<{ id: string }[]>`
+      SELECT id FROM tracking_delivery_outbox
+      WHERE destination_kind = 'pushcut'
+        AND state IN ('pending', 'failed', 'processing')
+        AND next_attempt_at <= now()
+      ORDER BY created_at ASC
+      LIMIT 1000
+    `;
+    await Promise.allSettled(
+      pendingPushcut.map(({ id }) =>
+        app.pushcutQueue.add(
+          'send',
+          { deliveryId: id },
+          { jobId: `${id}-recovery-${Math.floor(Date.now() / 30_000)}` },
+        ),
+      ),
+    );
   };
   await recoverTrackingDeliveries();
   const trackingRecoveryTimer = setInterval(() => {
@@ -145,6 +163,7 @@ async function main() {
   const metaWorker = createMetaWorker();
   const utmifyDeliveryWorker = createUtmifyDeliveryWorker();
   const utmifyWebEventWorker = createUtmifyWebEventWorker();
+  const pushcutDeliveryWorker = createPushcutDeliveryWorker();
   const missingEnv = {
     DATABASE_URL: Boolean(env.DATABASE_URL),
     TRACKING_ENCRYPTION_KEY: Boolean(env.TRACKING_ENCRYPTION_KEY),
@@ -164,6 +183,11 @@ async function main() {
     app.log.error(
       { DATABASE_URL: missingEnv.DATABASE_URL },
       'utmify web event worker did not start — InitiateCheckout leads will not be sent to UTMify',
+    );
+  if (!pushcutDeliveryWorker)
+    app.log.error(
+      { ...missingEnv },
+      'pushcut delivery worker did not start — sale notifications will not be sent',
     );
   app.utmifySync.start();
 
@@ -187,6 +211,7 @@ async function main() {
       await metaWorker?.close();
       await utmifyDeliveryWorker?.close();
       await utmifyWebEventWorker?.close();
+      await pushcutDeliveryWorker?.close();
       app.log.info('shutdown complete');
       process.exit(0);
     } catch (err) {

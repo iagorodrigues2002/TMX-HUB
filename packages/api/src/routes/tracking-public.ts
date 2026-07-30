@@ -679,6 +679,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             inserted: receipts.length > 0,
             deliveryIds: [] as string[],
             utmifyDeliveryIds: [] as string[],
+            pushcutDeliveryIds: [] as string[],
           };
         }
         const event = normalized.event;
@@ -750,7 +751,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           RETURNING id, status, order_kind
         `;
         if (!order) {
-          return { inserted: true, deliveryIds: [], utmifyDeliveryIds: [] };
+          return { inserted: true, deliveryIds: [], utmifyDeliveryIds: [], pushcutDeliveryIds: [] };
         }
         await sql`
           UPDATE webhook_receipts
@@ -776,13 +777,48 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           if (rows[0]) utmifyDeliveryIds.push(rows[0].id);
         }
         if (order.status !== 'paid') {
-          return { inserted: true, deliveryIds: [], utmifyDeliveryIds };
+          return { inserted: true, deliveryIds: [], utmifyDeliveryIds, pushcutDeliveryIds: [] };
+        }
+        // Pushcut notifies on every paid order regardless of kind — front and
+        // upsell both matter to "did a sale just happen", unlike Meta CAPI
+        // (below) which only wants front to keep campaign CPA honest.
+        const pushcutDestinations = await sql<
+          Array<{
+            id: string;
+            front_notification_name: string;
+            upsell_notification_name: string | null;
+          }>
+        >`
+          SELECT id, front_notification_name, upsell_notification_name
+          FROM tracking_pushcut_destinations
+          WHERE project_id = ${connection.project_id} AND enabled = true
+        `;
+        const pushcutDeliveryIds: string[] = [];
+        for (const destination of pushcutDestinations) {
+          const notificationName =
+            order.order_kind === 'upsell'
+              ? destination.upsell_notification_name
+              : destination.front_notification_name;
+          // Destination opted out of upsell alerts (upsell_notification_name
+          // is null) — nothing to enqueue for it on an upsell order.
+          if (!notificationName) continue;
+          const id = ulid();
+          const rows = await sql<{ id: string }[]>`
+            INSERT INTO tracking_delivery_outbox
+              (id, project_id, destination_kind, destination_id, order_id, event_id, event_type)
+            VALUES
+              (${id}, ${connection.project_id}, 'pushcut', ${destination.id}, ${order.id},
+               ${`vendepay:${event.transactionId}:${event.status}`}, ${`order.${order.order_kind}`})
+            ON CONFLICT (destination_kind, destination_id, event_id) DO NOTHING
+            RETURNING id
+          `;
+          if (rows[0]) pushcutDeliveryIds.push(rows[0].id);
         }
         // Meta receives only front-end sales. Upsell purchases would double-count
         // the same buyer/click and distort campaign CPA, so they stop here —
-        // UTMify (above) still receives every order regardless of kind.
+        // UTMify and Pushcut (above) still receive every order regardless of kind.
         if (order.order_kind === 'upsell') {
-          return { inserted: true, deliveryIds: [], utmifyDeliveryIds };
+          return { inserted: true, deliveryIds: [], utmifyDeliveryIds, pushcutDeliveryIds };
         }
         const [rules] = await sql<
           Array<{ attributed_only: boolean; minimum_amount_minor: number }>
@@ -794,7 +830,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           (rules?.attributed_only && !event.trackingSrc) ||
           (rules && (event.amountMinor ?? 0) < rules.minimum_amount_minor)
         ) {
-          return { inserted: true, deliveryIds: [], utmifyDeliveryIds };
+          return { inserted: true, deliveryIds: [], utmifyDeliveryIds, pushcutDeliveryIds };
         }
         const pixels = await sql<{ id: string }[]>`
           SELECT id FROM meta_pixels
@@ -814,7 +850,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           `;
           if (deliveries[0]) deliveryIds.push(deliveries[0].id);
         }
-        return { inserted: true, deliveryIds, utmifyDeliveryIds };
+        return { inserted: true, deliveryIds, utmifyDeliveryIds, pushcutDeliveryIds };
       });
       await Promise.allSettled(
         outcome.deliveryIds.map((deliveryId) => app.metaQueue.add('send', { deliveryId })),
@@ -824,11 +860,17 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           app.utmifyDeliveryQueue.add('send', { deliveryId }),
         ),
       );
+      await Promise.allSettled(
+        outcome.pushcutDeliveryIds.map((deliveryId) =>
+          app.pushcutQueue.add('send', { deliveryId }),
+        ),
+      );
       return reply.code(outcome.inserted ? 202 : 200).send({
         accepted: true,
         receipt_id: receiptId,
         meta_deliveries: outcome.deliveryIds.length,
         utmify_deliveries: outcome.utmifyDeliveryIds.length,
+        pushcut_deliveries: outcome.pushcutDeliveryIds.length,
         ...(!outcome.inserted ? { duplicate: true } : {}),
       });
     },

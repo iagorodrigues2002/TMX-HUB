@@ -1,0 +1,42 @@
+/**
+ * Builds the JSON body for a Pushcut webhook notification.
+ * Reference: https://www.pushcut.io/support/notifications#webhook-json
+ *
+ * Pushcut's notification (title/sound/actions) is pre-defined in the app;
+ * this JSON body overrides title/text dynamically per push and optionally
+ * targets specific devices. Any other key Pushcut doesn't recognize is
+ * ignored by their server, so it's safe to always include devices/title/
+ * text even when empty/default.
+ */
+
+export interface PushcutOrderInput {
+  kind: 'front' | 'upsell';
+  buyerName?: string;
+  productName?: string;
+  amountBrlMinor: number | null;
+  currency: string;
+  country?: string;
+}
+
+function money(brlMinor: number | null): string {
+  if (brlMinor == null) return '—';
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+    brlMinor / 100,
+  );
+}
+
+export function buildPushcutNotificationPayload(
+  input: PushcutOrderInput,
+  devices: string[],
+): Record<string, unknown> {
+  const buyer = input.buyerName?.trim() || 'Cliente';
+  const product = input.productName?.trim();
+  const amount = money(input.amountBrlMinor);
+  const title = input.kind === 'upsell' ? 'Upsell aprovado' : 'Venda aprovada';
+  const text = product ? `${buyer} · ${product} · ${amount}` : `${buyer} · ${amount}`;
+  return {
+    title,
+    text,
+    ...(devices.length > 0 ? { devices } : {}),
+  };
+}
