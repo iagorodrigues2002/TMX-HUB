@@ -156,11 +156,21 @@ const countryCode = (raw: string | undefined): string | undefined => {
 const VENDEPAY_CURRENCY_CODES: Record<string, string> = {
   '1': 'BRL',
   '2': 'USD',
-  '3': 'EUR',
-  '8': 'CAD',
-  '10': 'GBP',
-  '13': 'SEK',
+  '3': 'EUR', // Áustria (AT), Alemanha, Portugal, etc.
+  '4': 'CLP', // Chile: 9255 CLP ≈ $9.30 USD, matches front-product price
+  '6': 'COP', // Colômbia: 31707 COP ≈ $7.90 USD
+  '7': 'MXN', // México: 172.70 MXN ≈ $9.60 USD
+  '8': 'CAD', // Canadá
+  '10': 'GBP', // Reino Unido
+  '13': 'SEK', // Suécia
 };
+
+// Full list of currencies we know how to quote against BRL. Used by the
+// startup warmup and the backfill routine so read-time BRL totals work
+// even for currencies that haven't appeared in a recent order.
+export const SUPPORTED_CURRENCIES = Array.from(
+  new Set(Object.values(VENDEPAY_CURRENCY_CODES).filter((c) => c !== 'BRL')),
+);
 
 const currencyCode = (raw: string | undefined): string | undefined => {
   if (!raw) return undefined;

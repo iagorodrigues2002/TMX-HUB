@@ -115,3 +115,51 @@ export async function convertToBrlMinor(
   const brlMinor = Math.round(amountMinor * rate);
   return { brlMinor, rate };
 }
+
+/**
+ * One-shot warmup for a list of currencies. Used by the admin warmup
+ * endpoint and can be called on API boot. Fetches every currency in a
+ * single AwesomeAPI request when possible; falls back to per-currency
+ * requests if the bulk call fails. Returns the map of what was cached.
+ */
+export async function warmupBrlRates(
+  currencies: string[],
+  sql: Sql,
+): Promise<{ cached: Record<string, number>; failed: string[] }> {
+  const toFetch = currencies.map((c) => c.toUpperCase()).filter((c) => c !== 'BRL');
+  if (toFetch.length === 0) return { cached: {}, failed: [] };
+  const cached: Record<string, number> = {};
+  const failed: string[] = [];
+  try {
+    const bulk = await fetchLiveRates(toFetch);
+    for (const code of toFetch) {
+      const rate = bulk.get(code);
+      if (rate) {
+        await writeCachedRate(sql, code, rate);
+        cached[code] = rate;
+      } else {
+        failed.push(code);
+      }
+    }
+  } catch (error) {
+    logger.warn(
+      { error: error instanceof Error ? error.message : String(error) },
+      'exchange rate warmup bulk fetch failed, will try one at a time',
+    );
+    for (const code of toFetch) {
+      try {
+        const single = await fetchLiveRates([code]);
+        const rate = single.get(code);
+        if (rate) {
+          await writeCachedRate(sql, code, rate);
+          cached[code] = rate;
+        } else {
+          failed.push(code);
+        }
+      } catch {
+        failed.push(code);
+      }
+    }
+  }
+  return { cached, failed };
+}
