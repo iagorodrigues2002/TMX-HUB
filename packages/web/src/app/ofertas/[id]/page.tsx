@@ -473,6 +473,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                       <th className="px-3 py-2 text-right">Investido</th>
                       <th className="px-3 py-2 text-right">Faturamento</th>
                       <th className="px-3 py-2 text-right">Vendas</th>
+                      <th className="px-3 py-2 text-right">IC</th>
                       <th className="px-3 py-2 text-right">CPA</th>
                       <th className="px-3 py-2 text-right">ROAS</th>
                       <th className="px-3 py-2 text-right">CTR</th>
@@ -496,6 +497,9 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                           </td>
                           <td className="px-3 py-2 text-right font-mono text-white/75">
                             {formatInt(ad.sales)}
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono text-cyan-300">
+                            {formatInt(ad.ic)}
                           </td>
                           <td className="px-3 py-2 text-right font-mono text-white/75">
                             {money(cpa)}
