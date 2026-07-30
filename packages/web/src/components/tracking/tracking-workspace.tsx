@@ -6,6 +6,7 @@ import { TrackingHelp } from '@/components/tracking/tracking-help';
 import { Button } from '@/components/ui/button';
 import { type OfferView, apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
+import { useDisplayCurrency } from '@/lib/currency-preference';
 import { cn } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -32,6 +33,7 @@ export function TrackingWorkspace() {
   const canManage = user?.role === 'admin';
   const [tab, setTab] = useState<WorkspaceTab>('operation');
   const [selectedOfferId, setSelectedOfferId] = useState('');
+  const [displayCurrency, setDisplayCurrency] = useDisplayCurrency();
   const offers = useQuery({
     queryKey: ['tracking-offers'],
     queryFn: () => apiClient.listOffers(),
@@ -70,21 +72,38 @@ export function TrackingWorkspace() {
               conversões server-side para a Meta em uma única central.
             </p>
           </div>
-          <div className="grid min-w-[230px] grid-cols-2 gap-2">
-            {[
-              { icon: Webhook, label: 'Vendepay', value: 'Webhook' },
-              { icon: ShieldCheck, label: 'Meta', value: 'CAPI' },
-              { icon: Activity, label: 'Eventos', value: 'First-party' },
-              { icon: CheckCircle2, label: 'Entrega', value: 'Retentativas' },
-            ].map(({ icon: Icon, label, value }) => (
-              <div key={label} className="rounded-md border border-white/[0.07] bg-black/15 p-3">
-                <Icon className="h-3.5 w-3.5 text-cyan-300/75" />
-                <p className="mt-2 font-mono text-[10px] uppercase tracking-wider text-white/35">
-                  {label}
-                </p>
-                <p className="mt-0.5 text-xs text-white/70">{value}</p>
-              </div>
-            ))}
+          <div className="flex min-w-[230px] flex-col items-end gap-3">
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { icon: Webhook, label: 'Vendepay', value: 'Webhook' },
+                { icon: ShieldCheck, label: 'Meta', value: 'CAPI' },
+                { icon: Activity, label: 'Eventos', value: 'First-party' },
+                { icon: CheckCircle2, label: 'Entrega', value: 'Retentativas' },
+              ].map(({ icon: Icon, label, value }) => (
+                <div key={label} className="rounded-md border border-white/[0.07] bg-black/15 p-3">
+                  <Icon className="h-3.5 w-3.5 text-cyan-300/75" />
+                  <p className="mt-2 font-mono text-[10px] uppercase tracking-wider text-white/35">
+                    {label}
+                  </p>
+                  <p className="mt-0.5 text-xs text-white/70">{value}</p>
+                </div>
+              ))}
+            </div>
+            <fieldset className="tmx-currency-toggle">
+              <legend className="tmx-currency-toggle-label">Moeda</legend>
+              {(['BRL', 'USD'] as const).map((code) => (
+                <button
+                  key={code}
+                  type="button"
+                  onClick={() => setDisplayCurrency(code)}
+                  className="tmx-currency-toggle-btn"
+                  data-active={displayCurrency === code}
+                  aria-pressed={displayCurrency === code}
+                >
+                  {code}
+                </button>
+              ))}
+            </fieldset>
           </div>
         </div>
       </header>

@@ -1,5 +1,6 @@
 'use client';
 
+import { formatMoney, useDisplayCurrency } from '@/lib/currency-preference';
 import { cn } from '@/lib/utils';
 
 /**
@@ -25,18 +26,11 @@ type Summary = {
   unmapped_paid_orders: number;
   paid_revenue_minor: string;
   paid_revenue_brl_minor: string;
+  paid_revenue_usd_minor: string;
   unconverted_paid_orders: number;
   webhooks_received: number;
   webhooks_quarantined: number;
 };
-
-function money(minor: string | number | undefined) {
-  const value = Number(minor ?? 0) / 100;
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(Number.isFinite(value) ? value : 0);
-}
 
 function percent(numerator: number, denominator: number) {
   if (!denominator) return null;
@@ -49,18 +43,20 @@ function integer(value: number | undefined) {
 
 export function TrackerKpiRow({ summary }: { summary?: Summary }) {
   const s = summary;
+  const [displayCurrency] = useDisplayCurrency();
   const buyersFront = s?.paid_buyers ?? 0;
   const upsells = s?.upsell_orders ?? 0;
   const unmapped = s?.unmapped_paid_orders ?? 0;
-  // Faturamento is always displayed in BRL now, because ingestion converts
-  // every non-BRL sale at the current AwesomeAPI rate. Fall back to the raw
-  // sum only if the ingestion couldn't convert (rate unavailable) — in that
-  // case the raw sum is a mix of currencies and technically wrong, but at
-  // least it's non-zero so the operator knows sales are happening.
-  const revenue = money(
-    s?.paid_revenue_brl_minor && Number(s.paid_revenue_brl_minor) > 0
-      ? s.paid_revenue_brl_minor
-      : s?.paid_revenue_minor,
+  // Every non-BRL sale is converted at ingestion (persisted) and orders
+  // that predate the conversion feature fall through a read-time join
+  // against exchange_rate_cache in the summary query. The two totals
+  // reflect the same underlying revenue, formatted in the operator's
+  // preferred currency (persisted via useDisplayCurrency).
+  const revenueMinor =
+    displayCurrency === 'USD' ? s?.paid_revenue_usd_minor : s?.paid_revenue_brl_minor;
+  const revenue = formatMoney(
+    revenueMinor && Number(revenueMinor) > 0 ? revenueMinor : s?.paid_revenue_minor,
+    displayCurrency,
   );
   const connectRate = s?.ad_clicks ? percent(s.connected_clicks, s.ad_clicks) : null;
   const lossRate = s?.webhooks_received

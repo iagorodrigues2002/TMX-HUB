@@ -1168,6 +1168,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           orphan_orders: number;
           paid_revenue_minor: string;
           paid_revenue_brl_minor: string;
+          paid_revenue_usd_minor: string;
           unconverted_paid_orders: number;
           webhooks_received: number;
           webhooks_quarantined: number;
@@ -1251,6 +1252,27 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             ON rc.base_currency = o.currency AND rc.target_currency = 'BRL'
           WHERE o.project_id = p.id AND o.status = 'paid'
             AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS paid_revenue_brl_minor,
+        -- USD total for the display toggle. Same logic but reversed: BRL
+        -- orders divide by the USDBRL rate, USD orders pass through,
+        -- everything else goes BRL then divides.
+        (SELECT COALESCE(sum(
+            CASE
+              WHEN o.currency = 'USD' THEN o.amount_minor
+              WHEN o.currency = 'BRL' AND usd.rate IS NOT NULL THEN (o.amount_minor / usd.rate)::bigint
+              WHEN o.amount_brl_minor IS NOT NULL AND usd.rate IS NOT NULL
+                THEN (o.amount_brl_minor / usd.rate)::bigint
+              WHEN rc.rate IS NOT NULL AND usd.rate IS NOT NULL
+                THEN ((o.amount_minor * rc.rate) / usd.rate)::bigint
+              ELSE 0
+            END
+          ), 0)::text
+          FROM tracking_orders o
+          LEFT JOIN exchange_rate_cache rc
+            ON rc.base_currency = o.currency AND rc.target_currency = 'BRL'
+          LEFT JOIN exchange_rate_cache usd
+            ON usd.base_currency = 'USD' AND usd.target_currency = 'BRL'
+          WHERE o.project_id = p.id AND o.status = 'paid'
+            AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS paid_revenue_usd_minor,
         -- Orders that arrived but couldn't be converted at all (rate unknown
         -- and never cached). Zero once the rate service has quoted the
         -- currency once, even if the persisted column stays NULL.
@@ -1301,6 +1323,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           orphan_orders: 0,
           paid_revenue_minor: '0',
           paid_revenue_brl_minor: '0',
+          paid_revenue_usd_minor: '0',
           unconverted_paid_orders: 0,
           webhooks_received: 0,
           webhooks_quarantined: 0,
