@@ -1528,7 +1528,7 @@ export function TrackingAdvancedCenter({
                             </>
                           )}
                         </p>
-                        {destination.devices.length > 0 && (
+                        {Array.isArray(destination.devices) && destination.devices.length > 0 && (
                           <p className="mt-1 text-white/30">
                             Dispositivos: {destination.devices.join(', ')}
                           </p>

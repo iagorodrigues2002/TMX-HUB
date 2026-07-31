@@ -62,7 +62,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
            ${encryptSecret(parsed.data.secret, env.TRACKING_ENCRYPTION_KEY)},
            ${parsed.data.front_notification_name},
            ${parsed.data.upsell_notification_name ?? null},
-           ${JSON.stringify(parsed.data.devices)})
+           ${app.db.json(parsed.data.devices)})
         RETURNING id, name, front_notification_name, upsell_notification_name,
                   devices, enabled, created_at, updated_at
       `;
