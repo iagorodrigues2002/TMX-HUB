@@ -667,6 +667,32 @@ export interface IntradaySummaryView {
   windows: IntradayWindowView[];
 }
 
+export interface IntradayRangeWindowView {
+  index: number;
+  label: string;
+  startHour: number;
+  endHour: number;
+  available: boolean;
+  partial: boolean;
+  samples: number;
+  daysAvailable: number;
+  metrics: MetricsView;
+  adsAvailable: boolean;
+  adsPartial: boolean;
+  ads: IntradayAdView[];
+}
+
+export interface IntradayRangeSummaryView {
+  from: string;
+  to: string;
+  timeZone: string;
+  updatedAt?: string;
+  days: number;
+  overall: MetricsView;
+  overallAds: IntradayAdView[];
+  windows: IntradayRangeWindowView[];
+}
+
 export type OfferAiTone = 'direto' | 'conservador' | 'detalhado';
 
 export interface OfferAiConfigView {
@@ -1160,6 +1186,15 @@ export const apiClient = {
   async getOfferIntraday(id: string, date?: string): Promise<IntradaySummaryView> {
     const query = date ? `?date=${encodeURIComponent(date)}` : '';
     return request(`/v1/offers/${id}/intraday${query}`);
+  },
+
+  async getOfferIntradayRange(
+    id: string,
+    from: string,
+    to: string,
+  ): Promise<IntradayRangeSummaryView> {
+    const params = new URLSearchParams({ from, to });
+    return request(`/v1/offers/${id}/intraday/range?${params.toString()}`);
   },
 
   async getTrackingConfig(id: string): Promise<{

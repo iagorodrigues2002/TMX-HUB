@@ -46,6 +46,32 @@ export interface IntradaySummary {
   windows: IntradayWindow[];
 }
 
+export interface IntradayRangeWindow {
+  index: number;
+  label: string;
+  startHour: number;
+  endHour: number;
+  available: boolean;
+  partial: boolean;
+  samples: number;
+  daysAvailable: number;
+  metrics: SnapshotMetrics;
+  adsAvailable: boolean;
+  adsPartial: boolean;
+  ads: IntradayAdMetrics[];
+}
+
+export interface IntradayRangeSummary {
+  from: string;
+  to: string;
+  timeZone: typeof TIME_ZONE;
+  updatedAt?: string;
+  days: number;
+  overall: SnapshotMetrics;
+  overallAds: IntradayAdMetrics[];
+  windows: IntradayRangeWindow[];
+}
+
 function key(offerId: string, date: string): string {
   return `${PREFIX}${offerId}:${date}`;
 }
@@ -58,6 +84,53 @@ function previousIsoDate(date: string): string {
   const value = new Date(`${date}T00:00:00Z`);
   value.setUTCDate(value.getUTCDate() - 1);
   return value.toISOString().slice(0, 10);
+}
+
+function nextIsoDate(date: string): string {
+  const value = new Date(`${date}T00:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + 1);
+  return value.toISOString().slice(0, 10);
+}
+
+function enumerateDates(from: string, to: string): string[] {
+  const dates: string[] = [];
+  let cursor = from;
+  while (cursor <= to) {
+    dates.push(cursor);
+    cursor = nextIsoDate(cursor);
+  }
+  return dates;
+}
+
+function sumRawMetrics(
+  entries: Array<{ spend: number; sales: number; revenue: number; ic: number }>,
+) {
+  return entries.reduce(
+    (acc, entry) => ({
+      spend: acc.spend + entry.spend,
+      sales: acc.sales + entry.sales,
+      revenue: acc.revenue + entry.revenue,
+      ic: acc.ic + entry.ic,
+    }),
+    { spend: 0, sales: 0, revenue: 0, ic: 0 },
+  );
+}
+
+function mergeAdMetrics(adLists: IntradayAdMetrics[][]): IntradayAdMetrics[] {
+  const grouped = new Map<string, { spend: number; sales: number; revenue: number; ic: number }>();
+  for (const ads of adLists) {
+    for (const ad of ads) {
+      const current = grouped.get(ad.name) ?? { spend: 0, sales: 0, revenue: 0, ic: 0 };
+      current.spend += ad.spend;
+      current.sales += ad.sales;
+      current.revenue += ad.revenue;
+      current.ic += ad.ic;
+      grouped.set(ad.name, current);
+    }
+  }
+  return [...grouped.entries()]
+    .map(([name, raw]) => ({ name, ...computeMetrics(raw) }))
+    .sort((a, b) => b.revenue - a.revenue || b.spend - a.spend);
 }
 
 export function saoPauloParts(at: Date): { date: string; hour: number } {
@@ -240,6 +313,64 @@ export class IntradayStore {
       }
     }
     return buildIntradaySummary(date, checkpoints, now);
+  }
+
+  // Aggregates several days of already-archived (or live, for today) daily
+  // summaries into one range. Raw per-checkpoint data doesn't survive past
+  // days (see archiveDay), so this sums the additive fields (spend/sales/
+  // revenue/ic) from each day's summary and recomputes ratios (cpa/roas/etc)
+  // from the totals — never averages/sums the ratios themselves.
+  async summaryRange(
+    offerId: string,
+    now: Date,
+    fromDate: string,
+    toDate: string,
+  ): Promise<IntradayRangeSummary> {
+    const dates = enumerateDates(fromDate, toDate);
+    const summaries = await Promise.all(dates.map((date) => this.summary(offerId, now, date)));
+
+    const overall = computeMetrics(sumRawMetrics(summaries.map((s) => s.overall)));
+    const overallAds = mergeAdMetrics(summaries.map((s) => s.overallAds));
+
+    const windows = Array.from({ length: 12 }, (_, index): IntradayRangeWindow => {
+      const startHour = index * 2;
+      const endHour = startHour + 2;
+      const dayWindows = summaries.map((s) => s.windows[index]).filter((w) => w !== undefined);
+      const availableDayWindows = dayWindows.filter((w) => w.available);
+      const adsDayWindows = dayWindows.filter((w) => w.adsAvailable);
+      const ads = mergeAdMetrics(adsDayWindows.map((w) => w.ads));
+      return {
+        index,
+        label: `${String(startHour).padStart(2, '0')}h–${String(endHour).padStart(2, '0')}h`,
+        startHour,
+        endHour,
+        available: availableDayWindows.length > 0,
+        partial: dayWindows.some((w) => w.partial),
+        samples: dayWindows.reduce((total, w) => total + w.samples, 0),
+        daysAvailable: availableDayWindows.length,
+        metrics: computeMetrics(sumRawMetrics(availableDayWindows.map((w) => w.metrics))),
+        adsAvailable: ads.length > 0,
+        adsPartial: dayWindows.some((w) => w.adsPartial),
+        ads,
+      };
+    });
+
+    const updatedAt = summaries
+      .map((s) => s.updatedAt)
+      .filter((value): value is string => Boolean(value))
+      .sort()
+      .at(-1);
+
+    return {
+      from: fromDate,
+      to: toDate,
+      timeZone: TIME_ZONE,
+      ...(updatedAt ? { updatedAt } : {}),
+      days: dates.length,
+      overall,
+      overallAds,
+      windows,
+    };
   }
 
   private async archiveDay(offerId: string, date: string, now: Date): Promise<void> {

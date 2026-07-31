@@ -16,6 +16,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   type IntradayAdView,
+  type IntradayRangeSummaryView,
+  type IntradaySummaryView,
   type MetricsView,
   apiClient,
   canAccessOfferAi,
@@ -115,7 +117,8 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
   const [compareLeft, setCompareLeft] = useState('');
   const [compareRight, setCompareRight] = useState('');
   const [intradayMode, setIntradayMode] = useState<'overview' | 'ads'>('overview');
-  const [intradayDate, setIntradayDate] = useState(() => todayIso());
+  const [intradayFrom, setIntradayFrom] = useState(() => todayIso());
+  const [intradayTo, setIntradayTo] = useState(() => todayIso());
   const [intradayAdWindow, setIntradayAdWindow] = useState('overall');
   const [intradayAdSearch, setIntradayAdSearch] = useState('');
   const [adCompareLeft, setAdCompareLeft] = useState('');
@@ -146,11 +149,15 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
   });
   const data = snapshotsQuery.data;
 
-  const intradayQuery = useQuery({
-    queryKey: ['offer-intraday', id, intradayDate],
-    queryFn: () => apiClient.getOfferIntraday(id, intradayDate),
+  const isIntradayRange = intradayFrom !== intradayTo;
+  const intradayQuery = useQuery<IntradaySummaryView | IntradayRangeSummaryView>({
+    queryKey: ['offer-intraday', id, intradayFrom, intradayTo],
+    queryFn: () =>
+      isIntradayRange
+        ? apiClient.getOfferIntradayRange(id, intradayFrom, intradayTo)
+        : apiClient.getOfferIntraday(id, intradayFrom),
     enabled: Boolean(offer?.utmifyConfigured),
-    refetchInterval: intradayDate === todayIso() ? 60_000 : false,
+    refetchInterval: !isIntradayRange && intradayFrom === todayIso() ? 60_000 : false,
     refetchOnWindowFocus: false,
   });
   const intraday = intradayQuery.data;
@@ -241,11 +248,16 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
   const rightWindow = intraday?.windows.find(
     (window) => window.index === (compareRight ? Number(compareRight) : defaultRight),
   );
-  const currentWindow = intraday?.windows.find(
-    (window) =>
-      window.index ===
-      (intradayDate === todayIso() ? intraday.currentWindowIndex : availableWindows.at(-1)?.index),
-  );
+  const currentWindow =
+    !isIntradayRange && intraday && 'currentWindowIndex' in intraday
+      ? intraday.windows.find(
+          (window) =>
+            window.index ===
+            (intradayFrom === todayIso()
+              ? intraday.currentWindowIndex
+              : availableWindows.at(-1)?.index),
+        )
+      : undefined;
   const selectedAdWindow =
     intradayAdWindow === 'overall'
       ? undefined
@@ -647,19 +659,37 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
               <h2 className="text-[16px] font-semibold text-white">Janelas intradiárias</h2>
             </div>
             <p className="mt-1 text-[12px] text-white/45">
-              Checkpoints a cada 30 minutos · janelas fixas de 2 horas · histórico separado por dia
-              · horário de São Paulo
+              Checkpoints a cada 30 minutos · janelas fixas de 2 horas · horário de São Paulo ·
+              selecione um período pra somar vários dias
             </p>
           </div>
           <div className="flex items-end gap-3">
             <Label className="space-y-1">
-              <span className="hud-label">Dia das janelas</span>
+              <span className="hud-label">De</span>
               <Input
                 type="date"
-                value={intradayDate}
+                value={intradayFrom}
+                max={intradayTo}
+                onChange={(event) => {
+                  setIntradayFrom(event.target.value || todayIso());
+                  setCompareLeft('');
+                  setCompareRight('');
+                  setIntradayAdWindow('overall');
+                  setAdCompareLeft('');
+                  setAdCompareRight('');
+                }}
+                className="h-9 w-[160px]"
+              />
+            </Label>
+            <Label className="space-y-1">
+              <span className="hud-label">Até</span>
+              <Input
+                type="date"
+                value={intradayTo}
+                min={intradayFrom}
                 max={todayIso()}
                 onChange={(event) => {
-                  setIntradayDate(event.target.value || todayIso());
+                  setIntradayTo(event.target.value || todayIso());
                   setCompareLeft('');
                   setCompareRight('');
                   setIntradayAdWindow('overall');
@@ -709,39 +739,47 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
           </div>
         ) : intradayMode === 'overview' ? (
           <>
-            <div className="grid gap-4 xl:grid-cols-2">
+            <div className={`grid gap-4 ${isIntradayRange ? '' : 'xl:grid-cols-2'}`}>
               <article className="glass-card p-4">
                 <p className="hud-label">
-                  Janela geral · {new Date(`${intraday.date}T12:00:00`).toLocaleDateString('pt-BR')}
+                  {isIntradayRange
+                    ? `Acumulado no período · ${new Date(`${intradayFrom}T12:00:00`).toLocaleDateString('pt-BR')} a ${new Date(`${intradayTo}T12:00:00`).toLocaleDateString('pt-BR')}`
+                    : `Janela geral · ${new Date(`${intradayFrom}T12:00:00`).toLocaleDateString('pt-BR')}`}
                 </p>
-                <p className="mt-1 text-[12px] text-white/45">Acumulado desde 00h</p>
+                <p className="mt-1 text-[12px] text-white/45">
+                  {isIntradayRange
+                    ? `Soma de ${'days' in intraday ? intraday.days : 0} dia(s)`
+                    : 'Acumulado desde 00h'}
+                </p>
                 <WindowMetrics metrics={intraday.overall} currency={currency} />
               </article>
-              <article className="glass-card border-cyan-300/15 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="hud-label">
-                      {intradayDate === todayIso() ? 'Janela atual' : 'Última janela disponível'}
-                    </p>
-                    <p className="mt-1 text-[12px] text-white/45">
-                      {currentWindow?.label ?? 'Aguardando checkpoint'}
-                    </p>
+              {!isIntradayRange && (
+                <article className="glass-card border-cyan-300/15 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="hud-label">
+                        {intradayFrom === todayIso() ? 'Janela atual' : 'Última janela disponível'}
+                      </p>
+                      <p className="mt-1 text-[12px] text-white/45">
+                        {currentWindow?.label ?? 'Aguardando checkpoint'}
+                      </p>
+                    </div>
+                    {currentWindow?.partial && (
+                      <span className="rounded-full border border-amber-300/20 px-2 py-1 text-[9px] uppercase tracking-[0.12em] text-amber-200">
+                        Parcial
+                      </span>
+                    )}
                   </div>
-                  {currentWindow?.partial && (
-                    <span className="rounded-full border border-amber-300/20 px-2 py-1 text-[9px] uppercase tracking-[0.12em] text-amber-200">
-                      Parcial
-                    </span>
+                  {currentWindow?.available ? (
+                    <WindowMetrics metrics={currentWindow.metrics} currency={currency} />
+                  ) : (
+                    <p className="mt-5 text-[12px] text-white/45">
+                      É necessário um checkpoint anterior ao início da janela para calcular a
+                      diferença.
+                    </p>
                   )}
-                </div>
-                {currentWindow?.available ? (
-                  <WindowMetrics metrics={currentWindow.metrics} currency={currency} />
-                ) : (
-                  <p className="mt-5 text-[12px] text-white/45">
-                    É necessário um checkpoint anterior ao início da janela para calcular a
-                    diferença.
-                  </p>
-                )}
-              </article>
+                </article>
+              )}
             </div>
 
             <div className="glass-card overflow-hidden p-0">
@@ -759,7 +797,9 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                         {window.label}
                       </p>
                       <span className="text-[9px] uppercase tracking-[0.12em] text-white/30">
-                        {window.samples} coleta(s)
+                        {isIntradayRange && 'daysAvailable' in window
+                          ? `${window.daysAvailable}/${'days' in intraday ? intraday.days : 0} dias`
+                          : `${window.samples} coleta(s)`}
                       </span>
                     </div>
                     {window.available ? (
@@ -885,7 +925,9 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                   onChange={(event) => setIntradayAdWindow(event.target.value)}
                   className="block h-10 min-w-[190px] rounded-md border border-white/10 bg-[#0b1b22] px-3 text-[12px] text-white"
                 >
-                  <option value="overall">Acumulado do dia</option>
+                  <option value="overall">
+                    {isIntradayRange ? 'Acumulado do período' : 'Acumulado do dia'}
+                  </option>
                   {intraday.windows.map((window) => (
                     <option key={window.index} value={window.index} disabled={!window.adsAvailable}>
                       {window.label}

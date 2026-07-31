@@ -11,8 +11,8 @@ import { BadRequestError, HttpProblem, zodToProblem } from '../lib/problem.js';
 import {
   DEFAULT_AI_ROLE,
   DEFAULT_AI_TEMPLATE,
-  generateCampaignAnalysis,
   OPENCODE_MODELS,
+  generateCampaignAnalysis,
 } from '../services/campaign-ai.js';
 import { computeMetrics } from '../services/snapshot-store.js';
 
@@ -339,6 +339,51 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         req.user.role === 'admin',
       );
       return reply.send(await app.intradayStore.summary(offer.id, new Date(), parsed.data.date));
+    },
+  );
+
+  // Same 12 fixed 2h windows as /intraday, but summed across a date range
+  // instead of a single day (raw checkpoints don't survive past days, so
+  // this sums each day's already-archived summary and recomputes ratios).
+  app.get<{ Params: { id: string }; Querystring: { from?: string; to?: string } }>(
+    '/offers/:id/intraday/range',
+    async (req, reply) => {
+      if (!req.user) throw new BadRequestError('No user attached.');
+      const parsed = RangeQuerySchema.safeParse(req.query);
+      if (!parsed.success) throw zodToProblem(parsed.error, req.url);
+      const offer = await app.offerStore.assertAccess(
+        req.params.id,
+        req.user.sub,
+        req.user.role === 'admin',
+      );
+      const { from, to } = resolveRange(parsed.data);
+      if (from > to) {
+        throw new HttpProblem({
+          status: 400,
+          title: 'Bad Request',
+          detail: '"from" precisa ser antes ou igual a "to".',
+          code: 'invalid_range',
+        });
+      }
+      if (to > isoToday()) {
+        throw new HttpProblem({
+          status: 400,
+          title: 'Bad Request',
+          detail: '"to" não pode estar no futuro.',
+          code: 'date_in_future',
+        });
+      }
+      const MAX_RANGE_DAYS = 60;
+      const spanDays = Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000) + 1;
+      if (spanDays > MAX_RANGE_DAYS) {
+        throw new HttpProblem({
+          status: 400,
+          title: 'Bad Request',
+          detail: `O período não pode passar de ${MAX_RANGE_DAYS} dias.`,
+          code: 'range_too_large',
+        });
+      }
+      return reply.send(await app.intradayStore.summaryRange(offer.id, new Date(), from, to));
     },
   );
 
