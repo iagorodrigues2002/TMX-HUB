@@ -1379,7 +1379,12 @@ export const apiClient = {
   async testTrackingPushcutDestination(
     id: string,
     destinationId: string,
-  ): Promise<{ accepted: boolean; status?: number; error?: string }> {
+  ): Promise<{
+    accepted: boolean;
+    status: number | null;
+    response?: { error?: string; [key: string]: unknown };
+    error?: string;
+  }> {
     return request(`/v1/offers/${id}/tracking/pushcut-destinations/${destinationId}/test`, {
       method: 'POST',
     });

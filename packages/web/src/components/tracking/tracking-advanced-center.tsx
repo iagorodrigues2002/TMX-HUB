@@ -446,8 +446,15 @@ export function TrackingAdvancedCenter({
     mutationFn: (destinationId: string) =>
       apiClient.testTrackingPushcutDestination(offerId, destinationId),
     onSuccess: (result) => {
-      if (result.accepted) toast.success('Notificação de teste enviada. Confira seu dispositivo.');
-      else toast.error(result.error ?? `Pushcut respondeu com erro (HTTP ${result.status}).`);
+      if (result.accepted) {
+        toast.success('Notificação de teste enviada. Confira seu dispositivo.');
+        return;
+      }
+      const pushcutMessage = result.response?.error;
+      const detail = pushcutMessage
+        ? `${pushcutMessage}${result.status ? ` (HTTP ${result.status})` : ''}`
+        : (result.error ?? `Pushcut respondeu com erro (HTTP ${result.status}).`);
+      toast.error(`Pushcut recusou o teste: ${detail}`);
     },
     onError: (error) => toast.error((error as Error).message),
   });

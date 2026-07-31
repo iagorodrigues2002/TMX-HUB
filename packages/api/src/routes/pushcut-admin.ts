@@ -160,14 +160,22 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             return { message: text.slice(0, 500) };
           }
         })();
-        return reply.code(response.ok ? 200 : 502).send({
+        // Always 200 here: this is a diagnostic action, and Pushcut rejecting
+        // the request (bad notification name, wrong secret, ...) is an
+        // expected, informative outcome for the admin to see — not a failure
+        // of our own API. Returning a non-2xx would make the frontend's
+        // generic request() helper throw before it ever reaches the
+        // accepted/response handling below, hiding Pushcut's real error
+        // message behind a bare "HTTP 502".
+        return reply.code(200).send({
           accepted: response.ok,
           status: response.status,
           response: body,
         });
       } catch (error) {
-        return reply.code(502).send({
+        return reply.code(200).send({
           accepted: false,
+          status: null,
           error: error instanceof Error ? error.message : String(error),
         });
       }
