@@ -6,6 +6,7 @@ import { TrackingPanel } from '@/components/tracking/tracking-panel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api-client';
+import { formatMoney } from '@/lib/currency-preference';
 import { cn } from '@/lib/utils';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -19,13 +20,15 @@ import {
   Globe2,
   HelpCircle,
   Megaphone,
+  Percent,
   RadioTower,
   RefreshCw,
   Send,
+  Undo2,
   Video,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 const vendepaySample = JSON.stringify(
@@ -82,6 +85,7 @@ type Section =
   | 'tracker'
   | 'funnel'
   | 'attribution'
+  | 'refunds'
   | 'ab'
   | 'vturb'
   | 'pixels'
@@ -91,12 +95,14 @@ type Section =
   | 'meta'
   | 'utmify'
   | 'pushcut'
+  | 'fees'
   | 'help';
 
 const sections: Array<{ id: Section; label: string; icon: LucideIcon; group: string }> = [
   { id: 'tracker', label: 'Tracker', icon: RadioTower, group: 'Operação' },
   { id: 'funnel', label: 'Funil', icon: BarChart3, group: 'Operação' },
   { id: 'attribution', label: 'Campanhas e anúncios', icon: Megaphone, group: 'Operação' },
+  { id: 'refunds', label: 'Reembolsos e chargeback', icon: Undo2, group: 'Operação' },
   { id: 'ab', label: 'Testes A/B', icon: FlaskConical, group: 'Operação' },
   { id: 'vturb', label: 'Conversões vTurb', icon: Video, group: 'Operação' },
   { id: 'pixels', label: 'Pixels', icon: Facebook, group: 'Configuração' },
@@ -106,6 +112,7 @@ const sections: Array<{ id: Section; label: string; icon: LucideIcon; group: str
   { id: 'meta', label: 'Envio ao Meta', icon: Send, group: 'Configuração' },
   { id: 'utmify', label: 'Envio à UTMify', icon: Cable, group: 'Configuração' },
   { id: 'pushcut', label: 'Notificações Pushcut', icon: BellRing, group: 'Configuração' },
+  { id: 'fees', label: 'Taxas e líquido', icon: Percent, group: 'Configuração' },
   { id: 'help', label: 'Ajuda e testes', icon: HelpCircle, group: 'Configuração' },
 ];
 
@@ -145,6 +152,12 @@ export function TrackingAdvancedCenter({
   const [pushcutFrontNotification, setPushcutFrontNotification] = useState('');
   const [pushcutUpsellNotification, setPushcutUpsellNotification] = useState('');
   const [pushcutDevices, setPushcutDevices] = useState('');
+  const [feeVendepayPct, setFeeVendepayPct] = useState('');
+  const [feeExtraAmount, setFeeExtraAmount] = useState('');
+  const [feeExtraCurrency, setFeeExtraCurrency] = useState('');
+  const [feeReservePct, setFeeReservePct] = useState('');
+  const [feeReserveDays, setFeeReserveDays] = useState('');
+  const [feePayoutDays, setFeePayoutDays] = useState('');
   const qc = useQueryClient();
   const refreshTracking = async () => {
     setIsRefreshingTracking(true);
@@ -476,6 +489,43 @@ export function TrackingAdvancedCenter({
     },
     onError: (error) => toast.error((error as Error).message),
   });
+  const refunds = useQuery({
+    queryKey: ['tracking-refunds', offerId, trackingDate],
+    queryFn: () => apiClient.getTrackingRefunds(offerId, trackingDate),
+    enabled: section === 'refunds',
+    retry: false,
+  });
+  const feeSettings = useQuery({
+    queryKey: ['tracking-fee-settings', offerId],
+    queryFn: () => apiClient.getTrackingFeeSettings(offerId),
+    retry: false,
+  });
+  useEffect(() => {
+    if (!feeSettings.data) return;
+    setFeeVendepayPct(String(feeSettings.data.vendepay_fee_pct));
+    setFeeExtraAmount((feeSettings.data.extra_fee_minor / 100).toFixed(2));
+    setFeeExtraCurrency(feeSettings.data.extra_fee_currency);
+    setFeeReservePct(String(feeSettings.data.reserve_pct));
+    setFeeReserveDays(String(feeSettings.data.reserve_days));
+    setFeePayoutDays(String(feeSettings.data.payout_days));
+  }, [feeSettings.data]);
+  const saveFeeSettings = useMutation({
+    mutationFn: () =>
+      apiClient.updateTrackingFeeSettings(offerId, {
+        vendepay_fee_pct: Number(feeVendepayPct.replace(',', '.')),
+        extra_fee_minor: Math.round(Number(feeExtraAmount.replace(',', '.')) * 100),
+        extra_fee_currency: feeExtraCurrency,
+        reserve_pct: Number(feeReservePct.replace(',', '.')),
+        reserve_days: Number(feeReserveDays),
+        payout_days: Number(feePayoutDays),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['tracking-fee-settings', offerId] });
+      void qc.invalidateQueries({ queryKey: ['tracking-summary', offerId] });
+      toast.success('Taxas salvas. O líquido já reflete os novos valores.');
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
   const rotateVendepay = useMutation({
     mutationFn: () => apiClient.rotateVendepayWebhook(offerId),
     onSuccess: (result) => {
@@ -549,7 +599,7 @@ export function TrackingAdvancedCenter({
         ))}
       </aside>
       <div className="min-w-0">
-        {(['tracker', 'funnel', 'attribution'] as Section[]).includes(section) && (
+        {(['tracker', 'funnel', 'attribution', 'refunds'] as Section[]).includes(section) && (
           <div className="mb-3 flex flex-wrap items-end justify-between gap-3 rounded-lg border border-white/[0.08] bg-black/15 p-3">
             <div>
               <p className="hud-label">Período do trackeamento</p>
@@ -604,6 +654,67 @@ export function TrackingAdvancedCenter({
         )}
         {section === 'attribution' && (
           <TrackingLiveConsole offerId={offerId} mode="attribution" date={trackingDate} />
+        )}
+        {section === 'refunds' && (
+          <Module
+            title="Reembolsos e chargeback"
+            description="Pedidos com status reembolsado ou chargeback no dia selecionado, pela data em que o status mudou — não pela data da compra original."
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg border border-amber-300/15 bg-amber-300/[0.04] p-4">
+                <p className="hud-label text-amber-200/80">Reembolsos</p>
+                <p className="mono-num mt-2 text-2xl text-white">
+                  {formatMoney(refunds.data?.totals.refunded_revenue_brl_minor, 'BRL')}
+                </p>
+                <p className="mt-1 text-xs text-white/45">
+                  {refunds.data?.totals.refunded_orders ?? 0} pedido(s)
+                </p>
+              </div>
+              <div className="rounded-lg border border-red-300/15 bg-red-300/[0.04] p-4">
+                <p className="hud-label text-red-200/80">Chargeback</p>
+                <p className="mono-num mt-2 text-2xl text-white">
+                  {formatMoney(refunds.data?.totals.chargeback_revenue_brl_minor, 'BRL')}
+                </p>
+                <p className="mt-1 text-xs text-white/45">
+                  {refunds.data?.totals.chargeback_orders ?? 0} pedido(s)
+                </p>
+              </div>
+            </div>
+            <div className="mt-6 space-y-2">
+              {(refunds.data?.items ?? []).map((item) => (
+                <div
+                  key={item.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded border border-white/[0.07] p-3 text-xs"
+                >
+                  <div>
+                    <p className="font-mono text-white/70">{item.external_id}</p>
+                    <p className="mt-1 text-white/40">
+                      {item.buyer?.name ?? item.buyer?.email ?? 'comprador não identificado'} ·{' '}
+                      {item.order_kind} ·{' '}
+                      {new Date(item.updated_at).toLocaleString('pt-BR', {
+                        timeZone: 'America/Sao_Paulo',
+                      })}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={item.status === 'chargeback' ? 'text-red-300' : 'text-amber-300'}
+                    >
+                      {item.status === 'chargeback' ? 'chargeback' : 'reembolsado'}
+                    </span>
+                    <span className="mono-num text-white/80">
+                      {formatMoney(item.amount_brl_minor ?? undefined, 'BRL')}
+                    </span>
+                  </div>
+                </div>
+              ))}
+              {!refunds.data?.items?.length && (
+                <p className="rounded border border-dashed border-white/[0.08] p-4 text-sm text-white/35">
+                  Nenhum reembolso ou chargeback neste dia.
+                </p>
+              )}
+            </div>
+          </Module>
         )}
         {(section === 'pixels' || section === 'code') && (
           <TrackingPanel offerId={offerId} canManage={canManage} />
@@ -1668,6 +1779,110 @@ export function TrackingAdvancedCenter({
                 )}
               </div>
             </div>
+          </Module>
+        )}
+        {section === 'fees' && (
+          <Module
+            title="Taxas e líquido"
+            description="Configure as taxas cobradas pelo gateway pra calcular o faturamento líquido (bruto − reembolsos − chargebacks − taxas) exibido no Funil. Os valores já vêm preenchidos com as taxas do Mercado Global da Vendepay — ajuste se sua oferta usar outra tabela."
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label htmlFor="fee-vendepay-pct" className="block text-xs text-white/45">
+                  Taxa Vendepay (%)
+                </label>
+                <Input
+                  id="fee-vendepay-pct"
+                  className="mt-2"
+                  inputMode="decimal"
+                  value={feeVendepayPct}
+                  onChange={(e) => setFeeVendepayPct(e.target.value)}
+                  placeholder="9.9"
+                />
+              </div>
+              <div className="grid grid-cols-[1fr_90px] gap-2">
+                <div>
+                  <label htmlFor="fee-extra-amount" className="block text-xs text-white/45">
+                    Taxa extra (por venda)
+                  </label>
+                  <Input
+                    id="fee-extra-amount"
+                    className="mt-2"
+                    inputMode="decimal"
+                    value={feeExtraAmount}
+                    onChange={(e) => setFeeExtraAmount(e.target.value)}
+                    placeholder="1.49"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="fee-extra-currency" className="block text-xs text-white/45">
+                    Moeda
+                  </label>
+                  <Input
+                    id="fee-extra-currency"
+                    className="mt-2 uppercase"
+                    maxLength={3}
+                    value={feeExtraCurrency}
+                    onChange={(e) => setFeeExtraCurrency(e.target.value.toUpperCase())}
+                    placeholder="USD"
+                  />
+                </div>
+              </div>
+              <div>
+                <label htmlFor="fee-reserve-pct" className="block text-xs text-white/45">
+                  Reserva (%)
+                </label>
+                <Input
+                  id="fee-reserve-pct"
+                  className="mt-2"
+                  inputMode="decimal"
+                  value={feeReservePct}
+                  onChange={(e) => setFeeReservePct(e.target.value)}
+                  placeholder="6.9"
+                />
+              </div>
+              <div>
+                <label htmlFor="fee-reserve-days" className="block text-xs text-white/45">
+                  Tempo de reserva (dias)
+                </label>
+                <Input
+                  id="fee-reserve-days"
+                  className="mt-2"
+                  inputMode="numeric"
+                  value={feeReserveDays}
+                  onChange={(e) => setFeeReserveDays(e.target.value)}
+                  placeholder="90"
+                />
+              </div>
+              <div>
+                <label htmlFor="fee-payout-days" className="block text-xs text-white/45">
+                  Recebe em (dias)
+                </label>
+                <Input
+                  id="fee-payout-days"
+                  className="mt-2"
+                  inputMode="numeric"
+                  value={feePayoutDays}
+                  onChange={(e) => setFeePayoutDays(e.target.value)}
+                  placeholder="5"
+                />
+              </div>
+            </div>
+            {canManage && (
+              <Button
+                className="mt-4"
+                disabled={saveFeeSettings.isPending}
+                onClick={() => saveFeeSettings.mutate()}
+              >
+                Salvar taxas
+              </Button>
+            )}
+            {feeSettings.data && !feeSettings.data.configured && (
+              <p className="mt-4 rounded border border-dashed border-white/[0.08] p-3 text-xs text-white/40">
+                Ainda usando os valores padrão do Mercado Global. Salve pra fixar essa configuração
+                nesta oferta.
+              </p>
+            )}
           </Module>
         )}
         {section === 'ab' && (

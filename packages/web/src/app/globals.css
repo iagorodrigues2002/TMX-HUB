@@ -663,6 +663,9 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+[data-surface="tracking"] .tmx-kpi-tier1.tmx-kpi-tier1-single {
+  grid-template-columns: 1fr;
+}
 
 [data-surface="tracking"] .tmx-kpi-hero {
   background: var(--surface-plate);

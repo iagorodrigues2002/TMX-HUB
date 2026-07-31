@@ -3,6 +3,7 @@
 import { TrackingAdvancedCenter } from '@/components/tracking/tracking-advanced-center';
 import { TrackingBackdrop } from '@/components/tracking/tracking-backdrop';
 import { TrackingHelp } from '@/components/tracking/tracking-help';
+import { TrackingOverviewDashboard } from '@/components/tracking/tracking-overview-dashboard';
 import { Button } from '@/components/ui/button';
 import { type OfferView, apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
@@ -14,6 +15,7 @@ import {
   BookOpenCheck,
   CheckCircle2,
   ChevronDown,
+  LayoutDashboard,
   Loader2,
   RadioTower,
   ShieldCheck,
@@ -22,7 +24,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-type WorkspaceTab = 'operation' | 'guide';
+type WorkspaceTab = 'overview' | 'operation' | 'guide';
 
 function offerLabel(offer: OfferView) {
   return offer.companyName ? `${offer.name} · ${offer.companyName}` : offer.name;
@@ -31,7 +33,7 @@ function offerLabel(offer: OfferView) {
 export function TrackingWorkspace() {
   const { user } = useAuth();
   const canManage = user?.role === 'admin';
-  const [tab, setTab] = useState<WorkspaceTab>('operation');
+  const [tab, setTab] = useState<WorkspaceTab>('overview');
   const [selectedOfferId, setSelectedOfferId] = useState('');
   const [displayCurrency, setDisplayCurrency] = useDisplayCurrency();
   const offers = useQuery({
@@ -112,6 +114,18 @@ export function TrackingWorkspace() {
         <Button
           type="button"
           variant="ghost"
+          onClick={() => setTab('overview')}
+          className={cn(
+            'gap-2 text-white/45',
+            tab === 'overview' && 'bg-cyan-300/[0.09] text-cyan-200',
+          )}
+        >
+          <LayoutDashboard className="h-4 w-4" />
+          Visão geral
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
           onClick={() => setTab('operation')}
           className={cn(
             'gap-2 text-white/45',
@@ -135,7 +149,9 @@ export function TrackingWorkspace() {
         </Button>
       </div>
 
-      {tab === 'guide' ? (
+      {tab === 'overview' ? (
+        <TrackingOverviewDashboard />
+      ) : tab === 'guide' ? (
         <div>
           <div className="mb-6">
             <p className="hud-label">Guia completo</p>

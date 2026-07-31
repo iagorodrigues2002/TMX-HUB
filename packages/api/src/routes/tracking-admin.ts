@@ -43,6 +43,30 @@ const databaseUnavailable = {
   detail: 'A infraestrutura de tracking está temporariamente indisponível.',
 };
 
+// Mirrors Vendepay's "Taxas Mercado Global" card so net revenue is sensible
+// before anyone configures per-offer fees in tracking_fee_settings.
+const DEFAULT_FEE_SETTINGS = {
+  vendepay_fee_pct: '9.9',
+  extra_fee_minor: '149',
+  extra_fee_currency: 'USD',
+  reserve_pct: '6.9',
+  reserve_days: 90,
+  payout_days: 5,
+};
+
+const FeeSettingsSchema = z.object({
+  vendepay_fee_pct: z.coerce.number().min(0).max(100),
+  extra_fee_minor: z.coerce.number().int().min(0),
+  extra_fee_currency: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]{3}$/, 'Use o código de 3 letras da moeda (ex.: USD, BRL).'),
+  reserve_pct: z.coerce.number().min(0).max(100),
+  reserve_days: z.coerce.number().int().min(0).max(3650),
+  payout_days: z.coerce.number().int().min(0).max(365),
+});
+
 const webhookUrl = (token: string) =>
   `${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/webhooks/vendepay?token=${token}`;
 
@@ -1171,6 +1195,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           paid_revenue_brl_minor: string;
           paid_revenue_usd_minor: string;
           unconverted_paid_orders: number;
+          refunded_orders: number;
+          refunded_revenue_brl_minor: string;
+          chargeback_orders: number;
+          chargeback_revenue_brl_minor: string;
           webhooks_received: number;
           webhooks_quarantined: number;
           utmify_deliveries_attempted: number;
@@ -1284,6 +1312,41 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             AND o.amount_minor IS NOT NULL AND o.amount_brl_minor IS NULL
             AND o.currency <> 'BRL' AND rc.rate IS NULL
             AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS unconverted_paid_orders,
+        -- Refunds/chargebacks are filtered by updated_at (when the status
+        -- flipped), not occurred_at (original purchase) — "hoje" here means
+        -- money that actually left today, which may have been sold earlier.
+        (SELECT count(*)::int FROM tracking_orders o
+          WHERE o.project_id = p.id AND o.status = 'refunded'
+            AND o.updated_at >= ${from} AND o.updated_at < ${to}) AS refunded_orders,
+        (SELECT COALESCE(sum(
+            CASE
+              WHEN o.amount_brl_minor IS NOT NULL THEN o.amount_brl_minor
+              WHEN o.currency = 'BRL' THEN o.amount_minor
+              WHEN rc.rate IS NOT NULL THEN (o.amount_minor * rc.rate)::bigint
+              ELSE 0
+            END
+          ), 0)::text
+          FROM tracking_orders o
+          LEFT JOIN exchange_rate_cache rc
+            ON rc.base_currency = o.currency AND rc.target_currency = 'BRL'
+          WHERE o.project_id = p.id AND o.status = 'refunded'
+            AND o.updated_at >= ${from} AND o.updated_at < ${to}) AS refunded_revenue_brl_minor,
+        (SELECT count(*)::int FROM tracking_orders o
+          WHERE o.project_id = p.id AND o.status = 'chargeback'
+            AND o.updated_at >= ${from} AND o.updated_at < ${to}) AS chargeback_orders,
+        (SELECT COALESCE(sum(
+            CASE
+              WHEN o.amount_brl_minor IS NOT NULL THEN o.amount_brl_minor
+              WHEN o.currency = 'BRL' THEN o.amount_minor
+              WHEN rc.rate IS NOT NULL THEN (o.amount_minor * rc.rate)::bigint
+              ELSE 0
+            END
+          ), 0)::text
+          FROM tracking_orders o
+          LEFT JOIN exchange_rate_cache rc
+            ON rc.base_currency = o.currency AND rc.target_currency = 'BRL'
+          WHERE o.project_id = p.id AND o.status = 'chargeback'
+            AND o.updated_at >= ${from} AND o.updated_at < ${to}) AS chargeback_revenue_brl_minor,
         -- Data loss rate: webhooks the Vendepay gateway sent us that we could not turn
         -- into an order (quarantined) — i.e. sales that never entered the pipeline at all.
         (SELECT count(*)::int FROM webhook_receipts r
@@ -1305,6 +1368,41 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       FROM tracking_projects p
       WHERE p.offer_id = ${req.params.id}
     `;
+      const [feeRow] = await app.db<
+        Array<{
+          vendepay_fee_pct: string;
+          extra_fee_minor: string;
+          extra_fee_currency: string;
+          reserve_pct: string;
+          reserve_days: number;
+          payout_days: number;
+        }>
+      >`
+        SELECT vendepay_fee_pct, extra_fee_minor, extra_fee_currency, reserve_pct,
+               reserve_days, payout_days
+        FROM tracking_fee_settings
+        WHERE project_id = (SELECT id FROM tracking_projects WHERE offer_id = ${req.params.id})
+      `;
+      const fee = feeRow ?? DEFAULT_FEE_SETTINGS;
+      const extraFeeConversion = await convertToBrlMinor(
+        Number(fee.extra_fee_minor),
+        fee.extra_fee_currency,
+        app.db,
+      );
+      const extraFeePerOrderBrlMinor = extraFeeConversion?.brlMinor ?? 0;
+      const grossBrlMinor = Number(summary?.paid_revenue_brl_minor ?? 0);
+      const paidOrdersCount = summary?.paid_orders ?? 0;
+      const feeVendepayBrlMinor = Math.round((grossBrlMinor * Number(fee.vendepay_fee_pct)) / 100);
+      const feeExtraBrlMinor = extraFeePerOrderBrlMinor * paidOrdersCount;
+      const reserveBrlMinor = Math.round((grossBrlMinor * Number(fee.reserve_pct)) / 100);
+      const refundedBrlMinor = Number(summary?.refunded_revenue_brl_minor ?? 0);
+      const chargebackBrlMinor = Number(summary?.chargeback_revenue_brl_minor ?? 0);
+      const netRevenueBrlMinor =
+        grossBrlMinor -
+        refundedBrlMinor -
+        chargebackBrlMinor -
+        feeVendepayBrlMinor -
+        feeExtraBrlMinor;
       return {
         date,
         time_zone: 'America/Sao_Paulo',
@@ -1326,11 +1424,186 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           paid_revenue_brl_minor: '0',
           paid_revenue_usd_minor: '0',
           unconverted_paid_orders: 0,
+          refunded_orders: 0,
+          refunded_revenue_brl_minor: '0',
+          chargeback_orders: 0,
+          chargeback_revenue_brl_minor: '0',
           webhooks_received: 0,
           webhooks_quarantined: 0,
           utmify_deliveries_attempted: 0,
           utmify_deliveries_lost: 0,
         }),
+        fee_settings: {
+          vendepay_fee_pct: Number(fee.vendepay_fee_pct),
+          extra_fee_minor: Number(fee.extra_fee_minor),
+          extra_fee_currency: fee.extra_fee_currency,
+          reserve_pct: Number(fee.reserve_pct),
+          reserve_days: fee.reserve_days,
+          payout_days: fee.payout_days,
+          configured: Boolean(feeRow),
+        },
+        fee_vendepay_brl_minor: String(feeVendepayBrlMinor),
+        fee_extra_brl_minor: String(feeExtraBrlMinor),
+        reserve_brl_minor: String(reserveBrlMinor),
+        net_revenue_brl_minor: String(netRevenueBrlMinor),
+      };
+    },
+  );
+
+  // Per-offer gateway fee configuration used to compute net revenue.
+  // Falls back to Vendepay's global defaults when nothing has been saved.
+  app.get<{ Params: { id: string } }>('/offers/:id/tracking/fee-settings', async (req, reply) => {
+    await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
+    if (!app.db) return reply.code(503).send(databaseUnavailable);
+    const [row] = await app.db<
+      Array<{
+        vendepay_fee_pct: string;
+        extra_fee_minor: string;
+        extra_fee_currency: string;
+        reserve_pct: string;
+        reserve_days: number;
+        payout_days: number;
+      }>
+    >`
+        SELECT vendepay_fee_pct, extra_fee_minor, extra_fee_currency, reserve_pct,
+               reserve_days, payout_days
+        FROM tracking_fee_settings
+        WHERE project_id = (SELECT id FROM tracking_projects WHERE offer_id = ${req.params.id})
+      `;
+    const fee = row ?? DEFAULT_FEE_SETTINGS;
+    return reply.send({
+      vendepay_fee_pct: Number(fee.vendepay_fee_pct),
+      extra_fee_minor: Number(fee.extra_fee_minor),
+      extra_fee_currency: fee.extra_fee_currency,
+      reserve_pct: Number(fee.reserve_pct),
+      reserve_days: fee.reserve_days,
+      payout_days: fee.payout_days,
+      configured: Boolean(row),
+    });
+  });
+
+  app.patch<{ Params: { id: string } }>('/offers/:id/tracking/fee-settings', async (req, reply) => {
+    await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
+    if (!app.db) return reply.code(503).send(databaseUnavailable);
+    const parsed = FeeSettingsSchema.safeParse(req.body);
+    if (!parsed.success) throw zodToProblem(parsed.error);
+    const [project] = await app.db<{ id: string }[]>`
+        SELECT id FROM tracking_projects WHERE offer_id = ${req.params.id}
+      `;
+    if (!project) return reply.code(409).send({ error: 'tracking_not_configured' });
+    const {
+      vendepay_fee_pct,
+      extra_fee_minor,
+      extra_fee_currency,
+      reserve_pct,
+      reserve_days,
+      payout_days,
+    } = parsed.data;
+    await app.db`
+        INSERT INTO tracking_fee_settings
+          (project_id, vendepay_fee_pct, extra_fee_minor, extra_fee_currency, reserve_pct,
+           reserve_days, payout_days, updated_at)
+        VALUES
+          (${project.id}, ${vendepay_fee_pct}, ${extra_fee_minor}, ${extra_fee_currency},
+           ${reserve_pct}, ${reserve_days}, ${payout_days}, now())
+        ON CONFLICT (project_id) DO UPDATE SET
+          vendepay_fee_pct = EXCLUDED.vendepay_fee_pct,
+          extra_fee_minor = EXCLUDED.extra_fee_minor,
+          extra_fee_currency = EXCLUDED.extra_fee_currency,
+          reserve_pct = EXCLUDED.reserve_pct,
+          reserve_days = EXCLUDED.reserve_days,
+          payout_days = EXCLUDED.payout_days,
+          updated_at = now()
+      `;
+    return reply.send({ ...parsed.data, configured: true });
+  });
+
+  // Refunds/chargebacks for the day, filtered by updated_at (when the
+  // status flipped) so the list matches the money that actually moved.
+  app.get<{ Params: { id: string }; Querystring: PaginationQuery }>(
+    '/offers/:id/tracking/refunds',
+    async (req, reply) => {
+      await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
+      if (!app.db) return reply.code(503).send(databaseUnavailable);
+      const { page, per_page: perPage, offset } = parsePagination(req.query);
+      const { date, from, to } = parseTrackingDate(req.query);
+
+      const [items, totals] = await Promise.all([
+        app.db<
+          Array<{
+            id: string;
+            provider: string;
+            external_id: string;
+            status: string;
+            amount_minor: number | null;
+            currency: string | null;
+            amount_brl_minor: string | null;
+            buyer: Record<string, unknown>;
+            order_kind: string;
+            occurred_at: string;
+            updated_at: string;
+          }>
+        >`
+          SELECT o.id, o.provider, o.external_id, o.status, o.amount_minor, o.currency,
+                 o.amount_brl_minor, o.buyer, o.order_kind, o.occurred_at, o.updated_at
+          FROM tracking_orders o
+          JOIN tracking_projects p ON p.id = o.project_id
+          WHERE p.offer_id = ${req.params.id}
+            AND o.status IN ('refunded', 'chargeback')
+            AND o.updated_at >= ${from} AND o.updated_at < ${to}
+          ORDER BY o.updated_at DESC, o.id DESC
+          LIMIT ${perPage} OFFSET ${offset}
+        `,
+        app.db<
+          Array<{
+            total: number;
+            refunded_orders: number;
+            refunded_revenue_brl_minor: string;
+            chargeback_orders: number;
+            chargeback_revenue_brl_minor: string;
+          }>
+        >`
+          SELECT
+            count(*)::int AS total,
+            count(*) FILTER (WHERE o.status = 'refunded')::int AS refunded_orders,
+            COALESCE(sum(
+              CASE
+                WHEN o.status = 'refunded' AND o.amount_brl_minor IS NOT NULL THEN o.amount_brl_minor
+                WHEN o.status = 'refunded' AND o.currency = 'BRL' THEN o.amount_minor
+                WHEN o.status = 'refunded' AND rc.rate IS NOT NULL THEN (o.amount_minor * rc.rate)::bigint
+                ELSE 0
+              END
+            ), 0)::text AS refunded_revenue_brl_minor,
+            count(*) FILTER (WHERE o.status = 'chargeback')::int AS chargeback_orders,
+            COALESCE(sum(
+              CASE
+                WHEN o.status = 'chargeback' AND o.amount_brl_minor IS NOT NULL THEN o.amount_brl_minor
+                WHEN o.status = 'chargeback' AND o.currency = 'BRL' THEN o.amount_minor
+                WHEN o.status = 'chargeback' AND rc.rate IS NOT NULL THEN (o.amount_minor * rc.rate)::bigint
+                ELSE 0
+              END
+            ), 0)::text AS chargeback_revenue_brl_minor
+          FROM tracking_orders o
+          JOIN tracking_projects p ON p.id = o.project_id
+          LEFT JOIN exchange_rate_cache rc
+            ON rc.base_currency = o.currency AND rc.target_currency = 'BRL'
+          WHERE p.offer_id = ${req.params.id}
+            AND o.status IN ('refunded', 'chargeback')
+            AND o.updated_at >= ${from} AND o.updated_at < ${to}
+        `,
+      ]);
+      const total = totals[0]?.total ?? 0;
+      return {
+        date,
+        time_zone: 'America/Sao_Paulo',
+        items,
+        totals: {
+          refunded_orders: totals[0]?.refunded_orders ?? 0,
+          refunded_revenue_brl_minor: totals[0]?.refunded_revenue_brl_minor ?? '0',
+          chargeback_orders: totals[0]?.chargeback_orders ?? 0,
+          chargeback_revenue_brl_minor: totals[0]?.chargeback_revenue_brl_minor ?? '0',
+        },
+        pagination: pagination(page, perPage, total),
       };
     },
   );

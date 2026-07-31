@@ -19,6 +19,7 @@ import pushcutAdminRoutes from './pushcut-admin.js';
 import shieldJobsRoutes from './shield-jobs.js';
 import trackingAdminRoutes from './tracking-admin.js';
 import trackingAdvancedRoutes from './tracking-advanced.js';
+import trackingOverviewRoutes from './tracking-overview.js';
 import trackingPublicRoutes from './tracking-public.js';
 import usersRoutes from './users.js';
 import utmifyTrackingAdminRoutes from './utmify-tracking-admin.js';
@@ -100,6 +101,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         await protectedRoutes.register(offersRoutes);
         await protectedRoutes.register(trackingAdminRoutes);
         await protectedRoutes.register(trackingAdvancedRoutes);
+        await protectedRoutes.register(trackingOverviewRoutes);
         await protectedRoutes.register(nichesRoutes);
         await protectedRoutes.register(shieldJobsRoutes);
         await protectedRoutes.register(mediaJobsRoutes);

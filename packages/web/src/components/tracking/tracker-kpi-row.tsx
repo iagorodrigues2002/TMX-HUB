@@ -30,6 +30,15 @@ type Summary = {
   unconverted_paid_orders: number;
   webhooks_received: number;
   webhooks_quarantined: number;
+  refunded_orders?: number;
+  refunded_revenue_brl_minor?: string;
+  chargeback_orders?: number;
+  chargeback_revenue_brl_minor?: string;
+  fee_vendepay_brl_minor?: string;
+  fee_extra_brl_minor?: string;
+  reserve_brl_minor?: string;
+  net_revenue_brl_minor?: string;
+  fee_settings?: { reserve_days: number };
 };
 
 function percent(numerator: number, denominator: number) {
@@ -74,6 +83,12 @@ export function TrackerKpiRow({ summary }: { summary?: Summary }) {
     : s.connected_clicks / s.ad_clicks >= 0.5
       ? 'lush'
       : 'signal';
+
+  const hasFinance = s?.net_revenue_brl_minor !== undefined;
+  const refundedOrders = s?.refunded_orders ?? 0;
+  const chargebackOrders = s?.chargeback_orders ?? 0;
+  const feesTotalMinor =
+    Number(s?.fee_vendepay_brl_minor ?? 0) + Number(s?.fee_extra_brl_minor ?? 0);
 
   return (
     <div className="tmx-kpi">
@@ -150,6 +165,55 @@ export function TrackerKpiRow({ summary }: { summary?: Summary }) {
           tone={lossTone}
         />
       </div>
+
+      {hasFinance && (
+        <>
+          <p className="hud-label mt-5 mb-2">Financeiro (taxas Vendepay)</p>
+          <div className="tmx-kpi-tier2">
+            <StripReading
+              label="Reembolsos"
+              value={formatMoney(s?.refunded_revenue_brl_minor, 'BRL')}
+              detail={refundedOrders > 0 ? `${integer(refundedOrders)} pedidos` : null}
+              tone={refundedOrders > 0 ? 'ember' : 'muted'}
+            />
+            <StripReading
+              label="Chargeback"
+              value={formatMoney(s?.chargeback_revenue_brl_minor, 'BRL')}
+              detail={chargebackOrders > 0 ? `${integer(chargebackOrders)} pedidos` : null}
+              tone={chargebackOrders > 0 ? 'scar' : 'muted'}
+            />
+            <StripReading
+              label="Taxas Vendepay"
+              value={formatMoney(String(feesTotalMinor), 'BRL')}
+              detail="taxa + extra por venda"
+              tone="signal"
+            />
+            <StripReading
+              label="Em reserva"
+              value={formatMoney(s?.reserve_brl_minor, 'BRL')}
+              detail={
+                s?.fee_settings ? `libera em ${integer(s.fee_settings.reserve_days)} dias` : null
+              }
+              tone="muted"
+            />
+          </div>
+          <div className="tmx-kpi-tier1 tmx-kpi-tier1-single mt-2">
+            <HeroReading
+              eyebrow="Líquido (após taxas e reembolsos)"
+              value={formatMoney(s?.net_revenue_brl_minor, 'BRL')}
+              valueVariant="currency"
+              satellite={
+                <>
+                  <span className="tmx-kpi-sat-tag">bruto</span>
+                  <span className="mono-num tmx-kpi-sat-value">
+                    {formatMoney(s?.paid_revenue_brl_minor, 'BRL')}
+                  </span>
+                </>
+              }
+            />
+          </div>
+        </>
+      )}
     </div>
   );
 }

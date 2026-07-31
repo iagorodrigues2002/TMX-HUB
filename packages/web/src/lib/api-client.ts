@@ -621,6 +621,16 @@ export interface DashboardOfferEntry {
   snapshotsCount: number;
 }
 
+export interface TrackingFeeSettings {
+  vendepay_fee_pct: number;
+  extra_fee_minor: number;
+  extra_fee_currency: string;
+  reserve_pct: number;
+  reserve_days: number;
+  payout_days: number;
+  configured: boolean;
+}
+
 export interface DashboardSummary {
   from: string;
   to: string;
@@ -1257,13 +1267,107 @@ export const apiClient = {
     paid_revenue_brl_minor: string;
     paid_revenue_usd_minor: string;
     unconverted_paid_orders: number;
+    refunded_orders: number;
+    refunded_revenue_brl_minor: string;
+    chargeback_orders: number;
+    chargeback_revenue_brl_minor: string;
     webhooks_received: number;
     webhooks_quarantined: number;
     utmify_deliveries_attempted: number;
     utmify_deliveries_lost: number;
+    fee_settings: TrackingFeeSettings;
+    fee_vendepay_brl_minor: string;
+    fee_extra_brl_minor: string;
+    reserve_brl_minor: string;
+    net_revenue_brl_minor: string;
   }> {
     const query = date ? `?date=${encodeURIComponent(date)}` : '';
     return request(`/v1/offers/${id}/tracking/summary${query}`);
+  },
+
+  async getTrackingFeeSettings(id: string): Promise<TrackingFeeSettings> {
+    return request(`/v1/offers/${id}/tracking/fee-settings`);
+  },
+
+  async updateTrackingFeeSettings(
+    id: string,
+    body: {
+      vendepay_fee_pct: number;
+      extra_fee_minor: number;
+      extra_fee_currency: string;
+      reserve_pct: number;
+      reserve_days: number;
+      payout_days: number;
+    },
+  ): Promise<TrackingFeeSettings> {
+    return request(`/v1/offers/${id}/tracking/fee-settings`, { method: 'PATCH', body });
+  },
+
+  async getTrackingRefunds(
+    id: string,
+    date?: string,
+    page = 1,
+  ): Promise<{
+    date: string;
+    time_zone: string;
+    items: Array<{
+      id: string;
+      provider: string;
+      external_id: string;
+      status: 'refunded' | 'chargeback';
+      amount_minor: number | null;
+      currency: string | null;
+      amount_brl_minor: string | null;
+      buyer: { name?: string; email?: string; document?: string };
+      order_kind: 'front' | 'upsell' | 'unknown';
+      occurred_at: string;
+      updated_at: string;
+    }>;
+    totals: {
+      refunded_orders: number;
+      refunded_revenue_brl_minor: string;
+      chargeback_orders: number;
+      chargeback_revenue_brl_minor: string;
+    };
+    pagination: { page: number; per_page: number; total: number; total_pages: number };
+  }> {
+    const params = new URLSearchParams();
+    if (date) params.set('date', date);
+    if (page > 1) params.set('page', String(page));
+    const query = params.toString();
+    return request(`/v1/offers/${id}/tracking/refunds${query ? `?${query}` : ''}`);
+  },
+
+  async getTrackingOverview(date?: string): Promise<{
+    date: string;
+    time_zone: string;
+    offers: Array<{
+      offer_id: string;
+      offer_name: string;
+      paid_orders: number;
+      gross_revenue_brl_minor: string;
+      refunded_orders: number;
+      refunded_revenue_brl_minor: string;
+      chargeback_orders: number;
+      chargeback_revenue_brl_minor: string;
+      fees_brl_minor: string;
+      reserve_brl_minor: string;
+      net_revenue_brl_minor: string;
+    }>;
+    totals: {
+      paid_orders: number;
+      gross_revenue_brl_minor: string;
+      refunded_orders: number;
+      refunded_revenue_brl_minor: string;
+      chargeback_orders: number;
+      chargeback_revenue_brl_minor: string;
+      fees_brl_minor: string;
+      reserve_brl_minor: string;
+      net_revenue_brl_minor: string;
+    } | null;
+  }> {
+    const query = date ? `?date=${encodeURIComponent(date)}` : '';
+    return request(`/v1/tracking/overview${query}`);
   },
 
   async getTrackingDiagnostics(id: string): Promise<{
