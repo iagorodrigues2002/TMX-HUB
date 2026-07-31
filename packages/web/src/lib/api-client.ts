@@ -1269,17 +1269,25 @@ export const apiClient = {
     unconverted_paid_orders: number;
     refunded_orders: number;
     refunded_revenue_brl_minor: string;
+    refunded_revenue_usd_minor: string;
     chargeback_orders: number;
     chargeback_revenue_brl_minor: string;
+    chargeback_revenue_usd_minor: string;
     webhooks_received: number;
     webhooks_quarantined: number;
     utmify_deliveries_attempted: number;
     utmify_deliveries_lost: number;
     fee_settings: TrackingFeeSettings;
     fee_vendepay_brl_minor: string;
+    fee_vendepay_usd_minor: string;
     fee_extra_brl_minor: string;
+    fee_extra_usd_minor: string;
     reserve_brl_minor: string;
+    reserve_usd_minor: string;
     net_revenue_brl_minor: string;
+    net_revenue_usd_minor: string;
+    net_available_brl_minor: string;
+    net_available_usd_minor: string;
   }> {
     const query = date ? `?date=${encodeURIComponent(date)}` : '';
     return request(`/v1/offers/${id}/tracking/summary${query}`);
@@ -1338,36 +1346,59 @@ export const apiClient = {
     return request(`/v1/offers/${id}/tracking/refunds${query ? `?${query}` : ''}`);
   },
 
-  async getTrackingOverview(date?: string): Promise<{
-    date: string;
+  async getTrackingOverview(
+    from?: string,
+    to?: string,
+  ): Promise<{
+    from: string;
+    to: string;
     time_zone: string;
     offers: Array<{
       offer_id: string;
       offer_name: string;
       paid_orders: number;
       gross_revenue_brl_minor: string;
+      gross_revenue_usd_minor: string;
       refunded_orders: number;
       refunded_revenue_brl_minor: string;
+      refunded_revenue_usd_minor: string;
       chargeback_orders: number;
       chargeback_revenue_brl_minor: string;
+      chargeback_revenue_usd_minor: string;
       fees_brl_minor: string;
+      fees_usd_minor: string;
       reserve_brl_minor: string;
+      reserve_usd_minor: string;
       net_revenue_brl_minor: string;
+      net_revenue_usd_minor: string;
+      net_available_brl_minor: string;
+      net_available_usd_minor: string;
     }>;
     totals: {
       paid_orders: number;
       gross_revenue_brl_minor: string;
+      gross_revenue_usd_minor: string;
       refunded_orders: number;
       refunded_revenue_brl_minor: string;
+      refunded_revenue_usd_minor: string;
       chargeback_orders: number;
       chargeback_revenue_brl_minor: string;
+      chargeback_revenue_usd_minor: string;
       fees_brl_minor: string;
+      fees_usd_minor: string;
       reserve_brl_minor: string;
+      reserve_usd_minor: string;
       net_revenue_brl_minor: string;
+      net_revenue_usd_minor: string;
+      net_available_brl_minor: string;
+      net_available_usd_minor: string;
     } | null;
   }> {
-    const query = date ? `?date=${encodeURIComponent(date)}` : '';
-    return request(`/v1/tracking/overview${query}`);
+    const params = new URLSearchParams();
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    const query = params.toString();
+    return request(`/v1/tracking/overview${query ? `?${query}` : ''}`);
   },
 
   async getTrackingDiagnostics(id: string): Promise<{

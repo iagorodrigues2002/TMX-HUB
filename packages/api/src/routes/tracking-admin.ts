@@ -6,7 +6,7 @@ import { env } from '../env.js';
 import { SUPPORTED_CURRENCIES, normalizeVendepay } from '../integrations/vendepay/normalize.js';
 import { NotFoundError, zodToProblem } from '../lib/problem.js';
 import { encryptSecret } from '../lib/secret-box.js';
-import { convertToBrlMinor, warmupBrlRates } from '../services/exchange-rate.js';
+import { convertToBrlMinor, getBrlRate, warmupBrlRates } from '../services/exchange-rate.js';
 import { saoPauloParts } from '../services/intraday-store.js';
 import { saoPauloDayRange } from '../services/utmify-sync.js';
 
@@ -1397,12 +1397,18 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       const reserveBrlMinor = Math.round((grossBrlMinor * Number(fee.reserve_pct)) / 100);
       const refundedBrlMinor = Number(summary?.refunded_revenue_brl_minor ?? 0);
       const chargebackBrlMinor = Number(summary?.chargeback_revenue_brl_minor ?? 0);
+      // "Total" includes the reserve as if it were already released; "available"
+      // subtracts it too, since Vendepay is still holding it back. The reserve
+      // never gets added to either figure twice — total = available + reserve.
       const netRevenueBrlMinor =
         grossBrlMinor -
         refundedBrlMinor -
         chargebackBrlMinor -
         feeVendepayBrlMinor -
         feeExtraBrlMinor;
+      const netAvailableBrlMinor = netRevenueBrlMinor - reserveBrlMinor;
+      const usdRate = await getBrlRate('USD', app.db);
+      const toUsdMinor = (brlMinor: number) => (usdRate ? Math.round(brlMinor / usdRate) : 0);
       return {
         date,
         time_zone: 'America/Sao_Paulo',
@@ -1442,10 +1448,18 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           payout_days: fee.payout_days,
           configured: Boolean(feeRow),
         },
+        refunded_revenue_usd_minor: String(toUsdMinor(refundedBrlMinor)),
+        chargeback_revenue_usd_minor: String(toUsdMinor(chargebackBrlMinor)),
         fee_vendepay_brl_minor: String(feeVendepayBrlMinor),
+        fee_vendepay_usd_minor: String(toUsdMinor(feeVendepayBrlMinor)),
         fee_extra_brl_minor: String(feeExtraBrlMinor),
+        fee_extra_usd_minor: String(toUsdMinor(feeExtraBrlMinor)),
         reserve_brl_minor: String(reserveBrlMinor),
+        reserve_usd_minor: String(toUsdMinor(reserveBrlMinor)),
         net_revenue_brl_minor: String(netRevenueBrlMinor),
+        net_revenue_usd_minor: String(toUsdMinor(netRevenueBrlMinor)),
+        net_available_brl_minor: String(netAvailableBrlMinor),
+        net_available_usd_minor: String(toUsdMinor(netAvailableBrlMinor)),
       };
     },
   );

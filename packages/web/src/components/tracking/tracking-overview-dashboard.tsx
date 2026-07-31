@@ -2,7 +2,7 @@
 
 import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api-client';
-import { formatMoney } from '@/lib/currency-preference';
+import { formatMoney, useDisplayCurrency } from '@/lib/currency-preference';
 import { useQuery } from '@tanstack/react-query';
 import { LayoutDashboard, Loader2 } from 'lucide-react';
 import { useState } from 'react';
@@ -25,14 +25,18 @@ function integer(value: number | undefined) {
 }
 
 export function TrackingOverviewDashboard() {
-  const [date, setDate] = useState(() => saoPauloDate());
+  const [from, setFrom] = useState(() => saoPauloDate());
+  const [to, setTo] = useState(() => saoPauloDate());
+  const [displayCurrency] = useDisplayCurrency();
   const overview = useQuery({
-    queryKey: ['tracking-overview', date],
-    queryFn: () => apiClient.getTrackingOverview(date),
+    queryKey: ['tracking-overview', from, to],
+    queryFn: () => apiClient.getTrackingOverview(from, to),
     retry: false,
   });
 
   const totals = overview.data?.totals;
+  const pick = (brlMinor: string | undefined, usdMinor: string | undefined) =>
+    formatMoney(displayCurrency === 'USD' ? usdMinor : brlMinor, displayCurrency);
 
   return (
     <div className="space-y-5">
@@ -49,17 +53,31 @@ export function TrackingOverviewDashboard() {
               </p>
             </div>
           </div>
-          <label htmlFor="overview-date" className="space-y-1">
-            <span className="hud-label block">Data</span>
-            <Input
-              id="overview-date"
-              type="date"
-              value={date}
-              max={saoPauloDate()}
-              onChange={(event) => setDate(event.target.value || saoPauloDate())}
-              className="h-9 w-[160px]"
-            />
-          </label>
+          <div className="flex flex-wrap items-end gap-2">
+            <label htmlFor="overview-from" className="space-y-1">
+              <span className="hud-label block">De</span>
+              <Input
+                id="overview-from"
+                type="date"
+                value={from}
+                max={to}
+                onChange={(event) => setFrom(event.target.value || saoPauloDate())}
+                className="h-9 w-[160px]"
+              />
+            </label>
+            <label htmlFor="overview-to" className="space-y-1">
+              <span className="hud-label block">Até</span>
+              <Input
+                id="overview-to"
+                type="date"
+                value={to}
+                min={from}
+                max={saoPauloDate()}
+                onChange={(event) => setTo(event.target.value || saoPauloDate())}
+                className="h-9 w-[160px]"
+              />
+            </label>
+          </div>
         </div>
       </section>
 
@@ -69,7 +87,7 @@ export function TrackingOverviewDashboard() {
         </div>
       ) : !overview.data?.offers.length ? (
         <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-8 text-center text-sm text-white/40">
-          Nenhum pedido pago neste dia em nenhuma oferta.
+          Nenhum pedido pago neste período em nenhuma oferta.
         </div>
       ) : (
         <>
@@ -80,7 +98,7 @@ export function TrackingOverviewDashboard() {
                   <span className="tmx-kpi-strip-label">Bruto</span>
                 </div>
                 <p className="mono-num tmx-kpi-strip-value">
-                  {formatMoney(totals?.gross_revenue_brl_minor, 'BRL')}
+                  {pick(totals?.gross_revenue_brl_minor, totals?.gross_revenue_usd_minor)}
                 </p>
                 <p className="tmx-kpi-strip-detail">{integer(totals?.paid_orders)} pedidos</p>
               </div>
@@ -89,12 +107,15 @@ export function TrackingOverviewDashboard() {
                   <span className="tmx-kpi-strip-label">Reembolsos + chargeback</span>
                 </div>
                 <p className="mono-num tmx-kpi-strip-value">
-                  {formatMoney(
+                  {pick(
                     String(
                       Number(totals?.refunded_revenue_brl_minor ?? 0) +
                         Number(totals?.chargeback_revenue_brl_minor ?? 0),
                     ),
-                    'BRL',
+                    String(
+                      Number(totals?.refunded_revenue_usd_minor ?? 0) +
+                        Number(totals?.chargeback_revenue_usd_minor ?? 0),
+                    ),
                   )}
                 </p>
                 <p className="tmx-kpi-strip-detail">
@@ -107,30 +128,51 @@ export function TrackingOverviewDashboard() {
                   <span className="tmx-kpi-strip-label">Taxas</span>
                 </div>
                 <p className="mono-num tmx-kpi-strip-value">
-                  {formatMoney(totals?.fees_brl_minor, 'BRL')}
+                  {pick(totals?.fees_brl_minor, totals?.fees_usd_minor)}
                 </p>
               </div>
               <div className="tmx-kpi-strip-cell">
                 <div className="tmx-kpi-strip-head">
-                  <span className="tmx-kpi-strip-label">Em reserva</span>
+                  <span className="tmx-kpi-strip-label">Em reserva (retido)</span>
                 </div>
                 <p className="mono-num tmx-kpi-strip-value">
-                  {formatMoney(totals?.reserve_brl_minor, 'BRL')}
+                  {pick(totals?.reserve_brl_minor, totals?.reserve_usd_minor)}
                 </p>
+                <p className="tmx-kpi-strip-detail">soma ao líquido quando liberar</p>
               </div>
             </div>
-            <div className="tmx-kpi-tier1 tmx-kpi-tier1-single">
+            <div className="tmx-kpi-tier1">
               <div className="tmx-kpi-hero">
-                <p className="tmx-kpi-hero-eyebrow">Líquido total (após taxas e reembolsos)</p>
+                <p className="tmx-kpi-hero-eyebrow">Líquido disponível agora</p>
                 <p className="mono-num tmx-kpi-hero-value tmx-kpi-hero-value-currency">
-                  {formatMoney(totals?.net_revenue_brl_minor, 'BRL')}
+                  {pick(totals?.net_available_brl_minor, totals?.net_available_usd_minor)}
                 </p>
+                <div className="tmx-kpi-hero-sat">
+                  <span className="tmx-kpi-sat-tag">já descontada a reserva</span>
+                </div>
+              </div>
+              <div className="tmx-kpi-hero">
+                <p className="tmx-kpi-hero-eyebrow">Líquido total (reserva já liberada)</p>
+                <p className="mono-num tmx-kpi-hero-value tmx-kpi-hero-value-currency">
+                  {pick(totals?.net_revenue_brl_minor, totals?.net_revenue_usd_minor)}
+                </p>
+                <div className="tmx-kpi-hero-sat">
+                  <span className="tmx-kpi-sat-tag">disponível agora</span>
+                  <span className="mono-num tmx-kpi-sat-value">
+                    {pick(totals?.net_available_brl_minor, totals?.net_available_usd_minor)}
+                  </span>
+                  <span className="tmx-kpi-sat-sep" aria-hidden />
+                  <span className="tmx-kpi-sat-tag">+ reserva</span>
+                  <span className="mono-num tmx-kpi-sat-value">
+                    {pick(totals?.reserve_brl_minor, totals?.reserve_usd_minor)}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
 
           <div className="overflow-x-auto rounded-lg border border-white/[0.08]">
-            <table className="w-full min-w-[720px] border-collapse text-sm">
+            <table className="w-full min-w-[820px] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-white/[0.08] text-left text-[10px] uppercase tracking-wider text-white/40">
                   <th className="p-3 font-medium">Oferta</th>
@@ -140,7 +182,8 @@ export function TrackingOverviewDashboard() {
                   <th className="p-3 font-medium">Chargeback</th>
                   <th className="p-3 font-medium">Taxas</th>
                   <th className="p-3 font-medium">Em reserva</th>
-                  <th className="p-3 font-medium">Líquido</th>
+                  <th className="p-3 font-medium">Líquido agora</th>
+                  <th className="p-3 font-medium">Líquido total</th>
                 </tr>
               </thead>
               <tbody>
@@ -152,22 +195,25 @@ export function TrackingOverviewDashboard() {
                     <td className="p-3 font-medium text-white/90">{offer.offer_name}</td>
                     <td className="mono-num p-3">{integer(offer.paid_orders)}</td>
                     <td className="mono-num p-3">
-                      {formatMoney(offer.gross_revenue_brl_minor, 'BRL')}
+                      {pick(offer.gross_revenue_brl_minor, offer.gross_revenue_usd_minor)}
                     </td>
                     <td className="mono-num p-3 text-amber-200/80">
-                      {formatMoney(offer.refunded_revenue_brl_minor, 'BRL')}
+                      {pick(offer.refunded_revenue_brl_minor, offer.refunded_revenue_usd_minor)}
                     </td>
                     <td className="mono-num p-3 text-red-200/80">
-                      {formatMoney(offer.chargeback_revenue_brl_minor, 'BRL')}
+                      {pick(offer.chargeback_revenue_brl_minor, offer.chargeback_revenue_usd_minor)}
                     </td>
                     <td className="mono-num p-3 text-white/50">
-                      {formatMoney(offer.fees_brl_minor, 'BRL')}
+                      {pick(offer.fees_brl_minor, offer.fees_usd_minor)}
                     </td>
                     <td className="mono-num p-3 text-white/50">
-                      {formatMoney(offer.reserve_brl_minor, 'BRL')}
+                      {pick(offer.reserve_brl_minor, offer.reserve_usd_minor)}
+                    </td>
+                    <td className="mono-num p-3 font-medium text-cyan-200">
+                      {pick(offer.net_available_brl_minor, offer.net_available_usd_minor)}
                     </td>
                     <td className="mono-num p-3 font-medium text-emerald-200">
-                      {formatMoney(offer.net_revenue_brl_minor, 'BRL')}
+                      {pick(offer.net_revenue_brl_minor, offer.net_revenue_usd_minor)}
                     </td>
                   </tr>
                 ))}

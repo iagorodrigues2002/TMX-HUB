@@ -32,12 +32,20 @@ type Summary = {
   webhooks_quarantined: number;
   refunded_orders?: number;
   refunded_revenue_brl_minor?: string;
+  refunded_revenue_usd_minor?: string;
   chargeback_orders?: number;
   chargeback_revenue_brl_minor?: string;
+  chargeback_revenue_usd_minor?: string;
   fee_vendepay_brl_minor?: string;
+  fee_vendepay_usd_minor?: string;
   fee_extra_brl_minor?: string;
+  fee_extra_usd_minor?: string;
   reserve_brl_minor?: string;
+  reserve_usd_minor?: string;
   net_revenue_brl_minor?: string;
+  net_revenue_usd_minor?: string;
+  net_available_brl_minor?: string;
+  net_available_usd_minor?: string;
   fee_settings?: { reserve_days: number };
 };
 
@@ -87,8 +95,12 @@ export function TrackerKpiRow({ summary }: { summary?: Summary }) {
   const hasFinance = s?.net_revenue_brl_minor !== undefined;
   const refundedOrders = s?.refunded_orders ?? 0;
   const chargebackOrders = s?.chargeback_orders ?? 0;
+  const pick = (brlMinor: string | undefined, usdMinor: string | undefined) =>
+    formatMoney(displayCurrency === 'USD' ? usdMinor : brlMinor, displayCurrency);
   const feesTotalMinor =
-    Number(s?.fee_vendepay_brl_minor ?? 0) + Number(s?.fee_extra_brl_minor ?? 0);
+    displayCurrency === 'USD'
+      ? Number(s?.fee_vendepay_usd_minor ?? 0) + Number(s?.fee_extra_usd_minor ?? 0)
+      : Number(s?.fee_vendepay_brl_minor ?? 0) + Number(s?.fee_extra_brl_minor ?? 0);
 
   return (
     <div className="tmx-kpi">
@@ -172,41 +184,54 @@ export function TrackerKpiRow({ summary }: { summary?: Summary }) {
           <div className="tmx-kpi-tier2">
             <StripReading
               label="Reembolsos"
-              value={formatMoney(s?.refunded_revenue_brl_minor, 'BRL')}
+              value={pick(s?.refunded_revenue_brl_minor, s?.refunded_revenue_usd_minor)}
               detail={refundedOrders > 0 ? `${integer(refundedOrders)} pedidos` : null}
               tone={refundedOrders > 0 ? 'ember' : 'muted'}
             />
             <StripReading
               label="Chargeback"
-              value={formatMoney(s?.chargeback_revenue_brl_minor, 'BRL')}
+              value={pick(s?.chargeback_revenue_brl_minor, s?.chargeback_revenue_usd_minor)}
               detail={chargebackOrders > 0 ? `${integer(chargebackOrders)} pedidos` : null}
               tone={chargebackOrders > 0 ? 'scar' : 'muted'}
             />
             <StripReading
               label="Taxas Vendepay"
-              value={formatMoney(String(feesTotalMinor), 'BRL')}
+              value={formatMoney(String(feesTotalMinor), displayCurrency)}
               detail="taxa + extra por venda"
               tone="signal"
             />
             <StripReading
-              label="Em reserva"
-              value={formatMoney(s?.reserve_brl_minor, 'BRL')}
+              label="Em reserva (retido)"
+              value={pick(s?.reserve_brl_minor, s?.reserve_usd_minor)}
               detail={
-                s?.fee_settings ? `libera em ${integer(s.fee_settings.reserve_days)} dias` : null
+                s?.fee_settings
+                  ? `soma ao líquido em ${integer(s.fee_settings.reserve_days)} dias`
+                  : null
               }
               tone="muted"
             />
           </div>
-          <div className="tmx-kpi-tier1 tmx-kpi-tier1-single mt-2">
+          <div className="tmx-kpi-tier1 mt-2">
             <HeroReading
-              eyebrow="Líquido (após taxas e reembolsos)"
-              value={formatMoney(s?.net_revenue_brl_minor, 'BRL')}
+              eyebrow="Líquido disponível agora"
+              value={pick(s?.net_available_brl_minor, s?.net_available_usd_minor)}
+              valueVariant="currency"
+              satellite={<span className="tmx-kpi-sat-tag">já descontada a reserva</span>}
+            />
+            <HeroReading
+              eyebrow="Líquido total (reserva já liberada)"
+              value={pick(s?.net_revenue_brl_minor, s?.net_revenue_usd_minor)}
               valueVariant="currency"
               satellite={
                 <>
-                  <span className="tmx-kpi-sat-tag">bruto</span>
+                  <span className="tmx-kpi-sat-tag">disponível agora</span>
                   <span className="mono-num tmx-kpi-sat-value">
-                    {formatMoney(s?.paid_revenue_brl_minor, 'BRL')}
+                    {pick(s?.net_available_brl_minor, s?.net_available_usd_minor)}
+                  </span>
+                  <span className="tmx-kpi-sat-sep" aria-hidden />
+                  <span className="tmx-kpi-sat-tag">+ reserva</span>
+                  <span className="mono-num tmx-kpi-sat-value">
+                    {pick(s?.reserve_brl_minor, s?.reserve_usd_minor)}
                   </span>
                 </>
               }
