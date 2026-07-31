@@ -466,6 +466,16 @@ export function TrackingAdvancedCenter({
     },
     onError: (error) => toast.error((error as Error).message),
   });
+  const resendPushcutHistory = useMutation({
+    mutationFn: () => apiClient.resendTrackingPushcutHistory(offerId),
+    onSuccess: (result) => {
+      void qc.invalidateQueries({ queryKey: ['tracking-pushcut-deliveries', offerId] });
+      toast.success(
+        `${result.notifications_queued} notificação(ões) enfileirada(s) de ${result.orders_scanned} pedido(s) pago(s).`,
+      );
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
   const rotateVendepay = useMutation({
     mutationFn: () => apiClient.rotateVendepayWebhook(offerId),
     onSuccess: (result) => {
@@ -1512,7 +1522,19 @@ export function TrackingAdvancedCenter({
             )}
 
             <div className="mt-7 border-t border-white/[0.07] pt-6">
-              <p className="hud-label">Destinos configurados</p>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="hud-label">Destinos configurados</p>
+                {canManage && (pushcutDestinations.data?.destinations?.length ?? 0) > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={resendPushcutHistory.isPending}
+                    onClick={() => resendPushcutHistory.mutate()}
+                  >
+                    Reenviar todas as compras já feitas
+                  </Button>
+                )}
+              </div>
               <div className="mt-3 space-y-2">
                 {(pushcutDestinations.data?.destinations ?? []).map((destination) => (
                   <div

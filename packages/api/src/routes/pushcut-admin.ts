@@ -132,6 +132,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       `;
       if (!destination) return reply.code(404).send({ error: 'destination_not_found' });
 
+      const offer = await app.offerStore.maybeGet(req.params.id);
       const payload = buildPushcutNotificationPayload(
         {
           kind: 'front',
@@ -139,6 +140,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           productName: 'Checkout de teste',
           amountBrlMinor: 100,
           currency: 'BRL',
+          funnelName: offer?.name,
         },
         Array.isArray(destination.devices) ? destination.devices : [],
       );
@@ -224,6 +226,80 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!delivery) return reply.code(404).send({ error: 'delivery_not_found' });
       await app.pushcutQueue.add('send', { deliveryId: delivery.id });
       return reply.code(202).send({ accepted: true });
+    },
+  );
+
+  // Backfills Pushcut notifications for every paid order this offer has
+  // ever recorded — for destinations added after sales already happened.
+  // Reconstructs the same event_id the live webhook path would have used
+  // (vendepay:<external_id>:paid) so the existing UNIQUE(destination_kind,
+  // destination_id, event_id) constraint keeps this idempotent: running it
+  // twice, or a real webhook re-delivering the same order later, never
+  // double-sends.
+  app.post<{ Params: { id: string } }>(
+    '/offers/:id/tracking/pushcut-destinations/resend-history',
+    async (req, reply) => {
+      await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
+      if (!app.db) return reply.code(503).send(databaseUnavailable);
+      const [project] = await app.db<{ id: string }[]>`
+        SELECT id FROM tracking_projects WHERE offer_id = ${req.params.id} AND enabled = true
+      `;
+      if (!project) return reply.code(409).send({ error: 'tracking_not_configured' });
+
+      const destinations = await app.db<
+        Array<{
+          id: string;
+          front_notification_name: string;
+          upsell_notification_name: string | null;
+        }>
+      >`
+        SELECT id, front_notification_name, upsell_notification_name
+        FROM tracking_pushcut_destinations
+        WHERE project_id = ${project.id} AND enabled = true
+      `;
+      if (destinations.length === 0) {
+        return reply.code(409).send({ error: 'no_enabled_destinations' });
+      }
+
+      const offer = await app.offerStore.maybeGet(req.params.id);
+      const funnelName = offer?.name ?? null;
+
+      const orders = await app.db<Array<{ id: string; external_id: string; order_kind: string }>>`
+        SELECT id, external_id, order_kind
+        FROM tracking_orders
+        WHERE project_id = ${project.id} AND status = 'paid'
+      `;
+
+      const deliveryIds: string[] = [];
+      for (const order of orders) {
+        for (const destination of destinations) {
+          const notificationName =
+            order.order_kind === 'upsell'
+              ? destination.upsell_notification_name
+              : destination.front_notification_name;
+          if (!notificationName) continue;
+          const id = ulid();
+          const rows = await app.db<{ id: string }[]>`
+            INSERT INTO tracking_delivery_outbox
+              (id, project_id, destination_kind, destination_id, order_id, event_id, event_type,
+               funnel_name)
+            VALUES
+              (${id}, ${project.id}, 'pushcut', ${destination.id}, ${order.id},
+               ${`vendepay:${order.external_id}:paid`}, ${`order.${order.order_kind}`}, ${funnelName})
+            ON CONFLICT (destination_kind, destination_id, event_id) DO NOTHING
+            RETURNING id
+          `;
+          if (rows[0]) deliveryIds.push(rows[0].id);
+        }
+      }
+      await Promise.allSettled(
+        deliveryIds.map((deliveryId) => app.pushcutQueue.add('send', { deliveryId })),
+      );
+      return reply.send({
+        orders_scanned: orders.length,
+        destinations: destinations.length,
+        notifications_queued: deliveryIds.length,
+      });
     },
   );
 };

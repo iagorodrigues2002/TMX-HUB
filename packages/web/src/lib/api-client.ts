@@ -1415,6 +1415,14 @@ export const apiClient = {
     });
   },
 
+  async resendTrackingPushcutHistory(
+    id: string,
+  ): Promise<{ orders_scanned: number; destinations: number; notifications_queued: number }> {
+    return request(`/v1/offers/${id}/tracking/pushcut-destinations/resend-history`, {
+      method: 'POST',
+    });
+  },
+
   async recomputeTrackingProductKinds(id: string): Promise<{ updated: number }> {
     return request(`/v1/offers/${id}/tracking/product-kinds/recompute`, { method: 'POST' });
   },

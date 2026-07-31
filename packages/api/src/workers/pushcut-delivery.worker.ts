@@ -29,6 +29,7 @@ export function createPushcutDeliveryWorker(): Worker<PushcutJobData> | null {
           currency: string | null;
           country: string | null;
           product_name: string | null;
+          funnel_name: string | null;
         }>
       >`
         SELECT d.id, pd.secret_encrypted, pd.front_notification_name,
@@ -38,7 +39,8 @@ export function createPushcutDeliveryWorker(): Worker<PushcutJobData> | null {
                o.amount_brl_minor,
                COALESCE(o.currency, 'BRL') AS currency,
                o.buyer->>'country' AS country,
-               o.product->>'name' AS product_name
+               o.product->>'name' AS product_name,
+               d.funnel_name
         FROM tracking_delivery_outbox d
         JOIN tracking_pushcut_destinations pd
           ON pd.id = d.destination_id AND pd.enabled = true
@@ -77,6 +79,7 @@ export function createPushcutDeliveryWorker(): Worker<PushcutJobData> | null {
             amountBrlMinor: row.amount_brl_minor,
             currency: row.currency ?? 'BRL',
             country: row.country ?? undefined,
+            funnelName: row.funnel_name ?? undefined,
           },
           Array.isArray(row.devices) ? row.devices : [],
         );

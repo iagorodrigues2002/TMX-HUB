@@ -629,11 +629,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!app.db || !req.query.token) return reply.code(404).send({ accepted: false });
       const candidate = tokenHash(req.query.token);
       const connections = await app.db<
-        Array<{ id: string; project_id: string; token_hash: string }>
+        Array<{ id: string; project_id: string; token_hash: string; offer_id: string }>
       >`
-        SELECT id, project_id, token_hash
-        FROM vendepay_connections
-        WHERE token_hash = ${candidate} AND enabled = true
+        SELECT vc.id, vc.project_id, vc.token_hash, tp.offer_id
+        FROM vendepay_connections vc
+        JOIN tracking_projects tp ON tp.id = vc.project_id
+        WHERE vc.token_hash = ${candidate} AND vc.enabled = true
         LIMIT 1
       `;
       const connection = connections[0];
@@ -641,6 +642,15 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
       const normalized = normalizeVendepay(req.body);
       const receiptId = ulid();
+      // Offers live in Redis (OfferStore), not Postgres — resolve the funnel
+      // name here (route has app.offerStore) so it can be persisted onto the
+      // Pushcut outbox row for the worker (Postgres-only, no Redis access)
+      // to read back. Only bother when the webhook could actually produce a
+      // delivery.
+      const funnelName =
+        normalized.kind === 'processable'
+          ? ((await app.offerStore.maybeGet(connection.offer_id))?.name ?? null)
+          : null;
       // Convert to BRL before opening the DB transaction: the rate fetch can
       // hit the network, and we don't want to hold a Postgres tx open during
       // an outbound HTTP call. If the rate service is down and this currency
@@ -805,10 +815,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           const id = ulid();
           const rows = await sql<{ id: string }[]>`
             INSERT INTO tracking_delivery_outbox
-              (id, project_id, destination_kind, destination_id, order_id, event_id, event_type)
+              (id, project_id, destination_kind, destination_id, order_id, event_id, event_type,
+               funnel_name)
             VALUES
               (${id}, ${connection.project_id}, 'pushcut', ${destination.id}, ${order.id},
-               ${`vendepay:${event.transactionId}:${event.status}`}, ${`order.${order.order_kind}`})
+               ${`vendepay:${event.transactionId}:${event.status}`}, ${`order.${order.order_kind}`},
+               ${funnelName})
             ON CONFLICT (destination_kind, destination_id, event_id) DO NOTHING
             RETURNING id
           `;

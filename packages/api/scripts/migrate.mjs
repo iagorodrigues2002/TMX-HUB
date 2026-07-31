@@ -27,6 +27,7 @@ for (const name of [
   '015_tracking_orders_brl.sql',
   '016_tracking_pushcut.sql',
   '017_pushcut_devices_repair.sql',
+  '018_pushcut_funnel_name.sql',
 ]) {
   const migration = await readFile(new URL(`../migrations/${name}`, import.meta.url), 'utf8');
   await sql.unsafe(migration);
