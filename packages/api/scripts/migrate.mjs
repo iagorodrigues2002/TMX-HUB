@@ -37,6 +37,7 @@ const migrations = [
   '022_tracking_cancelled_delivery_cleanup.sql',
   '023_tracking_order_cancelled_at.sql',
   '024_tracking_abandoned_checkouts.sql',
+  '025_tracking_refused_statuses.sql',
 ];
 
 await sql`

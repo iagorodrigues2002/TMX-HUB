@@ -95,7 +95,11 @@ const normalizeStatus = (raw = ''): VendepayStatus => {
   )
     return 'paid';
   if (['pending', 'waiting', 'processing', 'pendente'].includes(status)) return 'pending';
-  if (['refused', 'declined', 'failed', 'recusado'].includes(status)) return 'refused';
+  if (
+    ['refused', 'declined', 'failed', 'recusado', 'recusada', 'falha', 'falhou'].includes(status) ||
+    /(^|[._])(recusad[oa]|falha|falhou|failed|declined)$/.test(status)
+  )
+    return 'refused';
   if (['refunded', 'refund', 'reembolsado'].includes(status)) return 'refunded';
   if (['chargeback', 'dispute'].includes(status)) return 'chargeback';
   if (['cancelled', 'canceled', 'cancelado'].includes(status)) return 'cancelled';

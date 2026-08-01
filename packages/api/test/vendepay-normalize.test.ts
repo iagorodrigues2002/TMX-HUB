@@ -141,6 +141,16 @@ describe('normalizeVendepay', () => {
     });
   });
 
+  it.each(['Falha', 'Recusada', 'compra.recusada', 'compra.falhou'])(
+    'normaliza erro da Vendepay %s como recusado',
+    (event) => {
+      const result = normalizeVendepay({ event, transaction_id: `error-${event}` });
+      expect(result.kind).toBe('processable');
+      if (result.kind !== 'processable') return;
+      expect(result.event.status).toBe('refused');
+    },
+  );
+
   it('coloca payload sem transação em quarentena', () => {
     const result = normalizeVendepay({ event: 'something', status: 'unknown' });
     expect(result.kind).toBe('quarantined');
