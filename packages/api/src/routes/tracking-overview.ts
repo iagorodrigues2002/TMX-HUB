@@ -104,7 +104,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS paid_revenue_brl_minor,
         (SELECT count(*)::int FROM tracking_orders o
           WHERE o.project_id = p.id AND o.status = 'cancelled'
-            AND o.updated_at >= ${from} AND o.updated_at < ${to}) AS cancelled_orders,
+            AND o.cancelled_at >= ${from} AND o.cancelled_at < ${to}) AS cancelled_orders,
         (SELECT COALESCE(sum(
             CASE
               WHEN o.amount_brl_minor IS NOT NULL THEN o.amount_brl_minor
@@ -117,7 +117,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           LEFT JOIN exchange_rate_cache rc
             ON rc.base_currency = o.currency AND rc.target_currency = 'BRL'
           WHERE o.project_id = p.id AND o.status = 'cancelled'
-            AND o.updated_at >= ${from} AND o.updated_at < ${to}) AS cancelled_revenue_brl_minor,
+            AND o.cancelled_at >= ${from} AND o.cancelled_at < ${to}) AS cancelled_revenue_brl_minor,
         (SELECT count(*)::int FROM tracking_orders o
           WHERE o.project_id = p.id AND o.status = 'refunded'
             AND o.updated_at >= ${from} AND o.updated_at < ${to}) AS refunded_orders,

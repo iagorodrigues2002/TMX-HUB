@@ -35,6 +35,7 @@ const migrations = [
   '020_tracking_fee_settings.sql',
   '021_tracking_upsell_tiers.sql',
   '022_tracking_cancelled_delivery_cleanup.sql',
+  '023_tracking_order_cancelled_at.sql',
 ];
 
 await sql`
@@ -52,7 +53,7 @@ const [{ legacy_schema: legacySchema }] = await sql`
   SELECT to_regclass('public.tracking_projects') IS NOT NULL AS legacy_schema
 `;
 if (legacySchema) {
-  for (const name of migrations.slice(0, -1)) {
+  for (const name of migrations.slice(0, 21)) {
     await sql`
       INSERT INTO app_schema_migrations (name)
       VALUES (${name})
