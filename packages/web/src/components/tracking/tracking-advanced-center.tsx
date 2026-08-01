@@ -145,7 +145,7 @@ export function TrackingAdvancedCenter({
     'https://api.utmify.com.br/api-credentials/orders',
   );
   const [productKindSelection, setProductKindSelection] = useState<
-    Record<string, 'front' | 'upsell'>
+    Record<string, 'front' | 'upsell' | 'upsell_2'>
   >({});
   const [pushcutName, setPushcutName] = useState('');
   const [pushcutSecret, setPushcutSecret] = useState('');
@@ -374,8 +374,11 @@ export function TrackingAdvancedCenter({
     retry: false,
   });
   const saveProductKind = useMutation({
-    mutationFn: (input: { product_id: string; kind: 'front' | 'upsell'; label?: string | null }) =>
-      apiClient.setTrackingProductKind(offerId, input),
+    mutationFn: (input: {
+      product_id: string;
+      kind: 'front' | 'upsell' | 'upsell_2';
+      label?: string | null;
+    }) => apiClient.setTrackingProductKind(offerId, input),
     onSuccess: (_result, variables) => {
       setProductKindSelection((prev) => {
         const next = { ...prev };
@@ -1462,12 +1465,16 @@ export function TrackingAdvancedCenter({
                             onChange={(event) =>
                               setProductKindSelection((prev) => ({
                                 ...prev,
-                                [product.product_id]: event.target.value as 'front' | 'upsell',
+                                [product.product_id]: event.target.value as
+                                  | 'front'
+                                  | 'upsell'
+                                  | 'upsell_2',
                               }))
                             }
                           >
                             <option value="front">Front</option>
-                            <option value="upsell">Upsell</option>
+                            <option value="upsell">Upsell 1</option>
+                            <option value="upsell_2">Upsell 2</option>
                           </select>
                           <Button
                             size="sm"
@@ -1516,9 +1523,19 @@ export function TrackingAdvancedCenter({
                     </div>
                     <div className="flex items-center gap-2">
                       <span
-                        className={mapping.kind === 'front' ? 'text-emerald-300' : 'text-cyan-300'}
+                        className={
+                          mapping.kind === 'front'
+                            ? 'text-emerald-300'
+                            : mapping.kind === 'upsell'
+                              ? 'text-cyan-300'
+                              : 'text-amber-300'
+                        }
                       >
-                        {mapping.kind === 'front' ? 'Front' : 'Upsell'}
+                        {mapping.kind === 'front'
+                          ? 'Front'
+                          : mapping.kind === 'upsell'
+                            ? 'Upsell 1'
+                            : 'Upsell 2'}
                       </span>
                       {canManage && (
                         <Button

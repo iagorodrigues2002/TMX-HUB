@@ -274,7 +274,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       for (const order of orders) {
         for (const destination of destinations) {
           const notificationName =
-            order.order_kind === 'upsell'
+            order.order_kind === 'upsell' || order.order_kind === 'upsell_2'
               ? destination.upsell_notification_name
               : destination.front_notification_name;
           if (!notificationName) continue;

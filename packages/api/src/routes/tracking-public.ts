@@ -806,7 +806,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         const pushcutDeliveryIds: string[] = [];
         for (const destination of pushcutDestinations) {
           const notificationName =
-            order.order_kind === 'upsell'
+            order.order_kind === 'upsell' || order.order_kind === 'upsell_2'
               ? destination.upsell_notification_name
               : destination.front_notification_name;
           // Destination opted out of upsell alerts (upsell_notification_name
@@ -829,7 +829,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         // Meta receives only front-end sales. Upsell purchases would double-count
         // the same buyer/click and distort campaign CPA, so they stop here —
         // UTMify and Pushcut (above) still receive every order regardless of kind.
-        if (order.order_kind === 'upsell') {
+        if (order.order_kind === 'upsell' || order.order_kind === 'upsell_2') {
           return { inserted: true, deliveryIds: [], utmifyDeliveryIds, pushcutDeliveryIds };
         }
         const [rules] = await sql<

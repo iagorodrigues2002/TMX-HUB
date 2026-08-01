@@ -53,7 +53,8 @@ export function createPushcutDeliveryWorker(): Worker<PushcutJobData> | null {
       let responseStatus: number | null = null;
       let responseResult: Record<string, unknown> = {};
       try {
-        const kind = row.order_kind === 'upsell' ? 'upsell' : 'front';
+        const kind =
+          row.order_kind === 'upsell' || row.order_kind === 'upsell_2' ? 'upsell' : 'front';
         const notificationName =
           kind === 'upsell' ? row.upsell_notification_name : row.front_notification_name;
         if (!notificationName) {

@@ -23,6 +23,7 @@ type Summary = {
   checkout_events: number;
   paid_buyers: number;
   upsell_orders: number;
+  upsell_2_orders?: number;
   unmapped_paid_orders: number;
   paid_revenue_minor: string;
   paid_revenue_brl_minor: string;
@@ -92,12 +93,20 @@ export function TrackerKpiRow({ summary }: { summary?: Summary }) {
       ? 'lush'
       : 'signal';
   const totalOrders = buyersFront + upsells + unmapped;
-  const conversionRate = s?.checkouts ? percent(totalOrders, s.checkouts) : null;
+  // Front-only, per the operator's convention: "taxa de conversão" tracks
+  // checkout → front sale. Upsell conversion (front buyer → upsell buyer)
+  // is a separate reading below, once per upsell tier.
+  const conversionRate = s?.checkouts ? percent(buyersFront, s.checkouts) : null;
   const conversionTone: 'lush' | 'signal' | 'muted' = !s?.checkouts
     ? 'muted'
-    : totalOrders / s.checkouts >= 0.1
+    : buyersFront / s.checkouts >= 0.1
       ? 'lush'
       : 'signal';
+  const upsell2 = s?.upsell_2_orders ?? 0;
+  const upsell1Rate = buyersFront ? percent(upsells, buyersFront) : null;
+  const upsell2Rate = buyersFront ? percent(upsell2, buyersFront) : null;
+  const upsellTone = (count: number): 'lush' | 'signal' | 'muted' =>
+    !buyersFront ? 'muted' : count / buyersFront >= 0.1 ? 'lush' : 'signal';
 
   const hasFinance = s?.net_revenue_brl_minor !== undefined;
   const refundedOrders = s?.refunded_orders ?? 0;
@@ -166,7 +175,7 @@ export function TrackerKpiRow({ summary }: { summary?: Summary }) {
         <StripReading
           label="Taxa de conversão"
           value={conversionRate ?? '—'}
-          detail={s?.checkouts ? `${integer(totalOrders)}/${integer(s.checkouts)} checkouts` : null}
+          detail={s?.checkouts ? `${integer(buyersFront)}/${integer(s.checkouts)} checkouts` : null}
           tone={conversionTone}
         />
         <StripReading
@@ -188,6 +197,26 @@ export function TrackerKpiRow({ summary }: { summary?: Summary }) {
               : null
           }
           tone={lossTone}
+        />
+      </div>
+
+      <p className="hud-label mt-5 mb-2">Conversão de upsell (sobre compradores front)</p>
+      <div className="tmx-kpi-tier2">
+        <StripReading
+          label="Conversão Upsell 1"
+          value={upsell1Rate ?? '—'}
+          detail={
+            buyersFront ? `${integer(upsells)}/${integer(buyersFront)} compradores front` : null
+          }
+          tone={upsellTone(upsells)}
+        />
+        <StripReading
+          label="Conversão Upsell 2"
+          value={upsell2Rate ?? '—'}
+          detail={
+            buyersFront ? `${integer(upsell2)}/${integer(buyersFront)} compradores front` : null
+          }
+          tone={upsellTone(upsell2)}
         />
       </div>
 

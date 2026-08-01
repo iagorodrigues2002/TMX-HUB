@@ -1189,6 +1189,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           paid_orders: number;
           paid_buyers: number;
           upsell_orders: number;
+          upsell_2_orders: number;
           unmapped_paid_orders: number;
           orphan_orders: number;
           paid_revenue_minor: string;
@@ -1251,6 +1252,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         (SELECT count(*)::int FROM tracking_orders o
           WHERE o.project_id = p.id AND o.status = 'paid' AND o.order_kind = 'upsell'
             AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS upsell_orders,
+        (SELECT count(*)::int FROM tracking_orders o
+          WHERE o.project_id = p.id AND o.status = 'paid' AND o.order_kind = 'upsell_2'
+            AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS upsell_2_orders,
         (SELECT count(*)::int FROM tracking_orders o
           WHERE o.project_id = p.id AND o.status = 'paid' AND o.order_kind = 'unknown'
             AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS unmapped_paid_orders,
@@ -1424,6 +1428,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           paid_orders: 0,
           paid_buyers: 0,
           upsell_orders: 0,
+          upsell_2_orders: 0,
           unmapped_paid_orders: 0,
           orphan_orders: 0,
           paid_revenue_minor: '0',

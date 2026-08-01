@@ -148,7 +148,10 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
       // deliveries for mapped upsells, but a delivery queued while the product was
       // still 'unknown' (or re-enqueued after a recompute) would otherwise slip
       // through here once the mapping lands.
-      if (row.event_name === 'Purchase' && row.order_kind === 'upsell') {
+      if (
+        row.event_name === 'Purchase' &&
+        (row.order_kind === 'upsell' || row.order_kind === 'upsell_2')
+      ) {
         await db`
           UPDATE meta_deliveries
           SET state = 'skipped', last_error = 'Pedido classificado como upsell; Meta recebe apenas vendas front.'

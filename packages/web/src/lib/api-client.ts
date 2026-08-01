@@ -1296,6 +1296,7 @@ export const apiClient = {
     paid_orders: number;
     paid_buyers: number;
     upsell_orders: number;
+    upsell_2_orders: number;
     unmapped_paid_orders: number;
     orphan_orders: number;
     paid_revenue_minor: string;
@@ -1362,7 +1363,7 @@ export const apiClient = {
       currency: string | null;
       amount_brl_minor: string | null;
       buyer: { name?: string; email?: string; document?: string };
-      order_kind: 'front' | 'upsell' | 'unknown';
+      order_kind: 'front' | 'upsell' | 'upsell_2' | 'unknown';
       occurred_at: string;
       updated_at: string;
     }>;
@@ -1467,7 +1468,7 @@ export const apiClient = {
     mapped: Array<{
       id: string;
       product_id: string;
-      kind: 'front' | 'upsell';
+      kind: 'front' | 'upsell' | 'upsell_2';
       label: string | null;
       created_at: string;
       updated_at: string;
@@ -1484,7 +1485,7 @@ export const apiClient = {
 
   async setTrackingProductKind(
     id: string,
-    body: { product_id: string; kind: 'front' | 'upsell'; label?: string | null },
+    body: { product_id: string; kind: 'front' | 'upsell' | 'upsell_2'; label?: string | null },
   ): Promise<{ id: string; product_id: string; kind: string; label: string | null }> {
     return request(`/v1/offers/${id}/tracking/product-kinds`, {
       method: 'PUT',

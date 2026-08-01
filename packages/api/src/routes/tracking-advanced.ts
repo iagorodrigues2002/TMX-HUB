@@ -58,7 +58,7 @@ const EntryLinkSchema = z.object({
 });
 const ProductKindSchema = z.object({
   product_id: z.string().trim().min(1).max(256),
-  kind: z.enum(['front', 'upsell']),
+  kind: z.enum(['front', 'upsell', 'upsell_2']),
   label: z.string().trim().max(120).nullable().optional(),
 });
 
