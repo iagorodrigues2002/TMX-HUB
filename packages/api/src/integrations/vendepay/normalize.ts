@@ -35,6 +35,7 @@ export type VendepayStatus =
   | 'refunded'
   | 'chargeback'
   | 'cancelled'
+  | 'abandoned'
   | 'unknown';
 
 export interface NormalizedVendepayEvent {
@@ -97,8 +98,9 @@ const normalizeStatus = (raw = ''): VendepayStatus => {
   if (['refused', 'declined', 'failed', 'recusado'].includes(status)) return 'refused';
   if (['refunded', 'refund', 'reembolsado'].includes(status)) return 'refunded';
   if (['chargeback', 'dispute'].includes(status)) return 'chargeback';
-  if (['cancelled', 'canceled', 'cancelado', 'carrinho.abandonado'].includes(status))
-    return 'cancelled';
+  if (['cancelled', 'canceled', 'cancelado'].includes(status)) return 'cancelled';
+  if (['carrinho.abandonado', 'carrinho_abandonado', 'abandonado'].includes(status))
+    return 'abandoned';
   return 'unknown';
 };
 

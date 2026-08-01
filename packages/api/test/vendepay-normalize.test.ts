@@ -134,7 +134,7 @@ describe('normalizeVendepay', () => {
     if (result.kind !== 'processable') return;
     expect(result.event).toMatchObject({
       transactionId: 'checkout-456',
-      status: 'cancelled',
+      status: 'abandoned',
       amountMinor: 4700,
       currency: 'BRL',
       product: { id: 'product-456' },

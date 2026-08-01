@@ -693,6 +693,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           };
         }
         const event = normalized.event;
+        const skipsUtmify = event.status === 'cancelled' || event.status === 'abandoned';
         const trackingIdentity = event.trackingSrc
           ? readTrackingToken(event.trackingSrc, env.WEBHOOK_SECRET)
           : null;
@@ -787,16 +788,16 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             VALUES
               (${id}, ${connection.project_id}, 'utmify', ${destination.id}, ${order.id},
                ${`vendepay:${event.transactionId}:${event.status}`}, ${`order.${event.status}`},
-               ${event.status === 'cancelled' ? 'skipped' : 'pending'},
+               ${skipsUtmify ? 'skipped' : 'pending'},
                ${
-                 event.status === 'cancelled'
-                   ? 'Status cancelled não é aceito pela UTMify; evento mantido apenas no TMX.'
+                 skipsUtmify
+                   ? 'Cancelamento/abandono não é aceito pela UTMify; evento mantido apenas no TMX.'
                    : null
                })
             ON CONFLICT (destination_kind, destination_id, event_id) DO NOTHING
             RETURNING id
           `;
-          if (rows[0] && event.status !== 'cancelled') utmifyDeliveryIds.push(rows[0].id);
+          if (rows[0] && !skipsUtmify) utmifyDeliveryIds.push(rows[0].id);
         }
         if (order.status !== 'paid') {
           return { inserted: true, deliveryIds: [], utmifyDeliveryIds, pushcutDeliveryIds: [] };
