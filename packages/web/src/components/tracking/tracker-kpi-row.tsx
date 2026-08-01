@@ -91,6 +91,13 @@ export function TrackerKpiRow({ summary }: { summary?: Summary }) {
     : s.connected_clicks / s.ad_clicks >= 0.5
       ? 'lush'
       : 'signal';
+  const totalOrders = buyersFront + upsells + unmapped;
+  const conversionRate = s?.checkouts ? percent(totalOrders, s.checkouts) : null;
+  const conversionTone: 'lush' | 'signal' | 'muted' = !s?.checkouts
+    ? 'muted'
+    : totalOrders / s.checkouts >= 0.1
+      ? 'lush'
+      : 'signal';
 
   const hasFinance = s?.net_revenue_brl_minor !== undefined;
   const refundedOrders = s?.refunded_orders ?? 0;
@@ -141,7 +148,7 @@ export function TrackerKpiRow({ summary }: { summary?: Summary }) {
         />
       </div>
 
-      <div className="tmx-kpi-tier2">
+      <div className="tmx-kpi-tier2 tmx-kpi-tier2-five">
         <StripReading
           label="Connect rate"
           value={connectRate ?? '—'}
@@ -155,6 +162,12 @@ export function TrackerKpiRow({ summary }: { summary?: Summary }) {
           value={integer(s?.checkouts)}
           detail={s?.checkout_events ? `${integer(s.checkout_events)} disparos` : null}
           tone="signal"
+        />
+        <StripReading
+          label="Taxa de conversão"
+          value={conversionRate ?? '—'}
+          detail={s?.checkouts ? `${integer(totalOrders)}/${integer(s.checkouts)} checkouts` : null}
+          tone={conversionTone}
         />
         <StripReading
           label="Pedidos totais"

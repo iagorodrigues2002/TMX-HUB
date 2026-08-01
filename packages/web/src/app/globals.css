@@ -759,6 +759,9 @@
   [data-surface="tracking"] .tmx-kpi-tier2 {
     grid-template-columns: repeat(4, 1fr);
   }
+  [data-surface="tracking"] .tmx-kpi-tier2.tmx-kpi-tier2-five {
+    grid-template-columns: repeat(5, 1fr);
+  }
 }
 
 [data-surface="tracking"] .tmx-kpi-strip-cell {
