@@ -207,17 +207,6 @@ export class UtmifySyncService {
     resultKeys: string[];
     accountFields: Array<Record<string, string | number | boolean>>;
     currency?: string;
-    levelProbe?: Record<
-      string,
-      {
-        ok: boolean;
-        rows?: number;
-        spend?: number;
-        revenue?: number;
-        sales?: number;
-        error?: string;
-      }
-    >;
   }> {
     if (!offer.dashboardId) throw new Error('Dashboard ID da UTMify não configurado.');
     const credentials = await this.offerStore.getUtmifyCredentials(offer.id);
@@ -226,81 +215,6 @@ export class UtmifySyncService {
     const yesterday = buildDays(2)[0]!;
     const response = await fetchAds(session.token, offer.dashboardId, yesterday);
     const results = response.results;
-    // TEMP diagnostic (2026-08-01): probe other "level" values on the same
-    // search-objects endpoint to see which one returns unattributed orders
-    // (e.g. upsells with no ad click) that "level: ad" appears to drop.
-    // Remove once the PJR_ENG under-count is resolved.
-    const levelProbe: Record<
-      string,
-      {
-        ok: boolean;
-        rows?: number;
-        spend?: number;
-        revenue?: number;
-        sales?: number;
-        error?: string;
-      }
-    > = {};
-    for (const level of [
-      'account',
-      'sale',
-      'order',
-      'transaction',
-      'source',
-      'utm',
-      'total',
-      'day',
-      'none',
-      'all',
-    ]) {
-      try {
-        const dateRange = saoPauloDayRange(yesterday);
-        const probeRes = await fetch(SEARCH_URL, {
-          method: 'POST',
-          headers: {
-            authorization: `Bearer ${session.token}`,
-            'content-type': 'application/json; charset=UTF-8',
-          },
-          body: JSON.stringify({
-            level,
-            dateRange,
-            nameContains: null,
-            productNames: null,
-            orderBy: 'greater_profit',
-            adObjectStatuses: null,
-            metaAdAccountIds: null,
-            dashboardId: offer.dashboardId,
-          }),
-          signal: AbortSignal.timeout(45_000),
-        });
-        const probePayload = (await probeRes.json().catch(() => null)) as Record<
-          string,
-          unknown
-        > | null;
-        if (!probeRes.ok) {
-          levelProbe[level] = {
-            ok: false,
-            error: `HTTP ${probeRes.status}: ${errorDetail(probePayload)}`,
-          };
-          continue;
-        }
-        const rows = Array.isArray(probePayload?.results)
-          ? (probePayload.results as UtmifyResult[])
-          : [];
-        levelProbe[level] = {
-          ok: true,
-          rows: rows.length,
-          spend: rows.reduce((sum, item) => sum + number(item.spend) / 100, 0),
-          revenue: rows.reduce((sum, item) => sum + number(item.revenue) / 100, 0),
-          sales: rows.reduce((sum, item) => sum + number(item.approvedOrdersCount), 0),
-        };
-      } catch (error) {
-        levelProbe[level] = {
-          ok: false,
-          error: error instanceof Error ? error.message : String(error),
-        };
-      }
-    }
     const resultKeys = [...new Set(results.flatMap((item) => Object.keys(item)))].sort();
     const accountFields = results.slice(0, 200).flatMap((item) => {
       const fields = Object.entries(item).filter(([key, value]) => {
@@ -317,7 +231,6 @@ export class UtmifySyncService {
       resultKeys,
       accountFields: uniqueAccounts.slice(0, 25),
       currency: detectDashboardCurrency(session.payload, offer.dashboardId) ?? response.currency,
-      levelProbe,
     };
   }
 }
