@@ -8,8 +8,11 @@ if (!process.env.DATABASE_URL) {
 const sql = postgres(process.env.DATABASE_URL, {
   max: 1,
   ssl: process.env.NODE_ENV === 'production' ? 'require' : false,
+  // Re-running idempotent DDL used to emit hundreds of "already exists"
+  // notices on every boot and could exhaust Railway's deployment log limit.
+  onnotice: () => {},
 });
-for (const name of [
+const migrations = [
   '001_tracking_foundation.sql',
   '002_meta_capi.sql',
   '003_tracking_advanced.sql',
@@ -32,9 +35,46 @@ for (const name of [
   '020_tracking_fee_settings.sql',
   '021_tracking_upsell_tiers.sql',
   '022_tracking_cancelled_delivery_cleanup.sql',
-]) {
+];
+
+await sql`
+  CREATE TABLE IF NOT EXISTS app_schema_migrations (
+    name text PRIMARY KEY,
+    applied_at timestamptz NOT NULL DEFAULT now()
+  )
+`;
+
+// Databases created before the migration ledger already have migrations
+// 001–021 applied. Seed their history instead of replaying the full schema at
+// every process start. A fresh database has no tracking_projects table and
+// still runs the complete sequence normally.
+const [{ legacy_schema: legacySchema }] = await sql`
+  SELECT to_regclass('public.tracking_projects') IS NOT NULL AS legacy_schema
+`;
+if (legacySchema) {
+  for (const name of migrations.slice(0, -1)) {
+    await sql`
+      INSERT INTO app_schema_migrations (name)
+      VALUES (${name})
+      ON CONFLICT (name) DO NOTHING
+    `;
+  }
+}
+
+for (const name of migrations) {
+  const [applied] = await sql`
+    SELECT 1 FROM app_schema_migrations WHERE name = ${name}
+  `;
+  if (applied) continue;
+
   const migration = await readFile(new URL(`../migrations/${name}`, import.meta.url), 'utf8');
-  await sql.unsafe(migration);
+  await sql.begin(async (tx) => {
+    await tx.unsafe(migration);
+    await tx`
+      INSERT INTO app_schema_migrations (name)
+      VALUES (${name})
+    `;
+  });
   console.log(`Migration ${name} aplicada.`);
 }
 await sql.end();
