@@ -241,7 +241,18 @@ export class UtmifySyncService {
         error?: string;
       }
     > = {};
-    for (const level of ['order', 'product', 'campaign', 'adset', 'offer']) {
+    for (const level of [
+      'account',
+      'sale',
+      'order',
+      'transaction',
+      'source',
+      'utm',
+      'total',
+      'day',
+      'none',
+      'all',
+    ]) {
       try {
         const dateRange = saoPauloDayRange(yesterday);
         const probeRes = await fetch(SEARCH_URL, {
@@ -267,7 +278,10 @@ export class UtmifySyncService {
           unknown
         > | null;
         if (!probeRes.ok) {
-          levelProbe[level] = { ok: false, error: `HTTP ${probeRes.status}` };
+          levelProbe[level] = {
+            ok: false,
+            error: `HTTP ${probeRes.status}: ${errorDetail(probePayload)}`,
+          };
           continue;
         }
         const rows = Array.isArray(probePayload?.results)
