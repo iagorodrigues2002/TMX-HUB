@@ -208,6 +208,9 @@ export class UtmifySyncService {
     accountFields: Array<Record<string, string | number | boolean>>;
     currency?: string;
     sampleRows?: Array<Record<string, unknown>>;
+    diagnosticDate?: string;
+    rawTotals?: { rowCount: number; spend: number; revenue: number };
+    ourSnapshot?: { spend: number; revenue: number; sales: number; ic: number; adsCount: number };
   }> {
     if (!offer.dashboardId) throw new Error('Dashboard ID da UTMify não configurado.');
     const credentials = await this.offerStore.getUtmifyCredentials(offer.id);
@@ -216,6 +219,19 @@ export class UtmifySyncService {
     const yesterday = buildDays(2)[0]!;
     const response = await fetchAds(session.token, offer.dashboardId, yesterday);
     const results = response.results;
+    const rawTotals = {
+      rowCount: results.length,
+      spend: results.reduce((sum, item) => sum + Number(item.spend ?? 0), 0) / 100,
+      revenue: results.reduce((sum, item) => sum + Number(item.revenue ?? 0), 0) / 100,
+    };
+    const ourSnap = toSnapshot(offer.id, yesterday, results);
+    const ourSnapshot = {
+      spend: ourSnap.spend,
+      revenue: ourSnap.revenue,
+      sales: ourSnap.sales,
+      ic: ourSnap.ic,
+      adsCount: ourSnap.ads?.length ?? 0,
+    };
     const resultKeys = [...new Set(results.flatMap((item) => Object.keys(item)))].sort();
     const accountFields = results.slice(0, 200).flatMap((item) => {
       const fields = Object.entries(item).filter(([key, value]) => {
@@ -253,6 +269,9 @@ export class UtmifySyncService {
       accountFields: uniqueAccounts.slice(0, 25),
       currency: detectDashboardCurrency(session.payload, offer.dashboardId) ?? response.currency,
       sampleRows,
+      diagnosticDate: yesterday,
+      rawTotals,
+      ourSnapshot,
     };
   }
 }
