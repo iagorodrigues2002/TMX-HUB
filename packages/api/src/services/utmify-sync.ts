@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { AdSnapshot, DailySnapshot, Offer } from '@page-cloner/shared';
 import type { Redis } from 'ioredis';
+import type { Sql } from 'postgres';
 import { generateCampaignAnalysis } from './campaign-ai.js';
 import type { IntradayStore } from './intraday-store.js';
 import type { OfferStore } from './offer-store.js';
@@ -56,6 +57,7 @@ export class UtmifySyncService {
       info: (obj: unknown, msg?: string) => void;
       warn: (obj: unknown, msg?: string) => void;
     },
+    private readonly db: Sql | null = null,
   ) {}
 
   start(): void {
@@ -103,11 +105,22 @@ export class UtmifySyncService {
       let syncedDays = 0;
       let detectedCurrency = detectDashboardCurrency(session.payload, offer.dashboardId);
       const failures: Array<{ date: string; message: string }> = [];
+      // UTMify's ad-level search endpoint only supports account/campaign/
+      // adset/ad grouping, so it silently drops orders with no ad
+      // attribution (e.g. upsells bought without a fresh ad click — UTMify's
+      // own dashboard labels these "N/A" source). When Vendepay tracking is
+      // also configured for this offer, it sees every paid order regardless
+      // of attribution, so we use it to correct sales/revenue undercounts.
+      const trackingProjectId =
+        (offer.currency ?? 'BRL') === 'BRL' ? await this.findTrackingProjectId(offer.id) : null;
       await mapWithConcurrency(days, DAY_SYNC_CONCURRENCY, async (date) => {
         try {
           const response = await fetchAds(session.token, dashboardId, date);
           detectedCurrency ??= response.currency;
-          const snapshot = toSnapshot(offer.id, date, response.results);
+          let snapshot = toSnapshot(offer.id, date, response.results);
+          if (trackingProjectId) {
+            snapshot = await this.reconcileWithVendepay(trackingProjectId, date, snapshot);
+          }
           ads += snapshot.ads?.length ?? 0;
           await this.snapshotStore.upsert(snapshot);
           await this.intradayStore.capture(offer.id, snapshot);
@@ -153,6 +166,60 @@ export class UtmifySyncService {
       throw error;
     } finally {
       await releaseLock(this.redis, lockKey, lockToken);
+    }
+  }
+
+  private async findTrackingProjectId(offerId: string): Promise<string | null> {
+    if (!this.db) return null;
+    try {
+      const [project] = await this.db<{ id: string }[]>`
+        SELECT id FROM tracking_projects WHERE offer_id = ${offerId} AND enabled = true
+      `;
+      return project?.id ?? null;
+    } catch (error) {
+      this.log.warn({ error, offerId }, 'utmify sync: tracking project lookup failed');
+      return null;
+    }
+  }
+
+  /**
+   * Only ever adds coverage: overrides sales/revenue with the Vendepay total
+   * for that day when it sees at least as many paid orders as UTMify's
+   * ad-attributed count. If Vendepay reports fewer (e.g. tracking was only
+   * enabled recently and has no history for that day), the UTMify numbers
+   * are left untouched rather than downgraded.
+   */
+  private async reconcileWithVendepay(
+    projectId: string,
+    date: string,
+    snapshot: DailySnapshot,
+  ): Promise<DailySnapshot> {
+    if (!this.db) return snapshot;
+    try {
+      const range = saoPauloDayRange(date);
+      const [totals] = await this.db<{ orders: number; revenue_brl_minor: string }[]>`
+        SELECT
+          count(*)::int AS orders,
+          COALESCE(sum(
+            CASE
+              WHEN amount_brl_minor IS NOT NULL THEN amount_brl_minor
+              WHEN currency = 'BRL' THEN amount_minor
+              ELSE 0
+            END
+          ), 0)::text AS revenue_brl_minor
+        FROM tracking_orders
+        WHERE project_id = ${projectId} AND status = 'paid'
+          AND occurred_at >= ${range.from} AND occurred_at < ${range.to}
+      `;
+      if (!totals || totals.orders < snapshot.sales) return snapshot;
+      return {
+        ...snapshot,
+        sales: totals.orders,
+        revenue: Number(totals.revenue_brl_minor) / 100,
+      };
+    } catch (error) {
+      this.log.warn({ error, projectId, date }, 'utmify sync: vendepay reconciliation failed');
+      return snapshot;
     }
   }
 

@@ -2,8 +2,8 @@ import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { env } from '../env.js';
 import { DigiAuditStore } from '../services/digi-audit-store.js';
 import { FunnelJobStore } from '../services/funnel-job-store.js';
-import { InviteStore } from '../services/invite-store.js';
 import { IntradayStore } from '../services/intraday-store.js';
+import { InviteStore } from '../services/invite-store.js';
 import { JobStore } from '../services/job-store.js';
 import { MediaJobStore } from '../services/media-job-store.js';
 import { NicheStore } from '../services/niche-store.js';
@@ -54,6 +54,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       app.snapshotStore,
       app.intradayStore,
       app.log,
+      app.db,
     ),
   );
 
