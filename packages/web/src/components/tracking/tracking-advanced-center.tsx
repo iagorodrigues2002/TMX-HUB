@@ -205,6 +205,16 @@ export function TrackingAdvancedCenter({
     },
     onError: (error) => toast.error((error as Error).message),
   });
+  const reconcileMetaPurchases = useMutation({
+    mutationFn: () => apiClient.reconcileMetaPurchases(offerId),
+    onSuccess: (result) => {
+      void qc.invalidateQueries({ queryKey: ['tracking-meta-deliveries', offerId] });
+      toast.success(
+        `${result.orders_found} compras conferidas · ${result.purchases_queued} Purchase reenfileirados para a Meta.`,
+      );
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
   const addDomain = useMutation({
     mutationFn: () => apiClient.addTrackingDomain(offerId, domain, domainKind),
     onSuccess: () => {
@@ -1147,17 +1157,33 @@ export function TrackingAdvancedCenter({
                     fbclid, além do identificador do navegador fbp.
                   </p>
                 </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={metaDeliveries.isFetching}
-                  onClick={() => void metaDeliveries.refetch()}
-                >
-                  <RefreshCw
-                    className={cn('mr-2 h-3.5 w-3.5', metaDeliveries.isFetching && 'animate-spin')}
-                  />
-                  Atualizar entregas
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  {canManage && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={reconcileMetaPurchases.isPending}
+                      onClick={() => reconcileMetaPurchases.mutate()}
+                    >
+                      <Send className="mr-2 h-3.5 w-3.5" />
+                      Reconciliar compras
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={metaDeliveries.isFetching}
+                    onClick={() => void metaDeliveries.refetch()}
+                  >
+                    <RefreshCw
+                      className={cn(
+                        'mr-2 h-3.5 w-3.5',
+                        metaDeliveries.isFetching && 'animate-spin',
+                      )}
+                    />
+                    Atualizar entregas
+                  </Button>
+                </div>
               </div>
               <div className="mt-4 space-y-2">
                 {(metaDeliveries.data?.deliveries ?? []).slice(0, 30).map((delivery) => {

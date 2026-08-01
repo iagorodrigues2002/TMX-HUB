@@ -92,7 +92,7 @@ export function TrackingOverviewDashboard() {
       ) : (
         <>
           <div data-surface="tracking" className="tmx-kpi rounded-lg">
-            <div className="tmx-kpi-tier2">
+            <div className="tmx-kpi-tier2 tmx-kpi-tier2-five">
               <div className="tmx-kpi-strip-cell">
                 <div className="tmx-kpi-strip-head">
                   <span className="tmx-kpi-strip-label">Bruto</span>
@@ -101,6 +101,20 @@ export function TrackingOverviewDashboard() {
                   {pick(totals?.gross_revenue_brl_minor, totals?.gross_revenue_usd_minor)}
                 </p>
                 <p className="tmx-kpi-strip-detail">{integer(totals?.paid_orders)} pedidos</p>
+              </div>
+              <div className="tmx-kpi-strip-cell">
+                <div className="tmx-kpi-strip-head">
+                  <span className="tmx-kpi-strip-label">Vendas canceladas</span>
+                </div>
+                <p className="mono-num tmx-kpi-strip-value text-amber-200">
+                  {pick(
+                    totals?.cancelled_revenue_brl_minor,
+                    totals?.cancelled_revenue_usd_minor,
+                  )}
+                </p>
+                <p className="tmx-kpi-strip-detail">
+                  {integer(totals?.cancelled_orders)} pedidos cancelados
+                </p>
               </div>
               <div className="tmx-kpi-strip-cell">
                 <div className="tmx-kpi-strip-head">
@@ -178,6 +192,7 @@ export function TrackingOverviewDashboard() {
                   <th className="p-3 font-medium">Oferta</th>
                   <th className="p-3 font-medium">Pedidos</th>
                   <th className="p-3 font-medium">Bruto</th>
+                  <th className="p-3 font-medium">Canceladas</th>
                   <th className="p-3 font-medium">Reembolsos</th>
                   <th className="p-3 font-medium">Chargeback</th>
                   <th className="p-3 font-medium">Taxas</th>
@@ -196,6 +211,17 @@ export function TrackingOverviewDashboard() {
                     <td className="mono-num p-3">{integer(offer.paid_orders)}</td>
                     <td className="mono-num p-3">
                       {pick(offer.gross_revenue_brl_minor, offer.gross_revenue_usd_minor)}
+                    </td>
+                    <td className="mono-num p-3 text-amber-200/80">
+                      <span className="block">
+                        {pick(
+                          offer.cancelled_revenue_brl_minor,
+                          offer.cancelled_revenue_usd_minor,
+                        )}
+                      </span>
+                      <span className="mt-1 block text-[10px] text-white/35">
+                        {integer(offer.cancelled_orders)} pedidos
+                      </span>
                     </td>
                     <td className="mono-num p-3 text-amber-200/80">
                       {pick(offer.refunded_revenue_brl_minor, offer.refunded_revenue_usd_minor)}

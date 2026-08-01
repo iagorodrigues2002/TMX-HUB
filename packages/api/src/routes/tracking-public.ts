@@ -777,14 +777,21 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           const id = ulid();
           const rows = await sql<{ id: string }[]>`
             INSERT INTO tracking_delivery_outbox
-              (id, project_id, destination_kind, destination_id, order_id, event_id, event_type)
+              (id, project_id, destination_kind, destination_id, order_id, event_id, event_type,
+               state, last_error)
             VALUES
               (${id}, ${connection.project_id}, 'utmify', ${destination.id}, ${order.id},
-               ${`vendepay:${event.transactionId}:${event.status}`}, ${`order.${event.status}`})
+               ${`vendepay:${event.transactionId}:${event.status}`}, ${`order.${event.status}`},
+               ${event.status === 'cancelled' ? 'skipped' : 'pending'},
+               ${
+                 event.status === 'cancelled'
+                   ? 'Status cancelled não é aceito pela UTMify; evento mantido apenas no TMX.'
+                   : null
+               })
             ON CONFLICT (destination_kind, destination_id, event_id) DO NOTHING
             RETURNING id
           `;
-          if (rows[0]) utmifyDeliveryIds.push(rows[0].id);
+          if (rows[0] && event.status !== 'cancelled') utmifyDeliveryIds.push(rows[0].id);
         }
         if (order.status !== 'paid') {
           return { inserted: true, deliveryIds: [], utmifyDeliveryIds, pushcutDeliveryIds: [] };
@@ -826,12 +833,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           `;
           if (rows[0]) pushcutDeliveryIds.push(rows[0].id);
         }
-        // Meta receives only front-end sales. Upsell purchases would double-count
-        // the same buyer/click and distort campaign CPA, so they stop here —
-        // UTMify and Pushcut (above) still receive every order regardless of kind.
-        if (order.order_kind === 'upsell' || order.order_kind === 'upsell_2') {
-          return { inserted: true, deliveryIds: [], utmifyDeliveryIds, pushcutDeliveryIds };
-        }
+        // Every approved transaction is a real Purchase. Front, upsell 1 and
+        // upsell 2 use distinct transaction/event IDs, so Meta can deduplicate
+        // retries without suppressing legitimate incremental revenue.
         const [rules] = await sql<
           Array<{ attributed_only: boolean; minimum_amount_minor: number }>
         >`

@@ -72,6 +72,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           offer_id: string;
           paid_orders: number;
           paid_revenue_brl_minor: string;
+          cancelled_orders: number;
+          cancelled_revenue_brl_minor: string;
           refunded_orders: number;
           refunded_revenue_brl_minor: string;
           chargeback_orders: number;
@@ -100,6 +102,22 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             ON rc.base_currency = o.currency AND rc.target_currency = 'BRL'
           WHERE o.project_id = p.id AND o.status = 'paid'
             AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS paid_revenue_brl_minor,
+        (SELECT count(*)::int FROM tracking_orders o
+          WHERE o.project_id = p.id AND o.status = 'cancelled'
+            AND o.updated_at >= ${from} AND o.updated_at < ${to}) AS cancelled_orders,
+        (SELECT COALESCE(sum(
+            CASE
+              WHEN o.amount_brl_minor IS NOT NULL THEN o.amount_brl_minor
+              WHEN o.currency = 'BRL' THEN o.amount_minor
+              WHEN rc.rate IS NOT NULL THEN (o.amount_minor * rc.rate)::bigint
+              ELSE 0
+            END
+          ), 0)::text
+          FROM tracking_orders o
+          LEFT JOIN exchange_rate_cache rc
+            ON rc.base_currency = o.currency AND rc.target_currency = 'BRL'
+          WHERE o.project_id = p.id AND o.status = 'cancelled'
+            AND o.updated_at >= ${from} AND o.updated_at < ${to}) AS cancelled_revenue_brl_minor,
         (SELECT count(*)::int FROM tracking_orders o
           WHERE o.project_id = p.id AND o.status = 'refunded'
             AND o.updated_at >= ${from} AND o.updated_at < ${to}) AS refunded_orders,
@@ -158,6 +176,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           );
           const extraFeeBrlMinor = (extraFeeConversion?.brlMinor ?? 0) * row.paid_orders;
           const grossBrlMinor = Number(row.paid_revenue_brl_minor);
+          const cancelledBrlMinor = Number(row.cancelled_revenue_brl_minor);
           const refundedBrlMinor = Number(row.refunded_revenue_brl_minor);
           const chargebackBrlMinor = Number(row.chargeback_revenue_brl_minor);
           const feeVendepayBrlMinor = Math.round((grossBrlMinor * feePct) / 100);
@@ -175,6 +194,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             paid_orders: row.paid_orders,
             gross_revenue_brl_minor: String(grossBrlMinor),
             gross_revenue_usd_minor: String(toUsdMinor(grossBrlMinor)),
+            cancelled_orders: row.cancelled_orders,
+            cancelled_revenue_brl_minor: String(cancelledBrlMinor),
+            cancelled_revenue_usd_minor: String(toUsdMinor(cancelledBrlMinor)),
             refunded_orders: row.refunded_orders,
             refunded_revenue_brl_minor: String(refundedBrlMinor),
             refunded_revenue_usd_minor: String(toUsdMinor(refundedBrlMinor)),
@@ -200,6 +222,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           paid_orders: acc.paid_orders + offer.paid_orders,
           gross_revenue_brl_minor:
             acc.gross_revenue_brl_minor + Number(offer.gross_revenue_brl_minor),
+          cancelled_orders: acc.cancelled_orders + offer.cancelled_orders,
+          cancelled_revenue_brl_minor:
+            acc.cancelled_revenue_brl_minor + Number(offer.cancelled_revenue_brl_minor),
           refunded_orders: acc.refunded_orders + offer.refunded_orders,
           refunded_revenue_brl_minor:
             acc.refunded_revenue_brl_minor + Number(offer.refunded_revenue_brl_minor),
@@ -215,6 +240,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         {
           paid_orders: 0,
           gross_revenue_brl_minor: 0,
+          cancelled_orders: 0,
+          cancelled_revenue_brl_minor: 0,
           refunded_orders: 0,
           refunded_revenue_brl_minor: 0,
           chargeback_orders: 0,
@@ -235,6 +262,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           paid_orders: totals.paid_orders,
           gross_revenue_brl_minor: String(totals.gross_revenue_brl_minor),
           gross_revenue_usd_minor: String(toUsdMinor(totals.gross_revenue_brl_minor)),
+          cancelled_orders: totals.cancelled_orders,
+          cancelled_revenue_brl_minor: String(totals.cancelled_revenue_brl_minor),
+          cancelled_revenue_usd_minor: String(toUsdMinor(totals.cancelled_revenue_brl_minor)),
           refunded_orders: totals.refunded_orders,
           refunded_revenue_brl_minor: String(totals.refunded_revenue_brl_minor),
           refunded_revenue_usd_minor: String(toUsdMinor(totals.refunded_revenue_brl_minor)),

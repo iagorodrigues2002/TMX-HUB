@@ -250,6 +250,66 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     },
   );
 
+  app.post<{ Params: { id: string } }>(
+    '/offers/:id/tracking/meta-purchases/reconcile',
+    async (req, reply) => {
+      const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin', true);
+      if (!app.db) return reply.code(503).send(databaseUnavailable);
+      if (!p) return reply.code(409).send({ error: 'tracking_not_configured' });
+
+      const result = await app.db.begin(async (sql) => {
+        const orders = await sql<
+          Array<{ id: string; external_id: string; event_at: Date }>
+        >`
+          SELECT id, external_id, COALESCE(paid_at, occurred_at) AS event_at
+          FROM tracking_orders
+          WHERE project_id = ${p.id} AND status = 'paid'
+          ORDER BY occurred_at ASC
+        `;
+        const pixels = await sql<Array<{ id: string }>>`
+          SELECT id FROM meta_pixels
+          WHERE project_id = ${p.id} AND enabled = true
+          ORDER BY created_at ASC
+        `;
+        const deliveries: Array<{ id: string }> = [];
+        for (const order of orders) {
+          for (const pixel of pixels) {
+            const rows = await sql<{ id: string }[]>`
+              INSERT INTO meta_deliveries AS existing
+                (id, project_id, pixel_id, order_id, event_id, event_name, event_at,
+                 outgoing_event_id)
+              VALUES
+                (${ulid()}, ${p.id}, ${pixel.id}, ${order.id},
+                 ${`vendepay:${order.external_id}:purchase`}, 'Purchase', ${order.event_at}, NULL)
+              ON CONFLICT (pixel_id, event_id) DO UPDATE SET
+                order_id = EXCLUDED.order_id,
+                event_name = 'Purchase',
+                event_at = EXCLUDED.event_at,
+                state = 'pending',
+                attempts = 0,
+                last_error = NULL
+              WHERE existing.state <> 'delivered'
+              RETURNING id
+            `;
+            if (rows[0]) deliveries.push(rows[0]);
+          }
+        }
+        return { orders: orders.length, pixels: pixels.length, deliveries };
+      });
+
+      await Promise.allSettled(
+        result.deliveries.map(({ id }) =>
+          app.metaQueue.add('send', { deliveryId: id }, { jobId: `${id}-reconcile-${Date.now()}` }),
+        ),
+      );
+      return reply.code(202).send({
+        orders_found: result.orders,
+        pixels_enabled: result.pixels,
+        purchases_queued: result.deliveries.length,
+      });
+    },
+  );
+
   app.post<{ Params: { id: string } }>('/offers/:id/tracking/domains', async (req, reply) => {
     const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin', true);
     if (!app.db) return reply.code(503).send(databaseUnavailable);

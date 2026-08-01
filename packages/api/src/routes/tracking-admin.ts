@@ -1053,7 +1053,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           ) previous_page ON e.event_name = 'InitiateCheckout'
           WHERE e.project_id = (SELECT id FROM project)
             AND e.received_at >= ${from} AND e.received_at < ${to}
-            AND e.event_name IN ('PageView', 'InitiateCheckout')
+            AND e.event_name IN ('PageView', 'AdClick', 'InitiateCheckout')
         ),
         order_facts AS (
           SELECT

@@ -1395,6 +1395,9 @@ export const apiClient = {
       paid_orders: number;
       gross_revenue_brl_minor: string;
       gross_revenue_usd_minor: string;
+      cancelled_orders: number;
+      cancelled_revenue_brl_minor: string;
+      cancelled_revenue_usd_minor: string;
       refunded_orders: number;
       refunded_revenue_brl_minor: string;
       refunded_revenue_usd_minor: string;
@@ -1414,6 +1417,9 @@ export const apiClient = {
       paid_orders: number;
       gross_revenue_brl_minor: string;
       gross_revenue_usd_minor: string;
+      cancelled_orders: number;
+      cancelled_revenue_brl_minor: string;
+      cancelled_revenue_usd_minor: string;
       refunded_orders: number;
       refunded_revenue_brl_minor: string;
       refunded_revenue_usd_minor: string;
@@ -1938,6 +1944,12 @@ export const apiClient = {
       `/v1/offers/${id}/tracking/initiate-checkout/reconcile?date=${encodeURIComponent(date)}`,
       { method: 'POST' },
     );
+  },
+
+  async reconcileMetaPurchases(
+    id: string,
+  ): Promise<{ orders_found: number; pixels_enabled: number; purchases_queued: number }> {
+    return request(`/v1/offers/${id}/tracking/meta-purchases/reconcile`, { method: 'POST' });
   },
 
   async listMetaPixels(id: string): Promise<{

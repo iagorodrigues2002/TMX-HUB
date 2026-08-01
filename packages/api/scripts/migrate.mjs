@@ -31,6 +31,7 @@ for (const name of [
   '019_pushcut_destination_kind.sql',
   '020_tracking_fee_settings.sql',
   '021_tracking_upsell_tiers.sql',
+  '022_tracking_cancelled_delivery_cleanup.sql',
 ]) {
   const migration = await readFile(new URL(`../migrations/${name}`, import.meta.url), 'utf8');
   await sql.unsafe(migration);

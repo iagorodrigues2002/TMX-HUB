@@ -127,7 +127,7 @@ describe('reliable tracking foundation', () => {
     expect(payload.commission.totalPriceInCents).toBe(19700);
     expect(payload.customer.country).toBe('US');
     expect(payload.trackingParameters).toMatchObject({
-      utm_source: 'facebook',
+      utm_source: 'FB',
       utm_campaign: 'campanha-a',
       utm_content: 'criativo-3',
     });
