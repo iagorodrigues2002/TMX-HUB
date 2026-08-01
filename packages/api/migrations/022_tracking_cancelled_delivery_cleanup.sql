@@ -1,5 +1,11 @@
 -- UTMify does not accept a cancelled status. Keep these lifecycle events in
 -- TMX, but do not leave impossible deliveries permanently pending.
+ALTER TABLE tracking_delivery_outbox
+  DROP CONSTRAINT IF EXISTS tracking_delivery_outbox_state_check;
+ALTER TABLE tracking_delivery_outbox
+  ADD CONSTRAINT tracking_delivery_outbox_state_check
+  CHECK (state IN ('pending', 'processing', 'delivered', 'failed', 'dead', 'skipped'));
+
 UPDATE tracking_delivery_outbox d
 SET state = 'skipped',
     last_error = 'Status cancelled não é aceito pela UTMify; evento mantido apenas no TMX.',
