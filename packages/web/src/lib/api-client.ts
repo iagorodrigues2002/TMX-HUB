@@ -1395,9 +1395,9 @@ export const apiClient = {
       paid_orders: number;
       gross_revenue_brl_minor: string;
       gross_revenue_usd_minor: string;
-      cancelled_orders: number;
-      cancelled_revenue_brl_minor: string;
-      cancelled_revenue_usd_minor: string;
+      failed_orders: number;
+      failed_revenue_brl_minor: string;
+      failed_revenue_usd_minor: string;
       refunded_orders: number;
       refunded_revenue_brl_minor: string;
       refunded_revenue_usd_minor: string;
@@ -1417,9 +1417,9 @@ export const apiClient = {
       paid_orders: number;
       gross_revenue_brl_minor: string;
       gross_revenue_usd_minor: string;
-      cancelled_orders: number;
-      cancelled_revenue_brl_minor: string;
-      cancelled_revenue_usd_minor: string;
+      failed_orders: number;
+      failed_revenue_brl_minor: string;
+      failed_revenue_usd_minor: string;
       refunded_orders: number;
       refunded_revenue_brl_minor: string;
       refunded_revenue_usd_minor: string;

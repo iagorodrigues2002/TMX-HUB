@@ -84,6 +84,8 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
           order_kind: string | null;
           product: { id?: string; name?: string; planId?: string; planName?: string } | null;
           buyer: { email?: string; phone?: string };
+          identity_email: string | null;
+          identity_phone: string | null;
           paid_at: Date | null;
           visitor_id: string | null;
           event_url: string | null;
@@ -110,6 +112,20 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
                o.order_kind,
                o.product,
                COALESCE(o.buyer, '{}'::jsonb) AS buyer, o.paid_at,
+               COALESCE(NULLIF(direct_event.properties->>'email', ''), (
+                 SELECT NULLIF(te.properties->>'email', '') FROM tracking_events te
+                 WHERE te.project_id = md.project_id
+                   AND te.visitor_id = COALESCE(o.visitor_id, direct_event.visitor_id)
+                   AND NULLIF(te.properties->>'email', '') IS NOT NULL
+                 ORDER BY te.received_at DESC LIMIT 1
+               )) AS identity_email,
+               COALESCE(NULLIF(direct_event.properties->>'phone', ''), (
+                 SELECT NULLIF(te.properties->>'phone', '') FROM tracking_events te
+                 WHERE te.project_id = md.project_id
+                   AND te.visitor_id = COALESCE(o.visitor_id, direct_event.visitor_id)
+                   AND NULLIF(te.properties->>'phone', '') IS NOT NULL
+                 ORDER BY te.received_at DESC LIMIT 1
+               )) AS identity_phone,
                COALESCE(o.visitor_id, direct_event.visitor_id) AS visitor_id,
                COALESCE(direct_event.event_url, (
                  SELECT te.event_url FROM tracking_events te
@@ -154,8 +170,11 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
           throw new Error('Purchase incompleto: valor, moeda ou data de pagamento ausente.');
         }
         const userData: Record<string, string | string[]> = {};
-        if (row.buyer.email) userData.em = [hash(row.buyer.email)];
-        if (row.buyer.phone) userData.ph = [hash(row.buyer.phone.replace(/\D/g, ''))];
+        const email =
+          row.buyer.email?.trim().toLowerCase() || row.identity_email?.trim().toLowerCase();
+        const phone = (row.buyer.phone || row.identity_phone || '').replace(/\D/g, '');
+        if (email) userData.em = [hash(email)];
+        if (phone) userData.ph = [hash(phone)];
         if (row.visitor_id) userData.external_id = [hash(row.visitor_id)];
         if (row.source?._fbp) userData.fbp = row.source._fbp;
         if (row.source?._fbc) userData.fbc = row.source._fbc;
