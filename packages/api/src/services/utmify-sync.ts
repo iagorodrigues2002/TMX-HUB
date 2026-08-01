@@ -1,10 +1,10 @@
-import type { AdSnapshot, DailySnapshot, Offer } from '@page-cloner/shared';
 import { randomUUID } from 'node:crypto';
+import type { AdSnapshot, DailySnapshot, Offer } from '@page-cloner/shared';
 import type { Redis } from 'ioredis';
+import { generateCampaignAnalysis } from './campaign-ai.js';
+import type { IntradayStore } from './intraday-store.js';
 import type { OfferStore } from './offer-store.js';
 import type { SnapshotStore } from './snapshot-store.js';
-import type { IntradayStore } from './intraday-store.js';
-import { generateCampaignAnalysis } from './campaign-ai.js';
 
 const AUTH_URL = 'https://server.utmify.com.br/users/auth';
 const SEARCH_URL = 'https://server.utmify.com.br/orders/search-objects';
@@ -207,6 +207,7 @@ export class UtmifySyncService {
     resultKeys: string[];
     accountFields: Array<Record<string, string | number | boolean>>;
     currency?: string;
+    sampleRows?: Array<Record<string, unknown>>;
   }> {
     if (!offer.dashboardId) throw new Error('Dashboard ID da UTMify não configurado.');
     const credentials = await this.offerStore.getUtmifyCredentials(offer.id);
@@ -227,10 +228,31 @@ export class UtmifySyncService {
     const uniqueAccounts = [
       ...new Map(accountFields.map((fields) => [JSON.stringify(fields), fields])).values(),
     ];
+    // TEMP diagnostic (2026-08-01): raw money fields for the top 5 rows by
+    // spend, to compare against our own spend/revenue parsing. Remove once
+    // the invested/revenue mismatch reported for PJR_ENG is resolved.
+    const moneyKeys = [
+      'name',
+      'spend',
+      'revenue',
+      'grossRevenue',
+      'pendingRevenue',
+      'refundedRevenue',
+      'profit',
+      'roas',
+      'roi',
+      'approvedOrdersCount',
+      'initiateCheckout',
+    ];
+    const sampleRows = [...results]
+      .sort((a, b) => Number(b.spend ?? 0) - Number(a.spend ?? 0))
+      .slice(0, 5)
+      .map((item) => Object.fromEntries(moneyKeys.map((k) => [k, item[k]])));
     return {
       resultKeys,
       accountFields: uniqueAccounts.slice(0, 25),
       currency: detectDashboardCurrency(session.payload, offer.dashboardId) ?? response.currency,
+      sampleRows,
     };
   }
 }
