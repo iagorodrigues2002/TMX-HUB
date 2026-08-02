@@ -83,7 +83,7 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
           amount_brl_minor: number | null;
           order_kind: string | null;
           product: { id?: string; name?: string; planId?: string; planName?: string } | null;
-          buyer: { email?: string; phone?: string };
+          buyer: { email?: string; phone?: string; country?: string };
           identity_email: string | null;
           identity_phone: string | null;
           paid_at: Date | null;
@@ -134,10 +134,13 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
                  ORDER BY te.received_at DESC LIMIT 1
                )) AS event_url,
                COALESCE(o.attribution_source, '{}'::jsonb) ||
+               COALESCE(tv.first_source, '{}'::jsonb) ||
+               COALESCE(tv.last_source, '{}'::jsonb) ||
                COALESCE(direct_event.source, '{}'::jsonb) || COALESCE((
                  SELECT te.source FROM tracking_events te
                  WHERE te.project_id = md.project_id
                    AND te.visitor_id = COALESCE(o.visitor_id, direct_event.visitor_id)
+                   AND te.source <> '{}'::jsonb
                  ORDER BY te.received_at DESC LIMIT 1
                ), '{}'::jsonb) AS source,
                COALESCE(direct_event.client_ip, (
@@ -157,6 +160,9 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
         LEFT JOIN tracking_orders o ON o.id = md.order_id
         LEFT JOIN tracking_events direct_event
           ON direct_event.project_id = md.project_id AND direct_event.id = md.event_id
+        LEFT JOIN tracking_visitors tv
+          ON tv.project_id = md.project_id
+         AND tv.visitor_id = COALESCE(o.visitor_id, direct_event.visitor_id)
         WHERE md.id = ${job.data.deliveryId} AND md.state <> 'delivered'
       `;
       if (!row) return;
@@ -187,8 +193,9 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
         }
         if (row.client_ip) userData.client_ip_address = row.client_ip;
         if (row.user_agent) userData.client_user_agent = row.user_agent;
-        if (row.source?.country && /^[a-z]{2}$/i.test(row.source.country)) {
-          userData.country = [hash(row.source.country)];
+        const country = row.buyer.country || row.source?.country;
+        if (country && /^[a-z]{2}$/i.test(country)) {
+          userData.country = [hash(country)];
         }
         const payload: Record<string, unknown> = {
           data: [

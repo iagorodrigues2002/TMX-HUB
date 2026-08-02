@@ -239,29 +239,33 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
              mp.name AS pixel_name, mp.pixel_id,
              COALESCE(o.external_id, 'TMX-IC-' || md.event_id) AS transaction_id,
              COALESCE(direct_event.event_url, latest_event.event_url) AS event_url,
-             NULLIF(COALESCE(direct_event.source->>'campaign_id',
-               latest_event.source->>'campaign_id'), '') AS campaign_id,
-             NULLIF(COALESCE(direct_event.source->>'adset_id',
-               latest_event.source->>'adset_id'), '') AS adset_id,
-             NULLIF(COALESCE(direct_event.source->>'ad_id',
-               latest_event.source->>'ad_id'), '') AS ad_id,
-             NULLIF(COALESCE(direct_event.source->>'fbclid',
-               latest_event.source->>'fbclid'), '') IS NOT NULL AS has_fbclid,
-             NULLIF(COALESCE(direct_event.source->>'_fbc',
-               latest_event.source->>'_fbc'), '') IS NOT NULL AS has_fbc,
-             NULLIF(COALESCE(direct_event.source->>'_fbp',
-               latest_event.source->>'_fbp'), '') IS NOT NULL AS has_fbp
+             NULLIF(COALESCE(direct_event.source->>'campaign_id', o.attribution_source->>'campaign_id',
+               tv.last_source->>'campaign_id', tv.first_source->>'campaign_id', latest_event.source->>'campaign_id'), '') AS campaign_id,
+             NULLIF(COALESCE(direct_event.source->>'adset_id', o.attribution_source->>'adset_id',
+               tv.last_source->>'adset_id', tv.first_source->>'adset_id', latest_event.source->>'adset_id'), '') AS adset_id,
+             NULLIF(COALESCE(direct_event.source->>'ad_id', o.attribution_source->>'ad_id',
+               tv.last_source->>'ad_id', tv.first_source->>'ad_id', latest_event.source->>'ad_id'), '') AS ad_id,
+             NULLIF(COALESCE(direct_event.source->>'fbclid', o.attribution_source->>'fbclid',
+               tv.last_source->>'fbclid', tv.first_source->>'fbclid', latest_event.source->>'fbclid'), '') IS NOT NULL AS has_fbclid,
+             NULLIF(COALESCE(direct_event.source->>'_fbc', o.attribution_source->>'_fbc',
+               tv.last_source->>'_fbc', tv.first_source->>'_fbc', latest_event.source->>'_fbc'), '') IS NOT NULL AS has_fbc,
+             NULLIF(COALESCE(direct_event.source->>'_fbp', o.attribution_source->>'_fbp',
+               tv.last_source->>'_fbp', tv.first_source->>'_fbp', latest_event.source->>'_fbp'), '') IS NOT NULL AS has_fbp
       FROM meta_deliveries md
       JOIN tracking_projects tp ON tp.id = md.project_id
       JOIN meta_pixels mp ON mp.id = md.pixel_id
       LEFT JOIN tracking_orders o ON o.id = md.order_id
       LEFT JOIN tracking_events direct_event
         ON direct_event.project_id = md.project_id AND direct_event.id = md.event_id
+      LEFT JOIN tracking_visitors tv
+        ON tv.project_id = md.project_id
+       AND tv.visitor_id = COALESCE(o.visitor_id, direct_event.visitor_id)
       LEFT JOIN LATERAL (
         SELECT te.event_url, te.source
         FROM tracking_events te
         WHERE te.project_id = md.project_id
           AND te.visitor_id = COALESCE(o.visitor_id, direct_event.visitor_id)
+          AND te.source <> '{}'::jsonb
         ORDER BY te.received_at DESC
         LIMIT 1
       ) latest_event ON true

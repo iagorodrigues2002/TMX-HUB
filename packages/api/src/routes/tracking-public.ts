@@ -697,10 +697,55 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         const trackingIdentity = event.trackingSrc
           ? readTrackingToken(event.trackingSrc, env.WEBHOOK_SECRET)
           : null;
-        const attributedVisitorId =
+        let attributedVisitorId =
           trackingIdentity?.projectId === connection.project_id
             ? trackingIdentity.visitorId
-            : event.trackingSrc;
+            : null;
+        // Older checkout links sometimes carried a plain visitor id instead of
+        // the signed TMX token. Accept it only when it already exists in this
+        // project; never persist an arbitrary src value as a visitor identity.
+        if (!attributedVisitorId && event.trackingSrc) {
+          const [knownVisitor] = await sql<{ visitor_id: string }[]>`
+            SELECT visitor_id FROM tracking_visitors
+            WHERE project_id=${connection.project_id} AND visitor_id=${event.trackingSrc}
+            LIMIT 1
+          `;
+          attributedVisitorId = knownVisitor?.visitor_id ?? null;
+        }
+        // If Vendepay omitted src, recover the visitor from identity data the
+        // lead previously supplied to tmx.identify()/checkout. This is an exact
+        // email/phone match scoped to the same offer, never a proximity guess.
+        if (!attributedVisitorId && (event.buyer.email || event.buyer.phone)) {
+          const [identityMatch] = await sql<{ visitor_id: string }[]>`
+            SELECT e.visitor_id FROM tracking_events e
+            WHERE e.project_id=${connection.project_id}
+              AND e.received_at >= ${event.occurredAt}::timestamptz - interval '30 days'
+              AND e.received_at <= ${event.occurredAt}::timestamptz + interval '1 day'
+              AND (
+                (${event.buyer.email ?? null}::text IS NOT NULL
+                  AND lower(e.properties->>'email')=lower(${event.buyer.email ?? null}::text))
+                OR
+                (${event.buyer.phone ?? null}::text IS NOT NULL
+                  AND regexp_replace(e.properties->>'phone','\\D','','g')=
+                      regexp_replace(${event.buyer.phone ?? null}::text,'\\D','','g'))
+              )
+            ORDER BY abs(extract(epoch FROM (${event.occurredAt}::timestamptz-e.received_at)))
+            LIMIT 1
+          `;
+          attributedVisitorId = identityMatch?.visitor_id ?? null;
+        }
+        const [visitorSource] = attributedVisitorId
+          ? await sql<Array<{ first_source: Record<string, string>; last_source: Record<string, string> }>>`
+              SELECT first_source, last_source FROM tracking_visitors
+              WHERE project_id=${connection.project_id} AND visitor_id=${attributedVisitorId}
+              LIMIT 1
+            `
+          : [];
+        const resolvedAttributionSource = {
+          ...(visitorSource?.first_source ?? {}),
+          ...(visitorSource?.last_source ?? {}),
+          ...event.source,
+        };
         const [productKind] = event.product.id
           ? await sql<{ kind: string }[]>`
               SELECT kind FROM tracking_product_kinds
@@ -725,7 +770,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
              ${amountBrlMinor}, ${exchangeRate}, ${convertedAt},
              ${attributedVisitorId ?? null}, ${sql.json(event.buyer)}, ${event.rawStatus ?? null},
              ${event.occurredAt}, ${event.status === 'paid' ? event.occurredAt : null},
-             ${event.paymentMethod ?? null}, ${sql.json(event.product)}, ${sql.json(event.source)},
+             ${event.paymentMethod ?? null}, ${sql.json(event.product)}, ${sql.json(resolvedAttributionSource)},
              ${orderKind}, ${event.status === 'cancelled' ? event.occurredAt : null})
           ON CONFLICT (project_id, provider, external_id) DO UPDATE SET
             status = CASE
