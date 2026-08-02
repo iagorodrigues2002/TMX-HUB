@@ -631,6 +631,36 @@ export interface TrackingFeeSettings {
   configured: boolean;
 }
 
+export interface TrackingHealthView {
+  score: number;
+  status: 'excellent' | 'good' | 'attention' | 'critical';
+  components: Array<{ key: string; label: string; score: number; weight: number }>;
+  alerts: Array<{
+    id: string;
+    alert_key: string;
+    severity: 'info' | 'warning' | 'critical';
+    title: string;
+    detail: string;
+    metric: string | null;
+    current_value: string | null;
+    threshold_value: string | null;
+    state: 'active' | 'acknowledged' | 'resolved';
+    first_seen_at: string;
+    last_seen_at: string;
+    acknowledged_at: string | null;
+    resolved_at: string | null;
+  }>;
+  metrics: {
+    attribution_rate: number;
+    meta_success: number;
+    utmify_success: number;
+    webhook_success: number;
+    order_match: number;
+    events_24h: number;
+    last_event_at: string | null;
+  };
+}
+
 export interface DashboardSummary {
   from: string;
   to: string;
@@ -1467,6 +1497,21 @@ export const apiClient = {
     detail: string;
   }> {
     return request(`/v1/offers/${id}/tracking/diagnostics`);
+  },
+
+  async getTrackingHealth(id: string): Promise<TrackingHealthView> {
+    return request(`/v1/offers/${id}/tracking/health`);
+  },
+
+  async updateTrackingHealthAlert(
+    id: string,
+    alertId: string,
+    action: 'acknowledge' | 'resolve',
+  ): Promise<{ ok: true; state: string }> {
+    return request(`/v1/offers/${id}/tracking/health/alerts/${alertId}`, {
+      method: 'POST',
+      body: { action },
+    });
   },
 
   async getTrackingProductKinds(id: string): Promise<{

@@ -3,6 +3,7 @@
 import { TrackingAdvancedCenter } from '@/components/tracking/tracking-advanced-center';
 import { TrackingBackdrop } from '@/components/tracking/tracking-backdrop';
 import { TrackingHelp } from '@/components/tracking/tracking-help';
+import { TrackingHealthCenter } from '@/components/tracking/tracking-health-center';
 import { TrackingOverviewDashboard } from '@/components/tracking/tracking-overview-dashboard';
 import { Button } from '@/components/ui/button';
 import { type OfferView, apiClient } from '@/lib/api-client';
@@ -16,6 +17,7 @@ import {
   CheckCircle2,
   ChevronDown,
   LayoutDashboard,
+  HeartPulse,
   Loader2,
   RadioTower,
   ShieldCheck,
@@ -24,7 +26,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-type WorkspaceTab = 'overview' | 'operation' | 'guide';
+type WorkspaceTab = 'overview' | 'health' | 'operation' | 'guide';
 
 function offerLabel(offer: OfferView) {
   return offer.companyName ? `${offer.name} · ${offer.companyName}` : offer.name;
@@ -114,6 +116,18 @@ export function TrackingWorkspace() {
         <Button
           type="button"
           variant="ghost"
+          onClick={() => setTab('health')}
+          className={cn(
+            'gap-2 text-white/45',
+            tab === 'health' && 'bg-cyan-300/[0.09] text-cyan-200',
+          )}
+        >
+          <HeartPulse className="h-4 w-4" />
+          Saúde e alertas
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
           onClick={() => setTab('overview')}
           className={cn(
             'gap-2 text-white/45',
@@ -151,6 +165,19 @@ export function TrackingWorkspace() {
 
       {tab === 'overview' ? (
         <TrackingOverviewDashboard />
+      ) : tab === 'health' ? (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-end justify-between gap-3 rounded-xl border border-white/[0.08] bg-white/[0.025] p-4">
+            <div><p className="hud-label">Oferta monitorada</p><p className="mt-1 text-xs text-white/40">Selecione a operação que deseja auditar.</p></div>
+            <div className="relative min-w-full sm:min-w-[320px]">
+              <select aria-label="Selecionar oferta para saúde do tracking" value={selectedOfferId} onChange={(event) => setSelectedOfferId(event.target.value)} className="h-11 w-full appearance-none rounded-md border border-white/[0.10] bg-[#06131d] px-4 pr-10 text-sm text-white outline-none transition focus:border-cyan-300/40">
+                {(offers.data ?? []).map((offer) => <option key={offer.id} value={offer.id}>{offerLabel(offer)}</option>)}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-white/35" />
+            </div>
+          </div>
+          {selectedOffer ? <TrackingHealthCenter offerId={selectedOffer.id} canManage={Boolean(canManage)} /> : <div className="glass-card p-8 text-center text-sm text-white/40">Nenhuma oferta disponível.</div>}
+        </div>
       ) : tab === 'guide' ? (
         <div>
           <div className="mb-6">
