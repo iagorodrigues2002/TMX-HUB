@@ -81,6 +81,12 @@ function saoPauloDate(date = new Date()) {
   return `${value.year}-${value.month}-${value.day}`;
 }
 
+function saoPauloDateOffset(daysAgo: number) {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() - daysAgo);
+  return saoPauloDate(date);
+}
+
 type Section =
   | 'tracker'
   | 'funnel'
@@ -158,6 +164,13 @@ export function TrackingAdvancedCenter({
   const [feeReservePct, setFeeReservePct] = useState('');
   const [feeReserveDays, setFeeReserveDays] = useState('');
   const [feePayoutDays, setFeePayoutDays] = useState('');
+  const datePresets = [
+    { label: 'Hoje', date: saoPauloDateOffset(0) },
+    { label: 'Ontem', date: saoPauloDateOffset(1) },
+    { label: 'Anteontem', date: saoPauloDateOffset(2) },
+    { label: '7 dias atrás', date: saoPauloDateOffset(7) },
+    { label: '30 dias atrás', date: saoPauloDateOffset(30) },
+  ];
   const qc = useQueryClient();
   const refreshTracking = async () => {
     setIsRefreshingTracking(true);
@@ -621,8 +634,22 @@ export function TrackingAdvancedCenter({
               </p>
             </div>
             <div className="flex flex-wrap items-end gap-2">
+              <div className="flex flex-wrap gap-1.5 self-end" aria-label="Datas rápidas">
+                {datePresets.map((preset) => (
+                  <Button
+                    key={preset.label}
+                    type="button"
+                    size="sm"
+                    variant={trackingDate === preset.date ? 'default' : 'outline'}
+                    className="h-9"
+                    onClick={() => setTrackingDate(preset.date)}
+                  >
+                    {preset.label}
+                  </Button>
+                ))}
+              </div>
               <label htmlFor="tracking-date" className="space-y-1">
-                <span className="hud-label block">Data</span>
+                <span className="hud-label block">Personalizado</span>
                 <Input
                   id="tracking-date"
                   type="date"
