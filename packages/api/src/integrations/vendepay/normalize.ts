@@ -164,6 +164,7 @@ const VENDEPAY_CURRENCY_CODES: Record<string, string> = {
   '2': 'USD',
   '3': 'EUR', // Áustria (AT), Alemanha, Portugal, etc.
   '4': 'CLP', // Chile: 9255 CLP ≈ $9.30 USD, matches front-product price
+  '5': 'PEN', // Peru: payloads SLM usam moeda=5 (ex.: 33,70 PEN)
   '6': 'COP', // Colômbia: 31707 COP ≈ $7.90 USD
   '7': 'MXN', // México: 172.70 MXN ≈ $9.60 USD
   '8': 'CAD', // Canadá

@@ -141,6 +141,25 @@ describe('normalizeVendepay', () => {
     });
   });
 
+  it('mapeia moeda 5 da Vendepay para sol peruano', () => {
+    const result = normalizeVendepay({
+      id: 'slm-pen-1',
+      event: 'compra.aprovada',
+      valorPago: 33.7,
+      moeda: 5,
+      produtoId: 'slm-product',
+    });
+
+    expect(result.kind).toBe('processable');
+    if (result.kind !== 'processable') return;
+    expect(result.event).toMatchObject({
+      transactionId: 'slm-pen-1',
+      status: 'paid',
+      amountMinor: 3370,
+      currency: 'PEN',
+    });
+  });
+
   it.each(['Falha', 'Recusada', 'compra.recusada', 'compra.falhou'])(
     'normaliza erro da Vendepay %s como recusado',
     (event) => {
