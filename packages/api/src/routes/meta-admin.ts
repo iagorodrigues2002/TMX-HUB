@@ -296,6 +296,36 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       return reply.code(202).send({ accepted: true });
     },
   );
+
+  app.post<{ Params: { id: string } }>(
+    '/offers/:id/tracking/meta-deliveries/resend-value-repairs',
+    async (req, reply) => {
+      await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
+      if (!app.db) return reply.code(503).send();
+      const repaired = await app.db<{ id: string }[]>`
+        UPDATE meta_deliveries md
+        SET state = 'pending', last_error = NULL,
+            outgoing_event_id = md.event_id || ':value-repair:' || extract(epoch from now())::bigint
+        FROM tracking_projects tp, tracking_orders o
+        WHERE md.project_id = tp.id
+          AND md.order_id = o.id
+          AND tp.offer_id = ${req.params.id}
+          AND md.event_name = 'Purchase'
+          AND o.status = 'paid'
+          AND o.amount_brl_minor IS NOT NULL
+          AND o.converted_at IS NOT NULL
+          AND o.converted_at > md.created_at
+          AND o.converted_at >= now() - interval '30 minutes'
+        RETURNING md.id
+      `;
+      await Promise.allSettled(
+        repaired.map(({ id }) =>
+          app.metaQueue.add('send', { deliveryId: id }, { jobId: `${id}-value-repair-${Date.now()}` }),
+        ),
+      );
+      return reply.code(202).send({ repaired_queued: repaired.length });
+    },
+  );
 };
 
 export default plugin;

@@ -1859,6 +1859,39 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       return reply.send({ resend_queued: rows.length });
     },
   );
+
+  app.post<{ Params: { id: string } }>(
+    '/offers/:id/tracking/utmify-deliveries/resend-value-repairs',
+    async (req, reply) => {
+      await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
+      if (!app.db) return reply.code(503).send(databaseUnavailable);
+      const rows = await app.db<{ id: string }[]>`
+        UPDATE tracking_delivery_outbox d
+        SET state = 'pending', last_error = NULL, next_attempt_at = now()
+        FROM tracking_projects p, tracking_orders o
+        WHERE d.project_id = p.id
+          AND o.id = d.order_id
+          AND p.offer_id = ${req.params.id}
+          AND d.destination_kind = 'utmify'
+          AND o.status = 'paid'
+          AND o.amount_brl_minor IS NOT NULL
+          AND o.converted_at IS NOT NULL
+          AND o.converted_at > d.created_at
+          AND o.converted_at >= now() - interval '30 minutes'
+        RETURNING d.id
+      `;
+      await Promise.allSettled(
+        rows.map(({ id }) =>
+          app.utmifyDeliveryQueue.add(
+            'send',
+            { deliveryId: id },
+            { jobId: `${id}-value-repair-${Date.now()}` },
+          ),
+        ),
+      );
+      return reply.code(202).send({ repaired_queued: rows.length });
+    },
+  );
 };
 
 export default plugin;
