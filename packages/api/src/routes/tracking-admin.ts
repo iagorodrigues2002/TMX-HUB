@@ -149,10 +149,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const n = (key: string) => Number(row[key] ?? 0);
     const ratio = (part: number, total: number) => (total > 0 ? part / total : 1);
     const attributionRate = ratio(n('attributed_ics_7d'), n('ics_7d'));
-    const webhookSuccess = 1 - ratio(n('quarantined_7d'), n('webhooks_7d'));
-    const metaSuccess = 1 - ratio(n('meta_failed_7d'), n('meta_total_7d'));
-    const utmifySuccess = 1 - ratio(n('utmify_failed_7d'), n('utmify_total_7d'));
-    const orderMatch = 1 - ratio(n('orphan_orders_7d'), n('orders_7d'));
+    const successRate = (failed: number, total: number) => (total > 0 ? 1 - failed / total : 1);
+    const webhookSuccess = successRate(n('quarantined_7d'), n('webhooks_7d'));
+    const metaSuccess = successRate(n('meta_failed_7d'), n('meta_total_7d'));
+    const utmifySuccess = successRate(n('utmify_failed_7d'), n('utmify_total_7d'));
+    const orderMatch = successRate(n('orphan_orders_7d'), n('orders_7d'));
     const components = [
       { key: 'configuration', label: 'Configuração', score: [row.enabled, row.pixel_ready, row.utmify_ready, row.domain_ready].filter(Boolean).length * 5, weight: 20 },
       { key: 'capture', label: 'Captura', score: (n('pageviews_7d') > 0 ? 12 : 0) + (n('events_24h') > 0 ? 8 : 0), weight: 20 },

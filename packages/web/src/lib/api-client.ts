@@ -1508,7 +1508,7 @@ export const apiClient = {
   },
 
   async getTrackingHealth(id: string): Promise<TrackingHealthView> {
-    return request(`/v1/offers/${id}/tracking/health`);
+    return request(`/v1/offers/${id}/tracking/health`, { signal: AbortSignal.timeout(20_000) });
   },
 
   async updateTrackingHealthAlert(

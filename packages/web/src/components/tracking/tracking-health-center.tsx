@@ -15,6 +15,7 @@ export function TrackingHealthCenter({ offerId, canManage }: { offerId: string; 
     queryKey: ['tracking-health', offerId],
     queryFn: () => apiClient.getTrackingHealth(offerId),
     refetchInterval: 60_000,
+    retry: 1,
   });
   const updateAlert = useMutation({
     mutationFn: ({ alertId, action }: { alertId: string; action: 'acknowledge' | 'resolve' }) =>
@@ -23,8 +24,15 @@ export function TrackingHealthCenter({ offerId, canManage }: { offerId: string; 
     onError: (error) => toast.error((error as Error).message),
   });
   const data = query.data;
-  if (query.isLoading || !data) {
+  if (query.isLoading) {
     return <div className="glass-card grid min-h-64 place-items-center"><RefreshCw className="h-5 w-5 animate-spin text-cyan-300" /></div>;
+  }
+  if (query.isError || !data) {
+    return <div className="glass-card flex min-h-64 flex-col items-center justify-center gap-4 p-6 text-center">
+      <span className="grid h-12 w-12 place-items-center rounded-xl border border-red-300/20 bg-red-300/[0.05]"><AlertTriangle className="h-5 w-5 text-red-300" /></span>
+      <div><h2 className="text-base font-semibold text-white">Não foi possível calcular a saúde agora</h2><p className="mt-2 max-w-lg text-xs leading-5 text-white/45">{query.error instanceof Error ? query.error.message : 'A API de monitoramento não respondeu.'}</p></div>
+      <Button variant="outline" disabled={query.isFetching} onClick={() => void query.refetch()}><RefreshCw className={query.isFetching ? 'animate-spin' : ''} />Tentar novamente</Button>
+    </div>;
   }
   const active = data.alerts.filter((alert) => alert.state !== 'resolved');
   return (
