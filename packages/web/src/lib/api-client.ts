@@ -663,7 +663,7 @@ export interface TrackingHealthView {
 
 export interface RecoveryView {
   settings: { checkout_url: string | null; sender_name: string; quiet_start: number; quiet_end: number; enabled: boolean } | null;
-  sources: { gateway: string | null; gateway_enabled: boolean; ab_test: string | null; ab_destinations: number; entry_links: number; automatic: boolean };
+  sources: { gateway: string | null; gateway_enabled: boolean; ab_test: string | null; ab_destinations: number; entry_links: number; entry_clicks: number; vendepay_webhooks: number; automatic: boolean };
   channels: Array<{ id: string; kind: 'whatsapp' | 'sms' | 'email'; enabled: boolean; configured: boolean; config: Record<string, string>; updated_at: string }>;
   totals: { eligible: number; contacted: number; clicked: number; recovered: number; recovered_minor: string };
   opportunities: Array<{ id: string; status: string; reason: string; buyer_name: string | null; email: string | null; phone: string | null; has_email: boolean; has_phone: boolean; created_at: string; last_contact_at: string | null; clicked_at: string | null; recovered_at: string | null; external_id: string; amount_minor: number | null; amount_brl_minor: number | null; currency: string | null; product: { name?: string } | null; messages: number; last_message_state: string | null }>;
