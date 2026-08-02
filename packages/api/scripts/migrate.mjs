@@ -39,6 +39,9 @@ const migrations = [
   '024_tracking_abandoned_checkouts.sql',
   '025_tracking_refused_statuses.sql',
   '026_meta_identity_backfill.sql',
+  '027_tracking_health_alerts.sql',
+  '028_purchase_attribution_repair.sql',
+  '029_tmx_recovery.sql',
 ];
 
 await sql`
