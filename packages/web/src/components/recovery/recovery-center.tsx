@@ -376,12 +376,18 @@ export function RecoveryCenter() {
               aria-label="Conteúdo do e-mail"
               value={emailMessage}
               onChange={(e) => setEmailMessage(e.target.value)}
+              maxLength={100000}
               rows={6}
               className="w-full rounded-lg border border-white/10 bg-black/15 p-3 font-mono text-xs text-white outline-none focus:border-cyan-300/30"
             />
-            <p className="text-[10px] text-white/30">
-              Aceita HTML e as variáveis {'{{nome}}'} e {'{{link}}'}.
-            </p>
+            <div className="flex items-center justify-between gap-3 text-[10px] text-white/30">
+              <p>
+                Aceita HTML e as variáveis {'{{nome}}'} e {'{{link}}'}.
+              </p>
+              <span className="font-mono">
+                {emailMessage.length.toLocaleString('pt-BR')} / 100.000
+              </span>
+            </div>
             <Button
               className="w-full"
               disabled={

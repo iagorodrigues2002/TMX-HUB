@@ -45,8 +45,14 @@ const ChannelSchema = z.discriminatedUnion('kind', [
     enabled: z.boolean().default(true),
     credentials: z.object({ api_key: z.string().min(10), from_email: EmailSenderSchema }),
     config: z.object({
-      subject: z.string().min(3).max(200),
-      message: z.string().min(10).max(5000),
+      subject: z
+        .string()
+        .min(3, 'O assunto precisa ter pelo menos 3 caracteres.')
+        .max(200, 'O assunto pode ter no máximo 200 caracteres.'),
+      message: z
+        .string()
+        .min(10, 'O HTML precisa ter pelo menos 10 caracteres.')
+        .max(100_000, 'O HTML pode ter no máximo 100.000 caracteres.'),
     }),
   }),
 ]);
