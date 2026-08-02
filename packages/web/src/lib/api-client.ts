@@ -686,6 +686,7 @@ export interface RecoveryView {
     enabled: boolean;
     configured: boolean;
     config: Record<string, string>;
+    from_email?: string | null;
     updated_at: string;
   }>;
   totals: {

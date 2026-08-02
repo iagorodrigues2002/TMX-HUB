@@ -63,6 +63,13 @@ export function RecoveryCenter() {
       setSenderName(recovery.data.settings.sender_name || 'TMX');
     }
   }, [recovery.data?.settings]);
+  useEffect(() => {
+    const email = recovery.data?.channels.find((item) => item.kind === 'email');
+    if (!email) return;
+    setFromEmail(email.from_email || '');
+    if (email.config.subject) setEmailSubject(email.config.subject);
+    if (email.config.message) setEmailMessage(email.config.message);
+  }, [recovery.data?.channels]);
   const refresh = () => void qc.invalidateQueries({ queryKey: ['recovery', offerId] });
   const settings = useMutation({
     mutationFn: () =>
@@ -374,7 +381,11 @@ export function RecoveryCenter() {
               type="password"
               value={resendKey}
               onChange={(e) => setResendKey(e.target.value)}
-              placeholder="Resend API Key"
+              placeholder={
+                configured('email')
+                  ? 'API key já salva · deixe vazio para reutilizar'
+                  : 'Resend API Key'
+              }
             />
             <Input
               value={fromEmail}
@@ -408,8 +419,7 @@ export function RecoveryCenter() {
             <Button
               className="w-full"
               disabled={
-                !resendKey ||
-                !fromEmail ||
+                (!configured('email') && (!resendKey || !fromEmail)) ||
                 emailSubject.length < 3 ||
                 emailMessage.length < 10 ||
                 channel.isPending
@@ -418,7 +428,10 @@ export function RecoveryCenter() {
                 channel.mutate({
                   kind: 'email',
                   enabled: true,
-                  credentials: { api_key: resendKey, from_email: fromEmail },
+                  credentials: {
+                    ...(resendKey ? { api_key: resendKey } : {}),
+                    ...(fromEmail ? { from_email: fromEmail } : {}),
+                  },
                   config: { subject: emailSubject, message: emailMessage },
                 })
               }

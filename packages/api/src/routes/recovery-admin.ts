@@ -43,7 +43,10 @@ const ChannelSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('email'),
     enabled: z.boolean().default(true),
-    credentials: z.object({ api_key: z.string().min(10), from_email: EmailSenderSchema }),
+    credentials: z
+      .object({ api_key: z.string().min(10).optional(), from_email: EmailSenderSchema.optional() })
+      .optional()
+      .default({}),
     config: z.object({
       subject: z
         .string()
@@ -164,11 +167,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         id: string;
         kind: string;
         enabled: boolean;
+        credentials_encrypted: string;
         config: Record<string, unknown>;
         updated_at: Date;
       }>
     >`
-      SELECT id, kind, enabled, config, updated_at FROM recovery_channels WHERE project_id=${project.id} ORDER BY kind
+      SELECT id, kind, enabled, credentials_encrypted, config, updated_at FROM recovery_channels WHERE project_id=${project.id} ORDER BY kind
     `;
     const opportunities = await app.db<Array<Record<string, unknown>>>`
       SELECT ro.id, ro.status, ro.reason, ro.buyer_name, ro.email, ro.phone, ro.created_at,
@@ -235,7 +239,20 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
               settings?.checkout_url),
         ),
       },
-      channels: channels.map((c) => ({ ...c, configured: true })),
+      channels: channels.map(({ credentials_encrypted, ...c }) => {
+        let from_email: string | null = null;
+        if (c.kind === 'email' && env.TRACKING_ENCRYPTION_KEY) {
+          try {
+            const credentials = JSON.parse(
+              decryptSecret(credentials_encrypted, env.TRACKING_ENCRYPTION_KEY),
+            ) as { from_email?: string };
+            from_email = credentials.from_email ?? null;
+          } catch {
+            from_email = null;
+          }
+        }
+        return { ...c, configured: true, from_email };
+      }),
       totals: totals[0],
       email_metrics: {
         ...emailMetrics,
@@ -289,7 +306,23 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!parsed.success) throw zodToProblem(parsed.error);
       const project = await projectFor(req.params.id);
       const value = parsed.data;
-      await app.db`INSERT INTO recovery_channels(id,project_id,kind,credentials_encrypted,config,enabled) VALUES(${ulid()},${project.id},${value.kind},${encryptSecret(JSON.stringify(value.credentials), env.TRACKING_ENCRYPTION_KEY)},${app.db.json(value.config as never)},${value.enabled}) ON CONFLICT(project_id,kind) DO UPDATE SET credentials_encrypted=EXCLUDED.credentials_encrypted,config=EXCLUDED.config,enabled=EXCLUDED.enabled,updated_at=now()`;
+      let credentials = value.credentials;
+      if (value.kind === 'email') {
+        const [existing] = await app.db<{ credentials_encrypted: string }[]>`
+          SELECT credentials_encrypted FROM recovery_channels WHERE project_id=${project.id} AND kind='email'`;
+        let saved: { api_key?: string; from_email?: string } = {};
+        if (existing) {
+          saved = JSON.parse(
+            decryptSecret(existing.credentials_encrypted, env.TRACKING_ENCRYPTION_KEY),
+          ) as typeof saved;
+        }
+        const validated = z
+          .object({ api_key: z.string().min(10), from_email: EmailSenderSchema })
+          .safeParse({ ...saved, ...value.credentials });
+        if (!validated.success) throw zodToProblem(validated.error);
+        credentials = validated.data;
+      }
+      await app.db`INSERT INTO recovery_channels(id,project_id,kind,credentials_encrypted,config,enabled) VALUES(${ulid()},${project.id},${value.kind},${encryptSecret(JSON.stringify(credentials), env.TRACKING_ENCRYPTION_KEY)},${app.db.json(value.config as never)},${value.enabled}) ON CONFLICT(project_id,kind) DO UPDATE SET credentials_encrypted=EXCLUDED.credentials_encrypted,config=EXCLUDED.config,enabled=EXCLUDED.enabled,updated_at=now()`;
       let webhook_configured = false;
       let webhook_error: string | null = null;
       if (value.kind === 'email') {
