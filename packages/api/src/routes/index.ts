@@ -16,6 +16,7 @@ import nichesRoutes from './niches.js';
 import offersRoutes from './offers.js';
 import previewRoutes from './preview.js';
 import pushcutAdminRoutes from './pushcut-admin.js';
+import recoveryAdminRoutes from './recovery-admin.js';
 import shieldJobsRoutes from './shield-jobs.js';
 import trackingAdminRoutes from './tracking-admin.js';
 import trackingAdvancedRoutes from './tracking-advanced.js';
@@ -108,6 +109,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         await protectedRoutes.register(metaAdminRoutes);
         await protectedRoutes.register(utmifyTrackingAdminRoutes);
         await protectedRoutes.register(pushcutAdminRoutes);
+        await protectedRoutes.register(recoveryAdminRoutes);
         await protectedRoutes.register(usersRoutes);
       });
     },

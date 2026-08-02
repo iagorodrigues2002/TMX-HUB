@@ -186,6 +186,18 @@ async function enqueueInitiateCheckout(
 }
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
+  app.get<{ Params: { token: string } }>('/recovery/r/:token', async (req, reply) => {
+    if (!app.db || !req.params.token || req.params.token.length > 256)
+      return reply.code(404).send({ error: 'recovery_not_found' });
+    const [opportunity] = await app.db<{ id: string; destination_url: string }[]>`
+      UPDATE recovery_opportunities SET status=CASE WHEN status='eligible' OR status='contacted' THEN 'clicked' ELSE status END,
+        clicked_at=COALESCE(clicked_at,now()),updated_at=now()
+      WHERE recovery_token_hash=${tokenHash(req.params.token)} AND status NOT IN ('suppressed','expired','recovered')
+      RETURNING id,destination_url
+    `;
+    if (!opportunity) return reply.code(404).send({ error: 'recovery_not_found' });
+    return reply.redirect(opportunity.destination_url, 302);
+  });
   app.get<{ Querystring: { key?: string } }>('/track/t.js', async (req, reply) => {
     if (!req.query.key || !app.db) return reply.code(404).send();
     const [project] = await app.db<{ id: string; enabled: boolean }[]>`
@@ -819,6 +831,24 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           SET order_id = ${order.id}, processed_at = now()
           WHERE id = ${receiptId}
         `;
+        if (order.status === 'paid') {
+          await sql`
+            UPDATE recovery_opportunities ro SET status='recovered',recovered_order_id=${order.id},
+              recovered_at=COALESCE(recovered_at,now()),updated_at=now()
+            WHERE ro.project_id=${connection.project_id} AND ro.status <> 'recovered'
+              AND (
+                ro.order_id=${order.id}
+                OR (${event.buyer.email ?? null}::text IS NOT NULL AND lower(ro.email)=lower(${event.buyer.email ?? null}::text))
+                OR (${event.buyer.phone ?? null}::text IS NOT NULL AND regexp_replace(ro.phone,'\\D','','g')=regexp_replace(${event.buyer.phone ?? null}::text,'\\D','','g'))
+              )
+          `;
+          await sql`
+            UPDATE recovery_messages rm SET state='cancelled'
+            FROM recovery_opportunities ro
+            WHERE rm.opportunity_id=ro.id AND ro.project_id=${connection.project_id}
+              AND ro.status='recovered' AND rm.state='pending'
+          `;
+        }
         const utmify = await sql<{ id: string }[]>`
           SELECT id FROM tracking_utmify_destinations
           WHERE project_id = ${connection.project_id} AND enabled = true

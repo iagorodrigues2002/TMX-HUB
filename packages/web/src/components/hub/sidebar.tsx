@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/auth-context';
 import { cn } from '@/lib/utils';
 import {
   Home,
+  HeartHandshake,
   RadioTower,
   ScrollText,
   Settings,
@@ -31,6 +32,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { label: 'Visão geral', mobileLabel: 'Início', href: '/', icon: Home },
   { label: 'Ofertas', href: '/ofertas', icon: Target, requiresTool: 'ofertas' },
+  { label: 'TMX Recovery', mobileLabel: 'Recovery', href: '/recovery', icon: HeartHandshake, requiresTool: 'ofertas' },
   {
     label: 'Trackeamento avançado',
     mobileLabel: 'Tracking',

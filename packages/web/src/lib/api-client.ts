@@ -661,6 +661,13 @@ export interface TrackingHealthView {
   };
 }
 
+export interface RecoveryView {
+  settings: { checkout_url: string; sender_name: string; quiet_start: number; quiet_end: number; enabled: boolean } | null;
+  channels: Array<{ id: string; kind: 'whatsapp' | 'sms' | 'email'; enabled: boolean; configured: boolean; config: Record<string, string>; updated_at: string }>;
+  totals: { eligible: number; contacted: number; clicked: number; recovered: number; recovered_minor: string };
+  opportunities: Array<{ id: string; status: string; reason: string; buyer_name: string | null; email: string | null; phone: string | null; has_email: boolean; has_phone: boolean; created_at: string; last_contact_at: string | null; clicked_at: string | null; recovered_at: string | null; external_id: string; amount_minor: number | null; amount_brl_minor: number | null; currency: string | null; product: { name?: string } | null; messages: number; last_message_state: string | null }>;
+}
+
 export interface DashboardSummary {
   from: string;
   to: string;
@@ -1512,6 +1519,22 @@ export const apiClient = {
       method: 'POST',
       body: { action },
     });
+  },
+
+  async getRecovery(id: string): Promise<RecoveryView> {
+    return request(`/v1/offers/${id}/recovery`);
+  },
+  async updateRecoverySettings(id: string, body: { checkout_url: string; sender_name: string; quiet_start: number; quiet_end: number; enabled: boolean }): Promise<{ ok: true }> {
+    return request(`/v1/offers/${id}/recovery/settings`, { method: 'PUT', body });
+  },
+  async updateRecoveryChannel(id: string, body: Record<string, unknown>): Promise<{ ok: true; kind: string }> {
+    return request(`/v1/offers/${id}/recovery/channels`, { method: 'PUT', body });
+  },
+  async syncRecovery(id: string): Promise<{ accepted: true; candidates: number; created: number }> {
+    return request(`/v1/offers/${id}/recovery/sync`, { method: 'POST' });
+  },
+  async sendRecovery(id: string, opportunityId: string, channel: 'whatsapp' | 'sms' | 'email'): Promise<{ accepted: true; message_id: string }> {
+    return request(`/v1/offers/${id}/recovery/opportunities/${opportunityId}/send`, { method: 'POST', body: { channel } });
   },
 
   async getTrackingProductKinds(id: string): Promise<{
