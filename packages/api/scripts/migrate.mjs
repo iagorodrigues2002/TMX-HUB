@@ -42,6 +42,7 @@ const migrations = [
   '027_tracking_health_alerts.sql',
   '028_purchase_attribution_repair.sql',
   '029_tmx_recovery.sql',
+  '030_recovery_email_analytics.sql',
 ];
 
 await sql`

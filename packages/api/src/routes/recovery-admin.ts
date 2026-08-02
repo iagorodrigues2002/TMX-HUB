@@ -96,6 +96,41 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     return project;
   };
 
+  const setupResendWebhook = async (projectId: string) => {
+    if (!app.db || !env.TRACKING_ENCRYPTION_KEY) throw new Error('recovery_unavailable');
+    const [channel] = await app.db<{ id: string; credentials_encrypted: string }[]>`
+      SELECT id,credentials_encrypted FROM recovery_channels WHERE project_id=${projectId} AND kind='email' AND enabled=true`;
+    if (!channel) throw new NotFoundError('Canal de e-mail não configurado.');
+    const credentials = JSON.parse(
+      decryptSecret(channel.credentials_encrypted, env.TRACKING_ENCRYPTION_KEY),
+    ) as { api_key: string };
+    const token = randomBytes(32).toString('base64url');
+    const endpoint = `${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/webhooks/recovery/resend?token=${encodeURIComponent(token)}`;
+    const response = await fetch('https://api.resend.com/webhooks', {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${credentials.api_key}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        endpoint,
+        events: [
+          'email.sent',
+          'email.delivered',
+          'email.opened',
+          'email.clicked',
+          'email.bounced',
+          'email.failed',
+        ],
+      }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok)
+      throw new Error(`Resend recusou o webhook (${response.status}): ${JSON.stringify(result)}`);
+    await app.db`UPDATE recovery_channels SET webhook_token_hash=${hash(token)},provider_webhook_id=${String((result as { id?: string }).id ?? '') || null},updated_at=now() WHERE id=${channel.id}`;
+    return { ok: true, webhook_id: (result as { id?: string }).id ?? null };
+  };
+
   app.get<{ Params: { id: string } }>('/offers/:id/recovery', async (req, reply) => {
     await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
     if (!app.db) return reply.code(503).send({ error: 'database_unavailable' });
@@ -140,7 +175,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
              ro.last_contact_at, ro.clicked_at, ro.recovered_at, o.external_id, o.amount_minor,
              o.amount_brl_minor, o.currency, o.product,
              (SELECT count(*)::int FROM recovery_messages rm WHERE rm.opportunity_id=ro.id) AS messages,
-             (SELECT rm.state FROM recovery_messages rm WHERE rm.opportunity_id=ro.id ORDER BY rm.created_at DESC LIMIT 1) AS last_message_state
+             (SELECT rm.state FROM recovery_messages rm WHERE rm.opportunity_id=ro.id ORDER BY rm.created_at DESC LIMIT 1) AS last_message_state,
+             (SELECT max(rm.delivered_at) FROM recovery_messages rm JOIN recovery_channels rc ON rc.id=rm.channel_id WHERE rm.opportunity_id=ro.id AND rc.kind='email') AS email_delivered_at,
+             (SELECT max(rm.opened_at) FROM recovery_messages rm JOIN recovery_channels rc ON rc.id=rm.channel_id WHERE rm.opportunity_id=ro.id AND rc.kind='email') AS email_opened_at,
+             (SELECT max(rm.clicked_at) FROM recovery_messages rm JOIN recovery_channels rc ON rc.id=rm.channel_id WHERE rm.opportunity_id=ro.id AND rc.kind='email') AS email_clicked_at
       FROM recovery_opportunities ro JOIN tracking_orders o ON o.id=ro.order_id
       WHERE ro.project_id=${project.id} ORDER BY ro.created_at DESC LIMIT 100
     `;
@@ -162,6 +200,29 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       LEFT JOIN tracking_orders recovered ON recovered.id=ro.recovered_order_id
       WHERE ro.project_id=${project.id}
     `;
+    const [emailMetrics] = await app.db<
+      Array<{
+        sent: number;
+        delivered: number;
+        opened: number;
+        clicked: number;
+        converted: number;
+        recovered_minor: string;
+      }>
+    >`
+      WITH email_opps AS (
+        SELECT ro.id,ro.status,COALESCE(recovered.amount_brl_minor,o.amount_brl_minor,0) AS amount,
+          bool_or(rm.state IN ('sent','delivered','read')) AS sent,
+          bool_or(rm.delivered_at IS NOT NULL) AS delivered,bool_or(rm.opened_at IS NOT NULL) AS opened,
+          bool_or(rm.clicked_at IS NOT NULL OR ro.clicked_at IS NOT NULL) AS clicked
+        FROM recovery_messages rm JOIN recovery_channels rc ON rc.id=rm.channel_id AND rc.kind='email'
+        JOIN recovery_opportunities ro ON ro.id=rm.opportunity_id JOIN tracking_orders o ON o.id=ro.order_id
+        LEFT JOIN tracking_orders recovered ON recovered.id=ro.recovered_order_id WHERE ro.project_id=${project.id}
+        GROUP BY ro.id,ro.status,recovered.amount_brl_minor,o.amount_brl_minor)
+      SELECT count(*) FILTER(WHERE sent)::int AS sent,count(*) FILTER(WHERE delivered)::int AS delivered,
+        count(*) FILTER(WHERE opened)::int AS opened,count(*) FILTER(WHERE clicked)::int AS clicked,
+        count(*) FILTER(WHERE status='recovered')::int AS converted,
+        COALESCE(sum(amount) FILTER(WHERE status='recovered'),0)::text AS recovered_minor FROM email_opps`;
     return {
       settings: settings ?? null,
       sources: {
@@ -176,6 +237,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       },
       channels: channels.map((c) => ({ ...c, configured: true })),
       totals: totals[0],
+      email_metrics: {
+        ...emailMetrics,
+        open_rate: emailMetrics?.delivered ? emailMetrics.opened / emailMetrics.delivered : 0,
+        click_rate: emailMetrics?.delivered ? emailMetrics.clicked / emailMetrics.delivered : 0,
+        conversion_rate: emailMetrics?.sent ? emailMetrics.converted / emailMetrics.sent : 0,
+      },
       opportunities: opportunities.map((o) => ({
         ...o,
         email: mask(o.email as string | null, 'email'),
@@ -200,6 +267,18 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     },
   );
 
+  app.post<{ Params: { id: string } }>('/offers/:id/recovery/email-webhook', async (req, reply) => {
+    await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
+    const project = await projectFor(req.params.id);
+    try {
+      return reply.code(201).send(await setupResendWebhook(project.id));
+    } catch (error) {
+      return reply
+        .code(502)
+        .send({ error: 'resend_webhook_failed', detail: (error as Error).message });
+    }
+  });
+
   app.put<{ Params: { id: string }; Body: unknown }>(
     '/offers/:id/recovery/channels',
     async (req, reply) => {
@@ -211,7 +290,17 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       const project = await projectFor(req.params.id);
       const value = parsed.data;
       await app.db`INSERT INTO recovery_channels(id,project_id,kind,credentials_encrypted,config,enabled) VALUES(${ulid()},${project.id},${value.kind},${encryptSecret(JSON.stringify(value.credentials), env.TRACKING_ENCRYPTION_KEY)},${app.db.json(value.config as never)},${value.enabled}) ON CONFLICT(project_id,kind) DO UPDATE SET credentials_encrypted=EXCLUDED.credentials_encrypted,config=EXCLUDED.config,enabled=EXCLUDED.enabled,updated_at=now()`;
-      return { ok: true, kind: value.kind };
+      let webhook_configured = false;
+      let webhook_error: string | null = null;
+      if (value.kind === 'email') {
+        try {
+          await setupResendWebhook(project.id);
+          webhook_configured = true;
+        } catch (error) {
+          webhook_error = (error as Error).message;
+        }
+      }
+      return { ok: true, kind: value.kind, webhook_configured, webhook_error };
     },
   );
 

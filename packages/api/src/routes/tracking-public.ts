@@ -186,6 +186,31 @@ async function enqueueInitiateCheckout(
 }
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
+  app.post<{
+    Querystring: { token?: string };
+    Body: { type?: string; created_at?: string; data?: { email_id?: string } };
+  }>('/webhooks/recovery/resend', async (req, reply) => {
+    if (!app.db || !req.query.token || req.query.token.length > 256)
+      return reply.code(404).send({ accepted: false });
+    const eventType = req.body?.type ?? '';
+    const emailId = req.body?.data?.email_id;
+    if (!emailId || !eventType.startsWith('email.'))
+      return reply.code(400).send({ accepted: false });
+    const rows = await app.db<Array<{ opportunity_id: string }>>`
+      UPDATE recovery_messages rm SET
+        state=CASE WHEN ${eventType}='email.delivered' AND rm.state='sent' THEN 'delivered' WHEN ${eventType} IN ('email.failed','email.bounced') THEN 'failed' ELSE rm.state END,
+        delivered_at=CASE WHEN ${eventType}='email.delivered' THEN COALESCE(rm.delivered_at,now()) ELSE rm.delivered_at END,
+        opened_at=CASE WHEN ${eventType}='email.opened' THEN COALESCE(rm.opened_at,now()) ELSE rm.opened_at END,
+        clicked_at=CASE WHEN ${eventType}='email.clicked' THEN COALESCE(rm.clicked_at,now()) ELSE rm.clicked_at END,
+        bounced_at=CASE WHEN ${eventType}='email.bounced' THEN COALESCE(rm.bounced_at,now()) ELSE rm.bounced_at END,
+        provider_event=rm.provider_event||${app.db.json(req.body as never)}
+      FROM recovery_channels rc WHERE rm.channel_id=rc.id AND rc.webhook_token_hash=${tokenHash(req.query.token)} AND rm.provider_message_id=${emailId}
+      RETURNING rm.opportunity_id`;
+    if (rows[0] && eventType === 'email.clicked')
+      await app.db`UPDATE recovery_opportunities SET status=CASE WHEN status IN ('eligible','contacted') THEN 'clicked' ELSE status END,clicked_at=COALESCE(clicked_at,now()),updated_at=now() WHERE id=${String(rows[0].opportunity_id)}`;
+    return reply.send({ accepted: true, matched: Boolean(rows[0]) });
+  });
+
   app.get<{ Params: { token: string } }>('/recovery/r/:token', async (req, reply) => {
     if (!app.db || !req.params.token || req.params.token.length > 256)
       return reply.code(404).send({ error: 'recovery_not_found' });
@@ -196,6 +221,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       RETURNING id,destination_url
     `;
     if (!opportunity) return reply.code(404).send({ error: 'recovery_not_found' });
+    await app.db`UPDATE recovery_messages SET clicked_at=COALESCE(clicked_at,now()) WHERE opportunity_id=${opportunity.id} AND channel_id IN (SELECT id FROM recovery_channels WHERE kind='email')`;
     return reply.redirect(opportunity.destination_url, 302);
   });
   app.get<{ Querystring: { key?: string } }>('/track/t.js', async (req, reply) => {
@@ -710,9 +736,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           ? readTrackingToken(event.trackingSrc, env.WEBHOOK_SECRET)
           : null;
         let attributedVisitorId =
-          trackingIdentity?.projectId === connection.project_id
-            ? trackingIdentity.visitorId
-            : null;
+          trackingIdentity?.projectId === connection.project_id ? trackingIdentity.visitorId : null;
         // Older checkout links sometimes carried a plain visitor id instead of
         // the signed TMX token. Accept it only when it already exists in this
         // project; never persist an arbitrary src value as a visitor identity.
@@ -747,7 +771,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           attributedVisitorId = identityMatch?.visitor_id ?? null;
         }
         const [visitorSource] = attributedVisitorId
-          ? await sql<Array<{ first_source: Record<string, string>; last_source: Record<string, string> }>>`
+          ? await sql<
+              Array<{ first_source: Record<string, string>; last_source: Record<string, string> }>
+            >`
               SELECT first_source, last_source FROM tracking_visitors
               WHERE project_id=${connection.project_id} AND visitor_id=${attributedVisitorId}
               LIMIT 1

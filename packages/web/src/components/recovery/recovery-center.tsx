@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   ChevronDown,
   GitBranch,
+  Eye,
   Mail,
   MessageCircle,
   Phone,
@@ -17,6 +18,7 @@ import {
   Settings2,
   ShoppingBag,
   Webhook,
+  X,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -54,6 +56,7 @@ export function RecoveryCenter() {
   const [emailMessage, setEmailMessage] = useState(
     '<p>Olá {{nome}},</p><p>notamos que sua compra não foi concluída.</p><p>{{link}}</p>',
   );
+  const [previewOpen, setPreviewOpen] = useState(false);
   useEffect(() => {
     if (recovery.data?.settings) {
       setCheckoutUrl(recovery.data.settings.checkout_url || '');
@@ -78,8 +81,14 @@ export function RecoveryCenter() {
   });
   const channel = useMutation({
     mutationFn: (body: Record<string, unknown>) => apiClient.updateRecoveryChannel(offerId, body),
-    onSuccess: () => {
-      toast.success('Canal salvo com criptografia.');
+    onSuccess: (result) => {
+      toast.success(
+        result.webhook_configured
+          ? 'Canal salvo e métricas ativadas.'
+          : 'Canal salvo com criptografia.',
+      );
+      if (result.webhook_error)
+        toast.warning('Canal salvo, mas o webhook de métricas precisa ser ativado.');
       refresh();
     },
     onError: (e) => toast.error((e as Error).message),
@@ -107,6 +116,14 @@ export function RecoveryCenter() {
     mutationFn: (kind: 'whatsapp' | 'sms' | 'email') => apiClient.bulkSendRecovery(offerId, kind),
     onSuccess: (r) => {
       toast.success(`${r.sent} enviada(s) · ${r.failed} falha(s).`);
+      refresh();
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+  const emailWebhook = useMutation({
+    mutationFn: () => apiClient.setupRecoveryEmailWebhook(offerId),
+    onSuccess: () => {
+      toast.success('Métricas de e-mail ativadas.');
       refresh();
     },
     onError: (e) => toast.error((e as Error).message),
@@ -408,7 +425,54 @@ export function RecoveryCenter() {
             >
               Salvar e-mail personalizado
             </Button>
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="outline" onClick={() => setPreviewOpen(true)}>
+                <Eye />
+                Pré-visualizar
+              </Button>
+              <Button
+                variant="outline"
+                disabled={!configured('email') || emailWebhook.isPending}
+                onClick={() => emailWebhook.mutate()}
+              >
+                <Webhook />
+                Ativar métricas
+              </Button>
+            </div>
           </div>
+        </div>
+      </section>
+      <section className="glass-card p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="hud-label">Performance de e-mail</p>
+            <p className="mt-1 text-xs text-white/40">
+              Entrega e abertura pelo Resend; clique, conversão e receita confirmados pelo link TMX
+              e pela Vendepay.
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-7">
+          {[
+            ['Enviados', r?.email_metrics?.sent ?? 0],
+            ['Entregues', r?.email_metrics?.delivered ?? 0],
+            ['Abertos', r?.email_metrics?.opened ?? 0],
+            ['Taxa abertura', `${Math.round((r?.email_metrics?.open_rate ?? 0) * 100)}%`],
+            ['Cliques', `${Math.round((r?.email_metrics?.click_rate ?? 0) * 100)}%`],
+            [
+              'Conversões',
+              `${r?.email_metrics?.converted ?? 0} · ${Math.round((r?.email_metrics?.conversion_rate ?? 0) * 100)}%`,
+            ],
+            [
+              'Valor recuperado',
+              `R$ ${(Number(r?.email_metrics?.recovered_minor ?? 0) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+            ],
+          ].map(([label, value]) => (
+            <div key={label} className="rounded-xl border border-white/[0.07] bg-black/10 p-3">
+              <p className="hud-label text-[8px]">{label}</p>
+              <p className="mono-num mt-2 text-lg text-white">{value}</p>
+            </div>
+          ))}
         </div>
       </section>
       <section className="glass-card p-5">
@@ -490,6 +554,15 @@ export function RecoveryCenter() {
                   <span className="rounded border border-amber-300/10 px-2 py-0.5 text-[9px] text-amber-200/60">
                     {o.reason}
                   </span>
+                  {o.email_opened_at ? (
+                    <span className="rounded border border-emerald-300/15 px-2 py-0.5 text-[9px] text-emerald-300">
+                      E-mail aberto
+                    </span>
+                  ) : o.email_delivered_at ? (
+                    <span className="rounded border border-cyan-300/15 px-2 py-0.5 text-[9px] text-cyan-300">
+                      Entregue · não aberto
+                    </span>
+                  ) : null}
                 </div>
                 <p className="mt-1 text-xs text-white/40">
                   {o.product?.name || o.external_id} · {o.email || 'sem e-mail'} ·{' '}
@@ -540,6 +613,30 @@ export function RecoveryCenter() {
           )}
         </div>
       </section>
+      {previewOpen && (
+        <div className="fixed inset-0 z-[100] grid place-items-center bg-black/80 p-4">
+          <div className="flex h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-cyan-300/20 bg-[#071720]">
+            <div className="flex items-center justify-between border-b border-white/10 p-4">
+              <div>
+                <p className="hud-label">Preview do e-mail</p>
+                <p className="mt-1 text-sm text-white/70">{emailSubject}</p>
+              </div>
+              <Button size="sm" variant="ghost" onClick={() => setPreviewOpen(false)}>
+                <X />
+                Fechar
+              </Button>
+            </div>
+            <iframe
+              title="Pré-visualização do e-mail"
+              sandbox=""
+              className="h-full w-full bg-white"
+              srcDoc={emailMessage
+                .replaceAll('{{nome}}', 'Maria')
+                .replaceAll('{{link}}', 'https://theminex.com/recovery-preview')}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

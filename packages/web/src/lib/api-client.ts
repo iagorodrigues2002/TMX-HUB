@@ -695,6 +695,17 @@ export interface RecoveryView {
     recovered: number;
     recovered_minor: string;
   };
+  email_metrics: {
+    sent: number;
+    delivered: number;
+    opened: number;
+    clicked: number;
+    converted: number;
+    recovered_minor: string;
+    open_rate: number;
+    click_rate: number;
+    conversion_rate: number;
+  };
   opportunities: Array<{
     id: string;
     status: string;
@@ -715,6 +726,9 @@ export interface RecoveryView {
     product: { name?: string } | null;
     messages: number;
     last_message_state: string | null;
+    email_delivered_at: string | null;
+    email_opened_at: string | null;
+    email_clicked_at: string | null;
   }>;
 }
 
@@ -1589,8 +1603,16 @@ export const apiClient = {
   async updateRecoveryChannel(
     id: string,
     body: Record<string, unknown>,
-  ): Promise<{ ok: true; kind: string }> {
+  ): Promise<{
+    ok: true;
+    kind: string;
+    webhook_configured?: boolean;
+    webhook_error?: string | null;
+  }> {
     return request(`/v1/offers/${id}/recovery/channels`, { method: 'PUT', body });
+  },
+  async setupRecoveryEmailWebhook(id: string): Promise<{ ok: true; webhook_id: string | null }> {
+    return request(`/v1/offers/${id}/recovery/email-webhook`, { method: 'POST' });
   },
   async syncRecovery(
     id: string,
