@@ -13,7 +13,7 @@ interface TopbarProps {
 export function Topbar({ breadcrumb, right }: TopbarProps) {
   return (
     <header
-      className="flex h-16 shrink-0 items-center gap-2 border-b border-cyan-100/[0.09] bg-[#061119]/88 px-3 shadow-[0_10px_35px_rgba(0,0,0,.18)] backdrop-blur-2xl sm:gap-4 sm:px-6"
+      className="tmx-topbar flex h-16 shrink-0 items-center gap-2 border-b border-cyan-100/[0.09] bg-[#061119]/88 px-3 shadow-[0_10px_35px_rgba(0,0,0,.18)] backdrop-blur-2xl sm:gap-4 sm:px-6"
       style={{ position: 'sticky', top: 0, zIndex: 30 }}
     >
       <Link href="/" className="group flex min-w-0 shrink-0 items-center gap-2 sm:gap-3">

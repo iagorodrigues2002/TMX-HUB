@@ -71,12 +71,14 @@ export function Kpi({ label, value, hint, icon, tone = 'default' }: KpiProps) {
           ? 'text-red-300'
           : 'text-cyan-300';
   return (
-    <div className={`rounded-md border p-4 ${accent}`}>
+    <div className={`tmx-kpi-card rounded-xl border p-4 ${accent}`} data-tone={tone}>
       <div className="flex items-center justify-between">
         <p className="hud-label">{label}</p>
         {icon && <span className={`shrink-0 ${iconColor}`}>{icon}</span>}
       </div>
-      <p className="mt-2 text-[22px] font-semibold leading-tight text-white">{value}</p>
+      <p className="mono-num mt-3 text-[clamp(1.25rem,3vw,1.75rem)] font-semibold leading-tight tracking-[-0.04em] text-white">
+        {value}
+      </p>
       {hint && <p className="mt-1 text-[11px] text-white/45">{hint}</p>}
     </div>
   );

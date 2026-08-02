@@ -67,8 +67,13 @@ export default function HubLandingPage() {
 
   return (
     <HubShell>
-      <header className="space-y-3">
-        <p className="hud-label">Operator Console</p>
+      <header className="tmx-command-hero rounded-2xl border border-cyan-300/15 p-5 sm:p-7 md:p-8">
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <p className="hud-label">Operator Console</p>
+          <span className="flex items-center gap-2 rounded-full border border-emerald-300/15 bg-emerald-300/[0.05] px-3 py-1 font-mono text-[9px] uppercase tracking-[0.18em] text-emerald-200/70">
+            <span className="status-dot" aria-hidden /> Sistema online
+          </span>
+        </div>
         <h1 className="text-3xl font-bold leading-tight tracking-tight text-white md:text-4xl">
           Olá,{' '}
           <span
@@ -78,7 +83,7 @@ export default function HubLandingPage() {
             {firstName}
           </span>
         </h1>
-        <p className="max-w-xl text-[14px] text-white/55">
+        <p className="mt-3 max-w-xl text-[14px] leading-6 text-white/55">
           {hasOffers
             ? 'Visão geral cruzando todas as suas dashboards. Use os filtros pra mudar o período.'
             : 'Seu espaço de trabalho mostra somente as ferramentas liberadas pelo administrador.'}

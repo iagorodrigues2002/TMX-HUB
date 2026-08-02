@@ -19,7 +19,7 @@ import * as React from 'react';
 const buttonVariants = cva(
   [
     'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg',
-    'font-semibold tracking-[0.01em] transition-all duration-200',
+    'font-semibold tracking-[0.01em] transition-all duration-200 active:scale-[0.98]',
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/40 focus-visible:ring-offset-0',
     'disabled:pointer-events-none disabled:opacity-50',
     '[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
@@ -28,13 +28,13 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: [
-          'text-[#031516] shadow-[0_0_12px_rgba(34,211,238,0.25)]',
-          'hover:brightness-110 hover:shadow-[0_0_18px_rgba(34,211,238,0.4)]',
+          'border border-cyan-200/20 text-[#031516] shadow-[0_0_12px_rgba(34,211,238,0.25),inset_0_1px_0_rgba(255,255,255,.28)]',
+          'hover:brightness-110 hover:shadow-[0_0_24px_rgba(34,211,238,0.42)]',
         ].join(' '),
         secondary:
           'bg-cyan-100/[0.07] text-white border border-cyan-100/[0.12] hover:bg-cyan-100/[0.12] hover:border-cyan-100/20',
         outline:
-          'bg-[#091a24]/50 text-white border border-cyan-100/[0.16] hover:bg-cyan-100/[0.07] hover:border-cyan-300/45',
+          'bg-[#071720]/65 text-white border border-cyan-100/[0.16] shadow-[inset_0_1px_0_rgba(255,255,255,.025)] hover:bg-cyan-100/[0.07] hover:border-cyan-300/45 hover:shadow-[0_0_18px_rgba(34,211,238,.08)]',
         ghost: 'text-white/70 hover:bg-white/[0.04] hover:text-white normal-case tracking-normal',
         destructive:
           'bg-rose-500/90 text-white hover:bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.25)]',

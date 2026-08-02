@@ -52,7 +52,7 @@ export function TrackingWorkspace() {
   return (
     <div data-surface="tracking" className="signal-reveal space-y-6">
       <TrackingBackdrop />
-      <header className="overflow-hidden rounded-xl border border-cyan-300/15 bg-gradient-to-br from-cyan-300/[0.08] via-white/[0.025] to-transparent p-6 md:p-8">
+      <header className="tmx-command-hero overflow-hidden rounded-2xl border border-cyan-300/15 bg-gradient-to-br from-cyan-300/[0.08] via-white/[0.025] to-transparent p-5 sm:p-6 md:p-8">
         <div className="flex flex-wrap items-start justify-between gap-6">
           <div className="max-w-3xl">
             <div className="mb-4 flex items-center gap-3">
