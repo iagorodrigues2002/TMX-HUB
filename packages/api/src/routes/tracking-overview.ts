@@ -103,8 +103,16 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           WHERE o.project_id = p.id AND o.status = 'paid'
             AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS paid_revenue_brl_minor,
         (SELECT count(*)::int FROM tracking_orders o
-          WHERE o.project_id = p.id AND o.status = 'refused'
-            AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS failed_orders,
+          WHERE o.project_id = p.id
+            AND o.status IN ('refused', 'failed', 'cancelled')
+            AND CASE
+              WHEN o.status = 'cancelled' THEN COALESCE(o.cancelled_at, o.updated_at)
+              ELSE o.occurred_at
+            END >= ${from}
+            AND CASE
+              WHEN o.status = 'cancelled' THEN COALESCE(o.cancelled_at, o.updated_at)
+              ELSE o.occurred_at
+            END < ${to}) AS failed_orders,
         (SELECT COALESCE(sum(
             CASE
               WHEN o.amount_brl_minor IS NOT NULL THEN o.amount_brl_minor
@@ -116,8 +124,16 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           FROM tracking_orders o
           LEFT JOIN exchange_rate_cache rc
             ON rc.base_currency = o.currency AND rc.target_currency = 'BRL'
-          WHERE o.project_id = p.id AND o.status = 'refused'
-            AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS failed_revenue_brl_minor,
+          WHERE o.project_id = p.id
+            AND o.status IN ('refused', 'failed', 'cancelled')
+            AND CASE
+              WHEN o.status = 'cancelled' THEN COALESCE(o.cancelled_at, o.updated_at)
+              ELSE o.occurred_at
+            END >= ${from}
+            AND CASE
+              WHEN o.status = 'cancelled' THEN COALESCE(o.cancelled_at, o.updated_at)
+              ELSE o.occurred_at
+            END < ${to}) AS failed_revenue_brl_minor,
         (SELECT count(*)::int FROM tracking_orders o
           WHERE o.project_id = p.id AND o.status = 'refunded'
             AND o.updated_at >= ${from} AND o.updated_at < ${to}) AS refunded_orders,

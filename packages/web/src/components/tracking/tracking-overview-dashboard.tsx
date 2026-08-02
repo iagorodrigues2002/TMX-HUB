@@ -110,7 +110,7 @@ export function TrackingOverviewDashboard() {
                   {pick(totals?.failed_revenue_brl_minor, totals?.failed_revenue_usd_minor)}
                 </p>
                 <p className="tmx-kpi-strip-detail">
-                  {integer(totals?.failed_orders)} pagamentos recusados/falhos
+                  {integer(totals?.failed_orders)} falhas, recusadas ou canceladas
                 </p>
               </div>
               <div className="tmx-kpi-strip-cell">
