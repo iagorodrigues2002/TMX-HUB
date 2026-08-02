@@ -209,7 +209,7 @@ export function RecoveryCenter() {
               <GitBranch className="h-4 w-4 text-cyan-300" />
               Link de entrada + A/B
             </div>
-            <p className="mt-2 truncate font-mono text-xs text-white/45">{`${r?.sources.entry_clicks ?? 0} clique(s) · ${r?.sources.ab_test || `${r?.sources.ab_destinations ?? 0} destino(s)`}`}</p>
+            <p className="mt-2 truncate font-mono text-xs text-white/45">{`${r?.sources.entry_clicks ?? 0} clique(s) · ${r?.sources.ab_test || `${r?.sources.checkout_destinations ?? r?.sources.ab_destinations ?? 0} checkout(s) detectado(s)`}`}</p>
           </div>
           <div className="rounded-xl border border-white/[0.07] bg-black/10 p-4">
             <div className="flex items-center gap-2 text-sm text-white/75">

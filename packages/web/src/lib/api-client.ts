@@ -677,6 +677,7 @@ export interface RecoveryView {
     entry_links: number;
     entry_clicks: number;
     vendepay_webhooks: number;
+    checkout_destinations: number;
     automatic: boolean;
   };
   channels: Array<{

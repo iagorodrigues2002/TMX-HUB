@@ -95,6 +95,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         entry_links: number;
         entry_clicks: number;
         vendepay_webhooks: number;
+        checkout_destinations: number;
       }>
     >`
       SELECT
@@ -104,7 +105,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         (SELECT count(*)::int FROM tracking_ab_variants v JOIN tracking_ab_tests t ON t.id=v.test_id WHERE t.project_id=${project.id} AND v.destination_url IS NOT NULL) AS ab_destinations,
         (SELECT count(*)::int FROM tracking_entry_links WHERE project_id=${project.id} AND enabled=true) AS entry_links,
         (SELECT count(*)::int FROM tracking_events WHERE project_id=${project.id} AND event_name='AdClick' AND received_at>=now()-interval '30 days') AS entry_clicks,
-        (SELECT count(*)::int FROM webhook_receipts wr JOIN vendepay_connections vc ON vc.id=wr.connection_id WHERE vc.project_id=${project.id} AND wr.received_at>=now()-interval '30 days') AS vendepay_webhooks
+        (SELECT count(*)::int FROM webhook_receipts wr JOIN vendepay_connections vc ON vc.id=wr.connection_id WHERE vc.project_id=${project.id} AND wr.received_at>=now()-interval '30 days') AS vendepay_webhooks,
+        (SELECT count(DISTINCT properties->>'href')::int FROM tracking_events WHERE project_id=${project.id} AND event_name='InitiateCheckout' AND received_at>=now()-interval '30 days' AND NULLIF(properties->>'href','') IS NOT NULL) AS checkout_destinations
     `;
     const channels = await app.db<
       Array<{
@@ -151,7 +153,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         gateway: sources?.gateway ?? (sources?.gateway_enabled ? 'vendepay' : null),
         automatic: Boolean(
           sources?.gateway_enabled &&
-            ((sources?.ab_destinations ?? 0) > 0 || settings?.checkout_url),
+            ((sources?.ab_destinations ?? 0) > 0 ||
+              (sources?.checkout_destinations ?? 0) > 0 ||
+              settings?.checkout_url),
         ),
       },
       channels: channels.map((c) => ({ ...c, configured: true })),
@@ -215,7 +219,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       SELECT o.id, o.visitor_id, o.buyer, o.status,
         COALESCE(entry.source,'{}'::jsonb) || COALESCE(o.attribution_source,'{}'::jsonb) ||
           jsonb_strip_nulls(jsonb_build_object('tmx_entry_link_id',entry.entry_link_id,'tmx_entry_link_name',entry.entry_link_name,'vendepay_webhook_id',receipt.id)) AS attribution_source,
-        COALESCE(assigned.destination_url, sourced.destination_url, selected.destination_url,
+        COALESCE(assigned.destination_url, sourced.destination_url, checkout_touch.destination_url, selected.destination_url, common_checkout.destination_url,
           NULLIF(COALESCE(receipt.payload#>>'{checkout,url}',receipt.payload#>>'{data,checkout,url}',receipt.payload#>>'{order,checkout_url}',receipt.payload->>'checkout_url'),''),
           ${settings?.checkout_url ?? null}) AS destination_url
       FROM tracking_orders o
@@ -229,10 +233,20 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       ) assigned ON true
       LEFT JOIN tracking_ab_variants sourced ON sourced.id=COALESCE(o.attribution_source->>'ab_variant_id', o.attribution_source->>'ab_variant')
       LEFT JOIN LATERAL (
+        SELECT NULLIF(e.properties->>'href','') AS destination_url FROM tracking_events e
+        WHERE e.project_id=o.project_id AND e.visitor_id=o.visitor_id AND e.event_name='InitiateCheckout' AND NULLIF(e.properties->>'href','') IS NOT NULL
+        ORDER BY e.received_at DESC LIMIT 1
+      ) checkout_touch ON true
+      LEFT JOIN LATERAL (
         SELECT v.destination_url FROM tracking_ab_tests t JOIN tracking_ab_variants v ON v.test_id=t.id
         WHERE t.project_id=o.project_id AND t.deleted_at IS NULL AND v.destination_url IS NOT NULL
         ORDER BY (v.id=t.winner_variant_id) DESC, (t.status='active') DESC, t.created_at DESC, v.position LIMIT 1
       ) selected ON true
+      LEFT JOIN LATERAL (
+        SELECT NULLIF(e.properties->>'href','') AS destination_url FROM tracking_events e
+        WHERE e.project_id=o.project_id AND e.event_name='InitiateCheckout' AND e.received_at>=now()-interval '30 days' AND NULLIF(e.properties->>'href','') IS NOT NULL
+        GROUP BY e.properties->>'href' ORDER BY count(*) DESC, max(e.received_at) DESC LIMIT 1
+      ) common_checkout ON true
       LEFT JOIN LATERAL (
         SELECT e.source,l.id AS entry_link_id,l.name AS entry_link_name
         FROM tracking_events e JOIN tracking_entry_links l ON l.id=e.properties->>'entry_link_id'
@@ -403,16 +417,14 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       let failed = 0;
       for (let index = 0; index < rows.length; index += 5) {
         const results = await Promise.all(
-          rows
-            .slice(index, index + 5)
-            .map((row) =>
-              app.inject({
-                method: 'POST',
-                url: `/v1/offers/${encodeURIComponent(req.params.id)}/recovery/opportunities/${encodeURIComponent(row.id)}/send`,
-                headers: { authorization: req.headers.authorization ?? '' },
-                payload: { channel },
-              }),
-            ),
+          rows.slice(index, index + 5).map((row) =>
+            app.inject({
+              method: 'POST',
+              url: `/v1/offers/${encodeURIComponent(req.params.id)}/recovery/opportunities/${encodeURIComponent(row.id)}/send`,
+              headers: { authorization: req.headers.authorization ?? '' },
+              payload: { channel },
+            }),
+          ),
         );
         for (const result of results) {
           if (result.statusCode >= 200 && result.statusCode < 300) sent++;
