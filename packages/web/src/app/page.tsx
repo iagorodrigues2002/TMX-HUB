@@ -16,6 +16,7 @@ import {
   Loader2,
   Network,
   Plus,
+  RefreshCw,
   ScrollText,
   Shield,
   Video,
@@ -27,20 +28,26 @@ import { useState } from 'react';
 export const dynamic = 'force-dynamic';
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
 }
 
 function nDaysAgoIso(n: number) {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() - n);
-  return d.toISOString().slice(0, 10);
+  const [year = 1970, month = 1, day = 1] = todayIso().split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day - n, 12));
+  return date.toISOString().slice(0, 10);
 }
 
 const PRESETS = [
   { label: 'Hoje', from: () => todayIso(), to: () => todayIso() },
-  { label: '7d', from: () => nDaysAgoIso(6), to: () => todayIso() },
-  { label: '14d', from: () => nDaysAgoIso(13), to: () => todayIso() },
-  { label: '30d', from: () => nDaysAgoIso(29), to: () => todayIso() },
+  { label: 'Ontem', from: () => nDaysAgoIso(1), to: () => nDaysAgoIso(1) },
+  { label: 'Anteontem', from: () => nDaysAgoIso(2), to: () => nDaysAgoIso(2) },
+  { label: '7 dias atrás', from: () => nDaysAgoIso(7), to: () => nDaysAgoIso(7) },
+  { label: '30 dias atrás', from: () => nDaysAgoIso(30), to: () => nDaysAgoIso(30) },
 ];
 
 export default function HubLandingPage() {
@@ -49,7 +56,7 @@ export default function HubLandingPage() {
   const [to, setTo] = useState(() => todayIso());
   const hasOffers = canAccessTool(user, 'ofertas');
 
-  const { data: summary, isLoading: summaryLoading } = useQuery({
+  const { data: summary, isLoading: summaryLoading, isFetching: summaryFetching, refetch } = useQuery({
     queryKey: ['dashboard-summary', from, to],
     queryFn: () => apiClient.getDashboardSummary({ from, to }),
     enabled: Boolean(user) && hasOffers,
@@ -82,14 +89,15 @@ export default function HubLandingPage() {
         <>
           {/* Filter bar */}
           <section className="mt-8">
-            <div className="glass-card flex flex-wrap items-end gap-3 p-4">
-              <div className="flex flex-wrap gap-2">
+            <div className="glass-card flex flex-wrap items-end gap-3 p-3 sm:p-4">
+              <div className="flex max-w-full gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {PRESETS.map((p) => {
                   const active = from === p.from() && to === p.to();
                   return (
                     <Button
                       key={p.label}
                       size="sm"
+                      className="h-10 shrink-0"
                       variant={active ? 'default' : 'outline'}
                       onClick={() => {
                         setFrom(p.from());
@@ -101,8 +109,8 @@ export default function HubLandingPage() {
                   );
                 })}
               </div>
-              <div className="ml-auto flex items-end gap-2">
-                <div className="space-y-1">
+              <div className="flex w-full flex-wrap items-end gap-2 xl:ml-auto xl:w-auto">
+                <div className="min-w-[140px] flex-1 space-y-1 sm:flex-none">
                   <Label className="hud-label">De</Label>
                   <Input
                     type="date"
@@ -111,7 +119,7 @@ export default function HubLandingPage() {
                     className="h-11 w-full sm:h-9 sm:w-[150px]"
                   />
                 </div>
-                <div className="space-y-1">
+                <div className="min-w-[140px] flex-1 space-y-1 sm:flex-none">
                   <Label className="hud-label">Até</Label>
                   <Input
                     type="date"
@@ -120,6 +128,17 @@ export default function HubLandingPage() {
                     className="h-11 w-full sm:h-9 sm:w-[150px]"
                   />
                 </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-11 flex-1 gap-2 sm:h-9 sm:flex-none"
+                  disabled={summaryFetching}
+                  onClick={() => void refetch()}
+                >
+                  <RefreshCw className={summaryFetching ? 'animate-spin' : ''} />
+                  Atualizar
+                </Button>
               </div>
             </div>
           </section>
