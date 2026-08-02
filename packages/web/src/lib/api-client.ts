@@ -662,11 +662,59 @@ export interface TrackingHealthView {
 }
 
 export interface RecoveryView {
-  settings: { checkout_url: string | null; sender_name: string; quiet_start: number; quiet_end: number; enabled: boolean } | null;
-  sources: { gateway: string | null; gateway_enabled: boolean; ab_test: string | null; ab_destinations: number; entry_links: number; entry_clicks: number; vendepay_webhooks: number; automatic: boolean };
-  channels: Array<{ id: string; kind: 'whatsapp' | 'sms' | 'email'; enabled: boolean; configured: boolean; config: Record<string, string>; updated_at: string }>;
-  totals: { eligible: number; contacted: number; clicked: number; recovered: number; recovered_minor: string };
-  opportunities: Array<{ id: string; status: string; reason: string; buyer_name: string | null; email: string | null; phone: string | null; has_email: boolean; has_phone: boolean; created_at: string; last_contact_at: string | null; clicked_at: string | null; recovered_at: string | null; external_id: string; amount_minor: number | null; amount_brl_minor: number | null; currency: string | null; product: { name?: string } | null; messages: number; last_message_state: string | null }>;
+  settings: {
+    checkout_url: string | null;
+    sender_name: string;
+    quiet_start: number;
+    quiet_end: number;
+    enabled: boolean;
+  } | null;
+  sources: {
+    gateway: string | null;
+    gateway_enabled: boolean;
+    ab_test: string | null;
+    ab_destinations: number;
+    entry_links: number;
+    entry_clicks: number;
+    vendepay_webhooks: number;
+    automatic: boolean;
+  };
+  channels: Array<{
+    id: string;
+    kind: 'whatsapp' | 'sms' | 'email';
+    enabled: boolean;
+    configured: boolean;
+    config: Record<string, string>;
+    updated_at: string;
+  }>;
+  totals: {
+    eligible: number;
+    contacted: number;
+    clicked: number;
+    recovered: number;
+    recovered_minor: string;
+  };
+  opportunities: Array<{
+    id: string;
+    status: string;
+    reason: string;
+    buyer_name: string | null;
+    email: string | null;
+    phone: string | null;
+    has_email: boolean;
+    has_phone: boolean;
+    created_at: string;
+    last_contact_at: string | null;
+    clicked_at: string | null;
+    recovered_at: string | null;
+    external_id: string;
+    amount_minor: number | null;
+    amount_brl_minor: number | null;
+    currency: string | null;
+    product: { name?: string } | null;
+    messages: number;
+    last_message_state: string | null;
+  }>;
 }
 
 export interface DashboardSummary {
@@ -1525,17 +1573,48 @@ export const apiClient = {
   async getRecovery(id: string): Promise<RecoveryView> {
     return request(`/v1/offers/${id}/recovery`);
   },
-  async updateRecoverySettings(id: string, body: { checkout_url?: string; sender_name: string; quiet_start: number; quiet_end: number; enabled: boolean }): Promise<{ ok: true }> {
+  async updateRecoverySettings(
+    id: string,
+    body: {
+      checkout_url?: string;
+      sender_name: string;
+      quiet_start: number;
+      quiet_end: number;
+      enabled: boolean;
+    },
+  ): Promise<{ ok: true }> {
     return request(`/v1/offers/${id}/recovery/settings`, { method: 'PUT', body });
   },
-  async updateRecoveryChannel(id: string, body: Record<string, unknown>): Promise<{ ok: true; kind: string }> {
+  async updateRecoveryChannel(
+    id: string,
+    body: Record<string, unknown>,
+  ): Promise<{ ok: true; kind: string }> {
     return request(`/v1/offers/${id}/recovery/channels`, { method: 'PUT', body });
   },
-  async syncRecovery(id: string): Promise<{ accepted: true; candidates: number; created: number; skipped: number }> {
+  async syncRecovery(
+    id: string,
+  ): Promise<{ accepted: true; candidates: number; created: number; skipped: number }> {
     return request(`/v1/offers/${id}/recovery/sync`, { method: 'POST' });
   },
-  async sendRecovery(id: string, opportunityId: string, channel: 'whatsapp' | 'sms' | 'email'): Promise<{ accepted: true; message_id: string }> {
-    return request(`/v1/offers/${id}/recovery/opportunities/${opportunityId}/send`, { method: 'POST', body: { channel } });
+  async sendRecovery(
+    id: string,
+    opportunityId: string,
+    channel: 'whatsapp' | 'sms' | 'email',
+  ): Promise<{ accepted: true; message_id: string }> {
+    return request(`/v1/offers/${id}/recovery/opportunities/${opportunityId}/send`, {
+      method: 'POST',
+      body: { channel },
+    });
+  },
+  async bulkSendRecovery(
+    id: string,
+    channel: 'whatsapp' | 'sms' | 'email',
+    limit = 100,
+  ): Promise<{ accepted: true; selected: number; sent: number; failed: number }> {
+    return request(`/v1/offers/${id}/recovery/bulk-send`, {
+      method: 'POST',
+      body: { channel, limit },
+    });
   },
 
   async getTrackingProductKinds(id: string): Promise<{

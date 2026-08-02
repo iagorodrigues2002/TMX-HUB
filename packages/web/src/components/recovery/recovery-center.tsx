@@ -5,39 +5,532 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { apiClient, type OfferView } from '@/lib/api-client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, ChevronDown, GitBranch, Mail, MessageCircle, Phone, RefreshCw, Send, Settings2, ShoppingBag, Webhook } from 'lucide-react';
+import {
+  CheckCircle2,
+  ChevronDown,
+  GitBranch,
+  Mail,
+  MessageCircle,
+  Phone,
+  RefreshCw,
+  Send,
+  Settings2,
+  ShoppingBag,
+  Webhook,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 export function RecoveryCenter() {
-  const qc=useQueryClient(); const [offerId,setOfferId]=useState('');
-  const offers=useQuery<OfferView[]>({queryKey:['offers'],queryFn:()=>apiClient.listOffers()});
-  useEffect(()=>{if(!offerId&&offers.data?.[0])setOfferId(offers.data[0].id)},[offerId,offers.data]);
-  const recovery=useQuery({queryKey:['recovery',offerId],queryFn:()=>apiClient.getRecovery(offerId),enabled:Boolean(offerId),refetchInterval:30000});
-  const [checkoutUrl,setCheckoutUrl]=useState(''); const [senderName,setSenderName]=useState('TMX');
-  const [waToken,setWaToken]=useState(''); const [waPhoneId,setWaPhoneId]=useState(''); const [waTemplate,setWaTemplate]=useState('tmx_recovery');
-  const [twilioSid,setTwilioSid]=useState(''); const [twilioToken,setTwilioToken]=useState(''); const [twilioFrom,setTwilioFrom]=useState('');
-  const [resendKey,setResendKey]=useState(''); const [fromEmail,setFromEmail]=useState('');
-  useEffect(()=>{if(recovery.data?.settings){setCheckoutUrl(recovery.data.settings.checkout_url||'');setSenderName(recovery.data.settings.sender_name||'TMX')}},[recovery.data?.settings]);
-  const refresh=()=>void qc.invalidateQueries({queryKey:['recovery',offerId]});
-  const settings=useMutation({mutationFn:()=>apiClient.updateRecoverySettings(offerId,{checkout_url:checkoutUrl,sender_name:senderName,quiet_start:21,quiet_end:8,enabled:true}),onSuccess:()=>{toast.success('Configuração de recuperação salva.');refresh()},onError:e=>toast.error((e as Error).message)});
-  const channel=useMutation({mutationFn:(body:Record<string,unknown>)=>apiClient.updateRecoveryChannel(offerId,body),onSuccess:()=>{toast.success('Canal salvo com criptografia.');refresh()},onError:e=>toast.error((e as Error).message)});
-  const sync=useMutation({mutationFn:()=>apiClient.syncRecovery(offerId),onSuccess:r=>{toast.success(`${r.created} nova(s) oportunidade(s) criada(s) · ${r.candidates-r.skipped} com checkout resolvido.`);refresh()},onError:e=>toast.error((e as Error).message)});
-  const send=useMutation({mutationFn:({id,kind}:{id:string;kind:'whatsapp'|'sms'|'email'})=>apiClient.sendRecovery(offerId,id,kind),onSuccess:()=>{toast.success('Recuperação enviada.');refresh()},onError:e=>toast.error((e as Error).message)});
-  const configured=(kind:string)=>recovery.data?.channels.some(c=>c.kind===kind&&c.enabled);
-  const r=recovery.data;
-  if (recovery.isError) return <div className="glass-card flex min-h-64 flex-col items-center justify-center gap-4 p-6 text-center"><p className="text-sm font-semibold text-white">Não foi possível carregar o TMX Recovery</p><p className="max-w-lg text-xs leading-5 text-white/45">{recovery.error instanceof Error?recovery.error.message:'A API de recuperação não respondeu.'}</p><Button variant="outline" disabled={recovery.isFetching} onClick={()=>void recovery.refetch()}><RefreshCw className={recovery.isFetching?'animate-spin':''}/>Tentar novamente</Button></div>;
-  return <div className="space-y-6">
-    <header className="tmx-command-hero rounded-2xl border border-cyan-300/15 p-5 sm:p-7">
-      <div className="flex flex-wrap items-start justify-between gap-5"><div><p className="hud-label">TMX Revenue Recovery</p><h1 className="mt-2 text-3xl font-bold tracking-tight text-white">Recuperação de vendas</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-white/50">Transforme abandonos e pagamentos recusados em uma fila rastreável de receita recuperada.</p></div><div className="relative min-w-full sm:min-w-[320px]"><select aria-label="Selecionar oferta" value={offerId} onChange={e=>setOfferId(e.target.value)} className="h-11 w-full appearance-none rounded-lg border border-cyan-100/[0.14] bg-[#06151e] px-4 pr-10 text-sm text-white">{(offers.data??[]).map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</select><ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-white/35"/></div></div>
-    </header>
-    <section className="grid grid-cols-2 gap-3 lg:grid-cols-5">{[['Elegíveis',r?.totals.eligible??0],['Contatadas',r?.totals.contacted??0],['Cliques',r?.totals.clicked??0],['Recuperadas',r?.totals.recovered??0],['Receita recuperada',`R$ ${(Number(r?.totals.recovered_minor??0)/100).toLocaleString('pt-BR',{minimumFractionDigits:2})}`]].map(([label,value])=><div key={label} className="tmx-kpi-card rounded-xl border border-white/[0.08] p-4"><p className="hud-label text-[9px]">{label}</p><p className="mono-num mt-3 text-xl text-white">{value}</p></div>)}</section>
-    <section className="glass-card p-5"><div className="flex items-center gap-3"><Settings2 className="h-4 w-4 text-cyan-300"/><div><p className="hud-label">Fontes automáticas</p><p className="mt-1 text-xs text-white/40">O Recovery cruza o clique de entrada com o webhook original da Vendepay e o checkout do teste A/B.</p></div></div><div className="mt-4 grid gap-3 md:grid-cols-3"><div className="rounded-xl border border-white/[0.07] bg-black/10 p-4"><div className="flex items-center gap-2 text-sm text-white/75"><Webhook className="h-4 w-4 text-emerald-300"/>Webhooks Vendepay</div><p className="mt-2 font-mono text-xs text-white/45">{r?.sources.gateway_enabled?`${r.sources.vendepay_webhooks??0} recebido(s) em 30 dias`:'Não conectado'}</p></div><div className="rounded-xl border border-white/[0.07] bg-black/10 p-4"><div className="flex items-center gap-2 text-sm text-white/75"><GitBranch className="h-4 w-4 text-cyan-300"/>Link de entrada + A/B</div><p className="mt-2 truncate font-mono text-xs text-white/45">{`${r?.sources.entry_clicks??0} clique(s) · ${r?.sources.ab_test||`${r?.sources.ab_destinations??0} destino(s)`}`}</p></div><div className="rounded-xl border border-white/[0.07] bg-black/10 p-4"><div className="flex items-center gap-2 text-sm text-white/75"><CheckCircle2 className={`h-4 w-4 ${r?.sources.automatic?'text-emerald-300':'text-amber-300'}`}/>Cruzamento</div><p className="mt-2 font-mono text-xs text-white/45">{r?.sources.automatic?'Webhook + jornada + checkout':'Falta gateway ou destino'}</p></div></div><div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]"><div><Label>Nome do remetente</Label><Input value={senderName} onChange={e=>setSenderName(e.target.value)}/><p className="mt-1 text-[11px] text-white/30">Campanha, conjunto e anúncio vêm do primeiro AdClick. Comprador e status vêm do webhook. O destino vem da variante A/B atribuída.</p></div><Button className="self-end" disabled={settings.isPending} onClick={()=>settings.mutate()}>Salvar remetente</Button></div></section>
-    <section className="grid gap-4 xl:grid-cols-3">
-      <div className="glass-card p-5"><div className="flex items-center justify-between"><div className="flex items-center gap-2"><MessageCircle className="h-4 w-4 text-emerald-300"/><p className="font-semibold">WhatsApp Cloud API</p></div>{configured('whatsapp')&&<CheckCircle2 className="h-4 w-4 text-emerald-300"/>}</div><div className="mt-4 space-y-3"><Input type="password" value={waToken} onChange={e=>setWaToken(e.target.value)} placeholder="Access token permanente"/><Input value={waPhoneId} onChange={e=>setWaPhoneId(e.target.value)} placeholder="Phone Number ID"/><Input value={waTemplate} onChange={e=>setWaTemplate(e.target.value)} placeholder="Template aprovado"/><Button className="w-full" disabled={!waToken||!waPhoneId||channel.isPending} onClick={()=>channel.mutate({kind:'whatsapp',enabled:true,credentials:{access_token:waToken,phone_number_id:waPhoneId},config:{template_name:waTemplate,language:'pt_BR'}})}>Configurar WhatsApp</Button></div></div>
-      <div className="glass-card p-5"><div className="flex items-center justify-between"><div className="flex items-center gap-2"><Phone className="h-4 w-4 text-cyan-300"/><p className="font-semibold">SMS · Twilio</p></div>{configured('sms')&&<CheckCircle2 className="h-4 w-4 text-emerald-300"/>}</div><div className="mt-4 space-y-3"><Input value={twilioSid} onChange={e=>setTwilioSid(e.target.value)} placeholder="Account SID"/><Input type="password" value={twilioToken} onChange={e=>setTwilioToken(e.target.value)} placeholder="Auth Token"/><Input value={twilioFrom} onChange={e=>setTwilioFrom(e.target.value)} placeholder="Número remetente"/><Button className="w-full" disabled={!twilioSid||!twilioToken||!twilioFrom||channel.isPending} onClick={()=>channel.mutate({kind:'sms',enabled:true,credentials:{account_sid:twilioSid,auth_token:twilioToken,from_number:twilioFrom},config:{message:'Olá {{nome}}, sua compra não foi concluída. Retome com segurança: {{link}}'}})}>Configurar SMS</Button></div></div>
-      <div className="glass-card p-5"><div className="flex items-center justify-between"><div className="flex items-center gap-2"><Mail className="h-4 w-4 text-violet-300"/><p className="font-semibold">E-mail · Resend</p></div>{configured('email')&&<CheckCircle2 className="h-4 w-4 text-emerald-300"/>}</div><div className="mt-4 space-y-3"><Input type="password" value={resendKey} onChange={e=>setResendKey(e.target.value)} placeholder="Resend API Key"/><Input value={fromEmail} onChange={e=>setFromEmail(e.target.value)} placeholder="TMX <vendas@dominio.com>"/><Button className="w-full" disabled={!resendKey||!fromEmail||channel.isPending} onClick={()=>channel.mutate({kind:'email',enabled:true,credentials:{api_key:resendKey,from_email:fromEmail},config:{subject:'Sua compra ainda está disponível',message:'<p>Olá {{nome}},</p><p>notamos que sua compra não foi concluída.</p><p>{{link}}</p>'}})}>Configurar e-mail</Button></div></div>
-    </section>
-    <section className="glass-card p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="hud-label">Oportunidades</p><p className="mt-1 text-xs text-white/40">Abandonos, recusas e falhas dos últimos 30 dias, importados do gateway com o checkout A/B correto.</p></div><Button variant="outline" disabled={sync.isPending||(!r?.sources.automatic&&!checkoutUrl)} onClick={()=>sync.mutate()}><RefreshCw className={sync.isPending?'animate-spin':''}/>Sincronizar dados TMX</Button></div><div className="mt-4 space-y-2">{(r?.opportunities??[]).map(o=><article key={o.id} className="flex flex-col gap-3 rounded-xl border border-white/[0.07] bg-black/10 p-4 lg:flex-row lg:items-center"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-amber-300/15 text-amber-300"><ShoppingBag className="h-4 w-4"/></span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="font-medium text-white/85">{o.buyer_name||'Comprador não identificado'}</p><span className="rounded border border-white/[0.08] px-2 py-0.5 font-mono text-[8px] uppercase text-white/40">{o.status}</span><span className="rounded border border-amber-300/10 px-2 py-0.5 text-[9px] text-amber-200/60">{o.reason}</span></div><p className="mt-1 text-xs text-white/40">{o.product?.name||o.external_id} · {o.email||'sem e-mail'} · {o.phone||'sem telefone'}</p></div><div className="flex flex-wrap gap-2">{configured('whatsapp')&&o.has_phone&&<Button size="sm" variant="outline" disabled={send.isPending} onClick={()=>send.mutate({id:o.id,kind:'whatsapp'})}><MessageCircle/>WhatsApp</Button>}{configured('sms')&&o.has_phone&&<Button size="sm" variant="outline" disabled={send.isPending} onClick={()=>send.mutate({id:o.id,kind:'sms'})}><Phone/>SMS</Button>}{configured('email')&&o.has_email&&<Button size="sm" variant="outline" disabled={send.isPending} onClick={()=>send.mutate({id:o.id,kind:'email'})}><Send/>E-mail</Button>}</div></article>)}{!r?.opportunities.length&&<div className="rounded-xl border border-dashed border-white/[0.08] p-8 text-center text-sm text-white/35">Sincronize os dados já existentes no Tracking Avançado para criar a primeira fila.</div>}</div></section>
-  </div>;
+  const qc = useQueryClient();
+  const [offerId, setOfferId] = useState('');
+  const offers = useQuery<OfferView[]>({
+    queryKey: ['offers'],
+    queryFn: () => apiClient.listOffers(),
+  });
+  useEffect(() => {
+    if (!offerId && offers.data?.[0]) setOfferId(offers.data[0].id);
+  }, [offerId, offers.data]);
+  const recovery = useQuery({
+    queryKey: ['recovery', offerId],
+    queryFn: () => apiClient.getRecovery(offerId),
+    enabled: Boolean(offerId),
+    refetchInterval: 30000,
+  });
+  const [checkoutUrl, setCheckoutUrl] = useState('');
+  const [senderName, setSenderName] = useState('TMX');
+  const [waToken, setWaToken] = useState('');
+  const [waPhoneId, setWaPhoneId] = useState('');
+  const [waTemplate, setWaTemplate] = useState('tmx_recovery');
+  const [twilioSid, setTwilioSid] = useState('');
+  const [twilioToken, setTwilioToken] = useState('');
+  const [twilioFrom, setTwilioFrom] = useState('');
+  const [resendKey, setResendKey] = useState('');
+  const [fromEmail, setFromEmail] = useState('');
+  const [smsMessage, setSmsMessage] = useState(
+    'Olá {{nome}}, sua compra não foi concluída. Retome com segurança: {{link}}',
+  );
+  const [emailSubject, setEmailSubject] = useState('Sua compra ainda está disponível');
+  const [emailMessage, setEmailMessage] = useState(
+    '<p>Olá {{nome}},</p><p>notamos que sua compra não foi concluída.</p><p>{{link}}</p>',
+  );
+  useEffect(() => {
+    if (recovery.data?.settings) {
+      setCheckoutUrl(recovery.data.settings.checkout_url || '');
+      setSenderName(recovery.data.settings.sender_name || 'TMX');
+    }
+  }, [recovery.data?.settings]);
+  const refresh = () => void qc.invalidateQueries({ queryKey: ['recovery', offerId] });
+  const settings = useMutation({
+    mutationFn: () =>
+      apiClient.updateRecoverySettings(offerId, {
+        checkout_url: checkoutUrl,
+        sender_name: senderName,
+        quiet_start: 21,
+        quiet_end: 8,
+        enabled: true,
+      }),
+    onSuccess: () => {
+      toast.success('Configuração de recuperação salva.');
+      refresh();
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+  const channel = useMutation({
+    mutationFn: (body: Record<string, unknown>) => apiClient.updateRecoveryChannel(offerId, body),
+    onSuccess: () => {
+      toast.success('Canal salvo com criptografia.');
+      refresh();
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+  const sync = useMutation({
+    mutationFn: () => apiClient.syncRecovery(offerId),
+    onSuccess: (r) => {
+      toast.success(
+        `${r.created} nova(s) oportunidade(s) criada(s) · ${r.candidates - r.skipped} com checkout resolvido.`,
+      );
+      refresh();
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+  const send = useMutation({
+    mutationFn: ({ id, kind }: { id: string; kind: 'whatsapp' | 'sms' | 'email' }) =>
+      apiClient.sendRecovery(offerId, id, kind),
+    onSuccess: () => {
+      toast.success('Recuperação enviada.');
+      refresh();
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+  const bulk = useMutation({
+    mutationFn: (kind: 'whatsapp' | 'sms' | 'email') => apiClient.bulkSendRecovery(offerId, kind),
+    onSuccess: (r) => {
+      toast.success(`${r.sent} enviada(s) · ${r.failed} falha(s).`);
+      refresh();
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+  const configured = (kind: string) =>
+    recovery.data?.channels.some((c) => c.kind === kind && c.enabled);
+  const r = recovery.data;
+  if (recovery.isError)
+    return (
+      <div className="glass-card flex min-h-64 flex-col items-center justify-center gap-4 p-6 text-center">
+        <p className="text-sm font-semibold text-white">Não foi possível carregar o TMX Recovery</p>
+        <p className="max-w-lg text-xs leading-5 text-white/45">
+          {recovery.error instanceof Error
+            ? recovery.error.message
+            : 'A API de recuperação não respondeu.'}
+        </p>
+        <Button
+          variant="outline"
+          disabled={recovery.isFetching}
+          onClick={() => void recovery.refetch()}
+        >
+          <RefreshCw className={recovery.isFetching ? 'animate-spin' : ''} />
+          Tentar novamente
+        </Button>
+      </div>
+    );
+  return (
+    <div className="space-y-6">
+      <header className="tmx-command-hero rounded-2xl border border-cyan-300/15 p-5 sm:p-7">
+        <div className="flex flex-wrap items-start justify-between gap-5">
+          <div>
+            <p className="hud-label">TMX Revenue Recovery</p>
+            <h1 className="mt-2 text-3xl font-bold tracking-tight text-white">
+              Recuperação de vendas
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/50">
+              Transforme abandonos e pagamentos recusados em uma fila rastreável de receita
+              recuperada.
+            </p>
+          </div>
+          <div className="relative min-w-full sm:min-w-[320px]">
+            <select
+              aria-label="Selecionar oferta"
+              value={offerId}
+              onChange={(e) => setOfferId(e.target.value)}
+              className="h-11 w-full appearance-none rounded-lg border border-cyan-100/[0.14] bg-[#06151e] px-4 pr-10 text-sm text-white"
+            >
+              {(offers.data ?? []).map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-white/35" />
+          </div>
+        </div>
+      </header>
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        {[
+          ['Elegíveis', r?.totals.eligible ?? 0],
+          ['Contatadas', r?.totals.contacted ?? 0],
+          ['Cliques', r?.totals.clicked ?? 0],
+          ['Recuperadas', r?.totals.recovered ?? 0],
+          [
+            'Receita recuperada',
+            `R$ ${(Number(r?.totals.recovered_minor ?? 0) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+          ],
+        ].map(([label, value]) => (
+          <div key={label} className="tmx-kpi-card rounded-xl border border-white/[0.08] p-4">
+            <p className="hud-label text-[9px]">{label}</p>
+            <p className="mono-num mt-3 text-xl text-white">{value}</p>
+          </div>
+        ))}
+      </section>
+      <section className="glass-card p-5">
+        <div className="flex items-center gap-3">
+          <Settings2 className="h-4 w-4 text-cyan-300" />
+          <div>
+            <p className="hud-label">Fontes automáticas</p>
+            <p className="mt-1 text-xs text-white/40">
+              O Recovery cruza o clique de entrada com o webhook original da Vendepay e o checkout
+              do teste A/B.
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-white/[0.07] bg-black/10 p-4">
+            <div className="flex items-center gap-2 text-sm text-white/75">
+              <Webhook className="h-4 w-4 text-emerald-300" />
+              Webhooks Vendepay
+            </div>
+            <p className="mt-2 font-mono text-xs text-white/45">
+              {r?.sources.gateway_enabled
+                ? `${r.sources.vendepay_webhooks ?? 0} recebido(s) em 30 dias`
+                : 'Não conectado'}
+            </p>
+          </div>
+          <div className="rounded-xl border border-white/[0.07] bg-black/10 p-4">
+            <div className="flex items-center gap-2 text-sm text-white/75">
+              <GitBranch className="h-4 w-4 text-cyan-300" />
+              Link de entrada + A/B
+            </div>
+            <p className="mt-2 truncate font-mono text-xs text-white/45">{`${r?.sources.entry_clicks ?? 0} clique(s) · ${r?.sources.ab_test || `${r?.sources.ab_destinations ?? 0} destino(s)`}`}</p>
+          </div>
+          <div className="rounded-xl border border-white/[0.07] bg-black/10 p-4">
+            <div className="flex items-center gap-2 text-sm text-white/75">
+              <CheckCircle2
+                className={`h-4 w-4 ${r?.sources.automatic ? 'text-emerald-300' : 'text-amber-300'}`}
+              />
+              Cruzamento
+            </div>
+            <p className="mt-2 font-mono text-xs text-white/45">
+              {r?.sources.automatic ? 'Webhook + jornada + checkout' : 'Falta gateway ou destino'}
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
+          <div>
+            <Label>Nome do remetente</Label>
+            <Input value={senderName} onChange={(e) => setSenderName(e.target.value)} />
+            <p className="mt-1 text-[11px] text-white/30">
+              Campanha, conjunto e anúncio vêm do primeiro AdClick. Comprador e status vêm do
+              webhook. O destino vem da variante A/B atribuída.
+            </p>
+          </div>
+          <Button
+            className="self-end"
+            disabled={settings.isPending}
+            onClick={() => settings.mutate()}
+          >
+            Salvar remetente
+          </Button>
+        </div>
+      </section>
+      <section className="grid gap-4 xl:grid-cols-3">
+        <div className="glass-card p-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <MessageCircle className="h-4 w-4 text-emerald-300" />
+              <p className="font-semibold">WhatsApp Cloud API</p>
+            </div>
+            {configured('whatsapp') && <CheckCircle2 className="h-4 w-4 text-emerald-300" />}
+          </div>
+          <div className="mt-4 space-y-3">
+            <Input
+              type="password"
+              value={waToken}
+              onChange={(e) => setWaToken(e.target.value)}
+              placeholder="Access token permanente"
+            />
+            <Input
+              value={waPhoneId}
+              onChange={(e) => setWaPhoneId(e.target.value)}
+              placeholder="Phone Number ID"
+            />
+            <Input
+              value={waTemplate}
+              onChange={(e) => setWaTemplate(e.target.value)}
+              placeholder="Template aprovado"
+            />
+            <Button
+              className="w-full"
+              disabled={!waToken || !waPhoneId || channel.isPending}
+              onClick={() =>
+                channel.mutate({
+                  kind: 'whatsapp',
+                  enabled: true,
+                  credentials: { access_token: waToken, phone_number_id: waPhoneId },
+                  config: { template_name: waTemplate, language: 'pt_BR' },
+                })
+              }
+            >
+              Configurar WhatsApp
+            </Button>
+          </div>
+        </div>
+        <div className="glass-card p-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Phone className="h-4 w-4 text-cyan-300" />
+              <p className="font-semibold">SMS · Twilio</p>
+            </div>
+            {configured('sms') && <CheckCircle2 className="h-4 w-4 text-emerald-300" />}
+          </div>
+          <div className="mt-4 space-y-3">
+            <Input
+              value={twilioSid}
+              onChange={(e) => setTwilioSid(e.target.value)}
+              placeholder="Account SID"
+            />
+            <Input
+              type="password"
+              value={twilioToken}
+              onChange={(e) => setTwilioToken(e.target.value)}
+              placeholder="Auth Token"
+            />
+            <Input
+              value={twilioFrom}
+              onChange={(e) => setTwilioFrom(e.target.value)}
+              placeholder="Número remetente"
+            />
+            <textarea
+              aria-label="Mensagem SMS"
+              value={smsMessage}
+              onChange={(e) => setSmsMessage(e.target.value)}
+              rows={4}
+              className="w-full rounded-lg border border-white/10 bg-black/15 p-3 text-sm text-white outline-none focus:border-cyan-300/30"
+            />
+            <p className="text-[10px] text-white/30">
+              Variáveis: {'{{nome}}'} e {'{{link}}'}
+            </p>
+            <Button
+              className="w-full"
+              disabled={
+                !twilioSid ||
+                !twilioToken ||
+                !twilioFrom ||
+                smsMessage.length < 10 ||
+                channel.isPending
+              }
+              onClick={() =>
+                channel.mutate({
+                  kind: 'sms',
+                  enabled: true,
+                  credentials: {
+                    account_sid: twilioSid,
+                    auth_token: twilioToken,
+                    from_number: twilioFrom,
+                  },
+                  config: { message: smsMessage },
+                })
+              }
+            >
+              Salvar SMS personalizado
+            </Button>
+          </div>
+        </div>
+        <div className="glass-card p-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Mail className="h-4 w-4 text-violet-300" />
+              <p className="font-semibold">E-mail · Resend</p>
+            </div>
+            {configured('email') && <CheckCircle2 className="h-4 w-4 text-emerald-300" />}
+          </div>
+          <div className="mt-4 space-y-3">
+            <Input
+              type="password"
+              value={resendKey}
+              onChange={(e) => setResendKey(e.target.value)}
+              placeholder="Resend API Key"
+            />
+            <Input
+              value={fromEmail}
+              onChange={(e) => setFromEmail(e.target.value)}
+              placeholder="TMX <vendas@dominio.com>"
+            />
+            <Input
+              value={emailSubject}
+              onChange={(e) => setEmailSubject(e.target.value)}
+              placeholder="Assunto do e-mail"
+            />
+            <textarea
+              aria-label="Conteúdo do e-mail"
+              value={emailMessage}
+              onChange={(e) => setEmailMessage(e.target.value)}
+              rows={6}
+              className="w-full rounded-lg border border-white/10 bg-black/15 p-3 font-mono text-xs text-white outline-none focus:border-cyan-300/30"
+            />
+            <p className="text-[10px] text-white/30">
+              Aceita HTML e as variáveis {'{{nome}}'} e {'{{link}}'}.
+            </p>
+            <Button
+              className="w-full"
+              disabled={
+                !resendKey ||
+                !fromEmail ||
+                emailSubject.length < 3 ||
+                emailMessage.length < 10 ||
+                channel.isPending
+              }
+              onClick={() =>
+                channel.mutate({
+                  kind: 'email',
+                  enabled: true,
+                  credentials: { api_key: resendKey, from_email: fromEmail },
+                  config: { subject: emailSubject, message: emailMessage },
+                })
+              }
+            >
+              Salvar e-mail personalizado
+            </Button>
+          </div>
+        </div>
+      </section>
+      <section className="glass-card p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="hud-label">Oportunidades</p>
+            <p className="mt-1 text-xs text-white/40">
+              Abandonos, recusas e falhas dos últimos 30 dias, importados do gateway com o checkout
+              A/B correto.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {configured('whatsapp') && (
+              <Button
+                variant="outline"
+                disabled={bulk.isPending}
+                onClick={() =>
+                  window.confirm('Enviar WhatsApp em massa para quem ainda não recebeu?') &&
+                  bulk.mutate('whatsapp')
+                }
+              >
+                <MessageCircle />
+                Massa
+              </Button>
+            )}
+            {configured('sms') && (
+              <Button
+                variant="outline"
+                disabled={bulk.isPending}
+                onClick={() =>
+                  window.confirm('Enviar SMS em massa para quem ainda não recebeu?') &&
+                  bulk.mutate('sms')
+                }
+              >
+                <Phone />
+                Massa
+              </Button>
+            )}
+            {configured('email') && (
+              <Button
+                variant="outline"
+                disabled={bulk.isPending}
+                onClick={() =>
+                  window.confirm('Enviar e-mail em massa para quem ainda não recebeu?') &&
+                  bulk.mutate('email')
+                }
+              >
+                <Mail />
+                Massa
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              disabled={sync.isPending || (!r?.sources.automatic && !checkoutUrl)}
+              onClick={() => sync.mutate()}
+            >
+              <RefreshCw className={sync.isPending ? 'animate-spin' : ''} />
+              Sincronizar dados TMX
+            </Button>
+          </div>
+        </div>
+        <div className="mt-4 space-y-2">
+          {(r?.opportunities ?? []).map((o) => (
+            <article
+              key={o.id}
+              className="flex flex-col gap-3 rounded-xl border border-white/[0.07] bg-black/10 p-4 lg:flex-row lg:items-center"
+            >
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-amber-300/15 text-amber-300">
+                <ShoppingBag className="h-4 w-4" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-medium text-white/85">
+                    {o.buyer_name || 'Comprador não identificado'}
+                  </p>
+                  <span className="rounded border border-white/[0.08] px-2 py-0.5 font-mono text-[8px] uppercase text-white/40">
+                    {o.status}
+                  </span>
+                  <span className="rounded border border-amber-300/10 px-2 py-0.5 text-[9px] text-amber-200/60">
+                    {o.reason}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-white/40">
+                  {o.product?.name || o.external_id} · {o.email || 'sem e-mail'} ·{' '}
+                  {o.phone || 'sem telefone'}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {configured('whatsapp') && o.has_phone && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={send.isPending}
+                    onClick={() => send.mutate({ id: o.id, kind: 'whatsapp' })}
+                  >
+                    <MessageCircle />
+                    WhatsApp
+                  </Button>
+                )}
+                {configured('sms') && o.has_phone && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={send.isPending}
+                    onClick={() => send.mutate({ id: o.id, kind: 'sms' })}
+                  >
+                    <Phone />
+                    SMS
+                  </Button>
+                )}
+                {configured('email') && o.has_email && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={send.isPending}
+                    onClick={() => send.mutate({ id: o.id, kind: 'email' })}
+                  >
+                    <Send />
+                    E-mail
+                  </Button>
+                )}
+              </div>
+            </article>
+          ))}
+          {!r?.opportunities.length && (
+            <div className="rounded-xl border border-dashed border-white/[0.08] p-8 text-center text-sm text-white/35">
+              Sincronize os dados já existentes no Tracking Avançado para criar a primeira fila.
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
+  );
 }
