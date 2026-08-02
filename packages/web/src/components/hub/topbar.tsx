@@ -13,10 +13,10 @@ interface TopbarProps {
 export function Topbar({ breadcrumb, right }: TopbarProps) {
   return (
     <header
-      className="flex h-16 shrink-0 items-center gap-4 border-b border-cyan-100/[0.09] bg-[#061119]/88 px-4 shadow-[0_10px_35px_rgba(0,0,0,.18)] backdrop-blur-2xl sm:px-6"
+      className="flex h-16 shrink-0 items-center gap-2 border-b border-cyan-100/[0.09] bg-[#061119]/88 px-3 shadow-[0_10px_35px_rgba(0,0,0,.18)] backdrop-blur-2xl sm:gap-4 sm:px-6"
       style={{ position: 'sticky', top: 0, zIndex: 30 }}
     >
-      <Link href="/" className="group flex items-center gap-3">
+      <Link href="/" className="group flex min-w-0 shrink-0 items-center gap-2 sm:gap-3">
         <span
           aria-hidden
           className="grid h-8 w-8 place-items-center rounded-md border border-cyan-300/30 shadow-glow"
@@ -76,7 +76,7 @@ export function Topbar({ breadcrumb, right }: TopbarProps) {
         </nav>
       )}
 
-      <div className="ml-auto flex items-center gap-2">{right}</div>
+      <div className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-2">{right}</div>
     </header>
   );
 }

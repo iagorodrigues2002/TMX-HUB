@@ -70,7 +70,7 @@ export function FunnelInputForm() {
         />
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid gap-2 sm:grid-cols-3">
         {presets.map(({ label, hint, depth, pages, icon: Icon }) => {
           const active = maxDepth === depth && maxPages === pages;
           return (

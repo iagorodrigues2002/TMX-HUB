@@ -424,7 +424,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
               type="date"
               value={from}
               onChange={(e) => setFrom(e.target.value)}
-              className="h-9 w-[150px]"
+              className="h-11 w-full sm:h-9 sm:w-[150px]"
             />
           </div>
           <div className="space-y-1">
@@ -433,7 +433,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
               type="date"
               value={to}
               onChange={(e) => setTo(e.target.value)}
-              className="h-9 w-[150px]"
+              className="h-11 w-full sm:h-9 sm:w-[150px]"
             />
           </div>
           {snapshotsQuery.isFetching && (

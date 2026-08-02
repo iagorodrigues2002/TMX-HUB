@@ -18,6 +18,7 @@ import { usePathname } from 'next/navigation';
 
 interface NavItem {
   label: string;
+  mobileLabel?: string;
   href: string;
   icon: typeof Home;
   /** When true, the item is rendered but not clickable (placeholder). */
@@ -28,10 +29,11 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { label: 'Visão geral', href: '/', icon: Home },
+  { label: 'Visão geral', mobileLabel: 'Início', href: '/', icon: Home },
   { label: 'Ofertas', href: '/ofertas', icon: Target, requiresTool: 'ofertas' },
   {
     label: 'Trackeamento avançado',
+    mobileLabel: 'Tracking',
     href: '/tracking',
     icon: RadioTower,
     requiresTool: 'ofertas',
@@ -98,7 +100,7 @@ export function Sidebar() {
       </aside>
       <nav
         aria-label="Navegação móvel"
-        className="fixed inset-x-3 bottom-3 z-50 flex justify-around rounded-2xl border border-cyan-100/[0.14] bg-[#081923]/95 p-1.5 shadow-2xl shadow-black/50 backdrop-blur-2xl lg:hidden"
+        className="fixed inset-x-2 bottom-2 z-50 grid grid-cols-5 gap-1 rounded-2xl border border-cyan-100/[0.14] bg-[#081923]/95 p-1.5 pb-[max(.375rem,env(safe-area-inset-bottom))] shadow-2xl shadow-black/50 backdrop-blur-2xl sm:inset-x-3 sm:bottom-3 lg:hidden"
       >
         {visibleNav
           .filter((item) => !item.disabled && item.label !== 'Conta')
@@ -111,12 +113,12 @@ export function Sidebar() {
                 key={item.label}
                 href={item.href}
                 className={cn(
-                  'flex min-w-14 flex-col items-center gap-1 rounded-xl px-2 py-2 text-[9px] font-semibold uppercase tracking-wider text-white/60',
+                  'flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5 text-center text-[9px] font-semibold uppercase leading-tight tracking-wide text-white/60',
                   active && 'bg-cyan-300/[0.10] text-cyan-200',
                 )}
               >
                 <Icon className="h-4 w-4" />
-                {item.label}
+                <span className="max-w-full truncate">{item.mobileLabel ?? item.label}</span>
               </Link>
             );
           })}

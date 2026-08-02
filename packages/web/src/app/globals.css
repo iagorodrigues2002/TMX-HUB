@@ -113,6 +113,7 @@
 
   html {
     color-scheme: dark;
+    overflow-x: hidden;
   }
 
   body {
@@ -123,6 +124,8 @@
     text-rendering: optimizeLegibility;
     position: relative;
     min-height: 100vh;
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
   }
 
   /* Vignette: top turquoise wash + bottom darken */
@@ -189,6 +192,25 @@
   }
   *::-webkit-scrollbar-thumb:hover {
     background: rgba(34, 211, 238, 0.25);
+  }
+}
+
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  button,
+  [role="button"],
+  a {
+    touch-action: manipulation;
+  }
+
+  [data-radix-scroll-area-viewport],
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
   }
 }
 

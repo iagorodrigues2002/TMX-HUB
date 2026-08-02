@@ -129,7 +129,7 @@ export function OfferList() {
               type="date"
               value={from}
               onChange={(event) => setFrom(event.target.value)}
-              className="h-9 w-[150px]"
+              className="h-11 w-full sm:h-9 sm:w-[150px]"
             />
           </div>
           <div className="space-y-1">
@@ -138,7 +138,7 @@ export function OfferList() {
               type="date"
               value={to}
               onChange={(event) => setTo(event.target.value)}
-              className="h-9 w-[150px]"
+              className="h-11 w-full sm:h-9 sm:w-[150px]"
             />
           </div>
           <div className="ml-auto text-right">
@@ -196,7 +196,7 @@ export function OfferList() {
                     </div>
                     <ArrowRight className="h-4 w-4 text-cyan-300 transition group-hover:translate-x-0.5" />
                   </div>
-                  <dl className="grid grid-cols-3 gap-2">
+                  <dl className="grid gap-2 min-[380px]:grid-cols-3">
                     <div>
                       <dt className="hud-label">Investido</dt>
                       <dd className="mt-1 font-mono text-[12px] text-amber-300">

@@ -100,7 +100,7 @@ export default function FunnelJobPage({ params }: { params: Promise<{ id: string
           )}
 
           {data && (
-            <dl className="grid grid-cols-3 gap-4 text-[13px]">
+            <dl className="grid gap-4 text-[13px] sm:grid-cols-3">
               <div>
                 <dt className="hud-label">Páginas</dt>
                 <dd className="mt-1 font-mono text-white/80">

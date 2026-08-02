@@ -599,10 +599,10 @@ export function TrackingAdvancedCenter({
 
   return (
     <div className="grid min-w-0 gap-5 2xl:grid-cols-[230px_minmax(0,1fr)]">
-      <aside className="h-fit min-w-0 rounded-lg border border-white/[0.08] bg-black/15 p-3 2xl:sticky 2xl:top-20">
+      <aside className="flex h-fit min-w-0 gap-2 overflow-x-auto overscroll-x-contain rounded-lg border border-white/[0.08] bg-black/15 p-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden 2xl:sticky 2xl:top-20 2xl:block 2xl:overflow-visible 2xl:p-3">
         {['Operação', 'Configuração'].map((group) => (
-          <div key={group} className="mb-4 last:mb-0">
-            <p className="px-3 pb-2 font-mono text-[9px] uppercase tracking-[0.22em] text-white/30">
+          <div key={group} className="contents 2xl:mb-4 2xl:block 2xl:last:mb-0">
+            <p className="hidden px-3 pb-2 font-mono text-[9px] uppercase tracking-[0.22em] text-white/30 2xl:block">
               {group}
             </p>
             {sections
@@ -613,7 +613,7 @@ export function TrackingAdvancedCenter({
                   type="button"
                   onClick={() => setSection(id)}
                   className={cn(
-                    'mb-1 flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm text-white/45 transition hover:bg-white/[0.04] hover:text-white/70',
+                    'flex min-h-11 w-auto shrink-0 items-center gap-2 rounded-md px-3 py-2.5 text-left text-xs text-white/45 transition hover:bg-white/[0.04] hover:text-white/70 2xl:mb-1 2xl:w-full 2xl:gap-3 2xl:text-sm',
                     section === id &&
                       'border border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-200 shadow-[0_0_20px_rgba(52,211,153,.08)]',
                   )}
@@ -633,22 +633,22 @@ export function TrackingAdvancedCenter({
                 Dados históricos separados por dia · horário de São Paulo
               </p>
             </div>
-            <div className="flex flex-wrap items-end gap-2">
-              <div className="flex flex-wrap gap-1.5 self-end" aria-label="Datas rápidas">
+            <div className="flex w-full flex-wrap items-end gap-2 lg:w-auto">
+              <div className="flex max-w-full gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Datas rápidas">
                 {datePresets.map((preset) => (
                   <Button
                     key={preset.label}
                     type="button"
                     size="sm"
                     variant={trackingDate === preset.date ? 'default' : 'outline'}
-                    className="h-9"
+                    className="h-10 shrink-0"
                     onClick={() => setTrackingDate(preset.date)}
                   >
                     {preset.label}
                   </Button>
                 ))}
               </div>
-              <label htmlFor="tracking-date" className="space-y-1">
+              <label htmlFor="tracking-date" className="min-w-[150px] flex-1 space-y-1 sm:flex-none">
                 <span className="hud-label block">Personalizado</span>
                 <Input
                   id="tracking-date"
@@ -656,14 +656,14 @@ export function TrackingAdvancedCenter({
                   value={trackingDate}
                   max={saoPauloDate()}
                   onChange={(event) => setTrackingDate(event.target.value || saoPauloDate())}
-                  className="h-9 w-[160px]"
+                  className="h-11 w-full sm:w-[160px]"
                 />
               </label>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-9 gap-2"
+                className="h-11 flex-1 gap-2 sm:flex-none"
                 disabled={isRefreshingTracking}
                 onClick={() => void refreshTracking()}
               >
@@ -675,7 +675,7 @@ export function TrackingAdvancedCenter({
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-9 gap-2"
+                  className="h-11 flex-1 gap-2 sm:flex-none"
                   disabled={reconcileInitiateCheckouts.isPending}
                   onClick={() => reconcileInitiateCheckouts.mutate()}
                 >
