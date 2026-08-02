@@ -770,6 +770,39 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           `;
           attributedVisitorId = identityMatch?.visitor_id ?? null;
         }
+        const [productKind] = event.product.id
+          ? await sql<{ kind: string }[]>`
+              SELECT kind FROM tracking_product_kinds
+              WHERE project_id = ${connection.project_id} AND product_id = ${event.product.id}
+            `
+          : [];
+        const orderKind = productKind?.kind ?? 'unknown';
+        // Upsell checkouts frequently omit src/UTMs. Inherit them from the
+        // closest prior front sale for the same exact email/phone so every
+        // incremental order remains tied to the originating campaign.
+        const [parentFront] =
+          orderKind === 'upsell' || orderKind === 'upsell_2'
+            ? await sql<
+                Array<{ visitor_id: string | null; attribution_source: Record<string, string> }>
+              >`
+                SELECT visitor_id, attribution_source
+                FROM tracking_orders
+                WHERE project_id=${connection.project_id}
+                  AND status='paid' AND order_kind='front'
+                  AND occurred_at <= ${event.occurredAt}
+                  AND occurred_at >= ${event.occurredAt}::timestamptz - interval '30 days'
+                  AND (
+                    (${event.buyer.email ?? null}::text IS NOT NULL
+                      AND lower(buyer->>'email')=lower(${event.buyer.email ?? null}::text))
+                    OR
+                    (${event.buyer.phone ?? null}::text IS NOT NULL
+                      AND regexp_replace(buyer->>'phone','\\D','','g')=
+                          regexp_replace(${event.buyer.phone ?? null}::text,'\\D','','g'))
+                  )
+                ORDER BY occurred_at DESC LIMIT 1
+              `
+            : [];
+        attributedVisitorId ??= parentFront?.visitor_id ?? null;
         const [visitorSource] = attributedVisitorId
           ? await sql<
               Array<{ first_source: Record<string, string>; last_source: Record<string, string> }>
@@ -780,17 +813,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             `
           : [];
         const resolvedAttributionSource = {
+          ...(parentFront?.attribution_source ?? {}),
           ...(visitorSource?.first_source ?? {}),
           ...(visitorSource?.last_source ?? {}),
           ...event.source,
         };
-        const [productKind] = event.product.id
-          ? await sql<{ kind: string }[]>`
-              SELECT kind FROM tracking_product_kinds
-              WHERE project_id = ${connection.project_id} AND product_id = ${event.product.id}
-            `
-          : [];
-        const orderKind = productKind?.kind ?? 'unknown';
         // BRL figures were computed before the transaction (see above) — the
         // rate lookup may make a network call and shouldn't hold a tx open.
         const amountBrlMinor = ingestBrlMinor;
