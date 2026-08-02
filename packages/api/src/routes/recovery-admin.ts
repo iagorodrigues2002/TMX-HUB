@@ -7,7 +7,7 @@ import { NotFoundError, zodToProblem } from '../lib/problem.js';
 import { decryptSecret, encryptSecret } from '../lib/secret-box.js';
 
 const SettingsSchema = z.object({
-  checkout_url: z.string().url().max(4096),
+  checkout_url: z.string().url().max(4096).optional().or(z.literal('')),
   sender_name: z.string().trim().min(2).max(80).default('TMX'),
   quiet_start: z.coerce.number().int().min(0).max(23).default(21),
   quiet_end: z.coerce.number().int().min(0).max(23).default(8),
@@ -26,6 +26,16 @@ const mask = (value: string | null, kind: 'email' | 'phone') => {
   return `***${value.replace(/\D/g, '').slice(-4)}`;
 };
 
+const appendAttribution = (destination: string, source: Record<string, string>) => {
+  const url = new URL(destination);
+  for (const [key, value] of Object.entries(source ?? {})) {
+    if (value && /^(utm_(source|medium|campaign|content|term)|campaign_id|campaign_name|adset_id|adset_name|ad_id|ad_name|placement|site_source_name|fbclid|gclid|src|sck)$/.test(key) && !url.searchParams.has(key)) {
+      url.searchParams.set(key, value);
+    }
+  }
+  return url.toString();
+};
+
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   const projectFor = async (offerId: string) => {
     const [project] = await app.db!<{ id: string }[]>`SELECT id FROM tracking_projects WHERE offer_id=${offerId} AND enabled=true`;
@@ -38,6 +48,14 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!app.db) return reply.code(503).send({ error: 'database_unavailable' });
     const project = await projectFor(req.params.id);
     const [settings] = await app.db`SELECT checkout_url, sender_name, quiet_start, quiet_end, enabled FROM recovery_settings WHERE project_id=${project.id}`;
+    const [sources] = await app.db<Array<{ gateway: string | null; gateway_enabled: boolean; ab_test: string | null; ab_destinations: number; entry_links: number }>>`
+      SELECT
+        (SELECT provider FROM tracking_gateway_connections WHERE project_id=${project.id} AND enabled=true ORDER BY provider LIMIT 1) AS gateway,
+        EXISTS(SELECT 1 FROM vendepay_connections WHERE project_id=${project.id} AND enabled=true) AS gateway_enabled,
+        (SELECT name FROM tracking_ab_tests WHERE project_id=${project.id} AND status='active' AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1) AS ab_test,
+        (SELECT count(*)::int FROM tracking_ab_variants v JOIN tracking_ab_tests t ON t.id=v.test_id WHERE t.project_id=${project.id} AND v.destination_url IS NOT NULL) AS ab_destinations,
+        (SELECT count(*)::int FROM tracking_entry_links WHERE project_id=${project.id} AND enabled=true) AS entry_links
+    `;
     const channels = await app.db<Array<{ id: string; kind: string; enabled: boolean; config: Record<string, unknown>; updated_at: Date }>>`
       SELECT id, kind, enabled, config, updated_at FROM recovery_channels WHERE project_id=${project.id} ORDER BY kind
     `;
@@ -60,7 +78,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       LEFT JOIN tracking_orders recovered ON recovered.id=ro.recovered_order_id
       WHERE ro.project_id=${project.id}
     `;
-    return { settings: settings ?? null, channels: channels.map((c) => ({ ...c, configured: true })), totals: totals[0], opportunities: opportunities.map((o) => ({ ...o, email: mask(o.email as string | null, 'email'), phone: mask(o.phone as string | null, 'phone'), has_email: Boolean(o.email), has_phone: Boolean(o.phone) })) };
+    return { settings: settings ?? null, sources: { ...sources, gateway: sources?.gateway ?? (sources?.gateway_enabled ? 'vendepay' : null), automatic: Boolean(sources?.gateway_enabled && ((sources?.ab_destinations ?? 0) > 0 || (sources?.entry_links ?? 0) > 0)) }, channels: channels.map((c) => ({ ...c, configured: true })), totals: totals[0], opportunities: opportunities.map((o) => ({ ...o, email: mask(o.email as string | null, 'email'), phone: mask(o.phone as string | null, 'phone'), has_email: Boolean(o.email), has_phone: Boolean(o.phone) })) };
   });
 
   app.put<{ Params: { id: string }; Body: unknown }>('/offers/:id/recovery/settings', async (req, reply) => {
@@ -68,7 +86,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!app.db) return reply.code(503).send();
     const parsed = SettingsSchema.safeParse(req.body); if (!parsed.success) throw zodToProblem(parsed.error);
     const project = await projectFor(req.params.id); const s = parsed.data;
-    await app.db`INSERT INTO recovery_settings(project_id,checkout_url,sender_name,quiet_start,quiet_end,enabled) VALUES(${project.id},${s.checkout_url},${s.sender_name},${s.quiet_start},${s.quiet_end},${s.enabled}) ON CONFLICT(project_id) DO UPDATE SET checkout_url=EXCLUDED.checkout_url,sender_name=EXCLUDED.sender_name,quiet_start=EXCLUDED.quiet_start,quiet_end=EXCLUDED.quiet_end,enabled=EXCLUDED.enabled,updated_at=now()`;
+    await app.db`INSERT INTO recovery_settings(project_id,checkout_url,sender_name,quiet_start,quiet_end,enabled) VALUES(${project.id},${s.checkout_url || null},${s.sender_name},${s.quiet_start},${s.quiet_end},${s.enabled}) ON CONFLICT(project_id) DO UPDATE SET checkout_url=EXCLUDED.checkout_url,sender_name=EXCLUDED.sender_name,quiet_start=EXCLUDED.quiet_start,quiet_end=EXCLUDED.quiet_end,enabled=EXCLUDED.enabled,updated_at=now()`;
     return { ok: true };
   });
 
@@ -86,18 +104,32 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!app.db || !env.TRACKING_ENCRYPTION_KEY) return reply.code(503).send();
     const project = await projectFor(req.params.id);
     const [settings] = await app.db<{ checkout_url: string | null }[]>`SELECT checkout_url FROM recovery_settings WHERE project_id=${project.id} AND enabled=true`;
-    if (!settings?.checkout_url) return reply.code(409).send({ error: 'recovery_checkout_url_missing', detail: 'Configure o checkout de recuperação primeiro.' });
-    const candidates = await app.db<Array<{ id: string; visitor_id: string | null; buyer: { name?: string; email?: string; phone?: string }; status: string; attribution_source: Record<string,string> }>>`
-      SELECT id, visitor_id, buyer, status, attribution_source FROM tracking_orders
-      WHERE project_id=${project.id} AND status IN ('abandoned','refused','failed')
-        AND updated_at >= now()-interval '30 days' AND (NULLIF(buyer->>'email','') IS NOT NULL OR NULLIF(buyer->>'phone','') IS NOT NULL)
+    const candidates = await app.db<Array<{ id: string; visitor_id: string | null; buyer: { name?: string; email?: string; phone?: string }; status: string; attribution_source: Record<string,string>; destination_url: string | null }>>`
+      SELECT o.id, o.visitor_id, o.buyer, o.status, o.attribution_source,
+        COALESCE(assigned.destination_url, sourced.destination_url, selected.destination_url, entry.destination_url, ${settings?.checkout_url ?? null}) AS destination_url
+      FROM tracking_orders o
+      LEFT JOIN LATERAL (
+        SELECT v.destination_url FROM tracking_ab_assignments a JOIN tracking_ab_variants v ON v.id=a.variant_id
+        WHERE a.visitor_id=o.visitor_id AND v.destination_url IS NOT NULL ORDER BY a.created_at DESC LIMIT 1
+      ) assigned ON true
+      LEFT JOIN tracking_ab_variants sourced ON sourced.id=COALESCE(o.attribution_source->>'ab_variant_id', o.attribution_source->>'ab_variant')
+      LEFT JOIN LATERAL (
+        SELECT v.destination_url FROM tracking_ab_tests t JOIN tracking_ab_variants v ON v.test_id=t.id
+        WHERE t.project_id=o.project_id AND t.deleted_at IS NULL AND v.destination_url IS NOT NULL
+        ORDER BY (v.id=t.winner_variant_id) DESC, (t.status='active') DESC, t.created_at DESC, v.position LIMIT 1
+      ) selected ON true
+      LEFT JOIN LATERAL (
+        SELECT destination_url FROM tracking_entry_links WHERE project_id=o.project_id AND enabled=true ORDER BY updated_at DESC LIMIT 1
+      ) entry ON true
+      WHERE o.project_id=${project.id} AND o.status IN ('abandoned','refused','failed')
+        AND o.updated_at >= now()-interval '30 days' AND (NULLIF(o.buyer->>'email','') IS NOT NULL OR NULLIF(o.buyer->>'phone','') IS NOT NULL)
     `;
-    let created=0;
-    for (const order of candidates) { const token=randomBytes(24).toString('base64url'); const rows=await app.db`
+    let created=0; let skipped=0;
+    for (const order of candidates) { if (!order.destination_url) { skipped++; continue; } const token=randomBytes(24).toString('base64url'); const destination=appendAttribution(order.destination_url, order.attribution_source); const rows=await app.db`
       INSERT INTO recovery_opportunities(id,project_id,order_id,visitor_id,buyer_name,email,phone,reason,recovery_token_hash,recovery_token_encrypted,destination_url,original_source)
-      VALUES(${ulid()},${project.id},${order.id},${order.visitor_id},${order.buyer.name??null},${order.buyer.email??null},${order.buyer.phone??null},${order.status},${hash(token)},${encryptSecret(token,env.TRACKING_ENCRYPTION_KEY)},${settings.checkout_url},${app.db.json(order.attribution_source as never)})
-      ON CONFLICT(project_id,order_id) DO NOTHING RETURNING id`; if(rows[0]) created++; }
-    return reply.code(202).send({ accepted:true, candidates:candidates.length, created });
+      VALUES(${ulid()},${project.id},${order.id},${order.visitor_id},${order.buyer.name??null},${order.buyer.email??null},${order.buyer.phone??null},${order.status},${hash(token)},${encryptSecret(token,env.TRACKING_ENCRYPTION_KEY)},${destination},${app.db.json(order.attribution_source as never)})
+      ON CONFLICT(project_id,order_id) DO UPDATE SET destination_url=EXCLUDED.destination_url, original_source=EXCLUDED.original_source, updated_at=now() RETURNING (xmax = 0) AS inserted`; if(rows[0]?.inserted) created++; }
+    return reply.code(202).send({ accepted:true, candidates:candidates.length, created, skipped });
   });
 
   app.post<{ Params: { id: string; opportunityId: string }; Body: unknown }>('/offers/:id/recovery/opportunities/:opportunityId/send', async (req, reply) => {
