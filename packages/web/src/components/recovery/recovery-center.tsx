@@ -364,6 +364,9 @@ export function RecoveryCenter() {
               onChange={(e) => setFromEmail(e.target.value)}
               placeholder="TMX <vendas@dominio.com>"
             />
+            <p className="text-[10px] text-white/30">
+              Aceita vendas@dominio.com ou TMX &lt;vendas@dominio.com&gt;.
+            </p>
             <Input
               value={emailSubject}
               onChange={(e) => setEmailSubject(e.target.value)}

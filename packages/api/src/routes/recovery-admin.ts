@@ -13,6 +13,16 @@ const SettingsSchema = z.object({
   quiet_end: z.coerce.number().int().min(0).max(23).default(8),
   enabled: z.boolean().default(true),
 });
+const EmailSenderSchema = z
+  .string()
+  .trim()
+  .min(3)
+  .max(320)
+  .refine((value) => {
+    if (z.string().email().safeParse(value).success) return true;
+    const named = value.match(/^[^<>\r\n]{1,100}\s*<([^<>\r\n]+)>$/);
+    return Boolean(named?.[1] && z.string().email().safeParse(named[1].trim()).success);
+  }, 'Use email@dominio.com ou Nome <email@dominio.com>.');
 const ChannelSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('whatsapp'),
@@ -33,7 +43,7 @@ const ChannelSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('email'),
     enabled: z.boolean().default(true),
-    credentials: z.object({ api_key: z.string().min(10), from_email: z.string().email() }),
+    credentials: z.object({ api_key: z.string().min(10), from_email: EmailSenderSchema }),
     config: z.object({
       subject: z.string().min(3).max(200),
       message: z.string().min(10).max(5000),
