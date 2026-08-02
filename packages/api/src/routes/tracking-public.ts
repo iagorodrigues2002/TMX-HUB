@@ -801,7 +801,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             (id, project_id, provider, external_id, status, amount_minor, currency,
              amount_brl_minor, exchange_rate, converted_at,
              visitor_id, buyer, raw_status, occurred_at, paid_at, payment_method,
-             product, attribution_source, order_kind, cancelled_at)
+             product, attribution_source, order_kind, cancelled_at, refunded_at, chargeback_at)
           VALUES
             (${ulid()}, ${connection.project_id}, 'vendepay', ${event.transactionId},
              ${event.status}, ${event.amountMinor ?? null}, ${event.currency ?? null},
@@ -809,7 +809,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
              ${attributedVisitorId ?? null}, ${sql.json(event.buyer)}, ${event.rawStatus ?? null},
              ${event.occurredAt}, ${event.status === 'paid' ? event.occurredAt : null},
              ${event.paymentMethod ?? null}, ${sql.json(event.product)}, ${sql.json(resolvedAttributionSource)},
-             ${orderKind}, ${event.status === 'cancelled' ? event.occurredAt : null})
+             ${orderKind}, ${event.status === 'cancelled' ? event.occurredAt : null},
+             ${event.status === 'refunded' ? event.occurredAt : null},
+             ${event.status === 'chargeback' ? event.occurredAt : null})
           ON CONFLICT (project_id, provider, external_id) DO UPDATE SET
             status = CASE
               WHEN tracking_orders.status IN ('refunded', 'chargeback') THEN tracking_orders.status
@@ -839,6 +841,16 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
               WHEN EXCLUDED.status = 'cancelled'
                 THEN COALESCE(tracking_orders.cancelled_at, EXCLUDED.cancelled_at, now())
               ELSE tracking_orders.cancelled_at
+            END,
+            refunded_at = CASE
+              WHEN EXCLUDED.status = 'refunded'
+                THEN COALESCE(tracking_orders.refunded_at, EXCLUDED.refunded_at, now())
+              ELSE tracking_orders.refunded_at
+            END,
+            chargeback_at = CASE
+              WHEN EXCLUDED.status = 'chargeback'
+                THEN COALESCE(tracking_orders.chargeback_at, EXCLUDED.chargeback_at, now())
+              ELSE tracking_orders.chargeback_at
             END,
             -- A mapping added after the order first arrived should still "heal" it on the
             -- next webhook (e.g. pending -> paid); never downgrade an already-known kind.

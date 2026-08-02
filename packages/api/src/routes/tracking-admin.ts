@@ -1342,31 +1342,31 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         (SELECT count(*)::int FROM tracking_orders o WHERE o.project_id = p.id
           AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS orders,
         (SELECT count(*)::int FROM tracking_orders o
-          WHERE o.project_id = p.id AND o.status = 'paid'
-            AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS paid_orders,
+          WHERE o.project_id = p.id AND o.paid_at IS NOT NULL
+            AND o.paid_at >= ${from} AND o.paid_at < ${to}) AS paid_orders,
         -- Front vs. upsell is marked explicitly per order (tracking_orders.order_kind),
         -- set from the tracking_product_kinds mapping at webhook time — not inferred
         -- from "repeat buyer within this window", which broke across date boundaries.
         (SELECT count(*)::int FROM tracking_orders o
-          WHERE o.project_id = p.id AND o.status = 'paid' AND o.order_kind = 'front'
-            AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS paid_buyers,
+          WHERE o.project_id = p.id AND o.paid_at IS NOT NULL AND o.order_kind = 'front'
+            AND o.paid_at >= ${from} AND o.paid_at < ${to}) AS paid_buyers,
         (SELECT count(*)::int FROM tracking_orders o
-          WHERE o.project_id = p.id AND o.status = 'paid' AND o.order_kind = 'upsell'
-            AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS upsell_orders,
+          WHERE o.project_id = p.id AND o.paid_at IS NOT NULL AND o.order_kind = 'upsell'
+            AND o.paid_at >= ${from} AND o.paid_at < ${to}) AS upsell_orders,
         (SELECT count(*)::int FROM tracking_orders o
-          WHERE o.project_id = p.id AND o.status = 'paid' AND o.order_kind = 'upsell_2'
-            AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS upsell_2_orders,
+          WHERE o.project_id = p.id AND o.paid_at IS NOT NULL AND o.order_kind = 'upsell_2'
+            AND o.paid_at >= ${from} AND o.paid_at < ${to}) AS upsell_2_orders,
         (SELECT count(*)::int FROM tracking_orders o
-          WHERE o.project_id = p.id AND o.status = 'paid' AND o.order_kind = 'unknown'
-            AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS unmapped_paid_orders,
+          WHERE o.project_id = p.id AND o.paid_at IS NOT NULL AND o.order_kind = 'unknown'
+            AND o.paid_at >= ${from} AND o.paid_at < ${to}) AS unmapped_paid_orders,
         (SELECT count(*)::int FROM tracking_orders o
           WHERE o.project_id = p.id AND NULLIF(trim(o.visitor_id), '') IS NULL
             AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS orphan_orders,
         -- Original currency (mixed): kept for backward compatibility and for
         -- reconciliation reports. The BRL-converted total is what the UI uses.
         (SELECT COALESCE(sum(o.amount_minor), 0)::text FROM tracking_orders o
-          WHERE o.project_id = p.id AND o.status = 'paid'
-            AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS paid_revenue_minor,
+          WHERE o.project_id = p.id AND o.paid_at IS NOT NULL
+            AND o.paid_at >= ${from} AND o.paid_at < ${to}) AS paid_revenue_minor,
         -- BRL total. Uses the persisted amount_brl_minor when the webhook
         -- converted at ingestion; falls back to a read-time conversion from
         -- exchange_rate_cache when the order is older than the conversion
@@ -1384,8 +1384,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           FROM tracking_orders o
           LEFT JOIN exchange_rate_cache rc
             ON rc.base_currency = o.currency AND rc.target_currency = 'BRL'
-          WHERE o.project_id = p.id AND o.status = 'paid'
-            AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS paid_revenue_brl_minor,
+          WHERE o.project_id = p.id AND o.paid_at IS NOT NULL
+            AND o.paid_at >= ${from} AND o.paid_at < ${to}) AS paid_revenue_brl_minor,
         -- USD total for the display toggle. Same logic but reversed: BRL
         -- orders divide by the USDBRL rate, USD orders pass through,
         -- everything else goes BRL then divides.
@@ -1405,24 +1405,24 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             ON rc.base_currency = o.currency AND rc.target_currency = 'BRL'
           LEFT JOIN exchange_rate_cache usd
             ON usd.base_currency = 'USD' AND usd.target_currency = 'BRL'
-          WHERE o.project_id = p.id AND o.status = 'paid'
-            AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS paid_revenue_usd_minor,
+          WHERE o.project_id = p.id AND o.paid_at IS NOT NULL
+            AND o.paid_at >= ${from} AND o.paid_at < ${to}) AS paid_revenue_usd_minor,
         -- Orders that arrived but couldn't be converted at all (rate unknown
         -- and never cached). Zero once the rate service has quoted the
         -- currency once, even if the persisted column stays NULL.
         (SELECT count(*)::int FROM tracking_orders o
           LEFT JOIN exchange_rate_cache rc
             ON rc.base_currency = o.currency AND rc.target_currency = 'BRL'
-          WHERE o.project_id = p.id AND o.status = 'paid'
+          WHERE o.project_id = p.id AND o.paid_at IS NOT NULL
             AND o.amount_minor IS NOT NULL AND o.amount_brl_minor IS NULL
             AND o.currency <> 'BRL' AND rc.rate IS NULL
-            AND o.occurred_at >= ${from} AND o.occurred_at < ${to}) AS unconverted_paid_orders,
+            AND o.paid_at >= ${from} AND o.paid_at < ${to}) AS unconverted_paid_orders,
         -- Refunds/chargebacks are filtered by updated_at (when the status
         -- flipped), not occurred_at (original purchase) — "hoje" here means
         -- money that actually left today, which may have been sold earlier.
         (SELECT count(*)::int FROM tracking_orders o
-          WHERE o.project_id = p.id AND o.status = 'refunded'
-            AND o.updated_at >= ${from} AND o.updated_at < ${to}) AS refunded_orders,
+          WHERE o.project_id = p.id AND o.refunded_at IS NOT NULL
+            AND o.refunded_at >= ${from} AND o.refunded_at < ${to}) AS refunded_orders,
         (SELECT COALESCE(sum(
             CASE
               WHEN o.amount_brl_minor IS NOT NULL THEN o.amount_brl_minor
@@ -1434,11 +1434,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           FROM tracking_orders o
           LEFT JOIN exchange_rate_cache rc
             ON rc.base_currency = o.currency AND rc.target_currency = 'BRL'
-          WHERE o.project_id = p.id AND o.status = 'refunded'
-            AND o.updated_at >= ${from} AND o.updated_at < ${to}) AS refunded_revenue_brl_minor,
+          WHERE o.project_id = p.id AND o.refunded_at IS NOT NULL
+            AND o.refunded_at >= ${from} AND o.refunded_at < ${to}) AS refunded_revenue_brl_minor,
         (SELECT count(*)::int FROM tracking_orders o
-          WHERE o.project_id = p.id AND o.status = 'chargeback'
-            AND o.updated_at >= ${from} AND o.updated_at < ${to}) AS chargeback_orders,
+          WHERE o.project_id = p.id AND o.chargeback_at IS NOT NULL
+            AND o.chargeback_at >= ${from} AND o.chargeback_at < ${to}) AS chargeback_orders,
         (SELECT COALESCE(sum(
             CASE
               WHEN o.amount_brl_minor IS NOT NULL THEN o.amount_brl_minor
@@ -1450,8 +1450,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           FROM tracking_orders o
           LEFT JOIN exchange_rate_cache rc
             ON rc.base_currency = o.currency AND rc.target_currency = 'BRL'
-          WHERE o.project_id = p.id AND o.status = 'chargeback'
-            AND o.updated_at >= ${from} AND o.updated_at < ${to}) AS chargeback_revenue_brl_minor,
+          WHERE o.project_id = p.id AND o.chargeback_at IS NOT NULL
+            AND o.chargeback_at >= ${from} AND o.chargeback_at < ${to}) AS chargeback_revenue_brl_minor,
         -- Data loss rate: webhooks the Vendepay gateway sent us that we could not turn
         -- into an order (quarantined) — i.e. sales that never entered the pipeline at all.
         (SELECT count(*)::int FROM webhook_receipts r
@@ -1638,8 +1638,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     return reply.send({ ...parsed.data, configured: true });
   });
 
-  // Refunds/chargebacks for the day, filtered by updated_at (when the
-  // status flipped) so the list matches the money that actually moved.
+  // Refunds/chargebacks use immutable lifecycle timestamps. A replay may
+  // update the row, but must never make an old refund appear as today's.
   app.get<{ Params: { id: string }; Querystring: PaginationQuery }>(
     '/offers/:id/tracking/refunds',
     async (req, reply) => {
@@ -1669,9 +1669,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           FROM tracking_orders o
           JOIN tracking_projects p ON p.id = o.project_id
           WHERE p.offer_id = ${req.params.id}
-            AND o.status IN ('refunded', 'chargeback')
-            AND o.updated_at >= ${from} AND o.updated_at < ${to}
-          ORDER BY o.updated_at DESC, o.id DESC
+            AND ((o.status = 'refunded' AND o.refunded_at >= ${from} AND o.refunded_at < ${to})
+              OR (o.status = 'chargeback' AND o.chargeback_at >= ${from} AND o.chargeback_at < ${to}))
+          ORDER BY COALESCE(o.refunded_at, o.chargeback_at) DESC, o.id DESC
           LIMIT ${perPage} OFFSET ${offset}
         `,
         app.db<
@@ -1708,8 +1708,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           LEFT JOIN exchange_rate_cache rc
             ON rc.base_currency = o.currency AND rc.target_currency = 'BRL'
           WHERE p.offer_id = ${req.params.id}
-            AND o.status IN ('refunded', 'chargeback')
-            AND o.updated_at >= ${from} AND o.updated_at < ${to}
+            AND ((o.status = 'refunded' AND o.refunded_at >= ${from} AND o.refunded_at < ${to})
+              OR (o.status = 'chargeback' AND o.chargeback_at >= ${from} AND o.chargeback_at < ${to}))
         `,
       ]);
       const total = totals[0]?.total ?? 0;
