@@ -267,8 +267,10 @@ export function TrackingAdvancedCenter({
     onError: (error) => toast.error((error as Error).message),
   });
   const createTest = useMutation({
-    mutationFn: () =>
-      apiClient.createTrackingAbTest(offerId, {
+    mutationFn: async () => {
+      const current = await apiClient.getTrackingConfig(offerId);
+      const setup = current.configured ? null : await apiClient.setupTracking(offerId);
+      await apiClient.createTrackingAbTest(offerId, {
         name: testName,
         kind,
         traffic_a: Number(trafficA),
@@ -284,27 +286,45 @@ export function TrackingAdvancedCenter({
             destination_url: destinationB,
           },
         ],
-      }),
-    onSuccess: () => {
+      });
+      return setup;
+    },
+    onSuccess: (setup) => {
+      if (setup?.vendepay_webhook_url) setVendepayWebhook(setup.vendepay_webhook_url);
       setTestName('');
       setDestinationA('');
       setDestinationB('');
+      void qc.invalidateQueries({ queryKey: ['tracking-config', offerId] });
       void refresh();
-      toast.success('Teste A/B ativado.');
+      toast.success(
+        setup?.vendepay_webhook_url
+          ? 'Teste A/B criado e tracking ativado. O webhook está disponível em Gateways.'
+          : 'Teste A/B ativado.',
+      );
     },
     onError: (error) => toast.error((error as Error).message),
   });
   const createEntryLink = useMutation({
-    mutationFn: () =>
-      apiClient.createTrackingEntryLink(offerId, {
+    mutationFn: async () => {
+      const current = await apiClient.getTrackingConfig(offerId);
+      const setup = current.configured ? null : await apiClient.setupTracking(offerId);
+      await apiClient.createTrackingEntryLink(offerId, {
         name: entryLinkName,
         destination_url: entryDestination,
-      }),
-    onSuccess: () => {
+      });
+      return setup;
+    },
+    onSuccess: (setup) => {
+      if (setup?.vendepay_webhook_url) setVendepayWebhook(setup.vendepay_webhook_url);
       setEntryLinkName('');
       setEntryDestination('');
+      void qc.invalidateQueries({ queryKey: ['tracking-config', offerId] });
       void refresh();
-      toast.success('Link de entrada criado.');
+      toast.success(
+        setup?.vendepay_webhook_url
+          ? 'Link criado e tracking ativado. O webhook está disponível em Gateways.'
+          : 'Link de entrada criado.',
+      );
     },
     onError: (error) => toast.error((error as Error).message),
   });
