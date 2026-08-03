@@ -823,7 +823,16 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         RETURNING v.id
       `;
       if (updated.length === 0) {
-        throw new NotFoundError('O tracking Vendepay ainda não foi configurado para esta oferta.');
+        const [project] = await app.db<{ id: string }[]>`
+          SELECT id FROM tracking_projects WHERE offer_id = ${req.params.id} LIMIT 1
+        `;
+        if (!project) {
+          throw new NotFoundError('O tracking ainda não foi configurado para esta oferta.');
+        }
+        await app.db`
+          INSERT INTO vendepay_connections (id, project_id, token_hash)
+          VALUES (${ulid()}, ${project.id}, ${tokenHash(token)})
+        `;
       }
       return reply.send({
         vendepay_webhook_url: webhookUrl(token),

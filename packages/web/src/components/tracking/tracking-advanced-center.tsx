@@ -660,12 +660,21 @@ export function TrackingAdvancedCenter({
         ))}
       </aside>
       <div className="min-w-0">
-        {!config.isLoading && !config.data?.configured && (
+        {!config.isLoading &&
+          (!config.data?.configured || !config.data?.vendepay?.configured) && (
           <section className="mb-4 rounded-lg border border-cyan-300/25 bg-cyan-300/[0.06] p-5 shadow-[0_0_32px_rgba(34,211,238,.08)]">
-            <p className="hud-label text-cyan-200">Oferta nova · configuração necessária</p>
+            <p className="hud-label text-cyan-200">
+              {config.data?.configured
+                ? 'Conexão Vendepay incompleta · reparo necessário'
+                : 'Oferta nova · configuração necessária'}
+            </p>
             <div className="mt-2 flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
               <div>
-                <h2 className="text-lg font-semibold text-white">Ative o tracking desta oferta</h2>
+                <h2 className="text-lg font-semibold text-white">
+                  {config.data?.configured
+                    ? 'Gere a conexão e o webhook da Vendepay'
+                    : 'Ative o tracking desta oferta'}
+                </h2>
                 <p className="mt-1 max-w-2xl text-sm leading-6 text-white/55">
                   O TMX criará o identificador da oferta, o código de instalação e o webhook exclusivo
                   da Vendepay. Depois disso, Pixels, UTMify e testes A/B ficam disponíveis.
@@ -683,7 +692,7 @@ export function TrackingAdvancedCenter({
               )}
             </div>
           </section>
-        )}
+          )}
         {(['tracker', 'funnel', 'attribution', 'refunds'] as Section[]).includes(section) && (
           <div className="mb-3 flex flex-wrap items-end justify-between gap-3 rounded-lg border border-white/[0.08] bg-black/15 p-3">
             <div>
