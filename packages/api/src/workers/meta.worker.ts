@@ -83,9 +83,10 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
           amount_brl_minor: number | null;
           order_kind: string | null;
           product: { id?: string; name?: string; planId?: string; planName?: string } | null;
-          buyer: { email?: string; phone?: string; country?: string };
+          buyer: { email?: string; phone?: string; country?: string; postalCode?: string };
           identity_email: string | null;
           identity_phone: string | null;
+          identity_postal_code: string | null;
           paid_at: Date | null;
           visitor_id: string | null;
           event_url: string | null;
@@ -126,6 +127,33 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
                    AND NULLIF(te.properties->>'phone', '') IS NOT NULL
                  ORDER BY te.received_at DESC LIMIT 1
                )) AS identity_phone,
+               COALESCE(
+                 NULLIF(direct_event.properties->>'postal_code', ''),
+                 NULLIF(direct_event.properties->>'postalCode', ''),
+                 NULLIF(direct_event.properties->>'postcode', ''),
+                 NULLIF(direct_event.properties->>'zip', ''),
+                 NULLIF(direct_event.properties->>'cep', ''),
+                 (
+                   SELECT COALESCE(
+                     NULLIF(te.properties->>'postal_code', ''),
+                     NULLIF(te.properties->>'postalCode', ''),
+                     NULLIF(te.properties->>'postcode', ''),
+                     NULLIF(te.properties->>'zip', ''),
+                     NULLIF(te.properties->>'cep', '')
+                   )
+                   FROM tracking_events te
+                   WHERE te.project_id = md.project_id
+                     AND te.visitor_id = COALESCE(o.visitor_id, direct_event.visitor_id)
+                     AND COALESCE(
+                       NULLIF(te.properties->>'postal_code', ''),
+                       NULLIF(te.properties->>'postalCode', ''),
+                       NULLIF(te.properties->>'postcode', ''),
+                       NULLIF(te.properties->>'zip', ''),
+                       NULLIF(te.properties->>'cep', '')
+                     ) IS NOT NULL
+                   ORDER BY te.received_at DESC LIMIT 1
+                 )
+               ) AS identity_postal_code,
                COALESCE(o.visitor_id, direct_event.visitor_id) AS visitor_id,
                COALESCE(direct_event.event_url, (
                  SELECT te.event_url FROM tracking_events te
@@ -179,8 +207,13 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
         const email =
           row.buyer.email?.trim().toLowerCase() || row.identity_email?.trim().toLowerCase();
         const phone = (row.buyer.phone || row.identity_phone || '').replace(/\D/g, '');
+        const postalCode = (row.buyer.postalCode || row.identity_postal_code || '')
+          .trim()
+          .toLowerCase()
+          .replace(/[\s-]+/g, '');
         if (email) userData.em = [hash(email)];
         if (phone) userData.ph = [hash(phone)];
+        if (postalCode) userData.zp = [hash(postalCode)];
         if (row.visitor_id) userData.external_id = [hash(row.visitor_id)];
         if (row.source?._fbp) userData.fbp = row.source._fbp;
         if (row.source?._fbc) userData.fbc = row.source._fbc;

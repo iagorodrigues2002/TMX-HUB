@@ -2,6 +2,19 @@ import { describe, expect, it } from 'vitest';
 import { normalizeVendepay } from '../src/integrations/vendepay/normalize.js';
 
 describe('normalizeVendepay', () => {
+  it('captures the buyer postal code from a Vendepay address', () => {
+    const result = normalizeVendepay({
+      transaction_id: 'postal-1',
+      status: 'paid',
+      customer: { address: { cep: '01310-100' } },
+    });
+
+    expect(result.kind).toBe('processable');
+    if (result.kind === 'processable') {
+      expect(result.event.buyer.postalCode).toBe('01310-100');
+    }
+  });
+
   it('normaliza venda aprovada e preserva o src do tracker', () => {
     const result = normalizeVendepay(
       {

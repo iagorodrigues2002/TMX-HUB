@@ -46,7 +46,13 @@ export interface NormalizedVendepayEvent {
   trackingSrc?: string;
   amountMinor?: number;
   currency?: string;
-  buyer: { name?: string; email?: string; phone?: string; country?: string };
+  buyer: {
+    name?: string;
+    email?: string;
+    phone?: string;
+    country?: string;
+    postalCode?: string;
+  };
   paymentMethod?: string;
   product: { id?: string; name?: string; planId?: string; planName?: string };
   source: Record<string, string>;
@@ -272,6 +278,47 @@ export function normalizeVendepay(raw: unknown, receivedAt = new Date()): Vendep
       'checkout.pais',
     ]),
   );
+  const postalCode = textAt(payload, [
+    'buyer.postalCode',
+    'buyer.postal_code',
+    'buyer.zipCode',
+    'buyer.zip_code',
+    'buyer.zip',
+    'buyer.cep',
+    'buyer.address.postalCode',
+    'buyer.address.postal_code',
+    'buyer.address.zipCode',
+    'buyer.address.zip_code',
+    'buyer.address.zip',
+    'buyer.address.cep',
+    'customer.postalCode',
+    'customer.postal_code',
+    'customer.zipCode',
+    'customer.zip_code',
+    'customer.zip',
+    'customer.cep',
+    'customer.address.postalCode',
+    'customer.address.postal_code',
+    'customer.address.zipCode',
+    'customer.address.zip_code',
+    'customer.address.zip',
+    'customer.address.cep',
+    'data.customer.address.postalCode',
+    'data.customer.address.postal_code',
+    'data.customer.address.zipCode',
+    'data.customer.address.zip_code',
+    'data.customer.address.zip',
+    'data.customer.address.cep',
+    'billing_address.postal_code',
+    'billing_address.zip',
+    'billing_address.cep',
+    'address.postal_code',
+    'address.zip',
+    'address.cep',
+    'endereco.cep',
+    'comprador.cep',
+    'checkout.cep',
+  ]);
   const occurredAt = isoDate(
     get(payload, 'paid_at') ??
       get(payload, 'updated_at') ??
@@ -405,6 +452,7 @@ export function normalizeVendepay(raw: unknown, receivedAt = new Date()): Vendep
         ...(email ? { email } : {}),
         ...(phone ? { phone } : {}),
         ...(country ? { country } : {}),
+        ...(postalCode ? { postalCode } : {}),
       },
       ...(paymentMethod ? { paymentMethod } : {}),
       product: {
