@@ -672,15 +672,29 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       LIMIT 1
     `;
     if (existing[0]) {
+      if (!existing[0].connection_id) {
+        const connectionId = ulid();
+        const webhookToken = randomBytes(32).toString('base64url');
+        await app.db`
+          INSERT INTO vendepay_connections (id, project_id, token_hash)
+          VALUES (${connectionId}, ${existing[0].id}, ${tokenHash(webhookToken)})
+        `;
+        return reply.send({
+          already_configured: true,
+          project_id: existing[0].id,
+          public_key: existing[0].public_key,
+          install_code: installCode(existing[0].public_key),
+          vendepay_webhook_url: webhookUrl(webhookToken),
+          warning: 'A conexão Vendepay foi reparada. A URL do webhook é exibida apenas agora.',
+        });
+      }
       return reply.send({
         already_configured: true,
         project_id: existing[0].id,
         public_key: existing[0].public_key,
         install_code: installCode(existing[0].public_key),
         vendepay_webhook_url: null,
-        warning: existing[0].connection_id
-          ? 'O tracking já estava configurado. Gere uma nova URL somente se precisar substituir o webhook na Vendepay.'
-          : 'O projeto já existia, mas a conexão Vendepay precisa ser reparada.',
+        warning: 'O tracking já estava configurado. Gere uma nova URL somente se precisar substituir o webhook na Vendepay.',
       });
     }
     const projectId = ulid();

@@ -321,6 +321,20 @@ export function TrackingAdvancedCenter({
     queryFn: () => apiClient.getTrackingConfig(offerId),
     retry: false,
   });
+  const setupTracking = useMutation({
+    mutationFn: () => apiClient.setupTracking(offerId),
+    onSuccess: (result) => {
+      if (result.vendepay_webhook_url) setVendepayWebhook(result.vendepay_webhook_url);
+      void qc.invalidateQueries({ queryKey: ['tracking-config', offerId] });
+      setSection('gateways');
+      toast.success(
+        result.vendepay_webhook_url
+          ? 'Tracking ativado. Copie agora o webhook da Vendepay.'
+          : 'Tracking desta oferta já está ativo.',
+      );
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
   const utmify = useQuery({
     queryKey: ['tracking-utmify-destination', offerId],
     queryFn: () => apiClient.getTrackingUtmifyDestination(offerId),
@@ -352,23 +366,44 @@ export function TrackingAdvancedCenter({
     onError: (error) => toast.error((error as Error).message),
   });
   const saveUtmify = useMutation({
-    mutationFn: () =>
-      apiClient.saveTrackingUtmifyDestination(offerId, {
+    mutationFn: async () => {
+      const setup = config.data?.configured ? null : await apiClient.setupTracking(offerId);
+      const destination = await apiClient.saveTrackingUtmifyDestination(offerId, {
         name: 'UTMify',
         api_token: utmifyToken,
         endpoint_url: utmifyEndpoint,
-      }),
-    onSuccess: () => {
+      });
+      return { destination, setup };
+    },
+    onSuccess: ({ setup }) => {
+      if (setup?.vendepay_webhook_url) {
+        setVendepayWebhook(setup.vendepay_webhook_url);
+        setSection('gateways');
+      }
       setUtmifyToken('');
+      void qc.invalidateQueries({ queryKey: ['tracking-config', offerId] });
       void qc.invalidateQueries({ queryKey: ['tracking-utmify-destination', offerId] });
-      toast.success('Destino UTMify configurado.');
+      toast.success(
+        setup?.vendepay_webhook_url
+          ? 'Tracking e UTMify configurados. O webhook da Vendepay já foi gerado.'
+          : 'Destino UTMify configurado.',
+      );
     },
     onError: (error) => toast.error((error as Error).message),
   });
   const saveUtmifyPixel = useMutation({
-    mutationFn: () => apiClient.saveTrackingUtmifyPixel(offerId, utmifyPixelId),
-    onSuccess: (result) => {
+    mutationFn: async () => {
+      const setup = config.data?.configured ? null : await apiClient.setupTracking(offerId);
+      const pixel = await apiClient.saveTrackingUtmifyPixel(offerId, utmifyPixelId);
+      return { pixel, setup };
+    },
+    onSuccess: ({ pixel: result, setup }) => {
+      if (setup?.vendepay_webhook_url) {
+        setVendepayWebhook(setup.vendepay_webhook_url);
+        setSection('gateways');
+      }
       setUtmifyPixelId('');
+      void qc.invalidateQueries({ queryKey: ['tracking-config', offerId] });
       void qc.invalidateQueries({ queryKey: ['tracking-utmify-pixel', offerId] });
       toast.success(`Pixel UTMify ${result.pixel_id} salvo. Reconcilie os ICs do dia.`);
     },
@@ -625,6 +660,30 @@ export function TrackingAdvancedCenter({
         ))}
       </aside>
       <div className="min-w-0">
+        {!config.isLoading && !config.data?.configured && (
+          <section className="mb-4 rounded-lg border border-cyan-300/25 bg-cyan-300/[0.06] p-5 shadow-[0_0_32px_rgba(34,211,238,.08)]">
+            <p className="hud-label text-cyan-200">Oferta nova · configuração necessária</p>
+            <div className="mt-2 flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+              <div>
+                <h2 className="text-lg font-semibold text-white">Ative o tracking desta oferta</h2>
+                <p className="mt-1 max-w-2xl text-sm leading-6 text-white/55">
+                  O TMX criará o identificador da oferta, o código de instalação e o webhook exclusivo
+                  da Vendepay. Depois disso, Pixels, UTMify e testes A/B ficam disponíveis.
+                </p>
+              </div>
+              {canManage && (
+                <Button
+                  type="button"
+                  className="h-11 shrink-0"
+                  disabled={setupTracking.isPending}
+                  onClick={() => setupTracking.mutate()}
+                >
+                  {setupTracking.isPending ? 'Criando infraestrutura…' : 'Ativar e gerar webhook'}
+                </Button>
+              )}
+            </div>
+          </section>
+        )}
         {(['tracker', 'funnel', 'attribution', 'refunds'] as Section[]).includes(section) && (
           <div className="mb-3 flex flex-wrap items-end justify-between gap-3 rounded-lg border border-white/[0.08] bg-black/15 p-3">
             <div>
