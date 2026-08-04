@@ -529,6 +529,17 @@ export function TrackingAdvancedCenter({
     },
     onError: (error) => toast.error((error as Error).message),
   });
+  const reconcileUtmifyUpsells = useMutation({
+    mutationFn: () => apiClient.reconcileTrackingUtmifyUpsells(offerId),
+    onSuccess: (result) => {
+      void qc.invalidateQueries({ queryKey: ['tracking-utmify-deliveries', offerId] });
+      void refreshTracking();
+      toast.success(
+        `${result.upsells_repaired} upsell(s) atribuídos · ${result.utmify_queued} atualização(ões) enviadas à UTMify.`,
+      );
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
   const pushcutDestinations = useQuery({
     queryKey: ['tracking-pushcut-destinations', offerId],
     queryFn: () => apiClient.getTrackingPushcutDestinations(offerId),
@@ -1823,14 +1834,24 @@ export function TrackingAdvancedCenter({
                       Mapeamentos salvos
                     </p>
                     {canManage && (productKinds.data?.mapped ?? []).length > 0 && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={recomputeProductKinds.isPending}
-                        onClick={() => recomputeProductKinds.mutate()}
-                      >
-                        Reclassificar pedidos existentes
-                      </Button>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={recomputeProductKinds.isPending}
+                          onClick={() => recomputeProductKinds.mutate()}
+                        >
+                          Reclassificar pedidos existentes
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={reconcileUtmifyUpsells.isPending}
+                          onClick={() => reconcileUtmifyUpsells.mutate()}
+                        >
+                          Corrigir campanhas dos upsells
+                        </Button>
+                      </div>
                     )}
                   </div>
                   {(productKinds.data?.mapped ?? []).map((mapping) => (
