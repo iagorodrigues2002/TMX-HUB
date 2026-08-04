@@ -2,8 +2,8 @@
 
 import { TrackingAdvancedCenter } from '@/components/tracking/tracking-advanced-center';
 import { TrackingBackdrop } from '@/components/tracking/tracking-backdrop';
-import { TrackingHelp } from '@/components/tracking/tracking-help';
 import { TrackingHealthCenter } from '@/components/tracking/tracking-health-center';
+import { TrackingHelp } from '@/components/tracking/tracking-help';
 import { TrackingOverviewDashboard } from '@/components/tracking/tracking-overview-dashboard';
 import { Button } from '@/components/ui/button';
 import { type OfferView, apiClient } from '@/lib/api-client';
@@ -13,10 +13,8 @@ import { cn } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
 import {
   Activity,
-  BookOpenCheck,
   CheckCircle2,
   ChevronDown,
-  LayoutDashboard,
   HeartPulse,
   Loader2,
   RadioTower,
@@ -26,7 +24,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-type WorkspaceTab = 'overview' | 'health' | 'operation' | 'guide';
+type WorkspaceTab = 'monitor' | 'configure' | 'diagnose';
 
 function offerLabel(offer: OfferView) {
   return offer.companyName ? `${offer.name} · ${offer.companyName}` : offer.name;
@@ -35,7 +33,7 @@ function offerLabel(offer: OfferView) {
 export function TrackingWorkspace() {
   const { user } = useAuth();
   const canManage = user?.role === 'admin';
-  const [tab, setTab] = useState<WorkspaceTab>('overview');
+  const [tab, setTab] = useState<WorkspaceTab>('monitor');
   const [selectedOfferId, setSelectedOfferId] = useState('');
   const [displayCurrency, setDisplayCurrency] = useDisplayCurrency();
   const offers = useQuery({
@@ -116,81 +114,83 @@ export function TrackingWorkspace() {
         <Button
           type="button"
           variant="ghost"
-          onClick={() => setTab('health')}
+          onClick={() => setTab('monitor')}
           className={cn(
             'gap-2 text-white/45',
-            tab === 'health' && 'bg-cyan-300/[0.09] text-cyan-200',
+            tab === 'monitor' && 'bg-cyan-300/[0.09] text-cyan-200',
           )}
         >
           <HeartPulse className="h-4 w-4" />
-          Saúde e alertas
+          Acompanhar
         </Button>
         <Button
           type="button"
           variant="ghost"
-          onClick={() => setTab('overview')}
+          onClick={() => setTab('configure')}
           className={cn(
             'gap-2 text-white/45',
-            tab === 'overview' && 'bg-cyan-300/[0.09] text-cyan-200',
+            tab === 'configure' && 'bg-cyan-300/[0.09] text-cyan-200',
           )}
         >
-          <LayoutDashboard className="h-4 w-4" />
-          Visão geral
+          <ShieldCheck className="h-4 w-4" />
+          Configurar
         </Button>
         <Button
           type="button"
           variant="ghost"
-          onClick={() => setTab('operation')}
+          onClick={() => setTab('diagnose')}
           className={cn(
             'gap-2 text-white/45',
-            tab === 'operation' && 'bg-cyan-300/[0.09] text-cyan-200',
+            tab === 'diagnose' && 'bg-cyan-300/[0.09] text-cyan-200',
           )}
         >
-          <Activity className="h-4 w-4" />
-          Operação
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={() => setTab('guide')}
-          className={cn(
-            'gap-2 text-white/45',
-            tab === 'guide' && 'bg-cyan-300/[0.09] text-cyan-200',
-          )}
-        >
-          <BookOpenCheck className="h-4 w-4" />
-          Configuração e testes
+          <HeartPulse className="h-4 w-4" />
+          Diagnosticar
         </Button>
       </div>
 
-      {tab === 'overview' ? (
-        <TrackingOverviewDashboard />
-      ) : tab === 'health' ? (
+      {tab === 'monitor' ? (
+        <div className="space-y-5">
+          <TrackingOverviewDashboard />
+        </div>
+      ) : tab === 'diagnose' ? (
         <div className="space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-3 rounded-xl border border-white/[0.08] bg-white/[0.025] p-4">
-            <div><p className="hud-label">Oferta monitorada</p><p className="mt-1 text-xs text-white/40">Selecione a operação que deseja auditar.</p></div>
+            <div>
+              <p className="hud-label">Oferta monitorada</p>
+              <p className="mt-1 text-xs text-white/40">Selecione a operação que deseja auditar.</p>
+            </div>
             <div className="relative min-w-full sm:min-w-[320px]">
-              <select aria-label="Selecionar oferta para saúde do tracking" value={selectedOfferId} onChange={(event) => setSelectedOfferId(event.target.value)} className="h-11 w-full appearance-none rounded-md border border-white/[0.10] bg-[#06131d] px-4 pr-10 text-sm text-white outline-none transition focus:border-cyan-300/40">
-                {(offers.data ?? []).map((offer) => <option key={offer.id} value={offer.id}>{offerLabel(offer)}</option>)}
+              <select
+                aria-label="Selecionar oferta para saúde do tracking"
+                value={selectedOfferId}
+                onChange={(event) => setSelectedOfferId(event.target.value)}
+                className="h-11 w-full appearance-none rounded-md border border-white/[0.10] bg-[#06131d] px-4 pr-10 text-sm text-white outline-none transition focus:border-cyan-300/40"
+              >
+                {(offers.data ?? []).map((offer) => (
+                  <option key={offer.id} value={offer.id}>
+                    {offerLabel(offer)}
+                  </option>
+                ))}
               </select>
               <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-white/35" />
             </div>
           </div>
-          {selectedOffer ? <TrackingHealthCenter offerId={selectedOffer.id} canManage={Boolean(canManage)} /> : <div className="glass-card p-8 text-center text-sm text-white/40">Nenhuma oferta disponível.</div>}
-        </div>
-      ) : tab === 'guide' ? (
-        <div>
-          <div className="mb-6">
-            <p className="hud-label">Guia completo</p>
-            <h2 className="mt-2 text-2xl font-semibold text-white">
-              Configurar e validar o tracking Vendepay
-            </h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-white/50">
-              Siga o roteiro até a primeira venda atribuída e use o diagnóstico para localizar
-              qualquer etapa que não esteja entregando dados.
-            </p>
-          </div>
-          <TrackingHelp offerId={selectedOfferId} />
+          {selectedOffer ? (
+            <TrackingHealthCenter offerId={selectedOffer.id} canManage={Boolean(canManage)} />
+          ) : (
+            <div className="glass-card p-8 text-center text-sm text-white/40">
+              Nenhuma oferta disponível.
+            </div>
+          )}
+          <details className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+            <summary className="cursor-pointer list-none text-sm font-medium text-cyan-100">
+              Abrir tutoriais e testes da instalação
+            </summary>
+            <div className="mt-5 border-t border-white/[0.07] pt-5">
+              <TrackingHelp offerId={selectedOfferId} />
+            </div>
+          </details>
         </div>
       ) : (
         <div className="space-y-5">

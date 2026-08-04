@@ -19,6 +19,7 @@ import {
   FlaskConical,
   Globe2,
   HelpCircle,
+  Layers3,
   Megaphone,
   Percent,
   RadioTower,
@@ -52,6 +53,9 @@ const vendepaySample = JSON.stringify(
   null,
   2,
 );
+
+const META_URL_PARAMETERS =
+  'utm_source={{site_source_name}}&utm_medium=paid_social&utm_campaign={{campaign.name}}&utm_content={{ad.name}}&utm_term={{adset.name}}&campaign_id={{campaign.id}}&adset_id={{adset.id}}&ad_id={{ad.id}}&placement={{placement}}&site_source_name={{site_source_name}}';
 
 const trackingDomainPreview = (value: string) => {
   const hostname = value
@@ -120,6 +124,40 @@ const sections: Array<{ id: Section; label: string; icon: LucideIcon; group: str
   { id: 'pushcut', label: 'Notificações Pushcut', icon: BellRing, group: 'Configuração' },
   { id: 'fees', label: 'Taxas e líquido', icon: Percent, group: 'Configuração' },
   { id: 'help', label: 'Ajuda e testes', icon: HelpCircle, group: 'Configuração' },
+];
+
+type TrackingArea =
+  | 'results'
+  | 'capture'
+  | 'meta'
+  | 'integrations'
+  | 'finance'
+  | 'automations'
+  | 'diagnostic';
+
+const trackingAreas: Array<{
+  id: TrackingArea;
+  label: string;
+  icon: LucideIcon;
+  sections: Section[];
+}> = [
+  {
+    id: 'results',
+    label: 'Resultados',
+    icon: BarChart3,
+    sections: ['tracker', 'funnel', 'attribution'],
+  },
+  { id: 'capture', label: 'Captura e links', icon: Layers3, sections: ['code', 'domains', 'ab'] },
+  { id: 'meta', label: 'Meta', icon: Facebook, sections: ['pixels', 'meta'] },
+  {
+    id: 'integrations',
+    label: 'Integrações',
+    icon: Cable,
+    sections: ['gateways', 'utmify', 'vturb'],
+  },
+  { id: 'finance', label: 'Financeiro', icon: Percent, sections: ['refunds', 'fees'] },
+  { id: 'automations', label: 'Automações', icon: BellRing, sections: ['pushcut'] },
+  { id: 'diagnostic', label: 'Diagnóstico', icon: HelpCircle, sections: ['help'] },
 ];
 
 export function TrackingAdvancedCenter({
@@ -363,6 +401,12 @@ export function TrackingAdvancedCenter({
   const utmifyPixel = useQuery({
     queryKey: ['tracking-utmify-pixel', offerId],
     queryFn: () => apiClient.getTrackingUtmifyPixel(offerId),
+    retry: false,
+  });
+  const metaPixels = useQuery({
+    queryKey: ['tracking-meta-pixels', offerId],
+    queryFn: () => apiClient.listMetaPixels(offerId),
+    enabled: Boolean(config.data?.configured),
     retry: false,
   });
   const utmifyWebEvents = useQuery({
@@ -651,1592 +695,1730 @@ export function TrackingAdvancedCenter({
     await navigator.clipboard.writeText(value);
     toast.success(`${label} copiado.`);
   };
+  const copyInstallKit = async () => {
+    const entryLinks = (advanced.data?.entry_links ?? [])
+      .map((link) => `- ${link.name}: ${link.tracking_url}`)
+      .join('\n');
+    const kit = [
+      'TMX · KIT DE INSTALAÇÃO',
+      `Oferta: ${offerId}`,
+      '',
+      '1. SCRIPT (instale antes de </head> em todas as páginas)',
+      config.data?.project?.install_code ?? 'Ative o tracking para gerar o script.',
+      '',
+      '2. WEBHOOK VENDEPAY',
+      vendepayWebhook || 'Abra Integrações → Vendepay e gere a URL secreta.',
+      '',
+      '3. PARÂMETROS DA URL · META ADS',
+      META_URL_PARAMETERS,
+      '',
+      '4. LINKS TMX',
+      entryLinks || 'Nenhum link de entrada criado.',
+    ].join('\n');
+    await navigator.clipboard.writeText(kit);
+    toast.success('Kit de instalação copiado.');
+  };
+
+  const activeArea =
+    trackingAreas.find((area) => area.sections.includes(section)) ?? trackingAreas[0]!;
+  const setupSteps = [
+    {
+      label: 'Ativar oferta',
+      detail: 'Identificador e infraestrutura',
+      ready: Boolean(config.data?.configured),
+      target: 'code' as Section,
+    },
+    {
+      label: 'Instalar captura',
+      detail: 'Script, domínio ou link TMX',
+      ready: Boolean(config.data?.project?.install_code),
+      target: 'code' as Section,
+    },
+    {
+      label: 'Conectar Vendepay',
+      detail: 'Webhook exclusivo da oferta',
+      ready: Boolean(config.data?.vendepay?.configured),
+      target: 'gateways' as Section,
+    },
+    {
+      label: 'Conectar destinos',
+      detail: 'Meta e UTMify',
+      ready: Boolean(metaPixels.data?.pixels?.length && utmify.data?.configured),
+      target: metaPixels.data?.pixels?.length ? ('utmify' as Section) : ('pixels' as Section),
+    },
+    {
+      label: 'Validar jornada',
+      detail: 'PageView, IC e Purchase',
+      ready: Boolean(metaDeliveries.data?.deliveries?.some((item) => item.state === 'delivered')),
+      target: 'help' as Section,
+    },
+  ];
+  const setupReady = setupSteps.filter((step) => step.ready).length;
 
   return (
-    <div className="grid min-w-0 gap-5 2xl:grid-cols-[230px_minmax(0,1fr)]">
-      <aside className="flex h-fit min-w-0 gap-2 overflow-x-auto overscroll-x-contain rounded-lg border border-white/[0.08] bg-black/15 p-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden 2xl:sticky 2xl:top-20 2xl:block 2xl:overflow-visible 2xl:p-3">
-        {['Operação', 'Configuração'].map((group) => (
-          <div key={group} className="contents 2xl:mb-4 2xl:block 2xl:last:mb-0">
-            <p className="hidden px-3 pb-2 font-mono text-[9px] uppercase tracking-[0.22em] text-white/30 2xl:block">
-              {group}
+    <div className="space-y-5">
+      <section className="rounded-xl border border-cyan-300/15 bg-gradient-to-br from-cyan-300/[0.06] to-transparent p-4 md:p-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="hud-label">Configuração guiada</p>
+            <h2 className="mt-2 text-lg font-semibold text-white">Oferta pronta em cinco etapas</h2>
+            <p className="mt-1 text-xs text-white/45">
+              {setupReady} de {setupSteps.length} etapas concluídas
             </p>
-            {sections
-              .filter((item) => item.group === group)
-              .map(({ id, label, icon: Icon }) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setSection(id)}
-                  className={cn(
-                    'flex min-h-11 w-auto shrink-0 items-center gap-2 rounded-md px-3 py-2.5 text-left text-xs text-white/45 transition hover:bg-white/[0.04] hover:text-white/70 2xl:mb-1 2xl:w-full 2xl:gap-3 2xl:text-sm',
-                    section === id &&
-                      'border border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-200 shadow-[0_0_20px_rgba(52,211,153,.08)]',
-                  )}
-                >
-                  <Icon className="h-4 w-4" /> {label}
-                </button>
-              ))}
           </div>
-        ))}
-      </aside>
-      <div className="min-w-0">
-        {!config.isLoading &&
-          (!config.data?.configured || !config.data?.vendepay?.configured) && (
-          <section className="mb-4 rounded-lg border border-cyan-300/25 bg-cyan-300/[0.06] p-5 shadow-[0_0_32px_rgba(34,211,238,.08)]">
-            <p className="hud-label text-cyan-200">
-              {config.data?.configured
-                ? 'Conexão Vendepay incompleta · reparo necessário'
-                : 'Oferta nova · configuração necessária'}
-            </p>
-            <div className="mt-2 flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
-              <div>
-                <h2 className="text-lg font-semibold text-white">
-                  {config.data?.configured
-                    ? 'Gere a conexão e o webhook da Vendepay'
-                    : 'Ative o tracking desta oferta'}
-                </h2>
-                <p className="mt-1 max-w-2xl text-sm leading-6 text-white/55">
-                  O TMX criará o identificador da oferta, o código de instalação e o webhook exclusivo
-                  da Vendepay. Depois disso, Pixels, UTMify e testes A/B ficam disponíveis.
-                </p>
-              </div>
-              {canManage && (
-                <Button
-                  type="button"
-                  className="h-11 shrink-0"
-                  disabled={setupTracking.isPending}
-                  onClick={() => setupTracking.mutate()}
-                >
-                  {setupTracking.isPending ? 'Criando infraestrutura…' : 'Ativar e gerar webhook'}
-                </Button>
+          <div className="flex w-full items-center gap-3 sm:w-auto">
+            <div className="h-1.5 min-w-32 flex-1 overflow-hidden rounded-full bg-white/[0.07] sm:w-52">
+              <div
+                className="h-full rounded-full bg-emerald-300 transition-all"
+                style={{ width: `${(setupReady / setupSteps.length) * 100}%` }}
+              />
+            </div>
+            {config.data?.configured && (
+              <Button type="button" size="sm" variant="outline" onClick={copyInstallKit}>
+                <Copy className="mr-2 h-3.5 w-3.5" /> Copiar kit
+              </Button>
+            )}
+          </div>
+        </div>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+          {setupSteps.map((step, index) => (
+            <button
+              key={step.label}
+              type="button"
+              onClick={() => setSection(step.target)}
+              className={cn(
+                'rounded-lg border p-3 text-left transition hover:bg-white/[0.04]',
+                step.ready
+                  ? 'border-emerald-300/15 bg-emerald-300/[0.04]'
+                  : 'border-white/[0.08] bg-black/10',
               )}
-            </div>
-          </section>
-          )}
-        {(['tracker', 'funnel', 'attribution', 'refunds'] as Section[]).includes(section) && (
-          <div className="mb-3 flex flex-wrap items-end justify-between gap-3 rounded-lg border border-white/[0.08] bg-black/15 p-3">
-            <div>
-              <p className="hud-label">Período do trackeamento</p>
-              <p className="mt-1 text-xs text-white/40">
-                Dados históricos separados por dia · horário de São Paulo
-              </p>
-            </div>
-            <div className="flex w-full flex-wrap items-end gap-2 lg:w-auto">
-              <div className="flex max-w-full gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Datas rápidas">
-                {datePresets.map((preset) => (
+            >
+              <span
+                className={cn(
+                  'font-mono text-[10px]',
+                  step.ready ? 'text-emerald-300' : 'text-amber-200',
+                )}
+              >
+                {step.ready ? '✓ CONCLUÍDO' : `0${index + 1} PENDENTE`}
+              </span>
+              <p className="mt-2 text-sm font-medium text-white/80">{step.label}</p>
+              <p className="mt-1 text-[11px] leading-4 text-white/40">{step.detail}</p>
+            </button>
+          ))}
+        </div>
+      </section>
+      <div className="grid min-w-0 gap-5 2xl:grid-cols-[210px_minmax(0,1fr)]">
+        <aside className="flex h-fit min-w-0 gap-2 overflow-x-auto overscroll-x-contain rounded-lg border border-white/[0.08] bg-black/15 p-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden 2xl:sticky 2xl:top-20 2xl:block 2xl:overflow-visible 2xl:p-3">
+          {trackingAreas.map(({ id, label, icon: Icon, sections: areaSections }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setSection(areaSections[0]!)}
+              className={cn(
+                'flex min-h-11 w-auto shrink-0 items-center gap-2 rounded-md px-3 py-2.5 text-left text-xs text-white/45 transition hover:bg-white/[0.04] hover:text-white/70 2xl:mb-1 2xl:w-full 2xl:gap-3 2xl:text-sm',
+                activeArea.id === id &&
+                  'border border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-200 shadow-[0_0_20px_rgba(52,211,153,.08)]',
+              )}
+            >
+              <Icon className="h-4 w-4" /> {label}
+            </button>
+          ))}
+        </aside>
+        <div className="min-w-0">
+          {activeArea.sections.length > 1 && (
+            <div className="mb-3 flex gap-2 overflow-x-auto rounded-lg border border-white/[0.08] bg-black/15 p-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {activeArea.sections.map((id) => {
+                const item = sections.find((entry) => entry.id === id);
+                if (!item) return null;
+                return (
                   <Button
-                    key={preset.label}
+                    key={id}
                     type="button"
                     size="sm"
-                    variant={trackingDate === preset.date ? 'default' : 'outline'}
-                    className="h-10 shrink-0"
-                    onClick={() => setTrackingDate(preset.date)}
+                    variant={section === id ? 'default' : 'ghost'}
+                    className="shrink-0"
+                    onClick={() => setSection(id)}
                   >
-                    {preset.label}
+                    {item.label}
                   </Button>
-                ))}
+                );
+              })}
+            </div>
+          )}
+          {!config.isLoading &&
+            (!config.data?.configured || !config.data?.vendepay?.configured) && (
+              <section className="mb-4 rounded-lg border border-cyan-300/25 bg-cyan-300/[0.06] p-5 shadow-[0_0_32px_rgba(34,211,238,.08)]">
+                <p className="hud-label text-cyan-200">
+                  {config.data?.configured
+                    ? 'Conexão Vendepay incompleta · reparo necessário'
+                    : 'Oferta nova · configuração necessária'}
+                </p>
+                <div className="mt-2 flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+                  <div>
+                    <h2 className="text-lg font-semibold text-white">
+                      {config.data?.configured
+                        ? 'Gere a conexão e o webhook da Vendepay'
+                        : 'Ative o tracking desta oferta'}
+                    </h2>
+                    <p className="mt-1 max-w-2xl text-sm leading-6 text-white/55">
+                      O TMX criará o identificador da oferta, o código de instalação e o webhook
+                      exclusivo da Vendepay. Depois disso, Pixels, UTMify e testes A/B ficam
+                      disponíveis.
+                    </p>
+                  </div>
+                  {canManage && (
+                    <Button
+                      type="button"
+                      className="h-11 shrink-0"
+                      disabled={setupTracking.isPending}
+                      onClick={() => setupTracking.mutate()}
+                    >
+                      {setupTracking.isPending
+                        ? 'Criando infraestrutura…'
+                        : 'Ativar e gerar webhook'}
+                    </Button>
+                  )}
+                </div>
+              </section>
+            )}
+          {(['tracker', 'funnel', 'attribution', 'refunds'] as Section[]).includes(section) && (
+            <div className="mb-3 flex flex-wrap items-end justify-between gap-3 rounded-lg border border-white/[0.08] bg-black/15 p-3">
+              <div>
+                <p className="hud-label">Período do trackeamento</p>
+                <p className="mt-1 text-xs text-white/40">
+                  Dados históricos separados por dia · horário de São Paulo
+                </p>
               </div>
-              <label htmlFor="tracking-date" className="min-w-[150px] flex-1 space-y-1 sm:flex-none">
-                <span className="hud-label block">Personalizado</span>
-                <Input
-                  id="tracking-date"
-                  type="date"
-                  value={trackingDate}
-                  max={saoPauloDate()}
-                  onChange={(event) => setTrackingDate(event.target.value || saoPauloDate())}
-                  className="h-11 w-full sm:w-[160px]"
-                />
-              </label>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-11 flex-1 gap-2 sm:flex-none"
-                disabled={isRefreshingTracking}
-                onClick={() => void refreshTracking()}
-              >
-                <RefreshCw className={cn('h-3.5 w-3.5', isRefreshingTracking && 'animate-spin')} />
-                Atualizar
-              </Button>
-              {canManage && (
+              <div className="flex w-full flex-wrap items-end gap-2 lg:w-auto">
+                <div
+                  className="flex max-w-full gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                  aria-label="Datas rápidas"
+                >
+                  {datePresets.map((preset) => (
+                    <Button
+                      key={preset.label}
+                      type="button"
+                      size="sm"
+                      variant={trackingDate === preset.date ? 'default' : 'outline'}
+                      className="h-10 shrink-0"
+                      onClick={() => setTrackingDate(preset.date)}
+                    >
+                      {preset.label}
+                    </Button>
+                  ))}
+                </div>
+                <label
+                  htmlFor="tracking-date"
+                  className="min-w-[150px] flex-1 space-y-1 sm:flex-none"
+                >
+                  <span className="hud-label block">Personalizado</span>
+                  <Input
+                    id="tracking-date"
+                    type="date"
+                    value={trackingDate}
+                    max={saoPauloDate()}
+                    onChange={(event) => setTrackingDate(event.target.value || saoPauloDate())}
+                    className="h-11 w-full sm:w-[160px]"
+                  />
+                </label>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   className="h-11 flex-1 gap-2 sm:flex-none"
-                  disabled={reconcileInitiateCheckouts.isPending}
-                  onClick={() => reconcileInitiateCheckouts.mutate()}
+                  disabled={isRefreshingTracking}
+                  onClick={() => void refreshTracking()}
                 >
-                  <Send className="h-3.5 w-3.5" />
-                  Reconciliar ICs
-                </Button>
-              )}
-            </div>
-          </div>
-        )}
-        {section === 'tracker' && (
-          <TrackingLiveConsole offerId={offerId} mode="tracker" date={trackingDate} />
-        )}
-        {section === 'funnel' && (
-          <TrackingLiveConsole offerId={offerId} mode="funnel" date={trackingDate} />
-        )}
-        {section === 'attribution' && (
-          <TrackingLiveConsole offerId={offerId} mode="attribution" date={trackingDate} />
-        )}
-        {section === 'refunds' && (
-          <Module
-            title="Reembolsos e chargeback"
-            description="Pedidos com status reembolsado ou chargeback no dia selecionado, pela data em que o status mudou — não pela data da compra original."
-          >
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-lg border border-amber-300/15 bg-amber-300/[0.04] p-4">
-                <p className="hud-label text-amber-200/80">Reembolsos</p>
-                <p className="mono-num mt-2 text-2xl text-white">
-                  {formatMoney(refunds.data?.totals.refunded_revenue_brl_minor, 'BRL')}
-                </p>
-                <p className="mt-1 text-xs text-white/45">
-                  {refunds.data?.totals.refunded_orders ?? 0} pedido(s)
-                </p>
-              </div>
-              <div className="rounded-lg border border-red-300/15 bg-red-300/[0.04] p-4">
-                <p className="hud-label text-red-200/80">Chargeback</p>
-                <p className="mono-num mt-2 text-2xl text-white">
-                  {formatMoney(refunds.data?.totals.chargeback_revenue_brl_minor, 'BRL')}
-                </p>
-                <p className="mt-1 text-xs text-white/45">
-                  {refunds.data?.totals.chargeback_orders ?? 0} pedido(s)
-                </p>
-              </div>
-            </div>
-            <div className="mt-6 space-y-2">
-              {(refunds.data?.items ?? []).map((item) => (
-                <div
-                  key={item.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded border border-white/[0.07] p-3 text-xs"
-                >
-                  <div>
-                    <p className="font-mono text-white/70">{item.external_id}</p>
-                    <p className="mt-1 text-white/40">
-                      {item.buyer?.name ?? item.buyer?.email ?? 'comprador não identificado'} ·{' '}
-                      {item.order_kind} ·{' '}
-                      {new Date(item.updated_at).toLocaleString('pt-BR', {
-                        timeZone: 'America/Sao_Paulo',
-                      })}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span
-                      className={item.status === 'chargeback' ? 'text-red-300' : 'text-amber-300'}
-                    >
-                      {item.status === 'chargeback' ? 'chargeback' : 'reembolsado'}
-                    </span>
-                    <span className="mono-num text-white/80">
-                      {formatMoney(item.amount_brl_minor ?? undefined, 'BRL')}
-                    </span>
-                  </div>
-                </div>
-              ))}
-              {!refunds.data?.items?.length && (
-                <p className="rounded border border-dashed border-white/[0.08] p-4 text-sm text-white/35">
-                  Nenhum reembolso ou chargeback neste dia.
-                </p>
-              )}
-            </div>
-          </Module>
-        )}
-        {(section === 'pixels' || section === 'code') && (
-          <TrackingPanel offerId={offerId} canManage={canManage} />
-        )}
-        {section === 'help' && <TrackingHelp />}
-        {section === 'domains' && (
-          <Module
-            title="Domínios"
-            description="Cadastre os domínios que recebem o código. Subdomínios passam a ser identificados pelos eventos."
-          >
-            {canManage && (
-              <div className="grid gap-2 md:grid-cols-[190px_minmax(0,1fr)_auto]">
-                <select
-                  aria-label="Tipo de domínio"
-                  value={domainKind}
-                  onChange={(event) => setDomainKind(event.target.value as typeof domainKind)}
-                  className="h-11 rounded-lg border border-cyan-100/[0.14] bg-[#091a24] px-3 text-sm text-white"
-                >
-                  <option value="source">Domínio do funil</option>
-                  <option value="tracking">Tracking first-party</option>
-                </select>
-                <Input
-                  value={domain}
-                  onChange={(e) => setDomain(e.target.value)}
-                  placeholder={
-                    domainKind === 'tracking' ? 'suaempresa.com' : 'checkout.suaoferta.com'
-                  }
-                />
-                <Button
-                  disabled={!domain.trim() || addDomain.isPending}
-                  onClick={() => addDomain.mutate()}
-                >
-                  Adicionar
-                </Button>
-              </div>
-            )}
-            {domainKind === 'tracking' && (
-              <div className="mt-3 rounded-xl border border-cyan-300/15 bg-cyan-300/[0.04] p-4 text-xs leading-5 text-white/65">
-                <div className="mb-3 rounded-lg border border-emerald-300/15 bg-emerald-300/[0.05] px-3 py-2">
-                  <span className="text-white/45">Domínio que será criado: </span>
-                  <code className="font-medium text-emerald-200">
-                    {trackingDomainPreview(domain) ?? 'tmx.suaempresa.com'}
-                  </code>
-                </div>
-                <p className="font-medium text-cyan-100">Configuração no Cloudflare</p>
-                <ol className="mt-2 space-y-1.5">
-                  <li>1. Abra o domínio no Cloudflare e entre em DNS → Registros.</li>
-                  <li>2. Adicione cada registro exibido abaixo usando os botões de copiar.</li>
-                  <li>
-                    3. No CNAME, deixe <strong className="text-white">Proxy desativado</strong>{' '}
-                    (nuvem cinza / Somente DNS) e TTL em Automático.
-                  </li>
-                  <li>
-                    4. No TXT, use exatamente o Nome e o Conteúdo mostrados, com TTL Automático.
-                  </li>
-                  <li>
-                    5. Salve, aguarde a propagação e clique em{' '}
-                    <strong className="text-white">Verificar</strong>.
-                  </li>
-                </ol>
-                <p className="mt-2 text-amber-100/70">
-                  O TMX sempre usará o subdomínio tmx, como tmx.suaempresa.com. Não crie A/AAAA para
-                  ele e não altere o DNS da landing page ou do checkout.
-                </p>
-              </div>
-            )}
-            <div className="mt-4 space-y-2">
-              {advanced.data?.domains?.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/[0.07] p-3 text-sm"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-white/80">{item.hostname}</p>
-                    <p className="mt-1 text-xs text-white/45">
-                      {item.status === 'live'
-                        ? 'O TMX recebeu eventos deste domínio.'
-                        : item.last_error || 'Instale o script e abra a página para confirmar.'}
-                    </p>
-                    {item.kind === 'tracking' && item.dns_target && (
-                      <div className="mt-3 space-y-2">
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="text-[10px] uppercase tracking-wider text-white/35">
-                            Registros para criar
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const records = item.dns_records?.length
-                                ? item.dns_records
-                                : [{ hostlabel: item.hostname, requiredValue: item.dns_target! }];
-                              void copyDnsValue(
-                                records
-                                  .map((record) => {
-                                    const type = record.requiredValue.includes('verify')
-                                      ? 'TXT'
-                                      : 'CNAME';
-                                    return `${type}\t${record.hostlabel}\t${record.requiredValue}`;
-                                  })
-                                  .join('\n'),
-                                'Configuração completa',
-                              );
-                            }}
-                            className="flex items-center gap-1.5 rounded px-2 py-1 text-[10px] text-cyan-200/65 transition hover:bg-white/[0.05] hover:text-cyan-200"
-                          >
-                            <Copy className="h-3.5 w-3.5" /> Copiar tudo
-                          </button>
-                        </div>
-                        {(item.dns_records?.length
-                          ? item.dns_records
-                          : [{ hostlabel: item.hostname, requiredValue: item.dns_target }]
-                        ).map((record) => {
-                          const type = record.requiredValue.includes('verify') ? 'TXT' : 'CNAME';
-                          return (
-                            <div
-                              key={`${record.hostlabel}-${record.requiredValue}`}
-                              className="rounded-lg border border-white/[0.07] bg-black/15 p-3"
-                            >
-                              <div className="grid gap-2 lg:grid-cols-[90px_minmax(0,1fr)_minmax(0,1.4fr)]">
-                                {[
-                                  { label: 'Tipo', value: type },
-                                  { label: 'Nome', value: record.hostlabel },
-                                  {
-                                    label: type === 'TXT' ? 'Conteúdo' : 'Destino',
-                                    value: record.requiredValue,
-                                  },
-                                ].map((field) => (
-                                  <div key={field.label} className="min-w-0">
-                                    <p className="font-mono text-[9px] uppercase tracking-wider text-white/35">
-                                      {field.label}
-                                    </p>
-                                    <div className="mt-1 flex items-center gap-1">
-                                      <code className="min-w-0 flex-1 break-all font-mono text-[11px] text-cyan-100/75">
-                                        {field.value}
-                                      </code>
-                                      <button
-                                        type="button"
-                                        aria-label={`Copiar ${field.label}`}
-                                        onClick={() => copyDnsValue(field.value, field.label)}
-                                        className="rounded p-1.5 text-white/35 transition hover:bg-white/[0.06] hover:text-cyan-200"
-                                      >
-                                        <Copy className="h-3.5 w-3.5" />
-                                      </button>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                              {type === 'CNAME' && (
-                                <p className="mt-2 text-[10px] text-amber-100/60">
-                                  Cloudflare: Proxy desativado (Somente DNS) · TTL Automático
-                                </p>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={item.status === 'live' ? 'text-emerald-300' : 'text-amber-300'}
-                    >
-                      {item.status === 'live'
-                        ? 'ao vivo'
-                        : item.status === 'dns_verified'
-                          ? 'DNS confirmado'
-                          : item.kind === 'tracking'
-                            ? 'aguardando DNS'
-                            : 'aguardando evento'}
-                    </span>
-                    {canManage && (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={verifyDomain.isPending}
-                          onClick={() => verifyDomain.mutate(item.id)}
-                        >
-                          Verificar
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          disabled={removeDomain.isPending}
-                          onClick={() => {
-                            if (
-                              window.confirm(
-                                `Remover ${item.hostname} desta configuração de tracking?`,
-                              )
-                            )
-                              removeDomain.mutate(item.id);
-                          }}
-                        >
-                          Remover
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {!advanced.data?.domains?.length && (
-                <p className="rounded-xl border border-dashed border-white/[0.1] p-4 text-sm text-white/50">
-                  Nenhum domínio cadastrado. Adicione o domínio sem protocolo ou caminho, por
-                  exemplo <code className="text-cyan-200">checkout.suaempresa.com</code>.
-                </p>
-              )}
-            </div>
-          </Module>
-        )}
-        {section === 'gateways' && (
-          <Module
-            title="Gateways"
-            description="A Vendepay usa o parâmetro src. Conexões podem ser pausadas e o token secreto pode ser rotacionado."
-          >
-            <div className="space-y-2">
-              {(
-                advanced.data?.gateways ?? [
-                  { provider: 'vendepay', propagation_param: 'src', enabled: true },
-                ]
-              ).map((gateway, index) => (
-                <div
-                  key={`${gateway.provider}-${index}`}
-                  className="flex items-center justify-between rounded border border-white/[0.07] p-4"
-                >
-                  <div>
-                    <p className="capitalize text-white/75">{gateway.provider}</p>
-                    <p className="mt-1 font-mono text-xs text-cyan-200/60">
-                      atribuição: {gateway.propagation_param}
-                    </p>
-                  </div>
-                  <span className="text-xs text-emerald-300">
-                    {gateway.enabled ? 'ativo' : 'pausado'}
-                  </span>
-                </div>
-              ))}
-            </div>
-            {canManage && config.data?.configured && (
-              <div className="mt-5 rounded-md border border-amber-300/15 bg-amber-300/[0.04] p-4">
-                <p className="text-sm font-medium text-amber-100">URL secreta da Vendepay</p>
-                <p className="mt-1 text-xs leading-5 text-white/45">
-                  Por segurança, o token só aparece ao gerar a URL. Gerar novamente desativa o
-                  webhook anterior.
-                </p>
-                <Button
-                  className="mt-3"
-                  variant="outline"
-                  disabled={rotateVendepay.isPending}
-                  onClick={() => rotateVendepay.mutate()}
-                >
-                  {rotateVendepay.isPending ? 'Gerando…' : 'Gerar URL real do webhook'}
-                </Button>
-                {vendepayWebhook && (
-                  <div className="mt-3 flex gap-2">
-                    <code className="min-w-0 flex-1 overflow-x-auto rounded bg-black/25 p-3 text-xs text-cyan-100">
-                      {vendepayWebhook}
-                    </code>
-                    <Button onClick={copyVendepayWebhook}>Copiar</Button>
-                  </div>
-                )}
-              </div>
-            )}
-            {canManage && config.data?.configured && (
-              <div className="mt-5 rounded-md border border-cyan-300/15 bg-cyan-300/[0.03] p-4">
-                <p className="text-sm font-medium text-cyan-100">
-                  Secret de assinatura da Vendepay
-                </p>
-                <p className="mt-1 text-xs leading-5 text-white/45">
-                  Salvo criptografado. Depois de salvar, o valor nunca volta ao navegador.
-                </p>
-                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                  <Input
-                    aria-label="Secret de assinatura da Vendepay"
-                    type="password"
-                    autoComplete="new-password"
-                    placeholder={
-                      config.data?.vendepay?.signing_secret_configured
-                        ? '•••••••••••••••••••••••• (configurado)'
-                        : 'Cole o secret exibido pela Vendepay'
-                    }
-                    value={vendepaySigningSecret}
-                    onChange={(event) => setVendepaySigningSecret(event.target.value)}
+                  <RefreshCw
+                    className={cn('h-3.5 w-3.5', isRefreshingTracking && 'animate-spin')}
                   />
-                  <Button
-                    disabled={
-                      vendepaySigningSecret.trim().length < 16 ||
-                      saveVendepaySigningSecret.isPending
-                    }
-                    onClick={() => saveVendepaySigningSecret.mutate()}
-                  >
-                    {saveVendepaySigningSecret.isPending
-                      ? 'Salvando…'
-                      : config.data?.vendepay?.signing_secret_configured
-                        ? 'Substituir secret'
-                        : 'Salvar secret'}
-                  </Button>
-                </div>
-                {config.data?.vendepay?.signing_secret_configured && (
-                  <p className="mt-2 text-xs text-emerald-300">
-                    ✓ Secret configurado com segurança
-                  </p>
-                )}
-              </div>
-            )}
-            {canManage && config.data?.configured && (
-              <div className="mt-5 rounded-md border border-white/[0.08] p-4">
-                <p className="text-sm font-medium text-white/80">Homologar payload da Vendepay</p>
-                <p className="mt-1 text-xs leading-5 text-white/45">
-                  Cole um exemplo recebido da Vendepay. O teste apenas normaliza os campos: não cria
-                  pedido, não envia ao Meta e não envia à UTMify.
-                </p>
-                <textarea
-                  aria-label="Payload JSON da Vendepay"
-                  className="mt-3 min-h-72 w-full rounded-md border border-white/[0.1] bg-black/25 p-3 font-mono text-xs leading-5 text-cyan-50 outline-none focus:border-cyan-300/40"
-                  value={vendepayPayload}
-                  onChange={(event) => setVendepayPayload(event.target.value)}
-                  spellCheck={false}
-                />
-                <Button
-                  className="mt-3"
-                  variant="outline"
-                  disabled={previewVendepay.isPending}
-                  onClick={() => previewVendepay.mutate()}
-                >
-                  {previewVendepay.isPending ? 'Validando…' : 'Validar sem criar venda'}
+                  Atualizar
                 </Button>
-                {previewVendepay.data && (
-                  <div
-                    className={cn(
-                      'mt-3 rounded border p-3 text-xs',
-                      previewVendepay.data.processable
-                        ? 'border-emerald-300/20 bg-emerald-300/[0.05] text-emerald-100'
-                        : 'border-red-300/20 bg-red-300/[0.05] text-red-100',
-                    )}
+                {canManage && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-11 flex-1 gap-2 sm:flex-none"
+                    disabled={reconcileInitiateCheckouts.isPending}
+                    onClick={() => reconcileInitiateCheckouts.mutate()}
                   >
-                    <p className="font-medium">
-                      {previewVendepay.data.processable
-                        ? 'Payload reconhecido'
-                        : 'Payload precisa de ajuste'}
-                    </p>
-                    <pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-white/55">
-                      {JSON.stringify(
-                        previewVendepay.data.normalized ??
-                          previewVendepay.data.diagnostics ?? ['Formato não reconhecido'],
-                        null,
-                        2,
-                      )}
-                    </pre>
-                  </div>
+                    <Send className="h-3.5 w-3.5" />
+                    Reconciliar ICs
+                  </Button>
                 )}
               </div>
-            )}
-            <div className="mt-6">
-              <p className="hud-label">Últimos webhooks da Vendepay</p>
-              <div className="mt-3 space-y-2">
-                {(vendepayReceipts.data?.receipts ?? []).slice(0, 20).map((receipt) => (
+            </div>
+          )}
+          {section === 'tracker' && (
+            <TrackingLiveConsole offerId={offerId} mode="tracker" date={trackingDate} />
+          )}
+          {section === 'funnel' && (
+            <TrackingLiveConsole offerId={offerId} mode="funnel" date={trackingDate} />
+          )}
+          {section === 'attribution' && (
+            <TrackingLiveConsole offerId={offerId} mode="attribution" date={trackingDate} />
+          )}
+          {section === 'refunds' && (
+            <Module
+              title="Reembolsos e chargeback"
+              description="Pedidos com status reembolsado ou chargeback no dia selecionado, pela data em que o status mudou — não pela data da compra original."
+            >
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-lg border border-amber-300/15 bg-amber-300/[0.04] p-4">
+                  <p className="hud-label text-amber-200/80">Reembolsos</p>
+                  <p className="mono-num mt-2 text-2xl text-white">
+                    {formatMoney(refunds.data?.totals.refunded_revenue_brl_minor, 'BRL')}
+                  </p>
+                  <p className="mt-1 text-xs text-white/45">
+                    {refunds.data?.totals.refunded_orders ?? 0} pedido(s)
+                  </p>
+                </div>
+                <div className="rounded-lg border border-red-300/15 bg-red-300/[0.04] p-4">
+                  <p className="hud-label text-red-200/80">Chargeback</p>
+                  <p className="mono-num mt-2 text-2xl text-white">
+                    {formatMoney(refunds.data?.totals.chargeback_revenue_brl_minor, 'BRL')}
+                  </p>
+                  <p className="mt-1 text-xs text-white/45">
+                    {refunds.data?.totals.chargeback_orders ?? 0} pedido(s)
+                  </p>
+                </div>
+              </div>
+              <div className="mt-6 space-y-2">
+                {(refunds.data?.items ?? []).map((item) => (
                   <div
-                    key={receipt.id}
+                    key={item.id}
                     className="flex flex-wrap items-center justify-between gap-3 rounded border border-white/[0.07] p-3 text-xs"
                   >
                     <div>
-                      <p className="font-mono text-white/70">
-                        {receipt.transaction_id ?? 'Sem transação reconhecida'}
-                      </p>
-                      <p className="mt-1 text-white/35">
-                        {new Date(receipt.received_at).toLocaleString('pt-BR')}
-                        {receipt.payment_method ? ` · ${receipt.payment_method}` : ''}
+                      <p className="font-mono text-white/70">{item.external_id}</p>
+                      <p className="mt-1 text-white/40">
+                        {item.buyer?.name ?? item.buyer?.email ?? 'comprador não identificado'} ·{' '}
+                        {item.order_kind} ·{' '}
+                        {new Date(item.updated_at).toLocaleString('pt-BR', {
+                          timeZone: 'America/Sao_Paulo',
+                        })}
                       </p>
                     </div>
-                    <span
-                      className={
-                        receipt.state === 'processed' || receipt.state === 'duplicate'
-                          ? 'text-emerald-300'
-                          : receipt.state === 'quarantined'
-                            ? 'text-red-300'
-                            : 'text-amber-300'
-                      }
-                    >
-                      {receipt.state}
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={item.status === 'chargeback' ? 'text-red-300' : 'text-amber-300'}
+                      >
+                        {item.status === 'chargeback' ? 'chargeback' : 'reembolsado'}
+                      </span>
+                      <span className="mono-num text-white/80">
+                        {formatMoney(item.amount_brl_minor ?? undefined, 'BRL')}
+                      </span>
+                    </div>
                   </div>
                 ))}
-                {!vendepayReceipts.data?.receipts?.length && (
+                {!refunds.data?.items?.length && (
                   <p className="rounded border border-dashed border-white/[0.08] p-4 text-sm text-white/35">
-                    Nenhum webhook recebido ainda. Depois de configurar a URL na Vendepay, os
-                    recebimentos aparecerão aqui.
+                    Nenhum reembolso ou chargeback neste dia.
                   </p>
                 )}
               </div>
-            </div>
-          </Module>
-        )}
-        {section === 'meta' && (
-          <Module
-            title="Envio ao Meta"
-            description="Audite cada IC e venda enviados pela Conversions API, incluindo a confirmação real da Meta e os sinais usados na atribuição."
-          >
-            <label className="flex items-center gap-3 text-sm text-white/65">
-              <input
-                type="checkbox"
-                checked={attributedOnly}
-                onChange={(e) => setAttributedOnly(e.target.checked)}
-              />{' '}
-              Enviar somente vendas atribuídas ao funil
-            </label>
-            <label htmlFor="tracking-meta-minimum" className="mt-4 block text-xs text-white/45">
-              Valor mínimo da compra (R$)
-            </label>
-            <Input
-              id="tracking-meta-minimum"
-              className="mt-2 max-w-xs"
-              value={minimum}
-              onChange={(e) => setMinimum(e.target.value)}
-              inputMode="decimal"
-            />
-            {canManage && (
-              <Button className="mt-4" onClick={() => saveRules.mutate()}>
-                Salvar regras
-              </Button>
-            )}
-            <div className="mt-7 border-t border-white/[0.07] pt-6">
-              <div className="flex flex-wrap items-end justify-between gap-3">
-                <div>
-                  <p className="hud-label">Confirmações da Conversions API</p>
-                  <p className="mt-2 max-w-3xl text-xs leading-5 text-white/40">
-                    “Confirmado” exige <span className="font-mono">events_received ≥ 1</span>. Para
-                    atribuir o evento à campanha, o IC real deve carregar principalmente fbc ou
-                    fbclid, além do identificador do navegador fbp.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {canManage && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={reconcileMetaPurchases.isPending}
-                      onClick={() => reconcileMetaPurchases.mutate()}
-                    >
-                      <Send className="mr-2 h-3.5 w-3.5" />
-                      Reconciliar compras
-                    </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={metaDeliveries.isFetching}
-                    onClick={() => void metaDeliveries.refetch()}
-                  >
-                    <RefreshCw
-                      className={cn(
-                        'mr-2 h-3.5 w-3.5',
-                        metaDeliveries.isFetching && 'animate-spin',
-                      )}
-                    />
-                    Atualizar entregas
-                  </Button>
-                </div>
-              </div>
-              <div className="mt-4 space-y-2">
-                {(metaDeliveries.data?.deliveries ?? []).slice(0, 30).map((delivery) => {
-                  const confirmed =
-                    delivery.state === 'delivered' && delivery.provider_event_count > 0;
-                  return (
-                    <div
-                      key={delivery.id}
-                      className="rounded border border-white/[0.07] bg-black/10 p-3 text-xs"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="font-mono text-white/70">
-                            {delivery.event_name} · {delivery.event_id}
-                          </p>
-                          <p className="mt-1 text-white/35">
-                            Pixel {delivery.pixel_id} · {delivery.attempts} tentativa(s)
-                            {delivery.response_status ? ` · HTTP ${delivery.response_status}` : ''}
-                          </p>
-                        </div>
-                        <span
-                          className={
-                            confirmed
-                              ? 'text-emerald-300'
-                              : delivery.state === 'failed'
-                                ? 'text-red-300'
-                                : 'text-amber-300'
-                          }
-                        >
-                          {confirmed
-                            ? `${delivery.provider_event_count} confirmado(s)`
-                            : delivery.state}
-                        </span>
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {[
-                          ['fbclid', delivery.has_fbclid],
-                          ['fbc', delivery.has_fbc],
-                          ['fbp', delivery.has_fbp],
-                          ['campanha', Boolean(delivery.campaign_id)],
-                          ['conjunto', Boolean(delivery.adset_id)],
-                          ['anúncio', Boolean(delivery.ad_id)],
-                        ].map(([label, available]) => (
-                          <span
-                            key={String(label)}
-                            className={cn(
-                              'rounded-full border px-2 py-1 font-mono text-[10px]',
-                              available
-                                ? 'border-emerald-300/20 bg-emerald-300/[0.06] text-emerald-200'
-                                : 'border-red-300/15 bg-red-300/[0.04] text-red-200/65',
-                            )}
-                          >
-                            {available ? '✓' : '×'} {label}
-                          </span>
-                        ))}
-                      </div>
-                      {delivery.event_url && (
-                        <p className="mt-2 truncate font-mono text-[10px] text-white/25">
-                          {delivery.event_url}
-                        </p>
-                      )}
-                      {delivery.last_error && (
-                        <p className="mt-2 break-words text-red-200/75">{delivery.last_error}</p>
-                      )}
-                    </div>
-                  );
-                })}
-                {!metaDeliveries.data?.deliveries?.length && (
-                  <p className="rounded border border-dashed border-white/[0.08] p-4 text-sm text-white/35">
-                    Nenhuma entrega Meta registrada.
-                  </p>
-                )}
-              </div>
-            </div>
-          </Module>
-        )}
-        {section === 'utmify' && (
-          <Module
-            title="Envio à UTMify"
-            description="Envia ICs ao Pixel UTMify e replica mudanças dos pedidos na API de vendas, com filas auditáveis separadas."
-          >
-            <div className="mb-5 rounded border border-cyan-400/20 bg-cyan-400/[0.04] p-4">
-              <p className="text-sm font-medium text-cyan-100">Pixel UTMify para PageView e IC</p>
-              <p className="mt-1 text-xs leading-5 text-white/45">
-                Use o ID de 24 caracteres exibido em UTMify → Integrações → Pixel. Não use o ID
-                numérico do Pixel Meta.
-              </p>
-              <p className="mt-2 font-mono text-xs text-white/65">
-                Atual: {utmifyPixel.data?.pixel_id ?? 'não configurado'}
-              </p>
+            </Module>
+          )}
+          {(section === 'pixels' || section === 'code') && (
+            <TrackingPanel offerId={offerId} canManage={canManage} />
+          )}
+          {section === 'help' && <TrackingHelp />}
+          {section === 'domains' && (
+            <Module
+              title="Domínios"
+              description="Cadastre os domínios que recebem o código. Subdomínios passam a ser identificados pelos eventos."
+            >
               {canManage && (
-                <div className="mt-3 grid gap-3 md:grid-cols-[1fr_auto]">
+                <div className="grid gap-2 md:grid-cols-[190px_minmax(0,1fr)_auto]">
+                  <select
+                    aria-label="Tipo de domínio"
+                    value={domainKind}
+                    onChange={(event) => setDomainKind(event.target.value as typeof domainKind)}
+                    className="h-11 rounded-lg border border-cyan-100/[0.14] bg-[#091a24] px-3 text-sm text-white"
+                  >
+                    <option value="source">Domínio do funil</option>
+                    <option value="tracking">Tracking first-party</option>
+                  </select>
                   <Input
-                    value={utmifyPixelId}
-                    onChange={(event) => setUtmifyPixelId(event.target.value)}
-                    placeholder="Ex.: 6a698a76093cf4ea09039541"
-                    maxLength={24}
+                    value={domain}
+                    onChange={(e) => setDomain(e.target.value)}
+                    placeholder={
+                      domainKind === 'tracking' ? 'suaempresa.com' : 'checkout.suaoferta.com'
+                    }
                   />
                   <Button
-                    disabled={
-                      !/^[a-f0-9]{24}$/i.test(utmifyPixelId.trim()) || saveUtmifyPixel.isPending
-                    }
-                    onClick={() => saveUtmifyPixel.mutate()}
+                    disabled={!domain.trim() || addDomain.isPending}
+                    onClick={() => addDomain.mutate()}
                   >
-                    Salvar Pixel UTMify
+                    Adicionar
                   </Button>
                 </div>
               )}
-            </div>
-            <div className="mb-5 flex items-center justify-between rounded border border-white/[0.07] p-4">
-              <div>
-                <p className="text-sm text-white/75">Destino de vendas</p>
-                <p className="mt-1 text-xs text-white/40">
-                  {utmify.data?.configured
-                    ? `Ativo · ${utmify.data.destination?.endpoint_url}`
-                    : 'Ainda não configurado'}
-                </p>
+              {domainKind === 'tracking' && (
+                <div className="mt-3 rounded-xl border border-cyan-300/15 bg-cyan-300/[0.04] p-4 text-xs leading-5 text-white/65">
+                  <div className="mb-3 rounded-lg border border-emerald-300/15 bg-emerald-300/[0.05] px-3 py-2">
+                    <span className="text-white/45">Domínio que será criado: </span>
+                    <code className="font-medium text-emerald-200">
+                      {trackingDomainPreview(domain) ?? 'tmx.suaempresa.com'}
+                    </code>
+                  </div>
+                  <p className="font-medium text-cyan-100">Configuração no Cloudflare</p>
+                  <ol className="mt-2 space-y-1.5">
+                    <li>1. Abra o domínio no Cloudflare e entre em DNS → Registros.</li>
+                    <li>2. Adicione cada registro exibido abaixo usando os botões de copiar.</li>
+                    <li>
+                      3. No CNAME, deixe <strong className="text-white">Proxy desativado</strong>{' '}
+                      (nuvem cinza / Somente DNS) e TTL em Automático.
+                    </li>
+                    <li>
+                      4. No TXT, use exatamente o Nome e o Conteúdo mostrados, com TTL Automático.
+                    </li>
+                    <li>
+                      5. Salve, aguarde a propagação e clique em{' '}
+                      <strong className="text-white">Verificar</strong>.
+                    </li>
+                  </ol>
+                  <p className="mt-2 text-amber-100/70">
+                    O TMX sempre usará o subdomínio tmx, como tmx.suaempresa.com. Não crie A/AAAA
+                    para ele e não altere o DNS da landing page ou do checkout.
+                  </p>
+                </div>
+              )}
+              <div className="mt-4 space-y-2">
+                {advanced.data?.domains?.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/[0.07] p-3 text-sm"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-white/80">{item.hostname}</p>
+                      <p className="mt-1 text-xs text-white/45">
+                        {item.status === 'live'
+                          ? 'O TMX recebeu eventos deste domínio.'
+                          : item.last_error || 'Instale o script e abra a página para confirmar.'}
+                      </p>
+                      {item.kind === 'tracking' && item.dns_target && (
+                        <div className="mt-3 space-y-2">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-[10px] uppercase tracking-wider text-white/35">
+                              Registros para criar
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const records = item.dns_records?.length
+                                  ? item.dns_records
+                                  : [{ hostlabel: item.hostname, requiredValue: item.dns_target! }];
+                                void copyDnsValue(
+                                  records
+                                    .map((record) => {
+                                      const type = record.requiredValue.includes('verify')
+                                        ? 'TXT'
+                                        : 'CNAME';
+                                      return `${type}\t${record.hostlabel}\t${record.requiredValue}`;
+                                    })
+                                    .join('\n'),
+                                  'Configuração completa',
+                                );
+                              }}
+                              className="flex items-center gap-1.5 rounded px-2 py-1 text-[10px] text-cyan-200/65 transition hover:bg-white/[0.05] hover:text-cyan-200"
+                            >
+                              <Copy className="h-3.5 w-3.5" /> Copiar tudo
+                            </button>
+                          </div>
+                          {(item.dns_records?.length
+                            ? item.dns_records
+                            : [{ hostlabel: item.hostname, requiredValue: item.dns_target }]
+                          ).map((record) => {
+                            const type = record.requiredValue.includes('verify') ? 'TXT' : 'CNAME';
+                            return (
+                              <div
+                                key={`${record.hostlabel}-${record.requiredValue}`}
+                                className="rounded-lg border border-white/[0.07] bg-black/15 p-3"
+                              >
+                                <div className="grid gap-2 lg:grid-cols-[90px_minmax(0,1fr)_minmax(0,1.4fr)]">
+                                  {[
+                                    { label: 'Tipo', value: type },
+                                    { label: 'Nome', value: record.hostlabel },
+                                    {
+                                      label: type === 'TXT' ? 'Conteúdo' : 'Destino',
+                                      value: record.requiredValue,
+                                    },
+                                  ].map((field) => (
+                                    <div key={field.label} className="min-w-0">
+                                      <p className="font-mono text-[9px] uppercase tracking-wider text-white/35">
+                                        {field.label}
+                                      </p>
+                                      <div className="mt-1 flex items-center gap-1">
+                                        <code className="min-w-0 flex-1 break-all font-mono text-[11px] text-cyan-100/75">
+                                          {field.value}
+                                        </code>
+                                        <button
+                                          type="button"
+                                          aria-label={`Copiar ${field.label}`}
+                                          onClick={() => copyDnsValue(field.value, field.label)}
+                                          className="rounded p-1.5 text-white/35 transition hover:bg-white/[0.06] hover:text-cyan-200"
+                                        >
+                                          <Copy className="h-3.5 w-3.5" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                                {type === 'CNAME' && (
+                                  <p className="mt-2 text-[10px] text-amber-100/60">
+                                    Cloudflare: Proxy desativado (Somente DNS) · TTL Automático
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={item.status === 'live' ? 'text-emerald-300' : 'text-amber-300'}
+                      >
+                        {item.status === 'live'
+                          ? 'ao vivo'
+                          : item.status === 'dns_verified'
+                            ? 'DNS confirmado'
+                            : item.kind === 'tracking'
+                              ? 'aguardando DNS'
+                              : 'aguardando evento'}
+                      </span>
+                      {canManage && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={verifyDomain.isPending}
+                            onClick={() => verifyDomain.mutate(item.id)}
+                          >
+                            Verificar
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={removeDomain.isPending}
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  `Remover ${item.hostname} desta configuração de tracking?`,
+                                )
+                              )
+                                removeDomain.mutate(item.id);
+                            }}
+                          >
+                            Remover
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {!advanced.data?.domains?.length && (
+                  <p className="rounded-xl border border-dashed border-white/[0.1] p-4 text-sm text-white/50">
+                    Nenhum domínio cadastrado. Adicione o domínio sem protocolo ou caminho, por
+                    exemplo <code className="text-cyan-200">checkout.suaempresa.com</code>.
+                  </p>
+                )}
               </div>
-              <span
-                className={
-                  utmify.data?.destination?.enabled ? 'text-emerald-300' : 'text-amber-300'
-                }
-              >
-                {utmify.data?.destination?.enabled ? 'operacional' : 'aguardando token'}
-              </span>
-            </div>
-            {canManage && (
-              <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-                <Input
-                  value={utmifyToken}
-                  onChange={(event) => setUtmifyToken(event.target.value)}
-                  type="password"
-                  autoComplete="off"
-                  placeholder="Token de API da UTMify"
-                />
-                <Button
-                  disabled={utmifyToken.trim().length < 16 || saveUtmify.isPending}
-                  onClick={() => saveUtmify.mutate()}
-                >
-                  {utmify.data?.configured ? 'Atualizar conexão' : 'Conectar UTMify'}
-                </Button>
-                <Input
-                  className="md:col-span-2"
-                  value={utmifyEndpoint}
-                  onChange={(event) => setUtmifyEndpoint(event.target.value)}
-                  placeholder="Endpoint da API de vendas"
-                />
-                <div className="md:col-span-2 rounded border border-cyan-400/20 bg-cyan-400/[0.04] p-4">
-                  <p className="text-sm font-medium text-cyan-100">Testar checkout pendente</p>
+            </Module>
+          )}
+          {section === 'gateways' && (
+            <Module
+              title="Gateways"
+              description="A Vendepay usa o parâmetro src. Conexões podem ser pausadas e o token secreto pode ser rotacionado."
+            >
+              <div className="space-y-2">
+                {(
+                  advanced.data?.gateways ?? [
+                    { provider: 'vendepay', propagation_param: 'src', enabled: true },
+                  ]
+                ).map((gateway, index) => (
+                  <div
+                    key={`${gateway.provider}-${index}`}
+                    className="flex items-center justify-between rounded border border-white/[0.07] p-4"
+                  >
+                    <div>
+                      <p className="capitalize text-white/75">{gateway.provider}</p>
+                      <p className="mt-1 font-mono text-xs text-cyan-200/60">
+                        atribuição: {gateway.propagation_param}
+                      </p>
+                    </div>
+                    <span className="text-xs text-emerald-300">
+                      {gateway.enabled ? 'ativo' : 'pausado'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {canManage && config.data?.configured && (
+                <div className="mt-5 rounded-md border border-amber-300/15 bg-amber-300/[0.04] p-4">
+                  <p className="text-sm font-medium text-amber-100">URL secreta da Vendepay</p>
                   <p className="mt-1 text-xs leading-5 text-white/45">
-                    Envia um pedido de R$ 1,00 com status waiting_payment e isTest=true. Ele valida
-                    a conexão sem registrar uma venda aprovada.
+                    Por segurança, o token só aparece ao gerar a URL. Gerar novamente desativa o
+                    webhook anterior.
                   </p>
                   <Button
                     className="mt-3"
                     variant="outline"
-                    disabled={!utmify.data?.destination?.enabled || testUtmifyCheckout.isPending}
-                    onClick={() => testUtmifyCheckout.mutate()}
+                    disabled={rotateVendepay.isPending}
+                    onClick={() => rotateVendepay.mutate()}
                   >
-                    {testUtmifyCheckout.isPending
-                      ? 'Enviando checkout de teste...'
-                      : 'Enviar checkout de teste'}
+                    {rotateVendepay.isPending ? 'Gerando…' : 'Gerar URL real do webhook'}
                   </Button>
-                </div>
-              </div>
-            )}
-            <div className="mt-6">
-              <p className="hud-label">Entregas de InitiateCheckout ao Pixel UTMify</p>
-              <div className="mt-3 space-y-2">
-                {(utmifyWebEvents.data?.deliveries ?? []).slice(0, 20).map((delivery) => (
-                  <div
-                    key={delivery.id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded border border-white/[0.07] p-3 text-xs"
-                  >
-                    <div>
-                      <p className="font-mono text-white/70">{delivery.event_id}</p>
-                      <p className="mt-1 text-white/35">
-                        Pixel {delivery.pixel_id} · {delivery.attempts} tentativa(s)
-                      </p>
-                      <p className="mt-1 font-mono text-[10px] text-white/30">
-                        {delivery.campaign_id ?? 'sem campanha'} · {delivery.ad_id ?? 'sem anúncio'}{' '}
-                        · {delivery.placement ?? 'sem posicionamento'}
-                      </p>
-                      {delivery.utmify_event_id && (
-                        <p className="mt-1 font-mono text-[10px] text-emerald-200/45">
-                          Recibo UTMify: {delivery.utmify_event_id}
-                        </p>
-                      )}
-                      {delivery.last_error && (
-                        <p className="mt-1 max-w-2xl break-words text-red-200/70">
-                          {delivery.last_error}
-                        </p>
-                      )}
+                  {vendepayWebhook && (
+                    <div className="mt-3 flex gap-2">
+                      <code className="min-w-0 flex-1 overflow-x-auto rounded bg-black/25 p-3 text-xs text-cyan-100">
+                        {vendepayWebhook}
+                      </code>
+                      <Button onClick={copyVendepayWebhook}>Copiar</Button>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={
-                          delivery.state === 'delivered'
-                            ? 'text-emerald-300'
-                            : delivery.state === 'failed' || delivery.state === 'dead'
-                              ? 'text-red-300'
-                              : 'text-amber-300'
-                        }
-                      >
-                        {delivery.state}
-                      </span>
-                      {canManage && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={retryUtmifyWebEvent.isPending}
-                          onClick={() => retryUtmifyWebEvent.mutate(delivery.id)}
-                        >
-                          Reenviar
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                {!utmifyWebEvents.data?.deliveries?.length && (
-                  <p className="rounded border border-dashed border-white/[0.08] p-4 text-sm text-white/35">
-                    Nenhum IC enviado neste dia.
-                  </p>
-                )}
-              </div>
-            </div>
-            <div className="mt-6">
-              <p className="hud-label">Últimas entregas de pedidos</p>
-              <div className="mt-3 space-y-2">
-                {(utmifyDeliveries.data?.deliveries ?? []).slice(0, 20).map((delivery) => (
-                  <div
-                    key={delivery.id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded border border-white/[0.07] p-3 text-xs"
-                  >
-                    <div>
-                      <p className="font-mono text-white/70">{delivery.transaction_id}</p>
-                      <p className="mt-1 text-white/35">
-                        {delivery.event_type} · {delivery.attempts} tentativa(s)
-                      </p>
-                      {delivery.last_error && (
-                        <p className="mt-1 max-w-2xl break-words text-red-200/70">
-                          {delivery.last_error}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span
-                        className={
-                          delivery.state === 'delivered'
-                            ? 'text-emerald-300'
-                            : delivery.state === 'failed' || delivery.state === 'dead'
-                              ? 'text-red-300'
-                              : 'text-amber-300'
-                        }
-                      >
-                        {delivery.state}
-                      </span>
-                      {canManage && (delivery.state === 'failed' || delivery.state === 'dead') && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => retryUtmify.mutate(delivery.id)}
-                        >
-                          Reenviar
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                {!utmifyDeliveries.data?.deliveries?.length && (
-                  <p className="rounded border border-dashed border-white/[0.08] p-4 text-sm text-white/35">
-                    As entregas aparecerão aqui quando o primeiro pedido for recebido.
-                  </p>
-                )}
-              </div>
-            </div>
-            <div className="mt-6">
-              <p className="hud-label">Produtos: front ou upsell?</p>
-              <p className="mt-1 max-w-2xl text-xs text-white/45">
-                Cada produto da Vendepay precisa ser marcado como venda front (novo comprador) ou
-                upsell (compra adicional do mesmo comprador). Sem isso o pedido fica &quot;não
-                mapeado&quot; e não entra corretamente nos números de front/upsell do resumo.
-              </p>
-              {(productKinds.data?.unmapped ?? []).length > 0 && (
-                <div className="mt-3 space-y-2">
-                  <p className="text-[10px] uppercase tracking-wider text-amber-300/70">
-                    Produtos vistos em pedidos mas ainda não classificados
-                  </p>
-                  {(productKinds.data?.unmapped ?? []).map((product) => (
-                    <div
-                      key={product.product_id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded border border-amber-300/15 bg-amber-300/[0.03] p-3 text-xs"
-                    >
-                      <div>
-                        <p className="font-mono text-white/70">{product.product_id}</p>
-                        <p className="mt-1 text-white/40">
-                          {product.product_name ?? 'sem nome'} · {product.orders} pedido(s)
-                        </p>
-                      </div>
-                      {canManage && (
-                        <div className="flex items-center gap-2">
-                          <select
-                            className="rounded border border-white/10 bg-black/20 px-2 py-1 text-xs text-white/80"
-                            value={productKindSelection[product.product_id] ?? 'front'}
-                            onChange={(event) =>
-                              setProductKindSelection((prev) => ({
-                                ...prev,
-                                [product.product_id]: event.target.value as
-                                  | 'front'
-                                  | 'upsell'
-                                  | 'upsell_2',
-                              }))
-                            }
-                          >
-                            <option value="front">Front</option>
-                            <option value="upsell">Upsell 1</option>
-                            <option value="upsell_2">Upsell 2</option>
-                          </select>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={saveProductKind.isPending}
-                            onClick={() =>
-                              saveProductKind.mutate({
-                                product_id: product.product_id,
-                                kind: productKindSelection[product.product_id] ?? 'front',
-                                label: product.product_name,
-                              })
-                            }
-                          >
-                            Classificar
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                  )}
                 </div>
               )}
-              <div className="mt-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-[10px] uppercase tracking-wider text-white/35">
-                    Mapeamentos salvos
+              {canManage && config.data?.configured && (
+                <div className="mt-5 rounded-md border border-cyan-300/15 bg-cyan-300/[0.03] p-4">
+                  <p className="text-sm font-medium text-cyan-100">
+                    Secret de assinatura da Vendepay
                   </p>
-                  {canManage && (productKinds.data?.mapped ?? []).length > 0 && (
+                  <p className="mt-1 text-xs leading-5 text-white/45">
+                    Salvo criptografado. Depois de salvar, o valor nunca volta ao navegador.
+                  </p>
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                    <Input
+                      aria-label="Secret de assinatura da Vendepay"
+                      type="password"
+                      autoComplete="new-password"
+                      placeholder={
+                        config.data?.vendepay?.signing_secret_configured
+                          ? '•••••••••••••••••••••••• (configurado)'
+                          : 'Cole o secret exibido pela Vendepay'
+                      }
+                      value={vendepaySigningSecret}
+                      onChange={(event) => setVendepaySigningSecret(event.target.value)}
+                    />
+                    <Button
+                      disabled={
+                        vendepaySigningSecret.trim().length < 16 ||
+                        saveVendepaySigningSecret.isPending
+                      }
+                      onClick={() => saveVendepaySigningSecret.mutate()}
+                    >
+                      {saveVendepaySigningSecret.isPending
+                        ? 'Salvando…'
+                        : config.data?.vendepay?.signing_secret_configured
+                          ? 'Substituir secret'
+                          : 'Salvar secret'}
+                    </Button>
+                  </div>
+                  {config.data?.vendepay?.signing_secret_configured && (
+                    <p className="mt-2 text-xs text-emerald-300">
+                      ✓ Secret configurado com segurança
+                    </p>
+                  )}
+                </div>
+              )}
+              {canManage && config.data?.configured && (
+                <div className="mt-5 rounded-md border border-white/[0.08] p-4">
+                  <p className="text-sm font-medium text-white/80">Homologar payload da Vendepay</p>
+                  <p className="mt-1 text-xs leading-5 text-white/45">
+                    Cole um exemplo recebido da Vendepay. O teste apenas normaliza os campos: não
+                    cria pedido, não envia ao Meta e não envia à UTMify.
+                  </p>
+                  <textarea
+                    aria-label="Payload JSON da Vendepay"
+                    className="mt-3 min-h-72 w-full rounded-md border border-white/[0.1] bg-black/25 p-3 font-mono text-xs leading-5 text-cyan-50 outline-none focus:border-cyan-300/40"
+                    value={vendepayPayload}
+                    onChange={(event) => setVendepayPayload(event.target.value)}
+                    spellCheck={false}
+                  />
+                  <Button
+                    className="mt-3"
+                    variant="outline"
+                    disabled={previewVendepay.isPending}
+                    onClick={() => previewVendepay.mutate()}
+                  >
+                    {previewVendepay.isPending ? 'Validando…' : 'Validar sem criar venda'}
+                  </Button>
+                  {previewVendepay.data && (
+                    <div
+                      className={cn(
+                        'mt-3 rounded border p-3 text-xs',
+                        previewVendepay.data.processable
+                          ? 'border-emerald-300/20 bg-emerald-300/[0.05] text-emerald-100'
+                          : 'border-red-300/20 bg-red-300/[0.05] text-red-100',
+                      )}
+                    >
+                      <p className="font-medium">
+                        {previewVendepay.data.processable
+                          ? 'Payload reconhecido'
+                          : 'Payload precisa de ajuste'}
+                      </p>
+                      <pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-white/55">
+                        {JSON.stringify(
+                          previewVendepay.data.normalized ??
+                            previewVendepay.data.diagnostics ?? ['Formato não reconhecido'],
+                          null,
+                          2,
+                        )}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="mt-6">
+                <p className="hud-label">Últimos webhooks da Vendepay</p>
+                <div className="mt-3 space-y-2">
+                  {(vendepayReceipts.data?.receipts ?? []).slice(0, 20).map((receipt) => (
+                    <div
+                      key={receipt.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded border border-white/[0.07] p-3 text-xs"
+                    >
+                      <div>
+                        <p className="font-mono text-white/70">
+                          {receipt.transaction_id ?? 'Sem transação reconhecida'}
+                        </p>
+                        <p className="mt-1 text-white/35">
+                          {new Date(receipt.received_at).toLocaleString('pt-BR')}
+                          {receipt.payment_method ? ` · ${receipt.payment_method}` : ''}
+                        </p>
+                      </div>
+                      <span
+                        className={
+                          receipt.state === 'processed' || receipt.state === 'duplicate'
+                            ? 'text-emerald-300'
+                            : receipt.state === 'quarantined'
+                              ? 'text-red-300'
+                              : 'text-amber-300'
+                        }
+                      >
+                        {receipt.state}
+                      </span>
+                    </div>
+                  ))}
+                  {!vendepayReceipts.data?.receipts?.length && (
+                    <p className="rounded border border-dashed border-white/[0.08] p-4 text-sm text-white/35">
+                      Nenhum webhook recebido ainda. Depois de configurar a URL na Vendepay, os
+                      recebimentos aparecerão aqui.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </Module>
+          )}
+          {section === 'meta' && (
+            <Module
+              title="Envio ao Meta"
+              description="Audite cada IC e venda enviados pela Conversions API, incluindo a confirmação real da Meta e os sinais usados na atribuição."
+            >
+              <label className="flex items-center gap-3 text-sm text-white/65">
+                <input
+                  type="checkbox"
+                  checked={attributedOnly}
+                  onChange={(e) => setAttributedOnly(e.target.checked)}
+                />{' '}
+                Enviar somente vendas atribuídas ao funil
+              </label>
+              <label htmlFor="tracking-meta-minimum" className="mt-4 block text-xs text-white/45">
+                Valor mínimo da compra (R$)
+              </label>
+              <Input
+                id="tracking-meta-minimum"
+                className="mt-2 max-w-xs"
+                value={minimum}
+                onChange={(e) => setMinimum(e.target.value)}
+                inputMode="decimal"
+              />
+              {canManage && (
+                <Button className="mt-4" onClick={() => saveRules.mutate()}>
+                  Salvar regras
+                </Button>
+              )}
+              <div className="mt-7 border-t border-white/[0.07] pt-6">
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <p className="hud-label">Confirmações da Conversions API</p>
+                    <p className="mt-2 max-w-3xl text-xs leading-5 text-white/40">
+                      “Confirmado” exige <span className="font-mono">events_received ≥ 1</span>.
+                      Para atribuir o evento à campanha, o IC real deve carregar principalmente fbc
+                      ou fbclid, além do identificador do navegador fbp.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {canManage && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={reconcileMetaPurchases.isPending}
+                        onClick={() => reconcileMetaPurchases.mutate()}
+                      >
+                        <Send className="mr-2 h-3.5 w-3.5" />
+                        Reconciliar compras
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={recomputeProductKinds.isPending}
-                      onClick={() => recomputeProductKinds.mutate()}
+                      disabled={metaDeliveries.isFetching}
+                      onClick={() => void metaDeliveries.refetch()}
                     >
-                      Reclassificar pedidos existentes
+                      <RefreshCw
+                        className={cn(
+                          'mr-2 h-3.5 w-3.5',
+                          metaDeliveries.isFetching && 'animate-spin',
+                        )}
+                      />
+                      Atualizar entregas
                     </Button>
+                  </div>
+                </div>
+                <div className="mt-4 space-y-2">
+                  {(metaDeliveries.data?.deliveries ?? []).slice(0, 30).map((delivery) => {
+                    const confirmed =
+                      delivery.state === 'delivered' && delivery.provider_event_count > 0;
+                    return (
+                      <div
+                        key={delivery.id}
+                        className="rounded border border-white/[0.07] bg-black/10 p-3 text-xs"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-mono text-white/70">
+                              {delivery.event_name} · {delivery.event_id}
+                            </p>
+                            <p className="mt-1 text-white/35">
+                              Pixel {delivery.pixel_id} · {delivery.attempts} tentativa(s)
+                              {delivery.response_status
+                                ? ` · HTTP ${delivery.response_status}`
+                                : ''}
+                            </p>
+                          </div>
+                          <span
+                            className={
+                              confirmed
+                                ? 'text-emerald-300'
+                                : delivery.state === 'failed'
+                                  ? 'text-red-300'
+                                  : 'text-amber-300'
+                            }
+                          >
+                            {confirmed
+                              ? `${delivery.provider_event_count} confirmado(s)`
+                              : delivery.state}
+                          </span>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {[
+                            ['fbclid', delivery.has_fbclid],
+                            ['fbc', delivery.has_fbc],
+                            ['fbp', delivery.has_fbp],
+                            ['campanha', Boolean(delivery.campaign_id)],
+                            ['conjunto', Boolean(delivery.adset_id)],
+                            ['anúncio', Boolean(delivery.ad_id)],
+                          ].map(([label, available]) => (
+                            <span
+                              key={String(label)}
+                              className={cn(
+                                'rounded-full border px-2 py-1 font-mono text-[10px]',
+                                available
+                                  ? 'border-emerald-300/20 bg-emerald-300/[0.06] text-emerald-200'
+                                  : 'border-red-300/15 bg-red-300/[0.04] text-red-200/65',
+                              )}
+                            >
+                              {available ? '✓' : '×'} {label}
+                            </span>
+                          ))}
+                        </div>
+                        {delivery.event_url && (
+                          <p className="mt-2 truncate font-mono text-[10px] text-white/25">
+                            {delivery.event_url}
+                          </p>
+                        )}
+                        {delivery.last_error && (
+                          <p className="mt-2 break-words text-red-200/75">{delivery.last_error}</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {!metaDeliveries.data?.deliveries?.length && (
+                    <p className="rounded border border-dashed border-white/[0.08] p-4 text-sm text-white/35">
+                      Nenhuma entrega Meta registrada.
+                    </p>
                   )}
                 </div>
-                {(productKinds.data?.mapped ?? []).map((mapping) => (
-                  <div
-                    key={mapping.id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded border border-white/[0.07] p-3 text-xs"
-                  >
-                    <div>
-                      <p className="font-mono text-white/70">{mapping.product_id}</p>
-                      {mapping.label && <p className="mt-1 text-white/40">{mapping.label}</p>}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={
-                          mapping.kind === 'front'
-                            ? 'text-emerald-300'
-                            : mapping.kind === 'upsell'
-                              ? 'text-cyan-300'
-                              : 'text-amber-300'
-                        }
-                      >
-                        {mapping.kind === 'front'
-                          ? 'Front'
-                          : mapping.kind === 'upsell'
-                            ? 'Upsell 1'
-                            : 'Upsell 2'}
-                      </span>
-                      {canManage && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          disabled={removeProductKind.isPending}
-                          onClick={() => removeProductKind.mutate(mapping.product_id)}
-                        >
-                          Remover
-                        </Button>
-                      )}
-                    </div>
+              </div>
+            </Module>
+          )}
+          {section === 'utmify' && (
+            <Module
+              title="Envio à UTMify"
+              description="Envia ICs ao Pixel UTMify e replica mudanças dos pedidos na API de vendas, com filas auditáveis separadas."
+            >
+              <div className="mb-5 rounded border border-cyan-400/20 bg-cyan-400/[0.04] p-4">
+                <p className="text-sm font-medium text-cyan-100">Pixel UTMify para PageView e IC</p>
+                <p className="mt-1 text-xs leading-5 text-white/45">
+                  Use o ID de 24 caracteres exibido em UTMify → Integrações → Pixel. Não use o ID
+                  numérico do Pixel Meta.
+                </p>
+                <p className="mt-2 font-mono text-xs text-white/65">
+                  Atual: {utmifyPixel.data?.pixel_id ?? 'não configurado'}
+                </p>
+                {canManage && (
+                  <div className="mt-3 grid gap-3 md:grid-cols-[1fr_auto]">
+                    <Input
+                      value={utmifyPixelId}
+                      onChange={(event) => setUtmifyPixelId(event.target.value)}
+                      placeholder="Ex.: 6a698a76093cf4ea09039541"
+                      maxLength={24}
+                    />
+                    <Button
+                      disabled={
+                        !/^[a-f0-9]{24}$/i.test(utmifyPixelId.trim()) || saveUtmifyPixel.isPending
+                      }
+                      onClick={() => saveUtmifyPixel.mutate()}
+                    >
+                      Salvar Pixel UTMify
+                    </Button>
                   </div>
-                ))}
-                {!productKinds.data?.mapped?.length && (
-                  <p className="rounded border border-dashed border-white/[0.08] p-4 text-sm text-white/35">
-                    Nenhum produto classificado ainda.
+                )}
+              </div>
+              <div className="mb-5 flex items-center justify-between rounded border border-white/[0.07] p-4">
+                <div>
+                  <p className="text-sm text-white/75">Destino de vendas</p>
+                  <p className="mt-1 text-xs text-white/40">
+                    {utmify.data?.configured
+                      ? `Ativo · ${utmify.data.destination?.endpoint_url}`
+                      : 'Ainda não configurado'}
                   </p>
-                )}
+                </div>
+                <span
+                  className={
+                    utmify.data?.destination?.enabled ? 'text-emerald-300' : 'text-amber-300'
+                  }
+                >
+                  {utmify.data?.destination?.enabled ? 'operacional' : 'aguardando token'}
+                </span>
               </div>
-            </div>
-          </Module>
-        )}
-        {section === 'pushcut' && (
-          <Module
-            title="Notificações Pushcut"
-            description="Receba uma notificação push no iPhone/iPad sempre que uma venda front ou upsell for aprovada. Cada destino é uma conta Pushcut (app) diferente — configure quantas precisar."
-          >
-            <div className="rounded border border-white/[0.07] bg-black/10 p-4 text-xs leading-5 text-white/50">
-              No app Pushcut, crie uma notificação em{' '}
-              <span className="font-mono">Notifications</span> (ex.: "Venda Aprovada") e outra pra
-              upsell se quiser sons diferentes. Copie o <span className="font-mono">secret</span> da
-              sua conta (aparece na URL do webhook,{' '}
-              <span className="font-mono">api.pushcut.io/[secret]/notifications/...</span>) e o nome
-              exato de cada notificação (ou o Reference ID, em Settings → Shortcuts).
-            </div>
-
-            <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              <div>
-                <label htmlFor="pushcut-name" className="block text-xs text-white/45">
-                  Nome do destino (ex.: iPhone do Iago)
-                </label>
-                <Input
-                  id="pushcut-name"
-                  className="mt-2"
-                  value={pushcutName}
-                  onChange={(e) => setPushcutName(e.target.value)}
-                />
-              </div>
-              <div>
-                <label htmlFor="pushcut-secret" className="block text-xs text-white/45">
-                  Secret da conta Pushcut
-                </label>
-                <Input
-                  id="pushcut-secret"
-                  className="mt-2"
-                  type="password"
-                  value={pushcutSecret}
-                  onChange={(e) => setPushcutSecret(e.target.value)}
-                />
-              </div>
-              <div>
-                <label htmlFor="pushcut-front" className="block text-xs text-white/45">
-                  Nome da notificação · venda front
-                </label>
-                <Input
-                  id="pushcut-front"
-                  className="mt-2"
-                  value={pushcutFrontNotification}
-                  onChange={(e) => setPushcutFrontNotification(e.target.value)}
-                  placeholder="Venda Aprovada"
-                />
-              </div>
-              <div>
-                <label htmlFor="pushcut-upsell" className="block text-xs text-white/45">
-                  Nome da notificação · upsell (opcional)
-                </label>
-                <Input
-                  id="pushcut-upsell"
-                  className="mt-2"
-                  value={pushcutUpsellNotification}
-                  onChange={(e) => setPushcutUpsellNotification(e.target.value)}
-                  placeholder="Deixe em branco pra não notificar upsell"
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <label htmlFor="pushcut-devices" className="block text-xs text-white/45">
-                  Dispositivos específicos (opcional, separados por vírgula)
-                </label>
-                <Input
-                  id="pushcut-devices"
-                  className="mt-2"
-                  value={pushcutDevices}
-                  onChange={(e) => setPushcutDevices(e.target.value)}
-                  placeholder="iPhone de Iago, iPad"
-                />
-              </div>
-            </div>
-            {canManage && (
-              <Button
-                className="mt-4"
-                disabled={
-                  createPushcutDestination.isPending ||
-                  !pushcutName ||
-                  !pushcutSecret ||
-                  !pushcutFrontNotification
-                }
-                onClick={() => createPushcutDestination.mutate()}
-              >
-                Adicionar destino
-              </Button>
-            )}
-
-            <div className="mt-7 border-t border-white/[0.07] pt-6">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="hud-label">Destinos configurados</p>
-                {canManage && (pushcutDestinations.data?.destinations?.length ?? 0) > 0 && (
+              {canManage && (
+                <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                  <Input
+                    value={utmifyToken}
+                    onChange={(event) => setUtmifyToken(event.target.value)}
+                    type="password"
+                    autoComplete="off"
+                    placeholder="Token de API da UTMify"
+                  />
                   <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={resendPushcutHistory.isPending}
-                    onClick={() => resendPushcutHistory.mutate()}
+                    disabled={utmifyToken.trim().length < 16 || saveUtmify.isPending}
+                    onClick={() => saveUtmify.mutate()}
                   >
-                    Reenviar todas as compras já feitas
+                    {utmify.data?.configured ? 'Atualizar conexão' : 'Conectar UTMify'}
                   </Button>
-                )}
-              </div>
-              <div className="mt-3 space-y-2">
-                {(pushcutDestinations.data?.destinations ?? []).map((destination) => (
-                  <div
-                    key={destination.id}
-                    className="rounded border border-white/[0.07] bg-black/10 p-3 text-xs"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-3">
+                  <Input
+                    className="md:col-span-2"
+                    value={utmifyEndpoint}
+                    onChange={(event) => setUtmifyEndpoint(event.target.value)}
+                    placeholder="Endpoint da API de vendas"
+                  />
+                  <div className="md:col-span-2 rounded border border-cyan-400/20 bg-cyan-400/[0.04] p-4">
+                    <p className="text-sm font-medium text-cyan-100">Testar checkout pendente</p>
+                    <p className="mt-1 text-xs leading-5 text-white/45">
+                      Envia um pedido de R$ 1,00 com status waiting_payment e isTest=true. Ele
+                      valida a conexão sem registrar uma venda aprovada.
+                    </p>
+                    <Button
+                      className="mt-3"
+                      variant="outline"
+                      disabled={!utmify.data?.destination?.enabled || testUtmifyCheckout.isPending}
+                      onClick={() => testUtmifyCheckout.mutate()}
+                    >
+                      {testUtmifyCheckout.isPending
+                        ? 'Enviando checkout de teste...'
+                        : 'Enviar checkout de teste'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+              <div className="mt-6">
+                <p className="hud-label">Entregas de InitiateCheckout ao Pixel UTMify</p>
+                <div className="mt-3 space-y-2">
+                  {(utmifyWebEvents.data?.deliveries ?? []).slice(0, 20).map((delivery) => (
+                    <div
+                      key={delivery.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded border border-white/[0.07] p-3 text-xs"
+                    >
                       <div>
-                        <p className="font-medium text-white/85">{destination.name}</p>
-                        <p className="mt-1 text-white/40">
-                          Front:{' '}
-                          <span className="font-mono">{destination.front_notification_name}</span>
-                          {destination.upsell_notification_name && (
-                            <>
-                              {' '}
-                              · Upsell:{' '}
-                              <span className="font-mono">
-                                {destination.upsell_notification_name}
-                              </span>
-                            </>
-                          )}
+                        <p className="font-mono text-white/70">{delivery.event_id}</p>
+                        <p className="mt-1 text-white/35">
+                          Pixel {delivery.pixel_id} · {delivery.attempts} tentativa(s)
                         </p>
-                        {Array.isArray(destination.devices) && destination.devices.length > 0 && (
-                          <p className="mt-1 text-white/30">
-                            Dispositivos: {destination.devices.join(', ')}
+                        <p className="mt-1 font-mono text-[10px] text-white/30">
+                          {delivery.campaign_id ?? 'sem campanha'} ·{' '}
+                          {delivery.ad_id ?? 'sem anúncio'} ·{' '}
+                          {delivery.placement ?? 'sem posicionamento'}
+                        </p>
+                        {delivery.utmify_event_id && (
+                          <p className="mt-1 font-mono text-[10px] text-emerald-200/45">
+                            Recibo UTMify: {delivery.utmify_event_id}
+                          </p>
+                        )}
+                        {delivery.last_error && (
+                          <p className="mt-1 max-w-2xl break-words text-red-200/70">
+                            {delivery.last_error}
                           </p>
                         )}
                       </div>
                       <div className="flex items-center gap-2">
                         <span
-                          className={destination.enabled ? 'text-emerald-300' : 'text-white/30'}
+                          className={
+                            delivery.state === 'delivered'
+                              ? 'text-emerald-300'
+                              : delivery.state === 'failed' || delivery.state === 'dead'
+                                ? 'text-red-300'
+                                : 'text-amber-300'
+                          }
                         >
-                          {destination.enabled ? 'ativo' : 'desativado'}
+                          {delivery.state}
                         </span>
                         {canManage && (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={testPushcutDestination.isPending}
-                              onClick={() => testPushcutDestination.mutate(destination.id)}
-                            >
-                              Testar
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={togglePushcutDestination.isPending}
-                              onClick={() =>
-                                togglePushcutDestination.mutate({
-                                  destinationId: destination.id,
-                                  enabled: !destination.enabled,
-                                })
-                              }
-                            >
-                              {destination.enabled ? 'Desativar' : 'Ativar'}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              disabled={removePushcutDestination.isPending}
-                              onClick={() => removePushcutDestination.mutate(destination.id)}
-                            >
-                              Remover
-                            </Button>
-                          </>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={retryUtmifyWebEvent.isPending}
+                            onClick={() => retryUtmifyWebEvent.mutate(delivery.id)}
+                          >
+                            Reenviar
+                          </Button>
                         )}
                       </div>
                     </div>
-                  </div>
-                ))}
-                {!pushcutDestinations.data?.destinations?.length && (
-                  <p className="rounded border border-dashed border-white/[0.08] p-4 text-sm text-white/35">
-                    Nenhum destino Pushcut configurado ainda.
-                  </p>
-                )}
+                  ))}
+                  {!utmifyWebEvents.data?.deliveries?.length && (
+                    <p className="rounded border border-dashed border-white/[0.08] p-4 text-sm text-white/35">
+                      Nenhum IC enviado neste dia.
+                    </p>
+                  )}
+                </div>
               </div>
-            </div>
-
-            <div className="mt-7 border-t border-white/[0.07] pt-6">
-              <p className="hud-label">Últimas entregas</p>
-              <div className="mt-3 space-y-2">
-                {(pushcutDeliveries.data?.deliveries ?? []).slice(0, 30).map((delivery) => (
-                  <div
-                    key={delivery.id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded border border-white/[0.07] p-3 text-xs"
-                  >
-                    <div>
-                      <p className="font-mono text-white/70">{delivery.transaction_id}</p>
-                      <p className="mt-1 text-white/35">
-                        {delivery.destination_name ?? 'destino removido'} · {delivery.order_kind} ·{' '}
-                        {delivery.attempts} tentativa(s)
-                        {delivery.response_status ? ` · HTTP ${delivery.response_status}` : ''}
-                      </p>
-                      {delivery.last_error && (
-                        <p className="mt-1 max-w-2xl break-words text-red-200/70">
-                          {delivery.last_error}
+              <div className="mt-6">
+                <p className="hud-label">Últimas entregas de pedidos</p>
+                <div className="mt-3 space-y-2">
+                  {(utmifyDeliveries.data?.deliveries ?? []).slice(0, 20).map((delivery) => (
+                    <div
+                      key={delivery.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded border border-white/[0.07] p-3 text-xs"
+                    >
+                      <div>
+                        <p className="font-mono text-white/70">{delivery.transaction_id}</p>
+                        <p className="mt-1 text-white/35">
+                          {delivery.event_type} · {delivery.attempts} tentativa(s)
                         </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span
-                        className={
-                          delivery.state === 'delivered'
-                            ? 'text-emerald-300'
-                            : delivery.state === 'failed' || delivery.state === 'dead'
-                              ? 'text-red-300'
-                              : delivery.state === 'skipped'
-                                ? 'text-white/30'
+                        {delivery.last_error && (
+                          <p className="mt-1 max-w-2xl break-words text-red-200/70">
+                            {delivery.last_error}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span
+                          className={
+                            delivery.state === 'delivered'
+                              ? 'text-emerald-300'
+                              : delivery.state === 'failed' || delivery.state === 'dead'
+                                ? 'text-red-300'
                                 : 'text-amber-300'
-                        }
-                      >
-                        {delivery.state}
-                      </span>
-                      {canManage && (delivery.state === 'failed' || delivery.state === 'dead') && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => retryPushcutDelivery.mutate(delivery.id)}
+                          }
                         >
-                          Reenviar
-                        </Button>
-                      )}
+                          {delivery.state}
+                        </span>
+                        {canManage &&
+                          (delivery.state === 'failed' || delivery.state === 'dead') && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => retryUtmify.mutate(delivery.id)}
+                            >
+                              Reenviar
+                            </Button>
+                          )}
+                      </div>
                     </div>
+                  ))}
+                  {!utmifyDeliveries.data?.deliveries?.length && (
+                    <p className="rounded border border-dashed border-white/[0.08] p-4 text-sm text-white/35">
+                      As entregas aparecerão aqui quando o primeiro pedido for recebido.
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="mt-6">
+                <p className="hud-label">Produtos: front ou upsell?</p>
+                <p className="mt-1 max-w-2xl text-xs text-white/45">
+                  Cada produto da Vendepay precisa ser marcado como venda front (novo comprador) ou
+                  upsell (compra adicional do mesmo comprador). Sem isso o pedido fica &quot;não
+                  mapeado&quot; e não entra corretamente nos números de front/upsell do resumo.
+                </p>
+                {(productKinds.data?.unmapped ?? []).length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    <p className="text-[10px] uppercase tracking-wider text-amber-300/70">
+                      Produtos vistos em pedidos mas ainda não classificados
+                    </p>
+                    {(productKinds.data?.unmapped ?? []).map((product) => (
+                      <div
+                        key={product.product_id}
+                        className="flex flex-wrap items-center justify-between gap-3 rounded border border-amber-300/15 bg-amber-300/[0.03] p-3 text-xs"
+                      >
+                        <div>
+                          <p className="font-mono text-white/70">{product.product_id}</p>
+                          <p className="mt-1 text-white/40">
+                            {product.product_name ?? 'sem nome'} · {product.orders} pedido(s)
+                          </p>
+                        </div>
+                        {canManage && (
+                          <div className="flex items-center gap-2">
+                            <select
+                              className="rounded border border-white/10 bg-black/20 px-2 py-1 text-xs text-white/80"
+                              value={productKindSelection[product.product_id] ?? 'front'}
+                              onChange={(event) =>
+                                setProductKindSelection((prev) => ({
+                                  ...prev,
+                                  [product.product_id]: event.target.value as
+                                    | 'front'
+                                    | 'upsell'
+                                    | 'upsell_2',
+                                }))
+                              }
+                            >
+                              <option value="front">Front</option>
+                              <option value="upsell">Upsell 1</option>
+                              <option value="upsell_2">Upsell 2</option>
+                            </select>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={saveProductKind.isPending}
+                              onClick={() =>
+                                saveProductKind.mutate({
+                                  product_id: product.product_id,
+                                  kind: productKindSelection[product.product_id] ?? 'front',
+                                  label: product.product_name,
+                                })
+                              }
+                            >
+                              Classificar
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                ))}
-                {!pushcutDeliveries.data?.deliveries?.length && (
-                  <p className="rounded border border-dashed border-white/[0.08] p-4 text-sm text-white/35">
-                    As entregas aparecerão aqui quando o primeiro pedido pago chegar.
-                  </p>
                 )}
+                <div className="mt-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] uppercase tracking-wider text-white/35">
+                      Mapeamentos salvos
+                    </p>
+                    {canManage && (productKinds.data?.mapped ?? []).length > 0 && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={recomputeProductKinds.isPending}
+                        onClick={() => recomputeProductKinds.mutate()}
+                      >
+                        Reclassificar pedidos existentes
+                      </Button>
+                    )}
+                  </div>
+                  {(productKinds.data?.mapped ?? []).map((mapping) => (
+                    <div
+                      key={mapping.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded border border-white/[0.07] p-3 text-xs"
+                    >
+                      <div>
+                        <p className="font-mono text-white/70">{mapping.product_id}</p>
+                        {mapping.label && <p className="mt-1 text-white/40">{mapping.label}</p>}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={
+                            mapping.kind === 'front'
+                              ? 'text-emerald-300'
+                              : mapping.kind === 'upsell'
+                                ? 'text-cyan-300'
+                                : 'text-amber-300'
+                          }
+                        >
+                          {mapping.kind === 'front'
+                            ? 'Front'
+                            : mapping.kind === 'upsell'
+                              ? 'Upsell 1'
+                              : 'Upsell 2'}
+                        </span>
+                        {canManage && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={removeProductKind.isPending}
+                            onClick={() => removeProductKind.mutate(mapping.product_id)}
+                          >
+                            Remover
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {!productKinds.data?.mapped?.length && (
+                    <p className="rounded border border-dashed border-white/[0.08] p-4 text-sm text-white/35">
+                      Nenhum produto classificado ainda.
+                    </p>
+                  )}
+                </div>
               </div>
-            </div>
-          </Module>
-        )}
-        {section === 'fees' && (
-          <Module
-            title="Taxas e líquido"
-            description="Configure as taxas cobradas pelo gateway pra calcular o faturamento líquido (bruto − reembolsos − chargebacks − taxas) exibido no Funil. Os valores já vêm preenchidos com as taxas do Mercado Global da Vendepay — ajuste se sua oferta usar outra tabela."
-          >
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <label htmlFor="fee-vendepay-pct" className="block text-xs text-white/45">
-                  Taxa Vendepay (%)
-                </label>
-                <Input
-                  id="fee-vendepay-pct"
-                  className="mt-2"
-                  inputMode="decimal"
-                  value={feeVendepayPct}
-                  onChange={(e) => setFeeVendepayPct(e.target.value)}
-                  placeholder="9.9"
-                />
+            </Module>
+          )}
+          {section === 'pushcut' && (
+            <Module
+              title="Notificações Pushcut"
+              description="Receba uma notificação push no iPhone/iPad sempre que uma venda front ou upsell for aprovada. Cada destino é uma conta Pushcut (app) diferente — configure quantas precisar."
+            >
+              <div className="rounded border border-white/[0.07] bg-black/10 p-4 text-xs leading-5 text-white/50">
+                No app Pushcut, crie uma notificação em{' '}
+                <span className="font-mono">Notifications</span> (ex.: "Venda Aprovada") e outra pra
+                upsell se quiser sons diferentes. Copie o <span className="font-mono">secret</span>{' '}
+                da sua conta (aparece na URL do webhook,{' '}
+                <span className="font-mono">api.pushcut.io/[secret]/notifications/...</span>) e o
+                nome exato de cada notificação (ou o Reference ID, em Settings → Shortcuts).
               </div>
-              <div className="grid grid-cols-[1fr_90px] gap-2">
+
+              <div className="mt-6 grid gap-3 sm:grid-cols-2">
                 <div>
-                  <label htmlFor="fee-extra-amount" className="block text-xs text-white/45">
-                    Taxa extra (por venda)
+                  <label htmlFor="pushcut-name" className="block text-xs text-white/45">
+                    Nome do destino (ex.: iPhone do Iago)
                   </label>
                   <Input
-                    id="fee-extra-amount"
+                    id="pushcut-name"
+                    className="mt-2"
+                    value={pushcutName}
+                    onChange={(e) => setPushcutName(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="pushcut-secret" className="block text-xs text-white/45">
+                    Secret da conta Pushcut
+                  </label>
+                  <Input
+                    id="pushcut-secret"
+                    className="mt-2"
+                    type="password"
+                    value={pushcutSecret}
+                    onChange={(e) => setPushcutSecret(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="pushcut-front" className="block text-xs text-white/45">
+                    Nome da notificação · venda front
+                  </label>
+                  <Input
+                    id="pushcut-front"
+                    className="mt-2"
+                    value={pushcutFrontNotification}
+                    onChange={(e) => setPushcutFrontNotification(e.target.value)}
+                    placeholder="Venda Aprovada"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="pushcut-upsell" className="block text-xs text-white/45">
+                    Nome da notificação · upsell (opcional)
+                  </label>
+                  <Input
+                    id="pushcut-upsell"
+                    className="mt-2"
+                    value={pushcutUpsellNotification}
+                    onChange={(e) => setPushcutUpsellNotification(e.target.value)}
+                    placeholder="Deixe em branco pra não notificar upsell"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label htmlFor="pushcut-devices" className="block text-xs text-white/45">
+                    Dispositivos específicos (opcional, separados por vírgula)
+                  </label>
+                  <Input
+                    id="pushcut-devices"
+                    className="mt-2"
+                    value={pushcutDevices}
+                    onChange={(e) => setPushcutDevices(e.target.value)}
+                    placeholder="iPhone de Iago, iPad"
+                  />
+                </div>
+              </div>
+              {canManage && (
+                <Button
+                  className="mt-4"
+                  disabled={
+                    createPushcutDestination.isPending ||
+                    !pushcutName ||
+                    !pushcutSecret ||
+                    !pushcutFrontNotification
+                  }
+                  onClick={() => createPushcutDestination.mutate()}
+                >
+                  Adicionar destino
+                </Button>
+              )}
+
+              <div className="mt-7 border-t border-white/[0.07] pt-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="hud-label">Destinos configurados</p>
+                  {canManage && (pushcutDestinations.data?.destinations?.length ?? 0) > 0 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={resendPushcutHistory.isPending}
+                      onClick={() => resendPushcutHistory.mutate()}
+                    >
+                      Reenviar todas as compras já feitas
+                    </Button>
+                  )}
+                </div>
+                <div className="mt-3 space-y-2">
+                  {(pushcutDestinations.data?.destinations ?? []).map((destination) => (
+                    <div
+                      key={destination.id}
+                      className="rounded border border-white/[0.07] bg-black/10 p-3 text-xs"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="font-medium text-white/85">{destination.name}</p>
+                          <p className="mt-1 text-white/40">
+                            Front:{' '}
+                            <span className="font-mono">{destination.front_notification_name}</span>
+                            {destination.upsell_notification_name && (
+                              <>
+                                {' '}
+                                · Upsell:{' '}
+                                <span className="font-mono">
+                                  {destination.upsell_notification_name}
+                                </span>
+                              </>
+                            )}
+                          </p>
+                          {Array.isArray(destination.devices) && destination.devices.length > 0 && (
+                            <p className="mt-1 text-white/30">
+                              Dispositivos: {destination.devices.join(', ')}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={destination.enabled ? 'text-emerald-300' : 'text-white/30'}
+                          >
+                            {destination.enabled ? 'ativo' : 'desativado'}
+                          </span>
+                          {canManage && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={testPushcutDestination.isPending}
+                                onClick={() => testPushcutDestination.mutate(destination.id)}
+                              >
+                                Testar
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={togglePushcutDestination.isPending}
+                                onClick={() =>
+                                  togglePushcutDestination.mutate({
+                                    destinationId: destination.id,
+                                    enabled: !destination.enabled,
+                                  })
+                                }
+                              >
+                                {destination.enabled ? 'Desativar' : 'Ativar'}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                disabled={removePushcutDestination.isPending}
+                                onClick={() => removePushcutDestination.mutate(destination.id)}
+                              >
+                                Remover
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {!pushcutDestinations.data?.destinations?.length && (
+                    <p className="rounded border border-dashed border-white/[0.08] p-4 text-sm text-white/35">
+                      Nenhum destino Pushcut configurado ainda.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-7 border-t border-white/[0.07] pt-6">
+                <p className="hud-label">Últimas entregas</p>
+                <div className="mt-3 space-y-2">
+                  {(pushcutDeliveries.data?.deliveries ?? []).slice(0, 30).map((delivery) => (
+                    <div
+                      key={delivery.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded border border-white/[0.07] p-3 text-xs"
+                    >
+                      <div>
+                        <p className="font-mono text-white/70">{delivery.transaction_id}</p>
+                        <p className="mt-1 text-white/35">
+                          {delivery.destination_name ?? 'destino removido'} · {delivery.order_kind}{' '}
+                          · {delivery.attempts} tentativa(s)
+                          {delivery.response_status ? ` · HTTP ${delivery.response_status}` : ''}
+                        </p>
+                        {delivery.last_error && (
+                          <p className="mt-1 max-w-2xl break-words text-red-200/70">
+                            {delivery.last_error}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span
+                          className={
+                            delivery.state === 'delivered'
+                              ? 'text-emerald-300'
+                              : delivery.state === 'failed' || delivery.state === 'dead'
+                                ? 'text-red-300'
+                                : delivery.state === 'skipped'
+                                  ? 'text-white/30'
+                                  : 'text-amber-300'
+                          }
+                        >
+                          {delivery.state}
+                        </span>
+                        {canManage &&
+                          (delivery.state === 'failed' || delivery.state === 'dead') && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => retryPushcutDelivery.mutate(delivery.id)}
+                            >
+                              Reenviar
+                            </Button>
+                          )}
+                      </div>
+                    </div>
+                  ))}
+                  {!pushcutDeliveries.data?.deliveries?.length && (
+                    <p className="rounded border border-dashed border-white/[0.08] p-4 text-sm text-white/35">
+                      As entregas aparecerão aqui quando o primeiro pedido pago chegar.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </Module>
+          )}
+          {section === 'fees' && (
+            <Module
+              title="Taxas e líquido"
+              description="Configure as taxas cobradas pelo gateway pra calcular o faturamento líquido (bruto − reembolsos − chargebacks − taxas) exibido no Funil. Os valores já vêm preenchidos com as taxas do Mercado Global da Vendepay — ajuste se sua oferta usar outra tabela."
+            >
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="fee-vendepay-pct" className="block text-xs text-white/45">
+                    Taxa Vendepay (%)
+                  </label>
+                  <Input
+                    id="fee-vendepay-pct"
                     className="mt-2"
                     inputMode="decimal"
-                    value={feeExtraAmount}
-                    onChange={(e) => setFeeExtraAmount(e.target.value)}
-                    placeholder="1.49"
+                    value={feeVendepayPct}
+                    onChange={(e) => setFeeVendepayPct(e.target.value)}
+                    placeholder="9.9"
+                  />
+                </div>
+                <div className="grid grid-cols-[1fr_90px] gap-2">
+                  <div>
+                    <label htmlFor="fee-extra-amount" className="block text-xs text-white/45">
+                      Taxa extra (por venda)
+                    </label>
+                    <Input
+                      id="fee-extra-amount"
+                      className="mt-2"
+                      inputMode="decimal"
+                      value={feeExtraAmount}
+                      onChange={(e) => setFeeExtraAmount(e.target.value)}
+                      placeholder="1.49"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="fee-extra-currency" className="block text-xs text-white/45">
+                      Moeda
+                    </label>
+                    <Input
+                      id="fee-extra-currency"
+                      className="mt-2 uppercase"
+                      maxLength={3}
+                      value={feeExtraCurrency}
+                      onChange={(e) => setFeeExtraCurrency(e.target.value.toUpperCase())}
+                      placeholder="USD"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label htmlFor="fee-reserve-pct" className="block text-xs text-white/45">
+                    Reserva (%)
+                  </label>
+                  <Input
+                    id="fee-reserve-pct"
+                    className="mt-2"
+                    inputMode="decimal"
+                    value={feeReservePct}
+                    onChange={(e) => setFeeReservePct(e.target.value)}
+                    placeholder="6.9"
                   />
                 </div>
                 <div>
-                  <label htmlFor="fee-extra-currency" className="block text-xs text-white/45">
-                    Moeda
+                  <label htmlFor="fee-reserve-days" className="block text-xs text-white/45">
+                    Tempo de reserva (dias)
                   </label>
                   <Input
-                    id="fee-extra-currency"
-                    className="mt-2 uppercase"
-                    maxLength={3}
-                    value={feeExtraCurrency}
-                    onChange={(e) => setFeeExtraCurrency(e.target.value.toUpperCase())}
-                    placeholder="USD"
+                    id="fee-reserve-days"
+                    className="mt-2"
+                    inputMode="numeric"
+                    value={feeReserveDays}
+                    onChange={(e) => setFeeReserveDays(e.target.value)}
+                    placeholder="90"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="fee-payout-days" className="block text-xs text-white/45">
+                    Recebe em (dias)
+                  </label>
+                  <Input
+                    id="fee-payout-days"
+                    className="mt-2"
+                    inputMode="numeric"
+                    value={feePayoutDays}
+                    onChange={(e) => setFeePayoutDays(e.target.value)}
+                    placeholder="5"
                   />
                 </div>
               </div>
-              <div>
-                <label htmlFor="fee-reserve-pct" className="block text-xs text-white/45">
-                  Reserva (%)
-                </label>
-                <Input
-                  id="fee-reserve-pct"
-                  className="mt-2"
-                  inputMode="decimal"
-                  value={feeReservePct}
-                  onChange={(e) => setFeeReservePct(e.target.value)}
-                  placeholder="6.9"
-                />
-              </div>
-              <div>
-                <label htmlFor="fee-reserve-days" className="block text-xs text-white/45">
-                  Tempo de reserva (dias)
-                </label>
-                <Input
-                  id="fee-reserve-days"
-                  className="mt-2"
-                  inputMode="numeric"
-                  value={feeReserveDays}
-                  onChange={(e) => setFeeReserveDays(e.target.value)}
-                  placeholder="90"
-                />
-              </div>
-              <div>
-                <label htmlFor="fee-payout-days" className="block text-xs text-white/45">
-                  Recebe em (dias)
-                </label>
-                <Input
-                  id="fee-payout-days"
-                  className="mt-2"
-                  inputMode="numeric"
-                  value={feePayoutDays}
-                  onChange={(e) => setFeePayoutDays(e.target.value)}
-                  placeholder="5"
-                />
-              </div>
-            </div>
-            {canManage && (
-              <Button
-                className="mt-4"
-                disabled={saveFeeSettings.isPending}
-                onClick={() => saveFeeSettings.mutate()}
-              >
-                Salvar taxas
-              </Button>
-            )}
-            {feeSettings.data && !feeSettings.data.configured && (
-              <p className="mt-4 rounded border border-dashed border-white/[0.08] p-3 text-xs text-white/40">
-                Ainda usando os valores padrão do Mercado Global. Salve pra fixar essa configuração
-                nesta oferta.
-              </p>
-            )}
-          </Module>
-        )}
-        {section === 'ab' && (
-          <Module
-            title="Links e testes A/B"
-            description="Mede a conexão entre o clique do anúncio e o carregamento real, além de dividir o tráfego entre variantes."
-          >
-            <div className="mb-6 rounded-2xl border border-emerald-300/15 bg-emerald-300/[0.035] p-4">
-              <p className="hud-label text-emerald-200">Connect Rate · 100% TMX</p>
-              <h3 className="mt-2 text-base font-semibold text-white">
-                Link de entrada do anúncio
-              </h3>
-              <p className="mt-2 text-xs leading-5 text-white/55">
-                Use este link como destino no anúncio. O TMX registra o clique antes do
-                redirecionamento, preserva todos os parâmetros e confirma a conexão quando o script
-                envia o PageView.
-              </p>
               {canManage && (
-                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <Button
+                  className="mt-4"
+                  disabled={saveFeeSettings.isPending}
+                  onClick={() => saveFeeSettings.mutate()}
+                >
+                  Salvar taxas
+                </Button>
+              )}
+              {feeSettings.data && !feeSettings.data.configured && (
+                <p className="mt-4 rounded border border-dashed border-white/[0.08] p-3 text-xs text-white/40">
+                  Ainda usando os valores padrão do Mercado Global. Salve pra fixar essa
+                  configuração nesta oferta.
+                </p>
+              )}
+            </Module>
+          )}
+          {section === 'ab' && (
+            <Module
+              title="Links e testes A/B"
+              description="Mede a conexão entre o clique do anúncio e o carregamento real, além de dividir o tráfego entre variantes."
+            >
+              <div className="mb-6 rounded-2xl border border-emerald-300/15 bg-emerald-300/[0.035] p-4">
+                <p className="hud-label text-emerald-200">Connect Rate · 100% TMX</p>
+                <h3 className="mt-2 text-base font-semibold text-white">
+                  Link de entrada do anúncio
+                </h3>
+                <p className="mt-2 text-xs leading-5 text-white/55">
+                  Use este link como destino no anúncio. O TMX registra o clique antes do
+                  redirecionamento, preserva todos os parâmetros e confirma a conexão quando o
+                  script envia o PageView.
+                </p>
+                {canManage && (
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    <Input
+                      value={entryLinkName}
+                      onChange={(event) => setEntryLinkName(event.target.value)}
+                      placeholder="Nome, ex.: Entrada PJR"
+                    />
+                    <Input
+                      value={entryDestination}
+                      onChange={(event) => setEntryDestination(event.target.value)}
+                      placeholder="URL final da landing page"
+                    />
+                    <Button
+                      className="md:col-span-2"
+                      disabled={
+                        entryLinkName.trim().length < 2 ||
+                        !entryDestination.startsWith('http') ||
+                        createEntryLink.isPending
+                      }
+                      onClick={() => createEntryLink.mutate()}
+                    >
+                      Criar link de entrada
+                    </Button>
+                  </div>
+                )}
+                <div className="mt-4 space-y-3">
+                  {(advanced.data?.entry_links ?? []).map((link) => (
+                    <div
+                      key={link.id}
+                      className="rounded-xl border border-white/[0.08] bg-black/10 p-4"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-medium text-white/85">{link.name}</p>
+                          <p className="mt-1 truncate text-xs text-white/40">
+                            Destino: {link.destination_url}
+                          </p>
+                        </div>
+                        <span className="text-xs text-emerald-300">Ativo</span>
+                      </div>
+                      <code className="mt-3 block overflow-x-auto whitespace-nowrap rounded-lg bg-black/20 p-3 text-xs text-cyan-100/75">
+                        {link.tracking_url}
+                      </code>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          onClick={async () => {
+                            await navigator.clipboard.writeText(link.tracking_url);
+                            toast.success('Link de entrada copiado.');
+                          }}
+                        >
+                          <Copy className="mr-2 h-3.5 w-3.5" />
+                          Copiar para o anúncio
+                        </Button>
+                        <Button asChild size="sm" variant="outline">
+                          <a
+                            href={`${link.tracking_url}?tmx_preview=1`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            Testar sem contabilizar
+                          </a>
+                        </Button>
+                        {canManage && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={removeEntryLink.isPending}
+                            onClick={() => {
+                              if (window.confirm(`Remover o link "${link.name}"?`)) {
+                                removeEntryLink.mutate(link.id);
+                              }
+                            }}
+                          >
+                            Remover
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {canManage && (
+                <div className="grid gap-3 md:grid-cols-2">
                   <Input
-                    value={entryLinkName}
-                    onChange={(event) => setEntryLinkName(event.target.value)}
-                    placeholder="Nome, ex.: Entrada PJR"
+                    className="md:col-span-2"
+                    value={testName}
+                    onChange={(e) => setTestName(e.target.value)}
+                    placeholder="Nome do teste"
+                  />
+                  <select
+                    value={kind}
+                    onChange={(e) => setKind(e.target.value as typeof kind)}
+                    className="h-10 rounded-md border border-white/[0.1] bg-[#06131d] px-3 text-sm text-white"
+                  >
+                    <option value="checkout">No checkout</option>
+                    <option value="presell">Na presell</option>
+                  </select>
+                  <label className="text-xs text-white/65">
+                    Tráfego da variante A: {trafficA}%
+                    <input
+                      className="mt-3 w-full accent-cyan-300"
+                      type="range"
+                      min="10"
+                      max="90"
+                      step="5"
+                      value={trafficA}
+                      onChange={(event) => setTrafficA(event.target.value)}
+                    />
+                  </label>
+                  <Input
+                    value={armA}
+                    onChange={(e) => setArmA(e.target.value)}
+                    placeholder="Braço A"
                   />
                   <Input
-                    value={entryDestination}
-                    onChange={(event) => setEntryDestination(event.target.value)}
-                    placeholder="URL final da landing page"
+                    value={armB}
+                    onChange={(e) => setArmB(e.target.value)}
+                    placeholder="Braço B"
                   />
+                  <Input
+                    value={destinationA}
+                    onChange={(event) => setDestinationA(event.target.value)}
+                    placeholder="URL de destino da variante A"
+                  />
+                  <Input
+                    value={destinationB}
+                    onChange={(event) => setDestinationB(event.target.value)}
+                    placeholder="URL de destino da variante B"
+                  />
+                  <div className="md:col-span-2 rounded-xl border border-cyan-300/15 bg-cyan-300/[0.04] p-4 text-xs leading-5 text-white/65">
+                    Cada visitante permanece na mesma variante. O TMX troca o destino dos botões de
+                    checkout, preserva UTMs e <code className="text-cyan-200">src</code>, e mede
+                    visitantes, checkouts, compras e receita.
+                  </div>
                   <Button
                     className="md:col-span-2"
                     disabled={
-                      entryLinkName.trim().length < 2 ||
-                      !entryDestination.startsWith('http') ||
-                      createEntryLink.isPending
+                      !testName.trim() ||
+                      !destinationA.startsWith('http') ||
+                      !destinationB.startsWith('http') ||
+                      createTest.isPending
                     }
-                    onClick={() => createEntryLink.mutate()}
+                    onClick={() => createTest.mutate()}
                   >
-                    Criar link de entrada
+                    Criar e ativar teste
                   </Button>
                 </div>
               )}
-              <div className="mt-4 space-y-3">
-                {(advanced.data?.entry_links ?? []).map((link) => (
-                  <div
-                    key={link.id}
-                    className="rounded-xl border border-white/[0.08] bg-black/10 p-4"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-medium text-white/85">{link.name}</p>
-                        <p className="mt-1 truncate text-xs text-white/40">
-                          Destino: {link.destination_url}
-                        </p>
-                      </div>
-                      <span className="text-xs text-emerald-300">Ativo</span>
-                    </div>
-                    <code className="mt-3 block overflow-x-auto whitespace-nowrap rounded-lg bg-black/20 p-3 text-xs text-cyan-100/75">
-                      {link.tracking_url}
-                    </code>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <Button
-                        size="sm"
-                        onClick={async () => {
-                          await navigator.clipboard.writeText(link.tracking_url);
-                          toast.success('Link de entrada copiado.');
-                        }}
-                      >
-                        <Copy className="mr-2 h-3.5 w-3.5" />
-                        Copiar para o anúncio
-                      </Button>
-                      <Button asChild size="sm" variant="outline">
-                        <a
-                          href={`${link.tracking_url}?tmx_preview=1`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          Testar sem contabilizar
-                        </a>
-                      </Button>
-                      {canManage && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          disabled={removeEntryLink.isPending}
-                          onClick={() => {
-                            if (window.confirm(`Remover o link "${link.name}"?`)) {
-                              removeEntryLink.mutate(link.id);
-                            }
-                          }}
-                        >
-                          Remover
-                        </Button>
-                      )}
-                    </div>
-                  </div>
+              <div className="mt-5 space-y-2">
+                {advanced.data?.ab_tests?.map((test) => (
+                  <AbTestCard
+                    key={test.id}
+                    offerId={offerId}
+                    test={test}
+                    canManage={canManage}
+                    onUpdated={refresh}
+                  />
                 ))}
               </div>
-            </div>
-            {canManage && (
-              <div className="grid gap-3 md:grid-cols-2">
-                <Input
-                  className="md:col-span-2"
-                  value={testName}
-                  onChange={(e) => setTestName(e.target.value)}
-                  placeholder="Nome do teste"
-                />
-                <select
-                  value={kind}
-                  onChange={(e) => setKind(e.target.value as typeof kind)}
-                  className="h-10 rounded-md border border-white/[0.1] bg-[#06131d] px-3 text-sm text-white"
-                >
-                  <option value="checkout">No checkout</option>
-                  <option value="presell">Na presell</option>
-                </select>
-                <label className="text-xs text-white/65">
-                  Tráfego da variante A: {trafficA}%
-                  <input
-                    className="mt-3 w-full accent-cyan-300"
-                    type="range"
-                    min="10"
-                    max="90"
-                    step="5"
-                    value={trafficA}
-                    onChange={(event) => setTrafficA(event.target.value)}
-                  />
-                </label>
-                <Input
-                  value={armA}
-                  onChange={(e) => setArmA(e.target.value)}
-                  placeholder="Braço A"
-                />
-                <Input
-                  value={armB}
-                  onChange={(e) => setArmB(e.target.value)}
-                  placeholder="Braço B"
-                />
-                <Input
-                  value={destinationA}
-                  onChange={(event) => setDestinationA(event.target.value)}
-                  placeholder="URL de destino da variante A"
-                />
-                <Input
-                  value={destinationB}
-                  onChange={(event) => setDestinationB(event.target.value)}
-                  placeholder="URL de destino da variante B"
-                />
-                <div className="md:col-span-2 rounded-xl border border-cyan-300/15 bg-cyan-300/[0.04] p-4 text-xs leading-5 text-white/65">
-                  Cada visitante permanece na mesma variante. O TMX troca o destino dos botões de
-                  checkout, preserva UTMs e <code className="text-cyan-200">src</code>, e mede
-                  visitantes, checkouts, compras e receita.
-                </div>
-                <Button
-                  className="md:col-span-2"
-                  disabled={
-                    !testName.trim() ||
-                    !destinationA.startsWith('http') ||
-                    !destinationB.startsWith('http') ||
-                    createTest.isPending
-                  }
-                  onClick={() => createTest.mutate()}
-                >
-                  Criar e ativar teste
-                </Button>
+            </Module>
+          )}
+          {section === 'vturb' && (
+            <Module
+              title="Conversões vTurb"
+              description="Central de reenvio de vendas para recuperar a atribuição da vTurb."
+            >
+              <div className="rounded border border-white/[0.07] p-4 text-sm text-white/55">
+                Estado:{' '}
+                <span className="text-amber-300">
+                  {advanced.data?.vturb?.enabled ? 'enviando' : 'aguardando configuração'}
+                </span>
+                <p className="mt-2 text-xs text-white/35">
+                  As vendas seguem o ciclo recebida → ID capturado → enviada, com tentativas
+                  registradas.
+                </p>
               </div>
-            )}
-            <div className="mt-5 space-y-2">
-              {advanced.data?.ab_tests?.map((test) => (
-                <AbTestCard
-                  key={test.id}
-                  offerId={offerId}
-                  test={test}
-                  canManage={canManage}
-                  onUpdated={refresh}
-                />
-              ))}
-            </div>
-          </Module>
-        )}
-        {section === 'vturb' && (
-          <Module
-            title="Conversões vTurb"
-            description="Central de reenvio de vendas para recuperar a atribuição da vTurb."
-          >
-            <div className="rounded border border-white/[0.07] p-4 text-sm text-white/55">
-              Estado:{' '}
-              <span className="text-amber-300">
-                {advanced.data?.vturb?.enabled ? 'enviando' : 'aguardando configuração'}
-              </span>
-              <p className="mt-2 text-xs text-white/35">
-                As vendas seguem o ciclo recebida → ID capturado → enviada, com tentativas
-                registradas.
-              </p>
-            </div>
-          </Module>
-        )}
+            </Module>
+          )}
+        </div>
       </div>
     </div>
   );
