@@ -74,9 +74,13 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
       setTestEventCode('');
       void queryClient.invalidateQueries({ queryKey: ['tracking-meta-pixels', offerId] });
       if (result.verification === 'verified') {
-        toast.success('Pixel Meta validado e salvo.');
+        toast.success(
+          `Pixel Meta validado. ${result.backfill_queued} conversão(ões) recente(s) enviada(s) para popular o pixel.`,
+        );
       } else {
-        toast.warning(result.verification_warning ?? 'Pixel salvo. Faça um envio em Test Events.');
+        toast.warning(
+          `${result.verification_warning ?? 'Pixel salvo. Faça um envio em Test Events.'} ${result.backfill_queued} conversão(ões) recente(s) foram enfileiradas.`,
+        );
       }
     },
     onError: (error) => toast.error((error as Error).message),
@@ -232,8 +236,9 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
                 </div>
               </div>
               <p className="mt-2 max-w-3xl text-xs leading-5 text-white/45">
-                Cada evento elegível será disparado no navegador e retroalimentado via CAPI em
-                todos os pixels ativos desta oferta, com o mesmo Event ID para deduplicação.
+                Cada IC e venda elegível é enviado via CAPI para todos os pixels ativos desta
+                oferta. Ao adicionar outro pixel, o TMX também envia automaticamente as conversões
+                dos últimos sete dias, com deduplicação independente por pixel.
               </p>
               {pixels.data?.pixels.map((pixel) => (
                 <div

@@ -2139,7 +2139,11 @@ export const apiClient = {
   async saveMetaPixel(
     id: string,
     input: { name: string; pixel_id: string; access_token: string; test_event_code?: string },
-  ): Promise<{ verification: 'verified' | 'pending_event_test'; verification_warning?: string }> {
+  ): Promise<{
+    verification: 'verified' | 'pending_event_test';
+    verification_warning?: string;
+    backfill_queued: number;
+  }> {
     return request(`/v1/offers/${id}/tracking/meta-pixels`, { method: 'POST', body: input });
   },
 

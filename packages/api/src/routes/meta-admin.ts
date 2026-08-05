@@ -70,7 +70,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       ? 'O token CAPI foi salvo, mas não possui permissão para consultar o Pixel via GET. Isso é comum em tokens gerados pelo Events Manager; valide-o enviando um evento com Test Event Code.'
       : null;
 
-    const [pixel] = await app.db`
+    const [pixel] = await app.db<{ id: string; name: string; pixel_id: string; test_event_code: string | null; enabled: boolean; created_at: Date }[]>`
       INSERT INTO meta_pixels
         (id, project_id, name, pixel_id, access_token_encrypted, test_event_code)
       VALUES
@@ -84,8 +84,47 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         enabled = true
       RETURNING id, name, pixel_id, test_event_code, enabled, created_at
     `;
+    if (!pixel) return reply.code(500).send({ error: 'meta_pixel_not_saved' });
+    const backfill = await app.db.begin(async (sql) => {
+      const purchases = await sql<{ id: string }[]>`
+        INSERT INTO meta_deliveries
+          (id, project_id, pixel_id, order_id, event_id, event_name, event_at)
+        SELECT md5(${pixel.id} || ':' || o.id || ':pixel-backfill-purchase'),
+               ${project.id}, ${pixel.id}, o.id,
+               'vendepay:' || o.external_id || ':purchase', 'Purchase',
+               COALESCE(o.paid_at, o.occurred_at)
+        FROM tracking_orders o
+        LEFT JOIN tracking_meta_rules rules ON rules.project_id=o.project_id
+        WHERE o.project_id=${project.id}
+          AND o.status='paid'
+          AND COALESCE(o.paid_at, o.occurred_at) >= now() - interval '6 days 23 hours'
+          AND (rules.attributed_only IS NOT TRUE OR NULLIF(o.attribution_source->>'src', '') IS NOT NULL)
+          AND (rules.minimum_amount_minor IS NULL OR COALESCE(o.amount_minor, 0) >= rules.minimum_amount_minor)
+        ON CONFLICT (pixel_id, event_id) DO NOTHING
+        RETURNING id
+      `;
+      const checkouts = await sql<{ id: string }[]>`
+        INSERT INTO meta_deliveries
+          (id, project_id, pixel_id, order_id, event_id, event_name, event_at)
+        SELECT md5(${pixel.id} || ':' || e.id || ':pixel-backfill-ic'),
+               ${project.id}, ${pixel.id}, NULL, e.id, 'InitiateCheckout', e.received_at
+        FROM tracking_events e
+        WHERE e.project_id=${project.id}
+          AND e.event_name='InitiateCheckout'
+          AND e.received_at >= now() - interval '6 days 23 hours'
+        ON CONFLICT (pixel_id, event_id) DO NOTHING
+        RETURNING id
+      `;
+      return [...purchases, ...checkouts];
+    });
+    await Promise.allSettled(
+      backfill.map(({ id }) =>
+        app.metaQueue.add('send', { deliveryId: id }, { jobId: `${id}-pixel-backfill` }),
+      ),
+    );
     return reply.code(201).send({
       pixel,
+      backfill_queued: backfill.length,
       verification: verification.ok ? 'verified' : 'pending_event_test',
       ...(verificationWarning ? { verification_warning: verificationWarning } : {}),
     });
