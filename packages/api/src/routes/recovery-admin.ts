@@ -97,6 +97,8 @@ const appendAttribution = (destination: string, source: Record<string, string>) 
 const renderRecoveryEmail = (message: string, name: string, link: string) =>
   message
     .replaceAll('{{nome}}', name)
+    .replaceAll('href="{{link}}"', `href="${link}"`)
+    .replaceAll("href='{{link}}'", `href='${link}'`)
     .replaceAll('{{link}}', `<a href="${link}">Retomar compra</a>`);
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
