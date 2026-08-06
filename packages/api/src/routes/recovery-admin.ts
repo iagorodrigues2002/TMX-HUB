@@ -223,9 +223,15 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       ORDER BY ro.recovered_at DESC LIMIT 100
     `;
     const testRuns = await app.db<Array<Record<string, unknown>>>`
-      SELECT id,recipient,state,sent_at,clicked_at,checkout_at,created_at
-      FROM recovery_test_runs WHERE project_id=${project.id}
-      ORDER BY created_at DESC LIMIT 10`;
+      SELECT rtr.id,rtr.recipient,rtr.state,rtr.sent_at,rtr.opened_at,rtr.clicked_at,
+        rtr.checkout_at,rtr.created_at,
+        count(rte.id) FILTER (WHERE rte.event_type='opened')::int AS open_count,
+        count(rte.id) FILTER (WHERE rte.event_type='clicked')::int AS click_count,
+        count(rte.id) FILTER (WHERE rte.event_type='checkout')::int AS checkout_count
+      FROM recovery_test_runs rtr
+      LEFT JOIN recovery_test_events rte ON rte.test_run_id=rtr.id
+      WHERE rtr.project_id=${project.id}
+      GROUP BY rtr.id ORDER BY rtr.created_at DESC LIMIT 10`;
     const totals = await app.db<
       Array<{
         eligible: number;

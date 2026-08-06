@@ -47,6 +47,7 @@ const migrations = [
   '032_utmify_upsell_attribution.sql',
   '033_recovery_attribution_events.sql',
   '034_recovery_test_runs.sql',
+  '035_recovery_test_events.sql',
 ];
 
 await sql`

@@ -766,8 +766,12 @@ export interface RecoveryView {
     recipient: string;
     state: 'pending' | 'sent' | 'failed';
     sent_at: string | null;
+    opened_at: string | null;
     clicked_at: string | null;
     checkout_at: string | null;
+    open_count: number;
+    click_count: number;
+    checkout_count: number;
     created_at: string;
   }>;
 }

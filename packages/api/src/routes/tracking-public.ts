@@ -226,7 +226,26 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     }
     if (rows[0] && eventType === 'email.clicked')
       await app.db`UPDATE recovery_opportunities SET status=CASE WHEN status IN ('eligible','contacted') THEN 'clicked' ELSE status END,clicked_at=COALESCE(clicked_at,now()),updated_at=now() WHERE id=${String(rows[0].opportunity_id)}`;
-    return reply.send({ accepted: true, matched: Boolean(rows[0]) });
+    let testMatched = false;
+    if (!rows[0] && eventType === 'email.opened') {
+      const [testRun] = await app.db<Array<{ id: string }>>`
+        SELECT rtr.id FROM recovery_test_runs rtr
+        JOIN recovery_channels rc ON rc.project_id=rtr.project_id AND rc.kind='email'
+        WHERE rc.webhook_token_hash=${tokenHash(req.query.token)}
+          AND rtr.provider_message_id=${emailId} LIMIT 1`;
+      if (testRun) {
+        const providerEventId = createHash('sha256').update(JSON.stringify(req.body)).digest('hex');
+        const inserted = await app.db`
+          INSERT INTO recovery_test_events(id,test_run_id,event_type,provider_event_id,event_at,metadata)
+          VALUES(${ulid()},${testRun.id},'opened',${providerEventId},
+            ${req.body.created_at ?? new Date().toISOString()},${app.db.json(req.body as never)})
+          ON CONFLICT(test_run_id,provider_event_id) DO NOTHING RETURNING id`;
+        if (inserted[0])
+          await app.db`UPDATE recovery_test_runs SET opened_at=COALESCE(opened_at,now()) WHERE id=${testRun.id}`;
+        testMatched = true;
+      }
+    }
+    return reply.send({ accepted: true, matched: Boolean(rows[0]) || testMatched });
   });
 
   app.get<{ Params: { token: string }; Querystring: { m?: string } }>(
@@ -284,6 +303,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       WHERE token_hash=${tokenHash(req.params.token)} AND state='sent'
       RETURNING id,destination_url`;
     if (!run) return reply.code(404).send({ error: 'recovery_test_not_found' });
+    await app.db`
+      INSERT INTO recovery_test_events(id,test_run_id,event_type,event_at,metadata)
+      VALUES
+        (${ulid()},${run.id},'clicked',now(),${app.db.json({ ip: req.ip, user_agent: req.headers['user-agent'] ?? null } as never)}),
+        (${ulid()},${run.id},'checkout',now(),${app.db.json({ destination_url: run.destination_url } as never)})`;
     const destination = new URL(run.destination_url);
     destination.searchParams.set('tmx_recovery_test', '1');
     destination.searchParams.set('tmx_recovery_test_id', run.id);

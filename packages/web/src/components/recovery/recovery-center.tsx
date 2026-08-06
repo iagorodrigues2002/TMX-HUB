@@ -496,21 +496,34 @@ export function RecoveryCenter() {
                         </span>
                         <span
                           className={`rounded border px-2 py-1 text-[8px] uppercase ${
-                            run.clicked_at
+                            run.open_count > 0
+                              ? 'border-emerald-300/20 text-emerald-300'
+                              : 'border-white/[0.07] text-white/25'
+                          }`}
+                        >
+                          {run.open_count > 0 ? `${run.open_count} abertura(s)` : 'Não aberto'}
+                        </span>
+                        <span
+                          className={`rounded border px-2 py-1 text-[8px] uppercase ${
+                            run.click_count > 0
                               ? 'border-cyan-300/20 text-cyan-300'
                               : 'border-white/[0.07] text-white/25'
                           }`}
                         >
-                          {run.clicked_at ? 'Clique ✓' : 'Aguardando clique'}
+                          {run.click_count > 0
+                            ? `${run.click_count} clique(s)`
+                            : 'Aguardando clique'}
                         </span>
                         <span
                           className={`rounded border px-2 py-1 text-[8px] uppercase ${
-                            run.checkout_at
+                            run.checkout_count > 0
                               ? 'border-violet-300/20 text-violet-300'
                               : 'border-white/[0.07] text-white/25'
                           }`}
                         >
-                          {run.checkout_at ? 'Checkout ✓' : 'Checkout pendente'}
+                          {run.checkout_count > 0
+                            ? `${run.checkout_count} checkout(s)`
+                            : 'Checkout pendente'}
                         </span>
                       </div>
                     </div>
