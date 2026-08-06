@@ -60,6 +60,11 @@ const ChannelSchema = z.discriminatedUnion('kind', [
   }),
 ]);
 const SendSchema = z.object({ channel: z.enum(['whatsapp', 'sms', 'email']) });
+const TestEmailSchema = z.object({
+  to: z.string().trim().email().max(320),
+  subject: z.string().trim().min(3).max(200),
+  message: z.string().min(10).max(100_000),
+});
 const BulkSendSchema = z.object({
   channel: z.enum(['whatsapp', 'sms', 'email']),
   limit: z.coerce.number().int().min(1).max(100).default(100),
@@ -330,6 +335,55 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         .send({ error: 'resend_webhook_failed', detail: (error as Error).message });
     }
   });
+
+  app.post<{ Params: { id: string }; Body: unknown }>(
+    '/offers/:id/recovery/test-email',
+    async (req, reply) => {
+      await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
+      if (!app.db || !env.TRACKING_ENCRYPTION_KEY)
+        return reply.code(503).send({ error: 'recovery_unavailable' });
+      const parsed = TestEmailSchema.safeParse(req.body);
+      if (!parsed.success) throw zodToProblem(parsed.error);
+      const project = await projectFor(req.params.id);
+      const [channel] = await app.db<
+        Array<{ credentials_encrypted: string }>
+      >`SELECT credentials_encrypted FROM recovery_channels WHERE project_id=${project.id} AND kind='email' AND enabled=true`;
+      if (!channel) return reply.code(409).send({ error: 'email_channel_not_configured' });
+      const credentials = JSON.parse(
+        decryptSecret(channel.credentials_encrypted, env.TRACKING_ENCRYPTION_KEY),
+      ) as { api_key: string; from_email: string };
+      const html = parsed.data.message
+        .replaceAll('{{nome}}', 'Cliente Teste')
+        .replaceAll(
+          '{{link}}',
+          '<a href="https://theminex.com/recovery" target="_blank">Retomar compra</a>',
+        );
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${credentials.api_key}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: credentials.from_email,
+          to: [parsed.data.to],
+          subject: `[TESTE TMX] ${parsed.data.subject}`,
+          html,
+          headers: { 'X-Entity-Ref-ID': `tmx-test-${ulid()}` },
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok)
+        return reply.code(502).send({
+          error: 'test_email_rejected',
+          provider_status: response.status,
+          detail: result,
+        });
+      return reply
+        .code(202)
+        .send({ accepted: true, provider_message_id: (result as { id?: string }).id ?? null });
+    },
+  );
 
   app.put<{ Params: { id: string }; Body: unknown }>(
     '/offers/:id/recovery/channels',

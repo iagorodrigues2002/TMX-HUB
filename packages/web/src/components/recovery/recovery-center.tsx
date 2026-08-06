@@ -43,6 +43,7 @@ export function RecoveryCenter() {
   const [senderName, setSenderName] = useState('TMX');
   const [resendKey, setResendKey] = useState('');
   const [fromEmail, setFromEmail] = useState('');
+  const [testEmail, setTestEmail] = useState('');
   const [emailSubject, setEmailSubject] = useState('Sua compra ainda está disponível');
   const [emailMessage, setEmailMessage] = useState(
     '<p>Olá {{nome}},</p><p>notamos que sua compra não foi concluída.</p><p>{{link}}</p>',
@@ -126,6 +127,16 @@ export function RecoveryCenter() {
       toast.success('Métricas de e-mail ativadas.');
       refresh();
     },
+    onError: (e) => toast.error((e as Error).message),
+  });
+  const testSend = useMutation({
+    mutationFn: () =>
+      apiClient.sendRecoveryTestEmail(offerId, {
+        to: testEmail.trim(),
+        subject: emailSubject,
+        message: emailMessage,
+      }),
+    onSuccess: () => toast.success(`E-mail teste enviado para ${testEmail.trim()}.`),
     onError: (e) => toast.error((e as Error).message),
   });
   const configured = (kind: string) =>
@@ -418,6 +429,43 @@ export function RecoveryCenter() {
                 <CheckCircle2 />
                 Salvar configuração
               </Button>
+            </div>
+            <div className="rounded-xl border border-cyan-300/10 bg-cyan-300/[0.03] p-4">
+              <div className="flex items-start gap-3">
+                <Mail className="mt-0.5 h-4 w-4 text-cyan-300" />
+                <div>
+                  <p className="text-sm font-medium text-white/80">Enviar um teste</p>
+                  <p className="mt-1 text-[11px] text-white/35">
+                    Usa o assunto e o conteúdo acima. O teste não entra nas métricas do Recovery.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+                <Input
+                  type="email"
+                  aria-label="Destinatário do e-mail teste"
+                  value={testEmail}
+                  onChange={(event) => setTestEmail(event.target.value)}
+                  placeholder="seuemail@dominio.com"
+                />
+                <Button
+                  variant="outline"
+                  disabled={
+                    !emailConfigured ||
+                    !/^\S+@\S+\.\S+$/.test(testEmail.trim()) ||
+                    testSend.isPending
+                  }
+                  onClick={() => testSend.mutate()}
+                >
+                  <Send className={testSend.isPending ? 'animate-pulse' : ''} />
+                  {testSend.isPending ? 'Enviando...' : 'Enviar teste'}
+                </Button>
+              </div>
+              {!emailConfigured && (
+                <p className="mt-2 text-[10px] text-amber-200/60">
+                  Salve a configuração do e-mail antes de enviar o primeiro teste.
+                </p>
+              )}
             </div>
           </div>
         </div>

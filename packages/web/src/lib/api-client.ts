@@ -1619,6 +1619,12 @@ export const apiClient = {
   async getRecovery(id: string): Promise<RecoveryView> {
     return request(`/v1/offers/${id}/recovery`);
   },
+  async sendRecoveryTestEmail(
+    id: string,
+    body: { to: string; subject: string; message: string },
+  ): Promise<{ accepted: true; provider_message_id: string | null }> {
+    return request(`/v1/offers/${id}/recovery/test-email`, { method: 'POST', body });
+  },
   async updateRecoverySettings(
     id: string,
     body: {
