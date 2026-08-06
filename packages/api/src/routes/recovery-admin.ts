@@ -150,10 +150,59 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     return { ok: true, webhook_id: (result as { id?: string }).id ?? null };
   };
 
+  const reconcileResendDeliveries = async (projectId: string) => {
+    if (!app.db || !env.TRACKING_ENCRYPTION_KEY) return;
+    const db = app.db;
+    const [channel] = await db<
+      Array<{ id: string; credentials_encrypted: string }>
+    >`SELECT id,credentials_encrypted FROM recovery_channels
+      WHERE project_id=${projectId} AND kind='email' AND enabled=true`;
+    if (!channel) return;
+    let apiKey: string;
+    try {
+      apiKey = (
+        JSON.parse(decryptSecret(channel.credentials_encrypted, env.TRACKING_ENCRYPTION_KEY)) as {
+          api_key: string;
+        }
+      ).api_key;
+    } catch {
+      return;
+    }
+    const pending = await db<Array<{ id: string; provider_message_id: string }>>`
+      SELECT id,provider_message_id FROM recovery_messages
+      WHERE channel_id=${channel.id} AND state='sent' AND delivered_at IS NULL
+        AND provider_message_id IS NOT NULL AND sent_at>=now()-interval '30 days'
+      ORDER BY sent_at DESC LIMIT 20`;
+    await Promise.allSettled(
+      pending.map(async (message) => {
+        const response = await fetch(
+          `https://api.resend.com/emails/${encodeURIComponent(message.provider_message_id)}`,
+          {
+            headers: { authorization: `Bearer ${apiKey}` },
+            signal: AbortSignal.timeout(3_000),
+          },
+        );
+        if (!response.ok) return;
+        const result = (await response.json()) as { last_event?: string };
+        const lastEvent = result.last_event ?? '';
+        if (['delivered', 'opened', 'clicked'].includes(lastEvent)) {
+          await db`UPDATE recovery_messages SET state='delivered',
+            delivered_at=COALESCE(delivered_at,now())
+            WHERE id=${message.id}`;
+        } else if (['bounced', 'failed', 'complained'].includes(lastEvent)) {
+          await db`UPDATE recovery_messages SET state='failed',
+            bounced_at=CASE WHEN ${lastEvent}='bounced' THEN COALESCE(bounced_at,now()) ELSE bounced_at END,
+            last_error=${`resend:${lastEvent}`} WHERE id=${message.id}`;
+        }
+      }),
+    );
+  };
+
   app.get<{ Params: { id: string } }>('/offers/:id/recovery', async (req, reply) => {
     await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
     if (!app.db) return reply.code(503).send({ error: 'database_unavailable' });
     const project = await projectFor(req.params.id);
+    await reconcileResendDeliveries(project.id);
     const [settings] =
       await app.db`SELECT checkout_url, sender_name, quiet_start, quiet_end, enabled FROM recovery_settings WHERE project_id=${project.id}`;
     const [sources] = await app.db<
@@ -266,14 +315,14 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       }>
     >`
       WITH email_opps AS (
-        SELECT ro.id,ro.status,ro.recovered_channel,COALESCE(recovered.amount_brl_minor,o.amount_brl_minor,0) AS amount,
+        SELECT ro.id,ro.status,ro.recovered_channel,COALESCE(recovered.amount_brl_minor,recovered.amount_minor,0) AS amount,
           bool_or(rm.state IN ('sent','delivered','read')) AS sent,
           bool_or(rm.delivered_at IS NOT NULL) AS delivered,bool_or(rm.opened_at IS NOT NULL) AS opened,
           bool_or(rm.clicked_at IS NOT NULL OR ro.clicked_at IS NOT NULL) AS clicked
         FROM recovery_messages rm JOIN recovery_channels rc ON rc.id=rm.channel_id AND rc.kind='email'
         JOIN recovery_opportunities ro ON ro.id=rm.opportunity_id JOIN tracking_orders o ON o.id=ro.order_id
         LEFT JOIN tracking_orders recovered ON recovered.id=ro.recovered_order_id WHERE ro.project_id=${project.id}
-        GROUP BY ro.id,ro.status,ro.recovered_channel,recovered.amount_brl_minor,o.amount_brl_minor)
+        GROUP BY ro.id,ro.status,ro.recovered_channel,recovered.amount_brl_minor,recovered.amount_minor)
       SELECT count(*) FILTER(WHERE sent)::int AS sent,count(*) FILTER(WHERE delivered)::int AS delivered,
         count(*) FILTER(WHERE opened)::int AS opened,count(*) FILTER(WHERE clicked)::int AS clicked,
         count(*) FILTER(WHERE status='recovered' AND recovered_channel='email')::int AS converted,

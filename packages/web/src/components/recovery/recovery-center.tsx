@@ -680,8 +680,8 @@ export function RecoveryCenter() {
           <div>
             <p className="hud-label">Performance de e-mail</p>
             <p className="mt-1 text-xs text-white/40">
-              Entrega e abertura pelo Resend; clique, conversão e receita confirmados pelo link TMX
-              e pela Vendepay.
+              Entrega reconciliada com a Resend; abertura e clique medidos pelo TMX; conversão e
+              receita confirmadas pela Vendepay.
             </p>
           </div>
         </div>
@@ -691,7 +691,7 @@ export function RecoveryCenter() {
             ['Entregues', r?.email_metrics?.delivered ?? 0],
             ['Abertos', r?.email_metrics?.opened ?? 0],
             ['Taxa abertura', `${Math.round((r?.email_metrics?.open_rate ?? 0) * 100)}%`],
-            ['Cliques', `${Math.round((r?.email_metrics?.click_rate ?? 0) * 100)}%`],
+            ['Taxa de cliques', `${Math.round((r?.email_metrics?.click_rate ?? 0) * 100)}%`],
             [
               'Conversões',
               `${r?.email_metrics?.converted ?? 0} · ${Math.round((r?.email_metrics?.conversion_rate ?? 0) * 100)}%`,

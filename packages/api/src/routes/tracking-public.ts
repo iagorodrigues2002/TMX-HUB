@@ -204,8 +204,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       return reply.code(400).send({ accepted: false });
     const rows = await app.db<Array<{ id: string; opportunity_id: string }>>`
       UPDATE recovery_messages rm SET
-        state=CASE WHEN ${eventType}='email.delivered' AND rm.state='sent' THEN 'delivered' WHEN ${eventType} IN ('email.failed','email.bounced') THEN 'failed' ELSE rm.state END,
-        delivered_at=CASE WHEN ${eventType}='email.delivered' THEN COALESCE(rm.delivered_at,now()) ELSE rm.delivered_at END,
+        state=CASE WHEN ${eventType} IN ('email.delivered','email.opened','email.clicked') AND rm.state='sent' THEN 'delivered' WHEN ${eventType} IN ('email.failed','email.bounced') THEN 'failed' ELSE rm.state END,
+        delivered_at=CASE WHEN ${eventType} IN ('email.delivered','email.opened','email.clicked') THEN COALESCE(rm.delivered_at,now()) ELSE rm.delivered_at END,
         opened_at=CASE WHEN ${eventType}='email.opened' THEN COALESCE(rm.opened_at,now()) ELSE rm.opened_at END,
         clicked_at=CASE WHEN ${eventType}='email.clicked' THEN COALESCE(rm.clicked_at,now()) ELSE rm.clicked_at END,
         bounced_at=CASE WHEN ${eventType}='email.bounced' THEN COALESCE(rm.bounced_at,now()) ELSE rm.bounced_at END,
@@ -263,7 +263,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!opportunity) return reply.code(404).send({ error: 'recovery_not_found' });
       let [message] = req.query.m
         ? await app.db<Array<{ id: string; channel: string }>>`
-          UPDATE recovery_messages rm SET clicked_at=COALESCE(clicked_at,now())
+          UPDATE recovery_messages rm SET clicked_at=COALESCE(clicked_at,now()),
+            delivered_at=COALESCE(delivered_at,now()),
+            state=CASE WHEN rm.state='sent' THEN 'delivered' ELSE rm.state END
           FROM recovery_channels rc
           WHERE rm.channel_id=rc.id AND rm.opportunity_id=${opportunity.id}
             AND rm.click_token_hash=${tokenHash(req.query.m)}
@@ -276,7 +278,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         WHERE rm.opportunity_id=${opportunity.id} AND rm.state IN ('sent','delivered','read')
         ORDER BY rm.sent_at DESC NULLS LAST,rm.created_at DESC LIMIT 1`;
         if (message)
-          await app.db`UPDATE recovery_messages SET clicked_at=COALESCE(clicked_at,now()) WHERE id=${message.id}`;
+          await app.db`UPDATE recovery_messages SET clicked_at=COALESCE(clicked_at,now()),
+            delivered_at=COALESCE(delivered_at,now()),
+            state=CASE WHEN state='sent' THEN 'delivered' ELSE state END WHERE id=${message.id}`;
       }
       if (message) {
         await app.db`
@@ -334,7 +338,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!app.db || !req.params.token || req.params.token.length > 256)
       return reply.code(404).send();
     const [message] = await app.db<{ id: string; opportunity_id: string }[]>`
-      UPDATE recovery_messages SET opened_at=COALESCE(opened_at,now())
+      UPDATE recovery_messages SET opened_at=COALESCE(opened_at,now()),
+        delivered_at=COALESCE(delivered_at,now()),
+        state=CASE WHEN state='sent' THEN 'delivered' ELSE state END
       WHERE click_token_hash=${tokenHash(req.params.token)}
       RETURNING id,opportunity_id`;
     if (message)
