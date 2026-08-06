@@ -731,6 +731,36 @@ export interface RecoveryView {
     email_opened_at: string | null;
     email_clicked_at: string | null;
   }>;
+  activity: Array<{
+    id: string;
+    event_type: 'sent' | 'delivered' | 'opened' | 'clicked' | 'bounced' | 'failed' | 'converted';
+    event_at: string;
+    url: string | null;
+    channel: 'whatsapp' | 'sms' | 'email';
+    opportunity_id: string;
+    buyer_name: string | null;
+    email: string | null;
+    phone: string | null;
+    external_id: string;
+    product: { name?: string } | null;
+    message_state: string;
+  }>;
+  conversions: Array<{
+    opportunity_id: string;
+    recovered_at: string;
+    recovered_channel: 'whatsapp' | 'sms' | 'email' | null;
+    original_external_id: string;
+    recovered_external_id: string;
+    recovered_minor: number;
+    currency: string | null;
+    product: { name?: string } | null;
+    buyer_name: string | null;
+    email: string | null;
+    phone: string | null;
+    sent_at: string | null;
+    opened_at: string | null;
+    clicked_at: string | null;
+  }>;
 }
 
 export interface DashboardSummary {

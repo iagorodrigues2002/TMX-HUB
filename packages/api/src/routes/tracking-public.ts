@@ -188,7 +188,12 @@ async function enqueueInitiateCheckout(
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.post<{
     Querystring: { token?: string };
-    Body: { type?: string; created_at?: string; data?: { email_id?: string } };
+    Body: {
+      type?: string;
+      created_at?: string;
+      data?: { email_id?: string; click?: { link?: string } };
+      [key: string]: unknown;
+    };
   }>('/webhooks/recovery/resend', async (req, reply) => {
     if (!app.db || !req.query.token || req.query.token.length > 256)
       return reply.code(404).send({ accepted: false });
@@ -196,7 +201,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const emailId = req.body?.data?.email_id;
     if (!emailId || !eventType.startsWith('email.'))
       return reply.code(400).send({ accepted: false });
-    const rows = await app.db<Array<{ opportunity_id: string }>>`
+    const rows = await app.db<Array<{ id: string; opportunity_id: string }>>`
       UPDATE recovery_messages rm SET
         state=CASE WHEN ${eventType}='email.delivered' AND rm.state='sent' THEN 'delivered' WHEN ${eventType} IN ('email.failed','email.bounced') THEN 'failed' ELSE rm.state END,
         delivered_at=CASE WHEN ${eventType}='email.delivered' THEN COALESCE(rm.delivered_at,now()) ELSE rm.delivered_at END,
@@ -205,25 +210,71 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         bounced_at=CASE WHEN ${eventType}='email.bounced' THEN COALESCE(rm.bounced_at,now()) ELSE rm.bounced_at END,
         provider_event=rm.provider_event||${app.db.json(req.body as never)}
       FROM recovery_channels rc WHERE rm.channel_id=rc.id AND rc.webhook_token_hash=${tokenHash(req.query.token)} AND rm.provider_message_id=${emailId}
-      RETURNING rm.opportunity_id`;
+      RETURNING rm.id,rm.opportunity_id`;
+    if (rows[0]) {
+      const mapped = eventType.replace('email.', '');
+      if (['sent', 'delivered', 'opened', 'clicked', 'bounced', 'failed'].includes(mapped)) {
+        const providerEventId = createHash('sha256').update(JSON.stringify(req.body)).digest('hex');
+        await app.db`
+          INSERT INTO recovery_message_events
+            (id,message_id,opportunity_id,event_type,provider_event_id,event_at,url,metadata)
+          VALUES (${ulid()},${rows[0].id},${rows[0].opportunity_id},${mapped},${providerEventId},
+            ${req.body.created_at ?? new Date().toISOString()},${req.body.data?.click?.link ?? null},
+            ${app.db.json(req.body as never)})
+          ON CONFLICT (message_id,provider_event_id) DO NOTHING`;
+      }
+    }
     if (rows[0] && eventType === 'email.clicked')
       await app.db`UPDATE recovery_opportunities SET status=CASE WHEN status IN ('eligible','contacted') THEN 'clicked' ELSE status END,clicked_at=COALESCE(clicked_at,now()),updated_at=now() WHERE id=${String(rows[0].opportunity_id)}`;
     return reply.send({ accepted: true, matched: Boolean(rows[0]) });
   });
 
-  app.get<{ Params: { token: string } }>('/recovery/r/:token', async (req, reply) => {
-    if (!app.db || !req.params.token || req.params.token.length > 256)
-      return reply.code(404).send({ error: 'recovery_not_found' });
-    const [opportunity] = await app.db<{ id: string; destination_url: string }[]>`
+  app.get<{ Params: { token: string }; Querystring: { m?: string } }>(
+    '/recovery/r/:token',
+    async (req, reply) => {
+      if (!app.db || !req.params.token || req.params.token.length > 256)
+        return reply.code(404).send({ error: 'recovery_not_found' });
+      const [opportunity] = await app.db<{ id: string; destination_url: string }[]>`
       UPDATE recovery_opportunities SET status=CASE WHEN status='eligible' OR status='contacted' THEN 'clicked' ELSE status END,
         clicked_at=COALESCE(clicked_at,now()),updated_at=now()
       WHERE recovery_token_hash=${tokenHash(req.params.token)} AND status NOT IN ('suppressed','expired','recovered')
       RETURNING id,destination_url
     `;
-    if (!opportunity) return reply.code(404).send({ error: 'recovery_not_found' });
-    await app.db`UPDATE recovery_messages SET clicked_at=COALESCE(clicked_at,now()) WHERE opportunity_id=${opportunity.id} AND channel_id IN (SELECT id FROM recovery_channels WHERE kind='email')`;
-    return reply.redirect(opportunity.destination_url, 302);
-  });
+      if (!opportunity) return reply.code(404).send({ error: 'recovery_not_found' });
+      let [message] = req.query.m
+        ? await app.db<Array<{ id: string; channel: string }>>`
+          UPDATE recovery_messages rm SET clicked_at=COALESCE(clicked_at,now())
+          FROM recovery_channels rc
+          WHERE rm.channel_id=rc.id AND rm.opportunity_id=${opportunity.id}
+            AND rm.click_token_hash=${tokenHash(req.query.m)}
+          RETURNING rm.id,rc.kind AS channel`
+        : [];
+      if (!message && !req.query.m) {
+        [message] = await app.db<Array<{ id: string; channel: string }>>`
+        SELECT rm.id,rc.kind AS channel FROM recovery_messages rm
+        JOIN recovery_channels rc ON rc.id=rm.channel_id
+        WHERE rm.opportunity_id=${opportunity.id} AND rm.state IN ('sent','delivered','read')
+        ORDER BY rm.sent_at DESC NULLS LAST,rm.created_at DESC LIMIT 1`;
+        if (message)
+          await app.db`UPDATE recovery_messages SET clicked_at=COALESCE(clicked_at,now()) WHERE id=${message.id}`;
+      }
+      if (message) {
+        await app.db`
+        INSERT INTO recovery_message_events
+          (id,message_id,opportunity_id,event_type,event_at,url,ip,user_agent,metadata)
+        VALUES (${ulid()},${message.id},${opportunity.id},'clicked',now(),${opportunity.destination_url},
+          ${req.ip},${req.headers['user-agent'] ?? null},'{}'::jsonb)`;
+      }
+      const destination = new URL(opportunity.destination_url);
+      destination.searchParams.set('tmx_recovery', '1');
+      destination.searchParams.set('tmx_recovery_opportunity', opportunity.id);
+      if (message) {
+        destination.searchParams.set('tmx_recovery_message', message.id);
+        destination.searchParams.set('tmx_recovery_channel', message.channel);
+      }
+      return reply.redirect(destination.toString(), 302);
+    },
+  );
   app.get<{ Querystring: { key?: string } }>('/track/t.js', async (req, reply) => {
     if (!req.query.key || !app.db) return reply.code(404).send();
     const [project] = await app.db<{ id: string; enabled: boolean }[]>`
@@ -897,22 +948,39 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           WHERE id = ${receiptId}
         `;
         if (order.status === 'paid') {
-          await sql`
-            UPDATE recovery_opportunities ro SET status='recovered',recovered_order_id=${order.id},
-              recovered_at=COALESCE(recovered_at,now()),updated_at=now()
-            WHERE ro.project_id=${connection.project_id} AND ro.status <> 'recovered'
-              AND (
-                ro.order_id=${order.id}
-                OR (${event.buyer.email ?? null}::text IS NOT NULL AND lower(ro.email)=lower(${event.buyer.email ?? null}::text))
-                OR (${event.buyer.phone ?? null}::text IS NOT NULL AND regexp_replace(ro.phone,'\\D','','g')=regexp_replace(${event.buyer.phone ?? null}::text,'\\D','','g'))
-              )
-          `;
-          await sql`
-            UPDATE recovery_messages rm SET state='cancelled'
+          const explicitMessageId = resolvedAttributionSource.tmx_recovery_message ?? null;
+          const [recoveryMatch] = await sql<
+            Array<{ id: string; message_id: string; channel: string }>
+          >`
+            SELECT ro.id,rm.id AS message_id,rc.kind AS channel
             FROM recovery_opportunities ro
-            WHERE rm.opportunity_id=ro.id AND ro.project_id=${connection.project_id}
-              AND ro.status='recovered' AND rm.state='pending'
-          `;
+            JOIN recovery_messages rm ON rm.opportunity_id=ro.id
+            JOIN recovery_channels rc ON rc.id=rm.channel_id
+            WHERE ro.project_id=${connection.project_id} AND ro.status <> 'recovered'
+              AND rm.clicked_at IS NOT NULL
+              AND (
+                (${explicitMessageId}::text IS NOT NULL AND rm.id=${explicitMessageId})
+                OR (${explicitMessageId}::text IS NULL AND (
+                  (${event.buyer.email ?? null}::text IS NOT NULL AND lower(ro.email)=lower(${event.buyer.email ?? null}::text))
+                  OR (${event.buyer.phone ?? null}::text IS NOT NULL AND regexp_replace(ro.phone,'\\D','','g')=regexp_replace(${event.buyer.phone ?? null}::text,'\\D','','g'))
+                ))
+              )
+              AND rm.clicked_at >= ${event.occurredAt}::timestamptz - interval '30 days'
+              AND rm.clicked_at <= ${event.occurredAt}::timestamptz + interval '10 minutes'
+            ORDER BY (${explicitMessageId}::text IS NOT NULL AND rm.id=${explicitMessageId}) DESC,rm.clicked_at DESC
+            LIMIT 1`;
+          if (recoveryMatch) {
+            await sql`
+              UPDATE recovery_opportunities SET status='recovered',recovered_order_id=${order.id},
+                recovered_message_id=${recoveryMatch.message_id},recovered_channel=${recoveryMatch.channel},
+                recovered_at=COALESCE(recovered_at,now()),updated_at=now()
+              WHERE id=${recoveryMatch.id}`;
+            await sql`
+              INSERT INTO recovery_message_events(id,message_id,opportunity_id,event_type,event_at,metadata)
+              VALUES(${ulid()},${recoveryMatch.message_id},${recoveryMatch.id},'converted',${event.occurredAt},
+                ${sql.json({ order_id: order.id, transaction_id: event.transactionId } as never)})`;
+            await sql`UPDATE recovery_messages SET state='cancelled' WHERE opportunity_id=${recoveryMatch.id} AND state='pending'`;
+          }
         }
         const utmify = await sql<{ id: string }[]>`
           SELECT id FROM tracking_utmify_destinations

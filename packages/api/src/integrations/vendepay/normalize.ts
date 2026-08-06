@@ -397,6 +397,10 @@ export function normalizeVendepay(raw: unknown, receivedAt = new Date()): Vendep
     'ad_name',
     'placement',
     'site_source_name',
+    'tmx_recovery',
+    'tmx_recovery_opportunity',
+    'tmx_recovery_message',
+    'tmx_recovery_channel',
   ] as const;
   const source = {
     ...Object.fromEntries(

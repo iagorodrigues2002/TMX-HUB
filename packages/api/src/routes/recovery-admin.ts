@@ -186,6 +186,31 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       FROM recovery_opportunities ro JOIN tracking_orders o ON o.id=ro.order_id
       WHERE ro.project_id=${project.id} ORDER BY ro.created_at DESC LIMIT 100
     `;
+    const activity = await app.db<Array<Record<string, unknown>>>`
+      SELECT rme.id,rme.event_type,rme.event_at,rme.url,rc.kind AS channel,
+        ro.id AS opportunity_id,ro.buyer_name,ro.email,ro.phone,
+        o.external_id,o.product,rm.state AS message_state
+      FROM recovery_message_events rme
+      JOIN recovery_messages rm ON rm.id=rme.message_id
+      JOIN recovery_channels rc ON rc.id=rm.channel_id
+      JOIN recovery_opportunities ro ON ro.id=rme.opportunity_id
+      JOIN tracking_orders o ON o.id=ro.order_id
+      WHERE ro.project_id=${project.id}
+      ORDER BY rme.event_at DESC LIMIT 250
+    `;
+    const conversions = await app.db<Array<Record<string, unknown>>>`
+      SELECT ro.id AS opportunity_id,ro.recovered_at,ro.recovered_channel,
+        original.external_id AS original_external_id,recovered.external_id AS recovered_external_id,
+        COALESCE(recovered.amount_brl_minor,recovered.amount_minor,0) AS recovered_minor,
+        recovered.currency,recovered.product,ro.buyer_name,ro.email,ro.phone,
+        rm.sent_at,rm.opened_at,rm.clicked_at
+      FROM recovery_opportunities ro
+      JOIN tracking_orders original ON original.id=ro.order_id
+      JOIN tracking_orders recovered ON recovered.id=ro.recovered_order_id
+      LEFT JOIN recovery_messages rm ON rm.id=ro.recovered_message_id
+      WHERE ro.project_id=${project.id} AND ro.status='recovered'
+      ORDER BY ro.recovered_at DESC LIMIT 100
+    `;
     const totals = await app.db<
       Array<{
         eligible: number;
@@ -198,8 +223,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       SELECT count(*) FILTER (WHERE ro.status='eligible')::int AS eligible,
         count(*) FILTER (WHERE ro.status='contacted')::int AS contacted,
         count(*) FILTER (WHERE ro.clicked_at IS NOT NULL)::int AS clicked,
-        count(*) FILTER (WHERE ro.status='recovered')::int AS recovered,
-        COALESCE(sum(COALESCE(recovered.amount_brl_minor,o.amount_brl_minor)) FILTER (WHERE ro.status='recovered'),0)::text AS recovered_minor
+        count(*) FILTER (WHERE ro.status='recovered' AND ro.recovered_message_id IS NOT NULL)::int AS recovered,
+        COALESCE(sum(COALESCE(recovered.amount_brl_minor,o.amount_brl_minor)) FILTER (WHERE ro.status='recovered' AND ro.recovered_message_id IS NOT NULL),0)::text AS recovered_minor
       FROM recovery_opportunities ro JOIN tracking_orders o ON o.id=ro.order_id
       LEFT JOIN tracking_orders recovered ON recovered.id=ro.recovered_order_id
       WHERE ro.project_id=${project.id}
@@ -215,18 +240,18 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       }>
     >`
       WITH email_opps AS (
-        SELECT ro.id,ro.status,COALESCE(recovered.amount_brl_minor,o.amount_brl_minor,0) AS amount,
+        SELECT ro.id,ro.status,ro.recovered_channel,COALESCE(recovered.amount_brl_minor,o.amount_brl_minor,0) AS amount,
           bool_or(rm.state IN ('sent','delivered','read')) AS sent,
           bool_or(rm.delivered_at IS NOT NULL) AS delivered,bool_or(rm.opened_at IS NOT NULL) AS opened,
           bool_or(rm.clicked_at IS NOT NULL OR ro.clicked_at IS NOT NULL) AS clicked
         FROM recovery_messages rm JOIN recovery_channels rc ON rc.id=rm.channel_id AND rc.kind='email'
         JOIN recovery_opportunities ro ON ro.id=rm.opportunity_id JOIN tracking_orders o ON o.id=ro.order_id
         LEFT JOIN tracking_orders recovered ON recovered.id=ro.recovered_order_id WHERE ro.project_id=${project.id}
-        GROUP BY ro.id,ro.status,recovered.amount_brl_minor,o.amount_brl_minor)
+        GROUP BY ro.id,ro.status,ro.recovered_channel,recovered.amount_brl_minor,o.amount_brl_minor)
       SELECT count(*) FILTER(WHERE sent)::int AS sent,count(*) FILTER(WHERE delivered)::int AS delivered,
         count(*) FILTER(WHERE opened)::int AS opened,count(*) FILTER(WHERE clicked)::int AS clicked,
-        count(*) FILTER(WHERE status='recovered')::int AS converted,
-        COALESCE(sum(amount) FILTER(WHERE status='recovered'),0)::text AS recovered_minor FROM email_opps`;
+        count(*) FILTER(WHERE status='recovered' AND recovered_channel='email')::int AS converted,
+        COALESCE(sum(amount) FILTER(WHERE status='recovered' AND recovered_channel='email'),0)::text AS recovered_minor FROM email_opps`;
     return {
       settings: settings ?? null,
       sources: {
@@ -266,6 +291,16 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         phone: mask(o.phone as string | null, 'phone'),
         has_email: Boolean(o.email),
         has_phone: Boolean(o.phone),
+      })),
+      activity: activity.map((event) => ({
+        ...event,
+        email: mask(event.email as string | null, 'email'),
+        phone: mask(event.phone as string | null, 'phone'),
+      })),
+      conversions: conversions.map((conversion) => ({
+        ...conversion,
+        email: mask(conversion.email as string | null, 'email'),
+        phone: mask(conversion.phone as string | null, 'phone'),
       })),
     };
   });
@@ -449,8 +484,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         decryptSecret(row.credentials_encrypted, env.TRACKING_ENCRYPTION_KEY),
       ) as Record<string, string>;
       const token = decryptSecret(row.recovery_token_encrypted, env.TRACKING_ENCRYPTION_KEY);
-      const link = `${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/recovery/r/${token}`;
+      const messageId = ulid();
+      const clickToken = randomBytes(24).toString('base64url');
+      const link = `${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/recovery/r/${token}?m=${encodeURIComponent(clickToken)}`;
       const name = row.buyer_name?.split(/\s+/)[0] || 'cliente';
+      await app.db`INSERT INTO recovery_messages(id,opportunity_id,channel_id,state,click_token_hash,content_snapshot) VALUES(${messageId},${row.opportunity_id},${row.channel_id},'pending',${hash(clickToken)},${app.db.json({ channel: parsed.data.channel, link } as never)})`;
       let response: Response;
       if (parsed.data.channel === 'whatsapp') {
         if (!row.phone) return reply.code(409).send({ error: 'phone_missing' });
@@ -522,9 +560,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       }
       const result = await response.json().catch(() => ({}));
       const sent = response.ok;
-      const messageId = ulid();
       await app.db.begin(async (sql) => {
-        await sql`INSERT INTO recovery_messages(id,opportunity_id,channel_id,state,provider_message_id,content_snapshot,response_status,last_error,sent_at) VALUES(${messageId},${row.opportunity_id},${row.channel_id},${sent ? 'sent' : 'failed'},${String((result as { id?: string }).id ?? '') || null},${sql.json({ channel: parsed.data.channel, link } as never)},${response.status},${sent ? null : JSON.stringify(result)},${sent ? new Date() : null})`;
+        await sql`UPDATE recovery_messages SET state=${sent ? 'sent' : 'failed'},provider_message_id=${String((result as { id?: string }).id ?? '') || null},response_status=${response.status},last_error=${sent ? null : JSON.stringify(result)},sent_at=${sent ? new Date() : null} WHERE id=${messageId}`;
+        await sql`INSERT INTO recovery_message_events(id,message_id,opportunity_id,event_type,metadata) VALUES(${ulid()},${messageId},${row.opportunity_id},${sent ? 'sent' : 'failed'},${sql.json({ provider_status: response.status } as never)})`;
         if (sent)
           await sql`UPDATE recovery_opportunities SET status='contacted',first_contact_at=COALESCE(first_contact_at,now()),last_contact_at=now(),updated_at=now() WHERE id=${row.opportunity_id}`;
       });
