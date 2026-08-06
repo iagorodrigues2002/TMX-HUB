@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { type OfferView, apiClient } from '@/lib/api-client';
+import { type OfferView, type RecoveryView, apiClient } from '@/lib/api-client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CheckCircle2,
@@ -107,7 +107,15 @@ export function RecoveryCenter() {
   });
   const send = useMutation({
     mutationFn: (id: string) => apiClient.sendRecovery(offerId, id, 'email'),
-    onSuccess: () => {
+    onSuccess: (_result, opportunityId) => {
+      qc.setQueryData<RecoveryView>(['recovery', offerId], (current) =>
+        current
+          ? {
+              ...current,
+              opportunities: current.opportunities.filter((item) => item.id !== opportunityId),
+            }
+          : current,
+      );
       toast.success('Recuperação enviada.');
       refresh();
     },
@@ -148,7 +156,10 @@ export function RecoveryCenter() {
   const emailConfigured = Boolean(configured('email'));
   const trackingReady = Boolean(r?.sources.automatic);
   const readyToSend = emailConfigured && trackingReady;
-  const emailOpportunities = (r?.opportunities ?? []).filter((item) => item.has_email);
+  const emailOpportunities = (r?.opportunities ?? []).filter(
+    (item) =>
+      item.has_email && !['sent', 'delivered', 'read'].includes(item.last_message_state ?? ''),
+  );
   if (recovery.isError)
     return (
       <div className="glass-card flex min-h-64 flex-col items-center justify-center gap-4 p-6 text-center">
@@ -788,7 +799,8 @@ export function RecoveryCenter() {
           ))}
           {!emailOpportunities.length && (
             <div className="rounded-xl border border-dashed border-white/[0.08] p-8 text-center text-sm text-white/35">
-              Nenhuma oportunidade com e-mail disponível. Sincronize os dados do Tracking Avançado.
+              Nenhuma oportunidade pendente de envio. Novos abandonos aparecerão após a
+              sincronização do Tracking Avançado.
             </div>
           )}
         </div>

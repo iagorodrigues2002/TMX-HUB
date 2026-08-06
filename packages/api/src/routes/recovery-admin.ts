@@ -244,7 +244,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
              ro.last_contact_at, ro.clicked_at, ro.recovered_at, o.external_id, o.amount_minor,
              o.amount_brl_minor, o.currency, o.product,
              (SELECT count(*)::int FROM recovery_messages rm WHERE rm.opportunity_id=ro.id) AS messages,
-             (SELECT rm.state FROM recovery_messages rm WHERE rm.opportunity_id=ro.id ORDER BY rm.created_at DESC LIMIT 1) AS last_message_state,
+             (SELECT rm.state FROM recovery_messages rm JOIN recovery_channels rc ON rc.id=rm.channel_id
+              WHERE rm.opportunity_id=ro.id AND rc.kind='email' ORDER BY rm.created_at DESC LIMIT 1) AS last_message_state,
              (SELECT max(rm.delivered_at) FROM recovery_messages rm JOIN recovery_channels rc ON rc.id=rm.channel_id WHERE rm.opportunity_id=ro.id AND rc.kind='email') AS email_delivered_at,
              (SELECT max(rm.opened_at) FROM recovery_messages rm JOIN recovery_channels rc ON rc.id=rm.channel_id WHERE rm.opportunity_id=ro.id AND rc.kind='email') AS email_opened_at,
              (SELECT max(rm.clicked_at) FROM recovery_messages rm JOIN recovery_channels rc ON rc.id=rm.channel_id WHERE rm.opportunity_id=ro.id AND rc.kind='email') AS email_clicked_at
