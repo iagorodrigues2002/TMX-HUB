@@ -275,6 +275,20 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       return reply.redirect(destination.toString(), 302);
     },
   );
+  app.get<{ Params: { token: string } }>('/recovery/test/:token', async (req, reply) => {
+    if (!app.db || !req.params.token || req.params.token.length > 256)
+      return reply.code(404).send({ error: 'recovery_test_not_found' });
+    const [run] = await app.db<{ id: string; destination_url: string }[]>`
+      UPDATE recovery_test_runs SET clicked_at=COALESCE(clicked_at,now()),
+        checkout_at=COALESCE(checkout_at,now())
+      WHERE token_hash=${tokenHash(req.params.token)} AND state='sent'
+      RETURNING id,destination_url`;
+    if (!run) return reply.code(404).send({ error: 'recovery_test_not_found' });
+    const destination = new URL(run.destination_url);
+    destination.searchParams.set('tmx_recovery_test', '1');
+    destination.searchParams.set('tmx_recovery_test_id', run.id);
+    return reply.redirect(destination.toString(), 302);
+  });
   app.get<{ Querystring: { key?: string } }>('/track/t.js', async (req, reply) => {
     if (!req.query.key || !app.db) return reply.code(404).send();
     const [project] = await app.db<{ id: string; enabled: boolean }[]>`

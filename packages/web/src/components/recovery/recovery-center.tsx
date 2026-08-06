@@ -136,7 +136,10 @@ export function RecoveryCenter() {
         subject: emailSubject,
         message: emailMessage,
       }),
-    onSuccess: () => toast.success(`E-mail teste enviado para ${testEmail.trim()}.`),
+    onSuccess: () => {
+      toast.success(`E-mail teste enviado para ${testEmail.trim()}.`);
+      refresh();
+    },
     onError: (e) => toast.error((e as Error).message),
   });
   const configured = (kind: string) =>
@@ -436,7 +439,8 @@ export function RecoveryCenter() {
                 <div>
                   <p className="text-sm font-medium text-white/80">Enviar um teste</p>
                   <p className="mt-1 text-[11px] text-white/35">
-                    Usa o assunto e o conteúdo acima. O teste não entra nas métricas do Recovery.
+                    É enviado exatamente como o lead receberá e abre o checkout real. O resultado
+                    fica separado das métricas de venda.
                   </p>
                 </div>
               </div>
@@ -465,6 +469,53 @@ export function RecoveryCenter() {
                 <p className="mt-2 text-[10px] text-amber-200/60">
                   Salve a configuração do e-mail antes de enviar o primeiro teste.
                 </p>
+              )}
+              {(r?.test_runs ?? []).length > 0 && (
+                <div className="mt-4 space-y-2 border-t border-white/[0.07] pt-4">
+                  <div className="flex items-center justify-between">
+                    <p className="hud-label text-[8px]">Últimos testes</p>
+                    <Button size="sm" variant="ghost" onClick={() => void recovery.refetch()}>
+                      <RefreshCw className={recovery.isFetching ? 'animate-spin' : ''} />
+                      Atualizar
+                    </Button>
+                  </div>
+                  {(r?.test_runs ?? []).slice(0, 3).map((run) => (
+                    <div
+                      key={run.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/[0.06] bg-black/10 px-3 py-2"
+                    >
+                      <div>
+                        <p className="text-xs text-white/65">{run.recipient}</p>
+                        <p className="mt-0.5 text-[9px] text-white/25">
+                          {new Date(run.created_at).toLocaleString('pt-BR')}
+                        </p>
+                      </div>
+                      <div className="flex gap-1.5">
+                        <span className="rounded border border-emerald-300/15 px-2 py-1 text-[8px] uppercase text-emerald-300">
+                          Enviado
+                        </span>
+                        <span
+                          className={`rounded border px-2 py-1 text-[8px] uppercase ${
+                            run.clicked_at
+                              ? 'border-cyan-300/20 text-cyan-300'
+                              : 'border-white/[0.07] text-white/25'
+                          }`}
+                        >
+                          {run.clicked_at ? 'Clique ✓' : 'Aguardando clique'}
+                        </span>
+                        <span
+                          className={`rounded border px-2 py-1 text-[8px] uppercase ${
+                            run.checkout_at
+                              ? 'border-violet-300/20 text-violet-300'
+                              : 'border-white/[0.07] text-white/25'
+                          }`}
+                        >
+                          {run.checkout_at ? 'Checkout ✓' : 'Checkout pendente'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </div>

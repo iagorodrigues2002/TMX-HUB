@@ -94,6 +94,10 @@ const appendAttribution = (destination: string, source: Record<string, string>) 
   }
   return url.toString();
 };
+const renderRecoveryEmail = (message: string, name: string, link: string) =>
+  message
+    .replaceAll('{{nome}}', name)
+    .replaceAll('{{link}}', `<a href="${link}">Retomar compra</a>`);
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   const projectFor = async (offerId: string) => {
@@ -216,6 +220,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       WHERE ro.project_id=${project.id} AND ro.status='recovered'
       ORDER BY ro.recovered_at DESC LIMIT 100
     `;
+    const testRuns = await app.db<Array<Record<string, unknown>>>`
+      SELECT id,recipient,state,sent_at,clicked_at,checkout_at,created_at
+      FROM recovery_test_runs WHERE project_id=${project.id}
+      ORDER BY created_at DESC LIMIT 10`;
     const totals = await app.db<
       Array<{
         eligible: number;
@@ -307,6 +315,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         email: mask(conversion.email as string | null, 'email'),
         phone: mask(conversion.phone as string | null, 'phone'),
       })),
+      test_runs: testRuns.map((run) => ({
+        ...run,
+        recipient: mask(run.recipient as string, 'email'),
+      })),
     };
   });
 
@@ -352,12 +364,24 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       const credentials = JSON.parse(
         decryptSecret(channel.credentials_encrypted, env.TRACKING_ENCRYPTION_KEY),
       ) as { api_key: string; from_email: string };
-      const html = parsed.data.message
-        .replaceAll('{{nome}}', 'Cliente Teste')
-        .replaceAll(
-          '{{link}}',
-          '<a href="https://theminex.com/recovery" target="_blank">Retomar compra</a>',
-        );
+      const [destination] = await app.db<Array<{ url: string | null }>>`
+        SELECT COALESCE(
+          (SELECT checkout_url FROM recovery_settings WHERE project_id=${project.id}),
+          (SELECT v.destination_url FROM tracking_ab_variants v
+            JOIN tracking_ab_tests t ON t.id=v.test_id
+            WHERE t.project_id=${project.id} AND t.status='active' AND t.deleted_at IS NULL
+              AND v.destination_url IS NOT NULL ORDER BY t.created_at DESC,v.position LIMIT 1),
+          (SELECT properties->>'href' FROM tracking_events WHERE project_id=${project.id}
+            AND event_name='InitiateCheckout' AND NULLIF(properties->>'href','') IS NOT NULL
+            ORDER BY received_at DESC LIMIT 1)
+        ) AS url`;
+      if (!destination?.url)
+        return reply.code(409).send({ error: 'recovery_checkout_not_configured' });
+      const testId = ulid();
+      const token = randomBytes(24).toString('base64url');
+      const link = `${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/recovery/test/${token}`;
+      const html = renderRecoveryEmail(parsed.data.message, 'Cliente Teste', link);
+      await app.db`INSERT INTO recovery_test_runs(id,project_id,recipient,token_hash,destination_url) VALUES(${testId},${project.id},${parsed.data.to},${hash(token)},${destination.url})`;
       const response = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
@@ -367,21 +391,25 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         body: JSON.stringify({
           from: credentials.from_email,
           to: [parsed.data.to],
-          subject: `[TESTE TMX] ${parsed.data.subject}`,
+          subject: parsed.data.subject,
           html,
           headers: { 'X-Entity-Ref-ID': `tmx-test-${ulid()}` },
         }),
       });
       const result = await response.json().catch(() => ({}));
-      if (!response.ok)
+      if (!response.ok) {
+        await app.db`UPDATE recovery_test_runs SET state='failed' WHERE id=${testId}`;
         return reply.code(502).send({
           error: 'test_email_rejected',
           provider_status: response.status,
           detail: result,
         });
+      }
+      const providerMessageId = (result as { id?: string }).id ?? null;
+      await app.db`UPDATE recovery_test_runs SET state='sent',provider_message_id=${providerMessageId},sent_at=now() WHERE id=${testId}`;
       return reply
         .code(202)
-        .send({ accepted: true, provider_message_id: (result as { id?: string }).id ?? null });
+        .send({ accepted: true, provider_message_id: providerMessageId, test_id: testId });
     },
   );
 
@@ -606,9 +634,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             from: credentials.from_email,
             to: [row.email],
             subject: row.config.subject,
-            html: (row.config.message || 'Olá {{nome}}, retome sua compra: {{link}}')
-              .replaceAll('{{nome}}', name)
-              .replaceAll('{{link}}', `<a href="${link}">Retomar compra</a>`),
+            html: renderRecoveryEmail(
+              row.config.message || 'Olá {{nome}}, retome sua compra: {{link}}',
+              name,
+              link,
+            ),
           }),
         });
       }

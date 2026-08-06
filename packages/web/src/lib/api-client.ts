@@ -761,6 +761,15 @@ export interface RecoveryView {
     opened_at: string | null;
     clicked_at: string | null;
   }>;
+  test_runs: Array<{
+    id: string;
+    recipient: string;
+    state: 'pending' | 'sent' | 'failed';
+    sent_at: string | null;
+    clicked_at: string | null;
+    checkout_at: string | null;
+    created_at: string;
+  }>;
 }
 
 export interface DashboardSummary {
@@ -1622,7 +1631,7 @@ export const apiClient = {
   async sendRecoveryTestEmail(
     id: string,
     body: { to: string; subject: string; message: string },
-  ): Promise<{ accepted: true; provider_message_id: string | null }> {
+  ): Promise<{ accepted: true; provider_message_id: string | null; test_id: string }> {
     return request(`/v1/offers/${id}/recovery/test-email`, { method: 'POST', body });
   },
   async updateRecoverySettings(
