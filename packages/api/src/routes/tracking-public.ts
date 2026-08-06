@@ -54,6 +54,7 @@ type EntryRedirectRequest = FastifyRequest<{
 }>;
 
 const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex');
+const transparentGif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==', 'base64');
 const attributionQueryKeys = new Set([
   'utm_source',
   'utm_medium',
@@ -312,6 +313,40 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     destination.searchParams.set('tmx_recovery_test', '1');
     destination.searchParams.set('tmx_recovery_test_id', run.id);
     return reply.redirect(destination.toString(), 302);
+  });
+  app.get<{ Params: { token: string } }>('/recovery/test/open/:token', async (req, reply) => {
+    if (!app.db || !req.params.token || req.params.token.length > 256)
+      return reply.code(404).send();
+    const [run] = await app.db<{ id: string }[]>`
+      UPDATE recovery_test_runs SET opened_at=COALESCE(opened_at,now())
+      WHERE token_hash=${tokenHash(req.params.token)} AND state='sent' RETURNING id`;
+    if (run)
+      await app.db`
+        INSERT INTO recovery_test_events(id,test_run_id,event_type,event_at,metadata)
+        VALUES(${ulid()},${run.id},'opened',now(),${app.db.json({ source: 'tmx_pixel', ip: req.ip, user_agent: req.headers['user-agent'] ?? null } as never)})`;
+    return reply
+      .header('content-type', 'image/gif')
+      .header('cache-control', 'no-store, no-cache, must-revalidate, max-age=0')
+      .header('cdn-cache-control', 'no-store')
+      .send(transparentGif);
+  });
+  app.get<{ Params: { token: string } }>('/recovery/open/:token', async (req, reply) => {
+    if (!app.db || !req.params.token || req.params.token.length > 256)
+      return reply.code(404).send();
+    const [message] = await app.db<{ id: string; opportunity_id: string }[]>`
+      UPDATE recovery_messages SET opened_at=COALESCE(opened_at,now())
+      WHERE click_token_hash=${tokenHash(req.params.token)}
+      RETURNING id,opportunity_id`;
+    if (message)
+      await app.db`
+        INSERT INTO recovery_message_events(id,message_id,opportunity_id,event_type,event_at,metadata)
+        VALUES(${ulid()},${message.id},${message.opportunity_id},'opened',now(),
+          ${app.db.json({ source: 'tmx_pixel', ip: req.ip, user_agent: req.headers['user-agent'] ?? null } as never)})`;
+    return reply
+      .header('content-type', 'image/gif')
+      .header('cache-control', 'no-store, no-cache, must-revalidate, max-age=0')
+      .header('cdn-cache-control', 'no-store')
+      .send(transparentGif);
   });
   app.get<{ Querystring: { key?: string } }>('/track/t.js', async (req, reply) => {
     if (!req.query.key || !app.db) return reply.code(404).send();

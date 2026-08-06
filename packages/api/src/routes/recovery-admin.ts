@@ -94,12 +94,17 @@ const appendAttribution = (destination: string, source: Record<string, string>) 
   }
   return url.toString();
 };
-const renderRecoveryEmail = (message: string, name: string, link: string) =>
-  message
+const renderRecoveryEmail = (message: string, name: string, link: string, openUrl: string) => {
+  const rendered = message
     .replaceAll('{{nome}}', name)
     .replaceAll('href="{{link}}"', `href="${link}"`)
     .replaceAll("href='{{link}}'", `href='${link}'`)
     .replaceAll('{{link}}', `<a href="${link}">Retomar compra</a>`);
+  const pixel = `<img src="${openUrl}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;opacity:0;overflow:hidden" />`;
+  return rendered.includes('</body>')
+    ? rendered.replace('</body>', `${pixel}</body>`)
+    : `${rendered}${pixel}`;
+};
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   const projectFor = async (offerId: string) => {
@@ -388,7 +393,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       const testId = ulid();
       const token = randomBytes(24).toString('base64url');
       const link = `${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/recovery/test/${token}`;
-      const html = renderRecoveryEmail(parsed.data.message, 'Cliente Teste', link);
+      const openUrl = `${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/recovery/test/open/${token}`;
+      const html = renderRecoveryEmail(parsed.data.message, 'Cliente Teste', link, openUrl);
       await app.db`INSERT INTO recovery_test_runs(id,project_id,recipient,token_hash,destination_url) VALUES(${testId},${project.id},${parsed.data.to},${hash(token)},${destination.url})`;
       const response = await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -646,6 +652,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
               row.config.message || 'Olá {{nome}}, retome sua compra: {{link}}',
               name,
               link,
+              `${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/recovery/open/${clickToken}`,
             ),
           }),
         });
