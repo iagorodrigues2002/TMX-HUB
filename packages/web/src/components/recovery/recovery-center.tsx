@@ -12,9 +12,7 @@ import {
   Eye,
   GitBranch,
   Mail,
-  MessageCircle,
   MousePointerClick,
-  Phone,
   RefreshCw,
   Send,
   Settings2,
@@ -43,17 +41,8 @@ export function RecoveryCenter() {
   });
   const [checkoutUrl, setCheckoutUrl] = useState('');
   const [senderName, setSenderName] = useState('TMX');
-  const [waToken, setWaToken] = useState('');
-  const [waPhoneId, setWaPhoneId] = useState('');
-  const [waTemplate, setWaTemplate] = useState('tmx_recovery');
-  const [twilioSid, setTwilioSid] = useState('');
-  const [twilioToken, setTwilioToken] = useState('');
-  const [twilioFrom, setTwilioFrom] = useState('');
   const [resendKey, setResendKey] = useState('');
   const [fromEmail, setFromEmail] = useState('');
-  const [smsMessage, setSmsMessage] = useState(
-    'Olá {{nome}}, sua compra não foi concluída. Retome com segurança: {{link}}',
-  );
   const [emailSubject, setEmailSubject] = useState('Sua compra ainda está disponível');
   const [emailMessage, setEmailMessage] = useState(
     '<p>Olá {{nome}},</p><p>notamos que sua compra não foi concluída.</p><p>{{link}}</p>',
@@ -116,8 +105,7 @@ export function RecoveryCenter() {
     onError: (e) => toast.error((e as Error).message),
   });
   const send = useMutation({
-    mutationFn: ({ id, kind }: { id: string; kind: 'whatsapp' | 'sms' | 'email' }) =>
-      apiClient.sendRecovery(offerId, id, kind),
+    mutationFn: (id: string) => apiClient.sendRecovery(offerId, id, 'email'),
     onSuccess: () => {
       toast.success('Recuperação enviada.');
       refresh();
@@ -125,7 +113,7 @@ export function RecoveryCenter() {
     onError: (e) => toast.error((e as Error).message),
   });
   const bulk = useMutation({
-    mutationFn: (kind: 'whatsapp' | 'sms' | 'email') => apiClient.bulkSendRecovery(offerId, kind),
+    mutationFn: () => apiClient.bulkSendRecovery(offerId, 'email'),
     onSuccess: (r) => {
       toast.success(`${r.sent} enviada(s) · ${r.failed} falha(s).`);
       refresh();
@@ -143,6 +131,10 @@ export function RecoveryCenter() {
   const configured = (kind: string) =>
     recovery.data?.channels.some((c) => c.kind === kind && c.enabled);
   const r = recovery.data;
+  const emailConfigured = Boolean(configured('email'));
+  const trackingReady = Boolean(r?.sources.automatic);
+  const readyToSend = emailConfigured && trackingReady;
+  const emailOpportunities = (r?.opportunities ?? []).filter((item) => item.has_email);
   if (recovery.isError)
     return (
       <div className="glass-card flex min-h-64 flex-col items-center justify-center gap-4 p-6 text-center">
@@ -167,7 +159,12 @@ export function RecoveryCenter() {
       <header className="tmx-command-hero rounded-2xl border border-cyan-300/15 p-5 sm:p-7">
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div>
-            <p className="hud-label">TMX Revenue Recovery</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="hud-label">TMX Revenue Recovery</p>
+              <span className="rounded-full border border-cyan-300/20 bg-cyan-300/[0.06] px-2.5 py-1 text-[8px] uppercase tracking-[0.18em] text-cyan-200">
+                E-mail only
+              </span>
+            </div>
             <h1 className="mt-2 text-3xl font-bold tracking-tight text-white">
               Recuperação de vendas
             </h1>
@@ -176,29 +173,39 @@ export function RecoveryCenter() {
               recuperada.
             </p>
           </div>
-          <div className="relative min-w-full sm:min-w-[320px]">
-            <select
-              aria-label="Selecionar oferta"
-              value={offerId}
-              onChange={(e) => setOfferId(e.target.value)}
-              className="h-11 w-full appearance-none rounded-lg border border-cyan-100/[0.14] bg-[#06151e] px-4 pr-10 text-sm text-white"
+          <div className="flex min-w-full gap-2 sm:min-w-[380px]">
+            <div className="relative flex-1">
+              <select
+                aria-label="Selecionar oferta"
+                value={offerId}
+                onChange={(e) => setOfferId(e.target.value)}
+                className="h-11 w-full appearance-none rounded-lg border border-cyan-100/[0.14] bg-[#06151e] px-4 pr-10 text-sm text-white"
+              >
+                {(offers.data ?? []).map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-white/35" />
+            </div>
+            <Button
+              variant="outline"
+              aria-label="Atualizar Recovery"
+              disabled={recovery.isFetching}
+              onClick={() => void recovery.refetch()}
             >
-              {(offers.data ?? []).map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.name}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-white/35" />
+              <RefreshCw className={recovery.isFetching ? 'animate-spin' : ''} />
+            </Button>
           </div>
         </div>
       </header>
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         {[
           ['Elegíveis', r?.totals.eligible ?? 0],
-          ['Contatadas', r?.totals.contacted ?? 0],
-          ['Cliques', r?.totals.clicked ?? 0],
-          ['Recuperadas', r?.totals.recovered ?? 0],
+          ['E-mails enviados', r?.email_metrics?.sent ?? 0],
+          ['Taxa de abertura', `${Math.round((r?.email_metrics?.open_rate ?? 0) * 100)}%`],
+          ['Vendas recuperadas', r?.totals.recovered ?? 0],
           [
             'Receita recuperada',
             `R$ ${(Number(r?.totals.recovered_minor ?? 0) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
@@ -252,154 +259,108 @@ export function RecoveryCenter() {
             </p>
           </div>
         </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
-          <div>
-            <Label>Nome do remetente</Label>
-            <Input value={senderName} onChange={(e) => setSenderName(e.target.value)} />
-            <p className="mt-1 text-[11px] text-white/30">
-              Campanha, conjunto e anúncio vêm do primeiro AdClick. Comprador e status vêm do
-              webhook. O destino vem da variante A/B atribuída.
-            </p>
+      </section>
+      <section className="grid gap-4 xl:grid-cols-[0.72fr_1.28fr]">
+        <div className="glass-card p-5 sm:p-6">
+          <p className="hud-label">Ativação</p>
+          <h2 className="mt-2 text-xl font-semibold text-white">Seu Recovery por e-mail</h2>
+          <p className="mt-2 text-sm leading-6 text-white/45">
+            Configure uma vez. O TMX identifica as oportunidades, cria o link rastreável e atribui a
+            compra automaticamente.
+          </p>
+          <div className="mt-6 space-y-3">
+            {[
+              ['1', 'Tracking conectado', trackingReady, 'Vendepay e checkout detectados'],
+              ['2', 'Remetente configurado', emailConfigured, 'Resend, domínio e conteúdo'],
+              ['3', 'Pronto para recuperar', readyToSend, 'Envio individual ou em massa'],
+            ].map(([step, title, done, description]) => (
+              <div
+                key={String(step)}
+                className={`flex gap-3 rounded-xl border p-4 ${
+                  done
+                    ? 'border-emerald-300/15 bg-emerald-300/[0.04]'
+                    : 'border-white/[0.07] bg-black/10'
+                }`}
+              >
+                <span
+                  className={`grid h-7 w-7 shrink-0 place-items-center rounded-full border font-mono text-xs ${
+                    done
+                      ? 'border-emerald-300/30 text-emerald-300'
+                      : 'border-white/10 text-white/35'
+                  }`}
+                >
+                  {done ? <CheckCircle2 className="h-4 w-4" /> : step}
+                </span>
+                <div>
+                  <p className="text-sm font-medium text-white/80">{title}</p>
+                  <p className="mt-1 text-[11px] text-white/35">{description}</p>
+                </div>
+              </div>
+            ))}
           </div>
           <Button
-            className="self-end"
-            disabled={settings.isPending}
-            onClick={() => settings.mutate()}
+            className="mt-5 w-full"
+            variant="outline"
+            disabled={sync.isPending || (!r?.sources.automatic && !checkoutUrl)}
+            onClick={() => sync.mutate()}
           >
-            Salvar remetente
+            <RefreshCw className={sync.isPending ? 'animate-spin' : ''} />
+            Buscar novas oportunidades
           </Button>
         </div>
-      </section>
-      <section className="grid gap-4 xl:grid-cols-3">
-        <div className="glass-card p-5">
+        <div className="glass-card p-5 sm:p-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <MessageCircle className="h-4 w-4 text-emerald-300" />
-              <p className="font-semibold">WhatsApp Cloud API</p>
+              <span className="grid h-9 w-9 place-items-center rounded-lg border border-cyan-300/15 bg-cyan-300/[0.06]">
+                <Mail className="h-4 w-4 text-cyan-300" />
+              </span>
+              <div>
+                <p className="font-semibold">Configuração do e-mail</p>
+                <p className="mt-0.5 text-[11px] text-white/35">Envio seguro pelo Resend</p>
+              </div>
             </div>
-            {configured('whatsapp') && <CheckCircle2 className="h-4 w-4 text-emerald-300" />}
-          </div>
-          <div className="mt-4 space-y-3">
-            <Input
-              type="password"
-              value={waToken}
-              onChange={(e) => setWaToken(e.target.value)}
-              placeholder="Access token permanente"
-            />
-            <Input
-              value={waPhoneId}
-              onChange={(e) => setWaPhoneId(e.target.value)}
-              placeholder="Phone Number ID"
-            />
-            <Input
-              value={waTemplate}
-              onChange={(e) => setWaTemplate(e.target.value)}
-              placeholder="Template aprovado"
-            />
-            <Button
-              className="w-full"
-              disabled={!waToken || !waPhoneId || channel.isPending}
-              onClick={() =>
-                channel.mutate({
-                  kind: 'whatsapp',
-                  enabled: true,
-                  credentials: { access_token: waToken, phone_number_id: waPhoneId },
-                  config: { template_name: waTemplate, language: 'pt_BR' },
-                })
-              }
+            <span
+              className={`rounded-full border px-3 py-1 text-[9px] uppercase tracking-wider ${
+                emailConfigured
+                  ? 'border-emerald-300/20 text-emerald-300'
+                  : 'border-amber-300/20 text-amber-200'
+              }`}
             >
-              Configurar WhatsApp
-            </Button>
+              {emailConfigured ? 'Configurado' : 'Configuração pendente'}
+            </span>
           </div>
-        </div>
-        <div className="glass-card p-5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Phone className="h-4 w-4 text-cyan-300" />
-              <p className="font-semibold">SMS · Twilio</p>
+          <div className="mt-5 grid gap-4 md:grid-cols-3">
+            <div>
+              <Label>Nome do remetente</Label>
+              <Input value={senderName} onChange={(e) => setSenderName(e.target.value)} />
+              <p className="mt-1 text-[10px] text-white/30">Nome exibido para o comprador.</p>
             </div>
-            {configured('sms') && <CheckCircle2 className="h-4 w-4 text-emerald-300" />}
+            <div>
+              <Label>Chave da API Resend</Label>
+              <Input
+                type="password"
+                value={resendKey}
+                onChange={(e) => setResendKey(e.target.value)}
+                placeholder={emailConfigured ? 'Chave já salva' : 're_...'}
+              />
+              <p className="mt-1 text-[10px] text-white/30">
+                {emailConfigured
+                  ? 'Deixe vazio para manter a chave atual.'
+                  : 'Necessária apenas na primeira configuração.'}
+              </p>
+            </div>
+            <div>
+              <Label>E-mail remetente</Label>
+              <Input
+                value={fromEmail}
+                onChange={(e) => setFromEmail(e.target.value)}
+                placeholder="TMX <vendas@dominio.com>"
+              />
+              <p className="mt-1 text-[10px] text-white/30">Use um domínio verificado no Resend.</p>
+            </div>
           </div>
           <div className="mt-4 space-y-3">
-            <Input
-              value={twilioSid}
-              onChange={(e) => setTwilioSid(e.target.value)}
-              placeholder="Account SID"
-            />
-            <Input
-              type="password"
-              value={twilioToken}
-              onChange={(e) => setTwilioToken(e.target.value)}
-              placeholder="Auth Token"
-            />
-            <Input
-              value={twilioFrom}
-              onChange={(e) => setTwilioFrom(e.target.value)}
-              placeholder="Número remetente"
-            />
-            <textarea
-              aria-label="Mensagem SMS"
-              value={smsMessage}
-              onChange={(e) => setSmsMessage(e.target.value)}
-              rows={4}
-              className="w-full rounded-lg border border-white/10 bg-black/15 p-3 text-sm text-white outline-none focus:border-cyan-300/30"
-            />
-            <p className="text-[10px] text-white/30">
-              Variáveis: {'{{nome}}'} e {'{{link}}'}
-            </p>
-            <Button
-              className="w-full"
-              disabled={
-                !twilioSid ||
-                !twilioToken ||
-                !twilioFrom ||
-                smsMessage.length < 10 ||
-                channel.isPending
-              }
-              onClick={() =>
-                channel.mutate({
-                  kind: 'sms',
-                  enabled: true,
-                  credentials: {
-                    account_sid: twilioSid,
-                    auth_token: twilioToken,
-                    from_number: twilioFrom,
-                  },
-                  config: { message: smsMessage },
-                })
-              }
-            >
-              Salvar SMS personalizado
-            </Button>
-          </div>
-        </div>
-        <div className="glass-card p-5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Mail className="h-4 w-4 text-violet-300" />
-              <p className="font-semibold">E-mail · Resend</p>
-            </div>
-            {configured('email') && <CheckCircle2 className="h-4 w-4 text-emerald-300" />}
-          </div>
-          <div className="mt-4 space-y-3">
-            <Input
-              type="password"
-              value={resendKey}
-              onChange={(e) => setResendKey(e.target.value)}
-              placeholder={
-                configured('email')
-                  ? 'API key já salva · deixe vazio para reutilizar'
-                  : 'Resend API Key'
-              }
-            />
-            <Input
-              value={fromEmail}
-              onChange={(e) => setFromEmail(e.target.value)}
-              placeholder="TMX <vendas@dominio.com>"
-            />
-            <p className="text-[10px] text-white/30">
-              Aceita vendas@dominio.com ou TMX &lt;vendas@dominio.com&gt;.
-            </p>
+            <Label>Assunto</Label>
             <Input
               value={emailSubject}
               onChange={(e) => setEmailSubject(e.target.value)}
@@ -410,8 +371,8 @@ export function RecoveryCenter() {
               value={emailMessage}
               onChange={(e) => setEmailMessage(e.target.value)}
               maxLength={100000}
-              rows={6}
-              className="w-full rounded-lg border border-white/10 bg-black/15 p-3 font-mono text-xs text-white outline-none focus:border-cyan-300/30"
+              rows={9}
+              className="w-full rounded-xl border border-white/10 bg-black/15 p-4 font-mono text-xs leading-5 text-white outline-none focus:border-cyan-300/30"
             />
             <div className="flex items-center justify-between gap-3 text-[10px] text-white/30">
               <p>
@@ -421,32 +382,10 @@ export function RecoveryCenter() {
                 {emailMessage.length.toLocaleString('pt-BR')} / 100.000
               </span>
             </div>
-            <Button
-              className="w-full"
-              disabled={
-                (!configured('email') && (!resendKey || !fromEmail)) ||
-                emailSubject.length < 3 ||
-                emailMessage.length < 10 ||
-                channel.isPending
-              }
-              onClick={() =>
-                channel.mutate({
-                  kind: 'email',
-                  enabled: true,
-                  credentials: {
-                    ...(resendKey ? { api_key: resendKey } : {}),
-                    ...(fromEmail ? { from_email: fromEmail } : {}),
-                  },
-                  config: { subject: emailSubject, message: emailMessage },
-                })
-              }
-            >
-              Salvar e-mail personalizado
-            </Button>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid gap-2 sm:grid-cols-[auto_auto_1fr]">
               <Button variant="outline" onClick={() => setPreviewOpen(true)}>
                 <Eye />
-                Pré-visualizar
+                Ver preview
               </Button>
               <Button
                 variant="outline"
@@ -455,6 +394,29 @@ export function RecoveryCenter() {
               >
                 <Webhook />
                 Ativar métricas
+              </Button>
+              <Button
+                disabled={
+                  (!emailConfigured && (!resendKey || !fromEmail)) ||
+                  emailSubject.length < 3 ||
+                  emailMessage.length < 10 ||
+                  channel.isPending
+                }
+                onClick={() => {
+                  settings.mutate();
+                  channel.mutate({
+                    kind: 'email',
+                    enabled: true,
+                    credentials: {
+                      ...(resendKey ? { api_key: resendKey } : {}),
+                      ...(fromEmail ? { from_email: fromEmail } : {}),
+                    },
+                    config: { subject: emailSubject, message: emailMessage },
+                  });
+                }}
+              >
+                <CheckCircle2 />
+                Salvar configuração
               </Button>
             </div>
           </div>
@@ -637,50 +599,24 @@ export function RecoveryCenter() {
       <section className="glass-card p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="hud-label">Oportunidades</p>
+            <p className="hud-label">Fila de recuperação</p>
             <p className="mt-1 text-xs text-white/40">
-              Abandonos, recusas e falhas dos últimos 30 dias, importados do gateway com o checkout
-              A/B correto.
+              Compradores aptos para receber o e-mail. O TMX usa automaticamente o checkout A/B
+              correto.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {configured('whatsapp') && (
+            {emailConfigured && (
               <Button
-                variant="outline"
                 disabled={bulk.isPending}
                 onClick={() =>
-                  window.confirm('Enviar WhatsApp em massa para quem ainda não recebeu?') &&
-                  bulk.mutate('whatsapp')
-                }
-              >
-                <MessageCircle />
-                Massa
-              </Button>
-            )}
-            {configured('sms') && (
-              <Button
-                variant="outline"
-                disabled={bulk.isPending}
-                onClick={() =>
-                  window.confirm('Enviar SMS em massa para quem ainda não recebeu?') &&
-                  bulk.mutate('sms')
-                }
-              >
-                <Phone />
-                Massa
-              </Button>
-            )}
-            {configured('email') && (
-              <Button
-                variant="outline"
-                disabled={bulk.isPending}
-                onClick={() =>
-                  window.confirm('Enviar e-mail em massa para quem ainda não recebeu?') &&
-                  bulk.mutate('email')
+                  window.confirm(
+                    'Enviar o e-mail configurado para todas as oportunidades elegíveis que ainda não receberam?',
+                  ) && bulk.mutate()
                 }
               >
                 <Mail />
-                Massa
+                Enviar e-mails em massa
               </Button>
             )}
             <Button
@@ -694,7 +630,7 @@ export function RecoveryCenter() {
           </div>
         </div>
         <div className="mt-4 space-y-2">
-          {(r?.opportunities ?? []).map((o) => (
+          {emailOpportunities.map((o) => (
             <article
               key={o.id}
               className="flex flex-col gap-3 rounded-xl border border-white/[0.07] bg-black/10 p-4 lg:flex-row lg:items-center"
@@ -729,45 +665,18 @@ export function RecoveryCenter() {
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {configured('whatsapp') && o.has_phone && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={send.isPending}
-                    onClick={() => send.mutate({ id: o.id, kind: 'whatsapp' })}
-                  >
-                    <MessageCircle />
-                    WhatsApp
-                  </Button>
-                )}
-                {configured('sms') && o.has_phone && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={send.isPending}
-                    onClick={() => send.mutate({ id: o.id, kind: 'sms' })}
-                  >
-                    <Phone />
-                    SMS
-                  </Button>
-                )}
-                {configured('email') && o.has_email && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={send.isPending}
-                    onClick={() => send.mutate({ id: o.id, kind: 'email' })}
-                  >
+                {emailConfigured && o.has_email && (
+                  <Button size="sm" disabled={send.isPending} onClick={() => send.mutate(o.id)}>
                     <Send />
-                    E-mail
+                    Enviar e-mail
                   </Button>
                 )}
               </div>
             </article>
           ))}
-          {!r?.opportunities.length && (
+          {!emailOpportunities.length && (
             <div className="rounded-xl border border-dashed border-white/[0.08] p-8 text-center text-sm text-white/35">
-              Sincronize os dados já existentes no Tracking Avançado para criar a primeira fila.
+              Nenhuma oportunidade com e-mail disponível. Sincronize os dados do Tracking Avançado.
             </div>
           )}
         </div>
