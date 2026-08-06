@@ -729,6 +729,11 @@ export function RecoveryCenter() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            {r?.settings?.email_automation_enabled && (
+              <span className="inline-flex items-center rounded-lg border border-emerald-300/20 bg-emerald-300/[0.07] px-3 text-[10px] font-medium text-emerald-200">
+                Automação ativa · envio em {r.settings.email_delay_minutes} min
+              </span>
+            )}
             {emailConfigured && (
               <Button
                 disabled={bulk.isPending}

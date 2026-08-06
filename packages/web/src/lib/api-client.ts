@@ -668,6 +668,9 @@ export interface RecoveryView {
     quiet_start: number;
     quiet_end: number;
     enabled: boolean;
+    email_automation_enabled: boolean;
+    email_delay_minutes: number;
+    automation_started_at: string;
   } | null;
   sources: {
     gateway: string | null;

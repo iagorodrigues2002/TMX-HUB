@@ -203,8 +203,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!app.db) return reply.code(503).send({ error: 'database_unavailable' });
     const project = await projectFor(req.params.id);
     await reconcileResendDeliveries(project.id);
-    const [settings] =
-      await app.db`SELECT checkout_url, sender_name, quiet_start, quiet_end, enabled FROM recovery_settings WHERE project_id=${project.id}`;
+    const [settings] = await app.db`SELECT checkout_url,sender_name,quiet_start,quiet_end,enabled,
+        email_automation_enabled,email_delay_minutes,automation_started_at
+        FROM recovery_settings WHERE project_id=${project.id}`;
     const [sources] = await app.db<
       Array<{
         gateway: string | null;

@@ -11,6 +11,7 @@ import rateLimitPlugin from './plugins/rate-limit.js';
 import storagePlugin from './plugins/storage.js';
 import swaggerPlugin from './plugins/swagger.js';
 import routes from './routes/index.js';
+import { runRecoveryEmailAutomation } from './services/recovery-automation.js';
 import { createBundleWorker } from './workers/bundle.worker.js';
 import { createFunnelWorker } from './workers/funnel.worker.js';
 import { createMediaWorker } from './workers/media.worker.js';
@@ -123,6 +124,26 @@ async function main() {
     );
   }, 30_000);
   trackingRecoveryTimer.unref();
+
+  let emailRecoveryRunning = false;
+  const runEmailRecovery = async () => {
+    if (emailRecoveryRunning) return;
+    emailRecoveryRunning = true;
+    try {
+      const result = await runRecoveryEmailAutomation(app);
+      if (result.created || result.sent || result.failed)
+        app.log.info(result, 'recovery email automation cycle completed');
+    } finally {
+      emailRecoveryRunning = false;
+    }
+  };
+  await runEmailRecovery();
+  const emailRecoveryTimer = setInterval(() => {
+    void runEmailRecovery().catch((error) =>
+      app.log.error({ error }, 'recovery email automation failed'),
+    );
+  }, 30_000);
+  emailRecoveryTimer.unref();
 
   // NOTE(workers): For dev simplicity we run the workers in the same Node
   // process as the HTTP server. In production these should run as separate
