@@ -156,7 +156,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             ) f ON true
             WHERE u.project_id=${project.id}
               AND u.status='paid'
-              AND u.order_kind IN ('upsell', 'upsell_2')
+              AND u.order_kind IN ('upsell', 'upsell_2', 'upsell_3')
           )
           UPDATE tracking_orders u
           SET visitor_id=COALESCE(u.visitor_id, matches.front_visitor_id),
@@ -183,7 +183,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
       await Promise.allSettled(
         result.deliveries.map(({ id }) =>
-          app.utmifyDeliveryQueue.add('send', { deliveryId: id }, { jobId: `${id}-upsell-${Date.now()}` }),
+          app.utmifyDeliveryQueue.add(
+            'send',
+            { deliveryId: id },
+            { jobId: `${id}-upsell-${Date.now()}` },
+          ),
         ),
       );
       return reply.code(202).send({

@@ -24,6 +24,7 @@ type Summary = {
   paid_buyers: number;
   upsell_orders: number;
   upsell_2_orders?: number;
+  upsell_3_orders?: number;
   unmapped_paid_orders: number;
   paid_revenue_minor: string;
   paid_revenue_brl_minor: string;
@@ -92,7 +93,6 @@ export function TrackerKpiRow({ summary }: { summary?: Summary }) {
     : s.connected_clicks / s.ad_clicks >= 0.5
       ? 'lush'
       : 'signal';
-  const totalOrders = buyersFront + upsells + unmapped;
   // Front-only, per the operator's convention: "taxa de conversão" tracks
   // checkout → front sale. Upsell conversion (front buyer → upsell buyer)
   // is a separate reading below, once per upsell tier.
@@ -103,8 +103,10 @@ export function TrackerKpiRow({ summary }: { summary?: Summary }) {
       ? 'lush'
       : 'signal';
   const upsell2 = s?.upsell_2_orders ?? 0;
+  const upsell3 = s?.upsell_3_orders ?? 0;
   const upsell1Rate = buyersFront ? percent(upsells, buyersFront) : null;
   const upsell2Rate = buyersFront ? percent(upsell2, buyersFront) : null;
+  const upsell3Rate = buyersFront ? percent(upsell3, buyersFront) : null;
   const upsellTone = (count: number): 'lush' | 'signal' | 'muted' =>
     !buyersFront ? 'muted' : count / buyersFront >= 0.1 ? 'lush' : 'signal';
 
@@ -180,13 +182,13 @@ export function TrackerKpiRow({ summary }: { summary?: Summary }) {
         />
         <StripReading
           label="Pedidos totais"
-          value={integer(buyersFront + upsells + unmapped)}
+          value={integer(buyersFront + upsells + upsell2 + upsell3 + unmapped)}
           detail={
             unmapped > 0
-              ? `${integer(buyersFront)} front · ${integer(upsells)} upsell`
-              : `${integer(buyersFront)} front · ${integer(upsells)} upsell`
+              ? `${integer(buyersFront)} front · ${integer(upsells + upsell2 + upsell3)} upsells · ${integer(unmapped)} não mapeados`
+              : `${integer(buyersFront)} front · ${integer(upsells + upsell2 + upsell3)} upsells`
           }
-          tone={buyersFront + upsells > 0 ? 'lush' : 'muted'}
+          tone={buyersFront + upsells + upsell2 + upsell3 > 0 ? 'lush' : 'muted'}
         />
         <StripReading
           label="Perda de dados"
@@ -217,6 +219,14 @@ export function TrackerKpiRow({ summary }: { summary?: Summary }) {
             buyersFront ? `${integer(upsell2)}/${integer(buyersFront)} compradores front` : null
           }
           tone={upsellTone(upsell2)}
+        />
+        <StripReading
+          label="Conversão Upsell 3"
+          value={upsell3Rate ?? '—'}
+          detail={
+            buyersFront ? `${integer(upsell3)}/${integer(buyersFront)} compradores front` : null
+          }
+          tone={upsellTone(upsell3)}
         />
       </div>
 

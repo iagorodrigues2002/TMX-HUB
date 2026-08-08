@@ -273,10 +273,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       const deliveryIds: string[] = [];
       for (const order of orders) {
         for (const destination of destinations) {
-          const notificationName =
-            order.order_kind === 'upsell' || order.order_kind === 'upsell_2'
-              ? destination.upsell_notification_name
-              : destination.front_notification_name;
+          const notificationName = ['upsell', 'upsell_2', 'upsell_3'].includes(order.order_kind)
+            ? destination.upsell_notification_name
+            : destination.front_notification_name;
           if (!notificationName) continue;
           const id = ulid();
           const rows = await app.db<{ id: string }[]>`

@@ -155,22 +155,130 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const utmifySuccess = successRate(n('utmify_failed_7d'), n('utmify_total_7d'));
     const orderMatch = successRate(n('orphan_orders_7d'), n('orders_7d'));
     const components = [
-      { key: 'configuration', label: 'Configuração', score: [row.enabled, row.pixel_ready, row.utmify_ready, row.domain_ready].filter(Boolean).length * 5, weight: 20 },
-      { key: 'capture', label: 'Captura', score: (n('pageviews_7d') > 0 ? 12 : 0) + (n('events_24h') > 0 ? 8 : 0), weight: 20 },
-      { key: 'attribution', label: 'Atribuição', score: Math.round(attributionRate * 20), weight: 20 },
-      { key: 'deliveries', label: 'Entregas', score: Math.round(((metaSuccess + utmifySuccess) / 2) * 25), weight: 25 },
-      { key: 'gateway', label: 'Gateway', score: Math.round(((webhookSuccess + orderMatch) / 2) * 15), weight: 15 },
+      {
+        key: 'configuration',
+        label: 'Configuração',
+        score:
+          [row.enabled, row.pixel_ready, row.utmify_ready, row.domain_ready].filter(Boolean)
+            .length * 5,
+        weight: 20,
+      },
+      {
+        key: 'capture',
+        label: 'Captura',
+        score: (n('pageviews_7d') > 0 ? 12 : 0) + (n('events_24h') > 0 ? 8 : 0),
+        weight: 20,
+      },
+      {
+        key: 'attribution',
+        label: 'Atribuição',
+        score: Math.round(attributionRate * 20),
+        weight: 20,
+      },
+      {
+        key: 'deliveries',
+        label: 'Entregas',
+        score: Math.round(((metaSuccess + utmifySuccess) / 2) * 25),
+        weight: 25,
+      },
+      {
+        key: 'gateway',
+        label: 'Gateway',
+        score: Math.round(((webhookSuccess + orderMatch) / 2) * 15),
+        weight: 15,
+      },
     ];
     const score = components.reduce((sum, item) => sum + item.score, 0);
-    const candidates: Array<{ key: string; severity: 'warning' | 'critical'; title: string; detail: string; metric: string; current: number; threshold: number }> = [];
-    if (!row.pixel_ready) candidates.push({ key: 'pixel_missing', severity: 'critical', title: 'Nenhum pixel Meta ativo', detail: 'A oferta não consegue retroalimentar campanhas enquanto não houver um pixel ativo.', metric: 'pixels', current: 0, threshold: 1 });
-    if (!row.utmify_ready) candidates.push({ key: 'utmify_missing', severity: 'critical', title: 'UTMify não está ativa', detail: 'Configure e habilite o destino UTMify desta oferta.', metric: 'utmify', current: 0, threshold: 1 });
-    if (!row.domain_ready) candidates.push({ key: 'domain_unverified', severity: 'warning', title: 'Domínio de tracking não verificado', detail: 'Valide o CNAME tmx do domínio para usar tracking first-party.', metric: 'domain', current: 0, threshold: 1 });
-    if (n('pageviews_7d') > 0 && attributionRate < 0.9) candidates.push({ key: 'low_attribution', severity: attributionRate < 0.7 ? 'critical' : 'warning', title: 'ICs sem campanha identificada', detail: `${Math.round((1-attributionRate)*100)}% dos ICs dos últimos 7 dias chegaram sem ad_id.`, metric: 'attribution_rate', current: attributionRate, threshold: 0.9 });
-    if (n('meta_total_7d') > 0 && metaSuccess < 0.98) candidates.push({ key: 'meta_delivery', severity: metaSuccess < 0.9 ? 'critical' : 'warning', title: 'Falhas de entrega para a Meta', detail: `${n('meta_failed_7d')} de ${n('meta_total_7d')} entregas falharam nos últimos 7 dias.`, metric: 'meta_success', current: metaSuccess, threshold: 0.98 });
-    if (n('utmify_total_7d') > 0 && utmifySuccess < 0.98) candidates.push({ key: 'utmify_delivery', severity: utmifySuccess < 0.9 ? 'critical' : 'warning', title: 'Falhas de entrega para a UTMify', detail: `${n('utmify_failed_7d')} de ${n('utmify_total_7d')} entregas falharam nos últimos 7 dias.`, metric: 'utmify_success', current: utmifySuccess, threshold: 0.98 });
-    if (n('webhooks_7d') > 0 && webhookSuccess < 0.99) candidates.push({ key: 'webhook_quarantine', severity: 'critical', title: 'Webhooks em quarentena', detail: `${n('quarantined_7d')} webhook(s) não puderam virar pedido.`, metric: 'webhook_success', current: webhookSuccess, threshold: 0.99 });
-    if (n('orders_7d') > 0 && orderMatch < 0.95) candidates.push({ key: 'orphan_orders', severity: 'critical', title: 'Pedidos sem visitante', detail: `${n('orphan_orders_7d')} pedido(s) não foram associados à jornada original.`, metric: 'order_match', current: orderMatch, threshold: 0.95 });
+    const candidates: Array<{
+      key: string;
+      severity: 'warning' | 'critical';
+      title: string;
+      detail: string;
+      metric: string;
+      current: number;
+      threshold: number;
+    }> = [];
+    if (!row.pixel_ready)
+      candidates.push({
+        key: 'pixel_missing',
+        severity: 'critical',
+        title: 'Nenhum pixel Meta ativo',
+        detail:
+          'A oferta não consegue retroalimentar campanhas enquanto não houver um pixel ativo.',
+        metric: 'pixels',
+        current: 0,
+        threshold: 1,
+      });
+    if (!row.utmify_ready)
+      candidates.push({
+        key: 'utmify_missing',
+        severity: 'critical',
+        title: 'UTMify não está ativa',
+        detail: 'Configure e habilite o destino UTMify desta oferta.',
+        metric: 'utmify',
+        current: 0,
+        threshold: 1,
+      });
+    if (!row.domain_ready)
+      candidates.push({
+        key: 'domain_unverified',
+        severity: 'warning',
+        title: 'Domínio de tracking não verificado',
+        detail: 'Valide o CNAME tmx do domínio para usar tracking first-party.',
+        metric: 'domain',
+        current: 0,
+        threshold: 1,
+      });
+    if (n('pageviews_7d') > 0 && attributionRate < 0.9)
+      candidates.push({
+        key: 'low_attribution',
+        severity: attributionRate < 0.7 ? 'critical' : 'warning',
+        title: 'ICs sem campanha identificada',
+        detail: `${Math.round((1 - attributionRate) * 100)}% dos ICs dos últimos 7 dias chegaram sem ad_id.`,
+        metric: 'attribution_rate',
+        current: attributionRate,
+        threshold: 0.9,
+      });
+    if (n('meta_total_7d') > 0 && metaSuccess < 0.98)
+      candidates.push({
+        key: 'meta_delivery',
+        severity: metaSuccess < 0.9 ? 'critical' : 'warning',
+        title: 'Falhas de entrega para a Meta',
+        detail: `${n('meta_failed_7d')} de ${n('meta_total_7d')} entregas falharam nos últimos 7 dias.`,
+        metric: 'meta_success',
+        current: metaSuccess,
+        threshold: 0.98,
+      });
+    if (n('utmify_total_7d') > 0 && utmifySuccess < 0.98)
+      candidates.push({
+        key: 'utmify_delivery',
+        severity: utmifySuccess < 0.9 ? 'critical' : 'warning',
+        title: 'Falhas de entrega para a UTMify',
+        detail: `${n('utmify_failed_7d')} de ${n('utmify_total_7d')} entregas falharam nos últimos 7 dias.`,
+        metric: 'utmify_success',
+        current: utmifySuccess,
+        threshold: 0.98,
+      });
+    if (n('webhooks_7d') > 0 && webhookSuccess < 0.99)
+      candidates.push({
+        key: 'webhook_quarantine',
+        severity: 'critical',
+        title: 'Webhooks em quarentena',
+        detail: `${n('quarantined_7d')} webhook(s) não puderam virar pedido.`,
+        metric: 'webhook_success',
+        current: webhookSuccess,
+        threshold: 0.99,
+      });
+    if (n('orders_7d') > 0 && orderMatch < 0.95)
+      candidates.push({
+        key: 'orphan_orders',
+        severity: 'critical',
+        title: 'Pedidos sem visitante',
+        detail: `${n('orphan_orders_7d')} pedido(s) não foram associados à jornada original.`,
+        metric: 'order_match',
+        current: orderMatch,
+        threshold: 0.95,
+      });
 
     const activeKeys = candidates.map((item) => item.key);
     for (const item of candidates) {
@@ -196,26 +304,43 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                CASE severity WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END, last_seen_at DESC
       LIMIT 50
     `;
-    return { score, status: score >= 90 ? 'excellent' : score >= 75 ? 'good' : score >= 55 ? 'attention' : 'critical', components, alerts,
-      metrics: { attribution_rate: attributionRate, meta_success: metaSuccess, utmify_success: utmifySuccess, webhook_success: webhookSuccess, order_match: orderMatch, events_24h: n('events_24h'), last_event_at: row.last_event_at } };
+    return {
+      score,
+      status:
+        score >= 90 ? 'excellent' : score >= 75 ? 'good' : score >= 55 ? 'attention' : 'critical',
+      components,
+      alerts,
+      metrics: {
+        attribution_rate: attributionRate,
+        meta_success: metaSuccess,
+        utmify_success: utmifySuccess,
+        webhook_success: webhookSuccess,
+        order_match: orderMatch,
+        events_24h: n('events_24h'),
+        last_event_at: row.last_event_at,
+      },
+    };
   });
 
-  app.post<{ Params: { id: string; alertId: string }; Body: unknown }>('/offers/:id/tracking/health/alerts/:alertId', async (req, reply) => {
-    await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
-    if (!app.db) return reply.code(503).send(databaseUnavailable);
-    const parsed = HealthAlertActionSchema.safeParse(req.body);
-    if (!parsed.success) throw zodToProblem(parsed.error);
-    const state = parsed.data.action === 'acknowledge' ? 'acknowledged' : 'resolved';
-    const rows = await app.db`
+  app.post<{ Params: { id: string; alertId: string }; Body: unknown }>(
+    '/offers/:id/tracking/health/alerts/:alertId',
+    async (req, reply) => {
+      await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
+      if (!app.db) return reply.code(503).send(databaseUnavailable);
+      const parsed = HealthAlertActionSchema.safeParse(req.body);
+      if (!parsed.success) throw zodToProblem(parsed.error);
+      const state = parsed.data.action === 'acknowledge' ? 'acknowledged' : 'resolved';
+      const rows = await app.db`
       UPDATE tracking_health_alerts a SET state=${state},
         acknowledged_at=CASE WHEN ${state}='acknowledged' THEN now() ELSE acknowledged_at END,
         resolved_at=CASE WHEN ${state}='resolved' THEN now() ELSE NULL END
       FROM tracking_projects p WHERE a.id=${req.params.alertId} AND a.project_id=p.id AND p.offer_id=${req.params.id}
       RETURNING a.id
     `;
-    if (!rows[0]) throw new NotFoundError('Alerta não encontrado.');
-    return reply.send({ ok: true, state });
-  });
+      if (!rows[0]) throw new NotFoundError('Alerta não encontrado.');
+      return reply.send({ ok: true, state });
+    },
+  );
   app.get<{ Params: { id: string } }>('/offers/:id/tracking/utmify-pixel', async (req, reply) => {
     await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
     if (!app.db) return reply.code(503).send(databaseUnavailable);
@@ -694,7 +819,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         public_key: existing[0].public_key,
         install_code: installCode(existing[0].public_key),
         vendepay_webhook_url: null,
-        warning: 'O tracking já estava configurado. Gere uma nova URL somente se precisar substituir o webhook na Vendepay.',
+        warning:
+          'O tracking já estava configurado. Gere uma nova URL somente se precisar substituir o webhook na Vendepay.',
       });
     }
     const projectId = ulid();
@@ -1314,6 +1440,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           paid_buyers: number;
           upsell_orders: number;
           upsell_2_orders: number;
+          upsell_3_orders: number;
           unmapped_paid_orders: number;
           orphan_orders: number;
           paid_revenue_minor: string;
@@ -1370,15 +1497,30 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         -- Front vs. upsell is marked explicitly per order (tracking_orders.order_kind),
         -- set from the tracking_product_kinds mapping at webhook time — not inferred
         -- from "repeat buyer within this window", which broke across date boundaries.
-        (SELECT count(*)::int FROM tracking_orders o
+        (SELECT count(DISTINCT COALESCE(
+            NULLIF(lower(trim(o.buyer->>'email')),''),
+            NULLIF(regexp_replace(o.buyer->>'phone','\D','','g'),''),
+            NULLIF(trim(o.visitor_id),''),o.external_id))::int FROM tracking_orders o
           WHERE o.project_id = p.id AND o.paid_at IS NOT NULL AND o.order_kind = 'front'
             AND o.paid_at >= ${from} AND o.paid_at < ${to}) AS paid_buyers,
-        (SELECT count(*)::int FROM tracking_orders o
+        (SELECT count(DISTINCT COALESCE(
+            NULLIF(lower(trim(o.buyer->>'email')),''),
+            NULLIF(regexp_replace(o.buyer->>'phone','\D','','g'),''),
+            NULLIF(trim(o.visitor_id),''),o.external_id))::int FROM tracking_orders o
           WHERE o.project_id = p.id AND o.paid_at IS NOT NULL AND o.order_kind = 'upsell'
             AND o.paid_at >= ${from} AND o.paid_at < ${to}) AS upsell_orders,
-        (SELECT count(*)::int FROM tracking_orders o
+        (SELECT count(DISTINCT COALESCE(
+            NULLIF(lower(trim(o.buyer->>'email')),''),
+            NULLIF(regexp_replace(o.buyer->>'phone','\D','','g'),''),
+            NULLIF(trim(o.visitor_id),''),o.external_id))::int FROM tracking_orders o
           WHERE o.project_id = p.id AND o.paid_at IS NOT NULL AND o.order_kind = 'upsell_2'
             AND o.paid_at >= ${from} AND o.paid_at < ${to}) AS upsell_2_orders,
+        (SELECT count(DISTINCT COALESCE(
+            NULLIF(lower(trim(o.buyer->>'email')),''),
+            NULLIF(regexp_replace(o.buyer->>'phone','\D','','g'),''),
+            NULLIF(trim(o.visitor_id),''),o.external_id))::int FROM tracking_orders o
+          WHERE o.project_id = p.id AND o.paid_at IS NOT NULL AND o.order_kind = 'upsell_3'
+            AND o.paid_at >= ${from} AND o.paid_at < ${to}) AS upsell_3_orders,
         (SELECT count(*)::int FROM tracking_orders o
           WHERE o.project_id = p.id AND o.paid_at IS NOT NULL AND o.order_kind = 'unknown'
             AND o.paid_at >= ${from} AND o.paid_at < ${to}) AS unmapped_paid_orders,
@@ -1553,6 +1695,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           paid_buyers: 0,
           upsell_orders: 0,
           upsell_2_orders: 0,
+          upsell_3_orders: 0,
           unmapped_paid_orders: 0,
           orphan_orders: 0,
           paid_revenue_minor: '0',

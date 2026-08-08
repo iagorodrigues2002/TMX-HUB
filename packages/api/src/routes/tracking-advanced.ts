@@ -58,7 +58,7 @@ const EntryLinkSchema = z.object({
 });
 const ProductKindSchema = z.object({
   product_id: z.string().trim().min(1).max(256),
-  kind: z.enum(['front', 'upsell', 'upsell_2']),
+  kind: z.enum(['front', 'upsell', 'upsell_2', 'upsell_3']),
   label: z.string().trim().max(120).nullable().optional(),
 });
 
@@ -258,9 +258,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!p) return reply.code(409).send({ error: 'tracking_not_configured' });
 
       const result = await app.db.begin(async (sql) => {
-        const orders = await sql<
-          Array<{ id: string; external_id: string; event_at: Date }>
-        >`
+        const orders = await sql<Array<{ id: string; external_id: string; event_at: Date }>>`
           SELECT id, external_id, COALESCE(paid_at, occurred_at) AS event_at
           FROM tracking_orders
           WHERE project_id = ${p.id} AND status = 'paid'

@@ -54,7 +54,9 @@ export function createPushcutDeliveryWorker(): Worker<PushcutJobData> | null {
       let responseResult: Record<string, unknown> = {};
       try {
         const kind =
-          row.order_kind === 'upsell' || row.order_kind === 'upsell_2' ? 'upsell' : 'front';
+          row.order_kind && ['upsell', 'upsell_2', 'upsell_3'].includes(row.order_kind)
+            ? 'upsell'
+            : 'front';
         const notificationName =
           kind === 'upsell' ? row.upsell_notification_name : row.front_notification_name;
         if (!notificationName) {

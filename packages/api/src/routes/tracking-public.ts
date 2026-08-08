@@ -910,11 +910,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         // Upsell checkouts frequently omit src/UTMs. Inherit them from the
         // closest prior front sale for the same exact email/phone so every
         // incremental order remains tied to the originating campaign.
-        const [parentFront] =
-          orderKind === 'upsell' || orderKind === 'upsell_2'
-            ? await sql<
-                Array<{ visitor_id: string | null; attribution_source: Record<string, string> }>
-              >`
+        const [parentFront] = ['upsell', 'upsell_2', 'upsell_3'].includes(orderKind)
+          ? await sql<
+              Array<{ visitor_id: string | null; attribution_source: Record<string, string> }>
+            >`
                 SELECT visitor_id, attribution_source
                 FROM tracking_orders
                 WHERE project_id=${connection.project_id}
@@ -931,7 +930,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                   )
                 ORDER BY occurred_at DESC LIMIT 1
               `
-            : [];
+          : [];
         attributedVisitorId ??= parentFront?.visitor_id ?? null;
         const [visitorSource] = attributedVisitorId
           ? await sql<
@@ -1105,10 +1104,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         `;
         const pushcutDeliveryIds: string[] = [];
         for (const destination of pushcutDestinations) {
-          const notificationName =
-            order.order_kind === 'upsell' || order.order_kind === 'upsell_2'
-              ? destination.upsell_notification_name
-              : destination.front_notification_name;
+          const notificationName = ['upsell', 'upsell_2', 'upsell_3'].includes(order.order_kind)
+            ? destination.upsell_notification_name
+            : destination.front_notification_name;
           // Destination opted out of upsell alerts (upsell_notification_name
           // is null) — nothing to enqueue for it on an upsell order.
           if (!notificationName) continue;

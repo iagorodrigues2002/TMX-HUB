@@ -49,6 +49,7 @@ const migrations = [
   '034_recovery_test_runs.sql',
   '035_recovery_test_events.sql',
   '036_recovery_email_automation.sql',
+  '037_tracking_upsell_3.sql',
 ];
 
 await sql`

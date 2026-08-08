@@ -189,7 +189,7 @@ export function TrackingAdvancedCenter({
     'https://api.utmify.com.br/api-credentials/orders',
   );
   const [productKindSelection, setProductKindSelection] = useState<
-    Record<string, 'front' | 'upsell' | 'upsell_2'>
+    Record<string, 'front' | 'upsell' | 'upsell_2' | 'upsell_3'>
   >({});
   const [pushcutName, setPushcutName] = useState('');
   const [pushcutSecret, setPushcutSecret] = useState('');
@@ -498,7 +498,7 @@ export function TrackingAdvancedCenter({
   const saveProductKind = useMutation({
     mutationFn: (input: {
       product_id: string;
-      kind: 'front' | 'upsell' | 'upsell_2';
+      kind: 'front' | 'upsell' | 'upsell_2' | 'upsell_3';
       label?: string | null;
     }) => apiClient.setTrackingProductKind(offerId, input),
     onSuccess: (_result, variables) => {
@@ -1800,13 +1800,15 @@ export function TrackingAdvancedCenter({
                                   [product.product_id]: event.target.value as
                                     | 'front'
                                     | 'upsell'
-                                    | 'upsell_2',
+                                    | 'upsell_2'
+                                    | 'upsell_3',
                                 }))
                               }
                             >
                               <option value="front">Front</option>
                               <option value="upsell">Upsell 1</option>
                               <option value="upsell_2">Upsell 2</option>
+                              <option value="upsell_3">Upsell 3</option>
                             </select>
                             <Button
                               size="sm"
@@ -1870,14 +1872,18 @@ export function TrackingAdvancedCenter({
                               ? 'text-emerald-300'
                               : mapping.kind === 'upsell'
                                 ? 'text-cyan-300'
-                                : 'text-amber-300'
+                                : mapping.kind === 'upsell_2'
+                                  ? 'text-amber-300'
+                                  : 'text-fuchsia-300'
                           }
                         >
                           {mapping.kind === 'front'
                             ? 'Front'
                             : mapping.kind === 'upsell'
                               ? 'Upsell 1'
-                              : 'Upsell 2'}
+                              : mapping.kind === 'upsell_2'
+                                ? 'Upsell 2'
+                                : 'Upsell 3'}
                         </span>
                         {canManage && (
                           <Button
