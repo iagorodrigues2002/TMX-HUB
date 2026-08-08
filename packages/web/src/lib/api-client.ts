@@ -733,6 +733,7 @@ export interface RecoveryView {
     email_delivered_at: string | null;
     email_opened_at: string | null;
     email_clicked_at: string | null;
+    email_already_sent: boolean;
   }>;
   activity: Array<{
     id: string;

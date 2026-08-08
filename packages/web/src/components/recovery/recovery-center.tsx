@@ -158,7 +158,9 @@ export function RecoveryCenter() {
   const readyToSend = emailConfigured && trackingReady;
   const emailOpportunities = (r?.opportunities ?? []).filter(
     (item) =>
-      item.has_email && !['sent', 'delivered', 'read'].includes(item.last_message_state ?? ''),
+      item.has_email &&
+      !item.email_already_sent &&
+      !['sent', 'delivered', 'read'].includes(item.last_message_state ?? ''),
   );
   if (recovery.isError)
     return (

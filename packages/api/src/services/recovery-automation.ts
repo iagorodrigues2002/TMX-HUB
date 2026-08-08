@@ -106,6 +106,11 @@ export async function runRecoveryEmailAutomation(app: { db: FastifyInstance['db'
           AND paid.occurred_at>=o.occurred_at
           AND lower(paid.buyer->>'email')=lower(o.buyer->>'email')
       )
+      AND NOT EXISTS (
+        SELECT 1 FROM recovery_email_dispatches red
+        WHERE red.project_id=ro.project_id AND red.email_normalized=lower(trim(ro.email))
+          AND red.state IN ('reserved','sent')
+      )
     ORDER BY o.updated_at ASC LIMIT 100`;
 
   let created = 0;
@@ -177,12 +182,27 @@ export async function runRecoveryEmailAutomation(app: { db: FastifyInstance['db'
     const messageId = ulid();
     const clickToken = randomBytes(24).toString('base64url');
     const link = `${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/recovery/r/${recoveryToken}?m=${encodeURIComponent(clickToken)}`;
+    const reservation = await db`
+      INSERT INTO recovery_email_dispatches(project_id,email_normalized,state,message_id)
+      VALUES((SELECT project_id FROM recovery_opportunities WHERE id=${row.id}),
+        ${row.email.trim().toLowerCase()},'reserved',NULL)
+      ON CONFLICT(project_id,email_normalized) DO UPDATE SET
+        state='reserved',message_id=NULL,reserved_at=now(),updated_at=now()
+      WHERE recovery_email_dispatches.state='failed'
+         OR (recovery_email_dispatches.state='reserved'
+             AND recovery_email_dispatches.reserved_at<now()-interval '15 minutes')
+      RETURNING project_id`;
+    if (!reservation[0]) continue;
     const claimed = await db`INSERT INTO recovery_messages
       (id,opportunity_id,channel_id,state,click_token_hash,content_snapshot)
       VALUES(${messageId},${row.id},${row.channel_id},'pending',${hash(clickToken)},
         ${db.json({ channel: 'email', link, automatic: true } as never)})
       ON CONFLICT DO NOTHING RETURNING id`;
     if (!claimed[0]) continue;
+    await db`UPDATE recovery_email_dispatches SET message_id=${messageId},updated_at=now()
+      WHERE email_normalized=${row.email.trim().toLowerCase()} AND state='reserved'
+        AND message_id IS NULL
+        AND project_id=(SELECT project_id FROM recovery_opportunities WHERE id=${row.id})`;
     let response: Response;
     try {
       response = await fetch('https://api.resend.com/emails', {
@@ -207,6 +227,8 @@ export async function runRecoveryEmailAutomation(app: { db: FastifyInstance['db'
       });
     } catch (error) {
       await db`UPDATE recovery_messages SET state='failed',last_error=${String(error)} WHERE id=${messageId}`;
+      await db`UPDATE recovery_email_dispatches SET state='failed',updated_at=now()
+        WHERE message_id=${messageId}`;
       failed++;
       continue;
     }
@@ -214,6 +236,8 @@ export async function runRecoveryEmailAutomation(app: { db: FastifyInstance['db'
     if (!response.ok) {
       await db`UPDATE recovery_messages SET state='failed',response_status=${response.status},
         last_error=${JSON.stringify(result)} WHERE id=${messageId}`;
+      await db`UPDATE recovery_email_dispatches SET state='failed',updated_at=now()
+        WHERE message_id=${messageId}`;
       failed++;
       continue;
     }
@@ -224,6 +248,8 @@ export async function runRecoveryEmailAutomation(app: { db: FastifyInstance['db'
         VALUES(${ulid()},${messageId},${row.id},'sent',${sql.json({ automatic: true, delay_minutes: 10 } as never)})`;
       await sql`UPDATE recovery_opportunities SET status='contacted',first_contact_at=COALESCE(first_contact_at,now()),
         last_contact_at=now(),updated_at=now() WHERE id=${row.id} AND status='eligible'`;
+      await sql`UPDATE recovery_email_dispatches SET state='sent',sent_at=now(),updated_at=now()
+        WHERE message_id=${messageId}`;
     });
     sent++;
   }
