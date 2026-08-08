@@ -1721,7 +1721,13 @@ export const apiClient = {
       kind: 'front' | 'upsell' | 'upsell_2' | 'upsell_3';
       label?: string | null;
     },
-  ): Promise<{ id: string; product_id: string; kind: string; label: string | null }> {
+  ): Promise<{
+    id: string;
+    product_id: string;
+    kind: string;
+    label: string | null;
+    orders_updated: number;
+  }> {
     return request(`/v1/offers/${id}/tracking/product-kinds`, {
       method: 'PUT',
       body,

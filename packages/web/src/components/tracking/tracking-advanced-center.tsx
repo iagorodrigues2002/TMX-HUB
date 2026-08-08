@@ -501,14 +501,17 @@ export function TrackingAdvancedCenter({
       kind: 'front' | 'upsell' | 'upsell_2' | 'upsell_3';
       label?: string | null;
     }) => apiClient.setTrackingProductKind(offerId, input),
-    onSuccess: (_result, variables) => {
+    onSuccess: (result, variables) => {
       setProductKindSelection((prev) => {
         const next = { ...prev };
         delete next[variables.product_id];
         return next;
       });
       void qc.invalidateQueries({ queryKey: ['tracking-product-kinds', offerId] });
-      toast.success('Produto classificado.');
+      void refreshTracking();
+      toast.success(
+        `Produto classificado · ${result.orders_updated} pedido(s) existente(s) atualizado(s).`,
+      );
     },
     onError: (error) => toast.error((error as Error).message),
   });

@@ -204,14 +204,21 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!app.db) return reply.code(503).send(databaseUnavailable);
     if (!p) return reply.code(409).send({ error: 'tracking_not_configured' });
     const body = parsed(ProductKindSchema, req.body);
-    const [row] = await app.db`
-      INSERT INTO tracking_product_kinds (id, project_id, product_id, kind, label)
-      VALUES (${ulid()}, ${p.id}, ${body.product_id}, ${body.kind}, ${body.label ?? null})
-      ON CONFLICT (project_id, product_id) DO UPDATE SET
-        kind = EXCLUDED.kind, label = EXCLUDED.label, updated_at = now()
-      RETURNING id, product_id, kind, label, created_at, updated_at
-    `;
-    return reply.code(201).send(row);
+    const result = await app.db.begin(async (sql) => {
+      const [row] = await sql`
+        INSERT INTO tracking_product_kinds (id, project_id, product_id, kind, label)
+        VALUES (${ulid()}, ${p.id}, ${body.product_id}, ${body.kind}, ${body.label ?? null})
+        ON CONFLICT (project_id, product_id) DO UPDATE SET
+          kind = EXCLUDED.kind, label = EXCLUDED.label, updated_at = now()
+        RETURNING id, product_id, kind, label, created_at, updated_at
+      `;
+      const orders = await sql`
+        UPDATE tracking_orders SET order_kind=${body.kind},updated_at=now()
+        WHERE project_id=${p.id} AND product->>'id'=${body.product_id}
+          AND order_kind<>${body.kind} RETURNING id`;
+      return { ...row, orders_updated: orders.length };
+    });
+    return reply.code(201).send(result);
   });
 
   app.delete<{ Params: { id: string; productId: string } }>(
