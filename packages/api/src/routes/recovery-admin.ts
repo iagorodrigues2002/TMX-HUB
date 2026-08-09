@@ -250,9 +250,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
              (SELECT max(rm.delivered_at) FROM recovery_messages rm JOIN recovery_channels rc ON rc.id=rm.channel_id WHERE rm.opportunity_id=ro.id AND rc.kind='email') AS email_delivered_at,
              (SELECT max(rm.opened_at) FROM recovery_messages rm JOIN recovery_channels rc ON rc.id=rm.channel_id WHERE rm.opportunity_id=ro.id AND rc.kind='email') AS email_opened_at,
              (SELECT max(rm.clicked_at) FROM recovery_messages rm JOIN recovery_channels rc ON rc.id=rm.channel_id WHERE rm.opportunity_id=ro.id AND rc.kind='email') AS email_clicked_at,
-             EXISTS(SELECT 1 FROM recovery_email_dispatches red
-               WHERE red.project_id=ro.project_id AND red.email_normalized=lower(trim(ro.email))
-                 AND red.state IN ('reserved','sent')) AS email_already_sent
+             EXISTS(SELECT 1 FROM recovery_messages previous
+               JOIN recovery_channels previous_channel ON previous_channel.id=previous.channel_id AND previous_channel.kind='email'
+               JOIN recovery_opportunities previous_opportunity ON previous_opportunity.id=previous.opportunity_id
+               WHERE previous_opportunity.project_id=ro.project_id
+                 AND lower(trim(previous_opportunity.email))=lower(trim(ro.email))
+                 AND previous.state IN ('sent','delivered','read')) AS email_already_sent
       FROM recovery_opportunities ro JOIN tracking_orders o ON o.id=ro.order_id
       WHERE ro.project_id=${project.id} ORDER BY ro.created_at DESC LIMIT 100
     `;
@@ -640,22 +643,15 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       const name = row.buyer_name?.split(/\s+/)[0] || 'cliente';
       if (parsed.data.channel === 'email') {
         if (!row.email) return reply.code(409).send({ error: 'email_missing' });
-        const reservation = await app.db`
-          INSERT INTO recovery_email_dispatches(project_id,email_normalized,state,message_id)
-          VALUES(${project.id},${row.email.trim().toLowerCase()},'reserved',NULL)
-          ON CONFLICT(project_id,email_normalized) DO UPDATE SET
-            state='reserved',message_id=NULL,reserved_at=now(),updated_at=now()
-          WHERE recovery_email_dispatches.state='failed'
-             OR (recovery_email_dispatches.state='reserved'
-                 AND recovery_email_dispatches.reserved_at<now()-interval '15 minutes')
-          RETURNING project_id`;
-        if (!reservation[0]) return reply.code(409).send({ error: 'recovery_email_already_sent' });
+        const [previous] = await app.db`
+          SELECT 1 FROM recovery_messages rm
+          JOIN recovery_channels rc ON rc.id=rm.channel_id AND rc.kind='email'
+          JOIN recovery_opportunities ro ON ro.id=rm.opportunity_id
+          WHERE ro.project_id=${project.id} AND lower(trim(ro.email))=${row.email.trim().toLowerCase()}
+            AND rm.state IN ('sent','delivered','read') LIMIT 1`;
+        if (previous) return reply.code(409).send({ error: 'recovery_email_already_sent' });
       }
       await app.db`INSERT INTO recovery_messages(id,opportunity_id,channel_id,state,click_token_hash,content_snapshot) VALUES(${messageId},${row.opportunity_id},${row.channel_id},'pending',${hash(clickToken)},${app.db.json({ channel: parsed.data.channel, link } as never)})`;
-      if (parsed.data.channel === 'email')
-        await app.db`UPDATE recovery_email_dispatches SET message_id=${messageId},updated_at=now()
-          WHERE project_id=${project.id} AND email_normalized=${row.email!.trim().toLowerCase()}
-            AND state='reserved' AND message_id IS NULL`;
       let response: Response;
       if (parsed.data.channel === 'whatsapp') {
         if (!row.phone) return reply.code(409).send({ error: 'phone_missing' });
@@ -735,11 +731,6 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         await sql`INSERT INTO recovery_message_events(id,message_id,opportunity_id,event_type,metadata) VALUES(${ulid()},${messageId},${row.opportunity_id},${sent ? 'sent' : 'failed'},${sql.json({ provider_status: response.status } as never)})`;
         if (sent)
           await sql`UPDATE recovery_opportunities SET status='contacted',first_contact_at=COALESCE(first_contact_at,now()),last_contact_at=now(),updated_at=now() WHERE id=${row.opportunity_id}`;
-        if (parsed.data.channel === 'email')
-          await sql`UPDATE recovery_email_dispatches SET state=${sent ? 'sent' : 'failed'},
-            sent_at=${sent ? new Date() : null},updated_at=now()
-            WHERE project_id=${project.id} AND email_normalized=${row.email!.trim().toLowerCase()}
-              AND message_id=${messageId}`;
       });
       if (!sent)
         return reply
@@ -764,9 +755,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         AND ((${channel}='email' AND NULLIF(ro.email,'') IS NOT NULL) OR (${channel}<>'email' AND NULLIF(ro.phone,'') IS NOT NULL))
         AND NOT EXISTS (SELECT 1 FROM recovery_messages rm JOIN recovery_channels rc ON rc.id=rm.channel_id WHERE rm.opportunity_id=ro.id AND rc.kind=${channel} AND rm.state IN ('sent','delivered','read'))
         AND (${channel}<>'email' OR NOT EXISTS (
-          SELECT 1 FROM recovery_email_dispatches red
-          WHERE red.project_id=ro.project_id AND red.email_normalized=lower(trim(ro.email))
-            AND red.state IN ('reserved','sent')
+          SELECT 1 FROM recovery_messages previous
+          JOIN recovery_channels previous_channel ON previous_channel.id=previous.channel_id AND previous_channel.kind='email'
+          JOIN recovery_opportunities previous_opportunity ON previous_opportunity.id=previous.opportunity_id
+          WHERE previous_opportunity.project_id=ro.project_id
+            AND lower(trim(previous_opportunity.email))=lower(trim(ro.email))
+            AND previous.state IN ('sent','delivered','read')
         ))
       ORDER BY ro.created_at ASC LIMIT ${limit}`;
       let sent = 0;
