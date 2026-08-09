@@ -137,7 +137,14 @@ async function main() {
       emailRecoveryRunning = false;
     }
   };
-  await runEmailRecovery();
+  // Recovery can involve provider calls and historical reconciliation. Never
+  // block API startup/login or let a recovery failure crash the HTTP service.
+  const emailRecoveryStartupTimer = setTimeout(() => {
+    void runEmailRecovery().catch((error) =>
+      app.log.error({ error }, 'initial recovery email automation failed'),
+    );
+  }, 5_000);
+  emailRecoveryStartupTimer.unref();
   const emailRecoveryTimer = setInterval(() => {
     void runEmailRecovery().catch((error) =>
       app.log.error({ error }, 'recovery email automation failed'),
