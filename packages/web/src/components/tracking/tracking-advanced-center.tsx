@@ -165,7 +165,8 @@ export function TrackingAdvancedCenter({
   canManage,
 }: { offerId: string; canManage: boolean }) {
   const [section, setSection] = useState<Section>('tracker');
-  const [trackingDate, setTrackingDate] = useState(() => saoPauloDate());
+  const [trackingFrom, setTrackingFrom] = useState(() => saoPauloDate());
+  const [trackingTo, setTrackingTo] = useState(() => saoPauloDate());
   const [isRefreshingTracking, setIsRefreshingTracking] = useState(false);
   const [domain, setDomain] = useState('');
   const [domainKind, setDomainKind] = useState<'source' | 'tracking'>('source');
@@ -203,12 +204,13 @@ export function TrackingAdvancedCenter({
   const [feeReserveDays, setFeeReserveDays] = useState('');
   const [feePayoutDays, setFeePayoutDays] = useState('');
   const datePresets = [
-    { label: 'Hoje', date: saoPauloDateOffset(0) },
-    { label: 'Ontem', date: saoPauloDateOffset(1) },
-    { label: 'Anteontem', date: saoPauloDateOffset(2) },
-    { label: '7 dias atrás', date: saoPauloDateOffset(7) },
-    { label: '30 dias atrás', date: saoPauloDateOffset(30) },
+    { label: 'Hoje', from: saoPauloDateOffset(0), to: saoPauloDateOffset(0) },
+    { label: 'Ontem', from: saoPauloDateOffset(1), to: saoPauloDateOffset(1) },
+    { label: 'Anteontem', from: saoPauloDateOffset(2), to: saoPauloDateOffset(2) },
+    { label: '7 dias', from: saoPauloDateOffset(6), to: saoPauloDateOffset(0) },
+    { label: '30 dias', from: saoPauloDateOffset(29), to: saoPauloDateOffset(0) },
   ];
+  const trackingPeriod = { from: trackingFrom, to: trackingTo };
   const qc = useQueryClient();
   const refreshTracking = async () => {
     setIsRefreshingTracking(true);
@@ -222,9 +224,9 @@ export function TrackingAdvancedCenter({
           'tracking-journeys',
           'tracking-attribution',
           'tracking-countries',
-        ].map((key) => qc.invalidateQueries({ queryKey: [key, offerId, trackingDate] })),
+        ].map((key) => qc.invalidateQueries({ queryKey: [key, offerId] })),
       );
-      toast.success('Dados do dia atualizados.');
+      toast.success('Dados do período atualizados.');
     } finally {
       setIsRefreshingTracking(false);
     }
@@ -242,7 +244,7 @@ export function TrackingAdvancedCenter({
   });
   const refresh = () => qc.invalidateQueries({ queryKey: ['tracking-advanced', offerId] });
   const reconcileInitiateCheckouts = useMutation({
-    mutationFn: () => apiClient.reconcileInitiateCheckouts(offerId, trackingDate),
+    mutationFn: () => apiClient.reconcileInitiateCheckouts(offerId, trackingPeriod),
     onSuccess: (result) => {
       void Promise.all([
         qc.invalidateQueries({ queryKey: ['tracking-meta-deliveries', offerId] }),
@@ -410,8 +412,8 @@ export function TrackingAdvancedCenter({
     retry: false,
   });
   const utmifyWebEvents = useQuery({
-    queryKey: ['tracking-utmify-web-events', offerId, trackingDate],
-    queryFn: () => apiClient.listTrackingUtmifyWebEvents(offerId, trackingDate),
+    queryKey: ['tracking-utmify-web-events', offerId, trackingFrom, trackingTo],
+    queryFn: () => apiClient.listTrackingUtmifyWebEvents(offerId, trackingPeriod),
     refetchInterval: 30_000,
     retry: false,
   });
@@ -629,8 +631,8 @@ export function TrackingAdvancedCenter({
     onError: (error) => toast.error((error as Error).message),
   });
   const refunds = useQuery({
-    queryKey: ['tracking-refunds', offerId, trackingDate],
-    queryFn: () => apiClient.getTrackingRefunds(offerId, trackingDate),
+    queryKey: ['tracking-refunds', offerId, trackingFrom, trackingTo],
+    queryFn: () => apiClient.getTrackingRefunds(offerId, trackingPeriod),
     enabled: section === 'refunds',
     retry: false,
   });
@@ -913,25 +915,47 @@ export function TrackingAdvancedCenter({
                       key={preset.label}
                       type="button"
                       size="sm"
-                      variant={trackingDate === preset.date ? 'default' : 'outline'}
+                      variant={
+                        trackingFrom === preset.from && trackingTo === preset.to
+                          ? 'default'
+                          : 'outline'
+                      }
                       className="h-10 shrink-0"
-                      onClick={() => setTrackingDate(preset.date)}
+                      onClick={() => {
+                        setTrackingFrom(preset.from);
+                        setTrackingTo(preset.to);
+                      }}
                     >
                       {preset.label}
                     </Button>
                   ))}
                 </div>
                 <label
-                  htmlFor="tracking-date"
+                  htmlFor="tracking-from"
                   className="min-w-[150px] flex-1 space-y-1 sm:flex-none"
                 >
-                  <span className="hud-label block">Personalizado</span>
+                  <span className="hud-label block">Data inicial</span>
                   <Input
-                    id="tracking-date"
+                    id="tracking-from"
                     type="date"
-                    value={trackingDate}
+                    value={trackingFrom}
+                    max={trackingTo}
+                    onChange={(event) => setTrackingFrom(event.target.value || trackingTo)}
+                    className="h-11 w-full sm:w-[160px]"
+                  />
+                </label>
+                <label
+                  htmlFor="tracking-to"
+                  className="min-w-[150px] flex-1 space-y-1 sm:flex-none"
+                >
+                  <span className="hud-label block">Data final</span>
+                  <Input
+                    id="tracking-to"
+                    type="date"
+                    value={trackingTo}
+                    min={trackingFrom}
                     max={saoPauloDate()}
-                    onChange={(event) => setTrackingDate(event.target.value || saoPauloDate())}
+                    onChange={(event) => setTrackingTo(event.target.value || trackingFrom)}
                     className="h-11 w-full sm:w-[160px]"
                   />
                 </label>
@@ -965,18 +989,33 @@ export function TrackingAdvancedCenter({
             </div>
           )}
           {section === 'tracker' && (
-            <TrackingLiveConsole offerId={offerId} mode="tracker" date={trackingDate} />
+            <TrackingLiveConsole
+              offerId={offerId}
+              mode="tracker"
+              from={trackingFrom}
+              to={trackingTo}
+            />
           )}
           {section === 'funnel' && (
-            <TrackingLiveConsole offerId={offerId} mode="funnel" date={trackingDate} />
+            <TrackingLiveConsole
+              offerId={offerId}
+              mode="funnel"
+              from={trackingFrom}
+              to={trackingTo}
+            />
           )}
           {section === 'attribution' && (
-            <TrackingLiveConsole offerId={offerId} mode="attribution" date={trackingDate} />
+            <TrackingLiveConsole
+              offerId={offerId}
+              mode="attribution"
+              from={trackingFrom}
+              to={trackingTo}
+            />
           )}
           {section === 'refunds' && (
             <Module
               title="Reembolsos e chargeback"
-              description="Pedidos com status reembolsado ou chargeback no dia selecionado, pela data em que o status mudou — não pela data da compra original."
+              description="Pedidos com status reembolsado ou chargeback no período selecionado, pela data em que o status mudou — não pela data da compra original."
             >
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-lg border border-amber-300/15 bg-amber-300/[0.04] p-4">

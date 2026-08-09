@@ -56,20 +56,23 @@ function shortId(value?: string) {
 export function TrackingLiveConsole({
   offerId,
   mode,
-  date,
+  from,
+  to,
 }: {
   offerId: string;
   mode?: View;
-  date: string;
+  from: string;
+  to: string;
 }) {
   const [view, setView] = useState<View>('tracker');
   const activeView = mode ?? view;
   const [feed, setFeed] = useState<'sales' | 'events'>('sales');
   const [funnelDetail, setFunnelDetail] = useState<'overview' | 'pages' | 'journeys'>('overview');
   const [search, setSearch] = useState('');
+  const period = { from, to };
   const summary = useQuery({
-    queryKey: ['tracking-summary', offerId, date],
-    queryFn: () => apiClient.getTrackingSummary(offerId, date),
+    queryKey: ['tracking-summary', offerId, from, to],
+    queryFn: () => apiClient.getTrackingSummary(offerId, period),
     refetchInterval: 30_000,
     retry: false,
   });
@@ -80,14 +83,14 @@ export function TrackingLiveConsole({
     retry: false,
   });
   const events = useQuery({
-    queryKey: ['tracking-events', offerId, date],
-    queryFn: () => apiClient.listTrackingEvents(offerId, 1, 50, date),
+    queryKey: ['tracking-events', offerId, from, to],
+    queryFn: () => apiClient.listTrackingEvents(offerId, 1, 50, period),
     refetchInterval: 30_000,
     retry: false,
   });
   const orders = useQuery({
-    queryKey: ['tracking-orders', offerId, date],
-    queryFn: () => apiClient.listTrackingOrders(offerId, 1, 50, date),
+    queryKey: ['tracking-orders', offerId, from, to],
+    queryFn: () => apiClient.listTrackingOrders(offerId, 1, 50, period),
     refetchInterval: 30_000,
     retry: false,
   });
@@ -98,29 +101,29 @@ export function TrackingLiveConsole({
     retry: false,
   });
   const pageFunnel = useQuery({
-    queryKey: ['tracking-page-funnel', offerId, date],
-    queryFn: () => apiClient.getTrackingPageFunnel(offerId, date),
+    queryKey: ['tracking-page-funnel', offerId, from, to],
+    queryFn: () => apiClient.getTrackingPageFunnel(offerId, period),
     enabled: activeView === 'funnel',
     refetchInterval: 30_000,
     retry: false,
   });
   const journeys = useQuery({
-    queryKey: ['tracking-journeys', offerId, date],
-    queryFn: () => apiClient.listTrackingJourneys(offerId, date),
+    queryKey: ['tracking-journeys', offerId, from, to],
+    queryFn: () => apiClient.listTrackingJourneys(offerId, period),
     enabled: activeView === 'funnel',
     refetchInterval: 30_000,
     retry: false,
   });
   const attribution = useQuery({
-    queryKey: ['tracking-attribution', offerId, date],
-    queryFn: () => apiClient.getTrackingAttribution(offerId, date),
+    queryKey: ['tracking-attribution', offerId, from, to],
+    queryFn: () => apiClient.getTrackingAttribution(offerId, period),
     enabled: activeView === 'attribution',
     refetchInterval: 30_000,
     retry: false,
   });
   const countries = useQuery({
-    queryKey: ['tracking-countries', offerId, date],
-    queryFn: () => apiClient.getTrackingCountries(offerId, date),
+    queryKey: ['tracking-countries', offerId, from, to],
+    queryFn: () => apiClient.getTrackingCountries(offerId, period),
     enabled: activeView === 'tracker',
     refetchInterval: 30_000,
     retry: false,

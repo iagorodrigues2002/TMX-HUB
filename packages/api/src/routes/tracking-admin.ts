@@ -19,6 +19,14 @@ const TrackingDateSchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .optional(),
+  from: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  to: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
 });
 const TrackingPaginationSchema = PaginationSchema.merge(TrackingDateSchema);
 
@@ -39,7 +47,11 @@ type PaginationQuery = {
   page?: string | number;
   per_page?: string | number;
   date?: string;
+  from?: string;
+  to?: string;
 };
+
+type TrackingPeriodQuery = { date?: string; from?: string; to?: string };
 
 const databaseUnavailable = {
   error: 'tracking_database_unavailable',
@@ -87,25 +99,44 @@ function parsePagination(query: PaginationQuery) {
   };
 }
 
-function parseTrackingDate(query: { date?: string }) {
+function parseTrackingDate(query: TrackingPeriodQuery) {
   const parsed = TrackingDateSchema.safeParse(query);
   if (!parsed.success) throw zodToProblem(parsed.error);
   const now = new Date();
   const today = saoPauloParts(now).date;
-  const date = parsed.data.date ?? today;
-  if (date > today) {
+  const startDate = parsed.data.from ?? parsed.data.date ?? parsed.data.to ?? today;
+  const endDate = parsed.data.to ?? parsed.data.date ?? parsed.data.from ?? today;
+  if (startDate > endDate) {
     throw zodToProblem(
       new z.ZodError([
         {
           code: 'custom',
-          path: ['date'],
-          message: 'A data não pode estar no futuro.',
+          path: ['from'],
+          message: 'A data inicial não pode ser posterior à data final.',
         },
       ]),
     );
   }
-  const range = saoPauloDayRange(date, now);
-  return { date, from: new Date(range.from), to: new Date(range.to) };
+  if (endDate > today) {
+    throw zodToProblem(
+      new z.ZodError([
+        {
+          code: 'custom',
+          path: ['to'],
+          message: 'O período não pode terminar no futuro.',
+        },
+      ]),
+    );
+  }
+  const startRange = saoPauloDayRange(startDate, now);
+  const endRange = saoPauloDayRange(endDate, now);
+  return {
+    date: startDate === endDate ? startDate : `${startDate}:${endDate}`,
+    from_date: startDate,
+    to_date: endDate,
+    from: new Date(startRange.from),
+    to: new Date(endRange.to),
+  };
 }
 
 function pagination(page: number, perPage: number, total: number) {
@@ -371,7 +402,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     return reply.send({ configured: true, pixel_id: parsed.data.pixel_id });
   });
 
-  app.get<{ Params: { id: string }; Querystring: { date?: string } }>(
+  app.get<{ Params: { id: string }; Querystring: TrackingPeriodQuery }>(
     '/offers/:id/tracking/utmify-web-events',
     async (req, reply) => {
       await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
@@ -419,7 +450,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     },
   );
 
-  app.post<{ Params: { id: string }; Querystring: { date?: string } }>(
+  app.post<{ Params: { id: string }; Querystring: TrackingPeriodQuery }>(
     '/offers/:id/tracking/initiate-checkout/reconcile',
     async (req, reply) => {
       await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
@@ -1058,7 +1089,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     },
   );
 
-  app.get<{ Params: { id: string }; Querystring: { date?: string } }>(
+  app.get<{ Params: { id: string }; Querystring: TrackingPeriodQuery }>(
     '/offers/:id/tracking/page-funnel',
     async (req, reply) => {
       await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
@@ -1096,7 +1127,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     },
   );
 
-  app.get<{ Params: { id: string }; Querystring: { date?: string } }>(
+  app.get<{ Params: { id: string }; Querystring: TrackingPeriodQuery }>(
     '/offers/:id/tracking/journeys',
     async (req, reply) => {
       await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
@@ -1203,7 +1234,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     },
   );
 
-  app.get<{ Params: { id: string }; Querystring: { date?: string } }>(
+  app.get<{ Params: { id: string }; Querystring: TrackingPeriodQuery }>(
     '/offers/:id/tracking/countries',
     async (req, reply) => {
       await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
@@ -1272,7 +1303,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     },
   );
 
-  app.get<{ Params: { id: string }; Querystring: { date?: string } }>(
+  app.get<{ Params: { id: string }; Querystring: TrackingPeriodQuery }>(
     '/offers/:id/tracking/attribution',
     async (req, reply) => {
       await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
@@ -1419,7 +1450,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     },
   );
 
-  app.get<{ Params: { id: string }; Querystring: { date?: string } }>(
+  app.get<{ Params: { id: string }; Querystring: TrackingPeriodQuery }>(
     '/offers/:id/tracking/summary',
     async (req, reply) => {
       await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');

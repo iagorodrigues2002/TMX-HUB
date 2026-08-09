@@ -47,6 +47,18 @@ export interface BulkLinkUpdateResult {
   affectedIds: string[];
 }
 
+export type TrackingPeriod = { from: string; to: string };
+
+function trackingPeriodParams(period?: string | TrackingPeriod) {
+  const params = new URLSearchParams();
+  if (typeof period === 'string') params.set('date', period);
+  else if (period) {
+    params.set('from', period.from);
+    params.set('to', period.to);
+  }
+  return params;
+}
+
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
@@ -1430,7 +1442,7 @@ export const apiClient = {
 
   async getTrackingSummary(
     id: string,
-    date?: string,
+    period?: string | TrackingPeriod,
   ): Promise<{
     date: string;
     time_zone: string;
@@ -1475,7 +1487,8 @@ export const apiClient = {
     net_available_brl_minor: string;
     net_available_usd_minor: string;
   }> {
-    const query = date ? `?date=${encodeURIComponent(date)}` : '';
+    const params = trackingPeriodParams(period);
+    const query = params.size ? `?${params.toString()}` : '';
     return request(`/v1/offers/${id}/tracking/summary${query}`);
   },
 
@@ -1499,7 +1512,7 @@ export const apiClient = {
 
   async getTrackingRefunds(
     id: string,
-    date?: string,
+    period?: string | TrackingPeriod,
     page = 1,
   ): Promise<{
     date: string;
@@ -1525,8 +1538,7 @@ export const apiClient = {
     };
     pagination: { page: number; per_page: number; total: number; total_pages: number };
   }> {
-    const params = new URLSearchParams();
-    if (date) params.set('date', date);
+    const params = trackingPeriodParams(period);
     if (page > 1) params.set('page', String(page));
     const query = params.toString();
     return request(`/v1/offers/${id}/tracking/refunds${query ? `?${query}` : ''}`);
@@ -1993,7 +2005,7 @@ export const apiClient = {
     id: string,
     page = 1,
     perPage = 25,
-    date?: string,
+    period?: string | TrackingPeriod,
   ): Promise<{
     date: string;
     time_zone: string;
@@ -2011,13 +2023,15 @@ export const apiClient = {
     }>;
     pagination: { page: number; per_page: number; total: number; total_pages: number };
   }> {
-    const dateQuery = date ? `&date=${encodeURIComponent(date)}` : '';
-    return request(`/v1/offers/${id}/tracking/events?page=${page}&per_page=${perPage}${dateQuery}`);
+    const params = trackingPeriodParams(period);
+    params.set('page', String(page));
+    params.set('per_page', String(perPage));
+    return request(`/v1/offers/${id}/tracking/events?${params.toString()}`);
   },
 
   async getTrackingPageFunnel(
     id: string,
-    date?: string,
+    period?: string | TrackingPeriod,
   ): Promise<{
     date: string;
     time_zone: string;
@@ -2029,13 +2043,14 @@ export const apiClient = {
       exits: number;
     }>;
   }> {
-    const query = date ? `?date=${encodeURIComponent(date)}` : '';
+    const params = trackingPeriodParams(period);
+    const query = params.size ? `?${params.toString()}` : '';
     return request(`/v1/offers/${id}/tracking/page-funnel${query}`);
   },
 
   async listTrackingJourneys(
     id: string,
-    date?: string,
+    period?: string | TrackingPeriod,
   ): Promise<{
     date: string;
     time_zone: string;
@@ -2056,7 +2071,8 @@ export const apiClient = {
       buyer?: Record<string, unknown>;
     }>;
   }> {
-    const query = date ? `?date=${encodeURIComponent(date)}` : '';
+    const params = trackingPeriodParams(period);
+    const query = params.size ? `?${params.toString()}` : '';
     return request(`/v1/offers/${id}/tracking/journeys${query}`);
   },
 
@@ -2064,7 +2080,7 @@ export const apiClient = {
     id: string,
     page = 1,
     perPage = 25,
-    date?: string,
+    period?: string | TrackingPeriod,
   ): Promise<{
     date: string;
     time_zone: string;
@@ -2083,13 +2099,15 @@ export const apiClient = {
     }>;
     pagination: { page: number; per_page: number; total: number; total_pages: number };
   }> {
-    const dateQuery = date ? `&date=${encodeURIComponent(date)}` : '';
-    return request(`/v1/offers/${id}/tracking/orders?page=${page}&per_page=${perPage}${dateQuery}`);
+    const params = trackingPeriodParams(period);
+    params.set('page', String(page));
+    params.set('per_page', String(perPage));
+    return request(`/v1/offers/${id}/tracking/orders?${params.toString()}`);
   },
 
   async getTrackingAttribution(
     id: string,
-    date?: string,
+    period?: string | TrackingPeriod,
   ): Promise<{
     date: string;
     time_zone: string;
@@ -2114,13 +2132,14 @@ export const apiClient = {
       paid_revenue_minor: string;
     }>;
   }> {
-    const query = date ? `?date=${encodeURIComponent(date)}` : '';
+    const params = trackingPeriodParams(period);
+    const query = params.size ? `?${params.toString()}` : '';
     return request(`/v1/offers/${id}/tracking/attribution${query}`);
   },
 
   async getTrackingCountries(
     id: string,
-    date?: string,
+    period?: string | TrackingPeriod,
   ): Promise<{
     date: string;
     time_zone: string;
@@ -2133,7 +2152,8 @@ export const apiClient = {
       paid_revenue_minor: string;
     }>;
   }> {
-    const query = date ? `?date=${encodeURIComponent(date)}` : '';
+    const params = trackingPeriodParams(period);
+    const query = params.size ? `?${params.toString()}` : '';
     return request(`/v1/offers/${id}/tracking/countries${query}`);
   },
 
@@ -2166,7 +2186,7 @@ export const apiClient = {
 
   async reconcileInitiateCheckouts(
     id: string,
-    date: string,
+    period: string | TrackingPeriod,
   ): Promise<{
     date: string;
     attribution_recovered: number;
@@ -2176,10 +2196,10 @@ export const apiClient = {
     meta_queued: number;
     utmify_queued: number;
   }> {
-    return request(
-      `/v1/offers/${id}/tracking/initiate-checkout/reconcile?date=${encodeURIComponent(date)}`,
-      { method: 'POST' },
-    );
+    const params = trackingPeriodParams(period);
+    return request(`/v1/offers/${id}/tracking/initiate-checkout/reconcile?${params.toString()}`, {
+      method: 'POST',
+    });
   },
 
   async reconcileMetaPurchases(
@@ -2267,7 +2287,7 @@ export const apiClient = {
 
   async listTrackingUtmifyWebEvents(
     id: string,
-    date: string,
+    period: string | TrackingPeriod,
   ): Promise<{
     date: string;
     deliveries: Array<{
@@ -2288,7 +2308,8 @@ export const apiClient = {
       utmify_event_id?: string;
     }>;
   }> {
-    return request(`/v1/offers/${id}/tracking/utmify-web-events?date=${encodeURIComponent(date)}`);
+    const params = trackingPeriodParams(period);
+    return request(`/v1/offers/${id}/tracking/utmify-web-events?${params.toString()}`);
   },
 
   async retryTrackingUtmifyWebEvent(id: string, deliveryId: string): Promise<void> {
