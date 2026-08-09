@@ -105,10 +105,10 @@ export function TrackerKpiRow({ summary }: { summary?: Summary }) {
   const upsell2 = s?.upsell_2_orders ?? 0;
   const upsell3 = s?.upsell_3_orders ?? 0;
   const upsell1Rate = buyersFront ? percent(upsells, buyersFront) : null;
-  const upsell2Rate = buyersFront ? percent(upsell2, buyersFront) : null;
-  const upsell3Rate = buyersFront ? percent(upsell3, buyersFront) : null;
-  const upsellTone = (count: number): 'lush' | 'signal' | 'muted' =>
-    !buyersFront ? 'muted' : count / buyersFront >= 0.1 ? 'lush' : 'signal';
+  const upsell2Rate = upsells ? percent(upsell2, upsells) : null;
+  const upsell3Rate = upsell2 ? percent(upsell3, upsell2) : null;
+  const upsellTone = (count: number, previousStep: number): 'lush' | 'signal' | 'muted' =>
+    !previousStep ? 'muted' : count / previousStep >= 0.1 ? 'lush' : 'signal';
 
   const hasFinance = s?.net_revenue_brl_minor !== undefined;
   const refundedOrders = s?.refunded_orders ?? 0;
@@ -202,7 +202,7 @@ export function TrackerKpiRow({ summary }: { summary?: Summary }) {
         />
       </div>
 
-      <p className="hud-label mt-5 mb-2">Conversão de upsell (sobre compradores front)</p>
+      <p className="hud-label mt-5 mb-2">Conversão de upsell por etapa anterior</p>
       <div className="tmx-kpi-tier2">
         <StripReading
           label="Conversão Upsell 1"
@@ -210,23 +210,19 @@ export function TrackerKpiRow({ summary }: { summary?: Summary }) {
           detail={
             buyersFront ? `${integer(upsells)}/${integer(buyersFront)} compradores front` : null
           }
-          tone={upsellTone(upsells)}
+          tone={upsellTone(upsells, buyersFront)}
         />
         <StripReading
           label="Conversão Upsell 2"
           value={upsell2Rate ?? '—'}
-          detail={
-            buyersFront ? `${integer(upsell2)}/${integer(buyersFront)} compradores front` : null
-          }
-          tone={upsellTone(upsell2)}
+          detail={upsells ? `${integer(upsell2)}/${integer(upsells)} compradores Upsell 1` : null}
+          tone={upsellTone(upsell2, upsells)}
         />
         <StripReading
           label="Conversão Upsell 3"
           value={upsell3Rate ?? '—'}
-          detail={
-            buyersFront ? `${integer(upsell3)}/${integer(buyersFront)} compradores front` : null
-          }
-          tone={upsellTone(upsell3)}
+          detail={upsell2 ? `${integer(upsell3)}/${integer(upsell2)} compradores Upsell 2` : null}
+          tone={upsellTone(upsell3, upsell2)}
         />
       </div>
 
