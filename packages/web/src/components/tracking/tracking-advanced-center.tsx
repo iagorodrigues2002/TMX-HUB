@@ -2934,7 +2934,7 @@ function AbTestCard({
                 <div className="col-span-2">
                   <dt className="text-white/45">Receita atribuída</dt>
                   <dd className="mt-1 text-base font-semibold text-emerald-300">
-                    {(Number(row?.revenue_minor ?? 0) / 100).toLocaleString('pt-BR', {
+                    {(Number(row?.revenue_brl_minor ?? 0) / 100).toLocaleString('pt-BR', {
                       style: 'currency',
                       currency: 'BRL',
                     })}

@@ -626,22 +626,40 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                   )) AS checkouts,
                (SELECT count(*)::int FROM tracking_orders o
                 WHERE o.project_id=t.project_id
-                  AND o.visitor_id IN (
-                    SELECT aa.visitor_id FROM tracking_ab_assignments aa
-                    WHERE aa.variant_id=v.id
+                  AND (
+                    o.attribution_source->>'ab_variant_id'=v.id
+                    OR EXISTS (
+                      SELECT 1 FROM tracking_ab_assignments aa
+                      WHERE aa.variant_id=v.id AND aa.visitor_id=o.visitor_id
+                        AND aa.created_at <= o.occurred_at
+                    )
                   )) AS orders,
                (SELECT count(*)::int FROM tracking_orders o
                 WHERE o.project_id=t.project_id AND o.status='paid'
-                  AND o.visitor_id IN (
-                    SELECT aa.visitor_id FROM tracking_ab_assignments aa
-                    WHERE aa.variant_id=v.id
+                  AND (
+                    o.attribution_source->>'ab_variant_id'=v.id
+                    OR EXISTS (
+                      SELECT 1 FROM tracking_ab_assignments aa
+                      WHERE aa.variant_id=v.id AND aa.visitor_id=o.visitor_id
+                        AND aa.created_at <= o.occurred_at
+                    )
                   )) AS paid_orders,
-               (SELECT COALESCE(sum(o.amount_minor), 0)::bigint FROM tracking_orders o
+               (SELECT COALESCE(sum(
+                  COALESCE(
+                    o.amount_brl_minor,
+                    CASE WHEN upper(o.currency)='BRL' THEN o.amount_minor END,
+                    0
+                  )
+                ), 0)::bigint FROM tracking_orders o
                 WHERE o.project_id=t.project_id AND o.status='paid'
-                  AND o.visitor_id IN (
-                    SELECT aa.visitor_id FROM tracking_ab_assignments aa
-                    WHERE aa.variant_id=v.id
-                  )) AS revenue_minor
+                  AND (
+                    o.attribution_source->>'ab_variant_id'=v.id
+                    OR EXISTS (
+                      SELECT 1 FROM tracking_ab_assignments aa
+                      WHERE aa.variant_id=v.id AND aa.visitor_id=o.visitor_id
+                        AND aa.created_at <= o.occurred_at
+                    )
+                  )) AS revenue_brl_minor
         FROM tracking_ab_variants v
         JOIN tracking_ab_tests t ON t.id = v.test_id
         LEFT JOIN tracking_ab_assignments a ON a.variant_id = v.id

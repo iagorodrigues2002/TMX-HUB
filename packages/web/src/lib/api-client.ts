@@ -2074,7 +2074,7 @@ export const apiClient = {
       checkouts: number;
       orders: number;
       paid_orders: number;
-      revenue_minor: string;
+      revenue_brl_minor: string;
     }>;
   }> {
     return request(`/v1/offers/${id}/tracking/ab-tests/${testId}/metrics`);
