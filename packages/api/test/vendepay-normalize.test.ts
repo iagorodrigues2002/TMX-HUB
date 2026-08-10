@@ -220,4 +220,19 @@ describe('normalizeVendepay', () => {
     );
     expect(first.dedupeKey).toBe(second.dedupeKey);
   });
+
+  it('permite reprocessar um evento corrigido que passou a trazer o tracking id', () => {
+    const withoutTracking = normalizeVendepay({
+      event_id: 'evt-repair-1',
+      transaction_id: 'tx-repair-1',
+      status: 'paid',
+    });
+    const withTracking = normalizeVendepay({
+      event_id: 'evt-repair-1',
+      transaction_id: 'tx-repair-1',
+      status: 'paid',
+      trackeamentoId: 'signed-tmx-token',
+    });
+    expect(withTracking.dedupeKey).not.toBe(withoutTracking.dedupeKey);
+  });
 });

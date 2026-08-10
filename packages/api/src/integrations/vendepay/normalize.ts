@@ -437,7 +437,12 @@ export function normalizeVendepay(raw: unknown, receivedAt = new Date()): Vendep
     ...(trackingSrc ? { src: trackingSrc } : {}),
   };
   const dedupeKey = eventId
-    ? createHash('sha256').update(`event|${eventId}`).digest('hex')
+    ? createHash('sha256')
+        // Keep provider retries idempotent, but allow a corrected replay that
+        // adds the tracking token omitted from the first payload. The order
+        // upsert still guarantees a single commercial transaction.
+        .update(`event|${eventId}|${trackingSrc ?? ''}`)
+        .digest('hex')
     : createHash('sha256')
         .update(
           [
