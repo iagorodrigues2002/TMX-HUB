@@ -150,9 +150,28 @@ describe('normalizeVendepay', () => {
       status: 'abandoned',
       amountMinor: 4700,
       currency: 'BRL',
+      trackingSrc: 'track-456',
       product: { id: 'product-456' },
+      source: { src: 'track-456' },
     });
   });
+
+  it.each(['trackeamentoId', 'trackingId', 'tracking_id'])(
+    'preserva o src devolvido pela Vendepay em %s',
+    (field) => {
+      const result = normalizeVendepay({
+        id: `purchase-${field}`,
+        event: 'compra.aprovada',
+        valorPago: 5,
+        moeda: 'BRL',
+        [field]: 'signed-tmx-tracking-token',
+      });
+      expect(result.kind).toBe('processable');
+      if (result.kind !== 'processable') return;
+      expect(result.event.trackingSrc).toBe('signed-tmx-tracking-token');
+      expect(result.event.source.src).toBe('signed-tmx-tracking-token');
+    },
+  );
 
   it('mapeia moeda 5 da Vendepay para sol peruano', () => {
     const result = normalizeVendepay({

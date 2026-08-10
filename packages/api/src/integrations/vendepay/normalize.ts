@@ -345,6 +345,16 @@ export function normalizeVendepay(raw: unknown, receivedAt = new Date()): Vendep
     'data.src',
     'order.src',
     'urlParams.src',
+    // Current Vendepay payloads can rename the checkout query `src` to
+    // trackeamentoId. Treat it as the same signed TMX tracking token.
+    'trackeamentoId',
+    'trackingId',
+    'tracking_id',
+    'data.trackeamentoId',
+    'data.trackingId',
+    'data.tracking_id',
+    'order.trackeamentoId',
+    'checkout.trackeamentoId',
   ]);
   const paymentMethod = paymentMethodCode(
     textAt(payload, [
