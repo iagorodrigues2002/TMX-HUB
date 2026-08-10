@@ -50,6 +50,9 @@ const migrations = [
   '035_recovery_test_events.sql',
   '036_recovery_email_automation.sql',
   '037_tracking_upsell_3.sql',
+  '038_vendepay_multiple_accounts.sql',
+  '039_name_existing_vendepay_connections.sql',
+  '040_entry_link_edit_and_ab.sql',
 ];
 
 await sql`
