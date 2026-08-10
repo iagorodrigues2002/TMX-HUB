@@ -2644,15 +2644,38 @@ export function TrackingAdvancedCenter({
                           <Copy className="mr-2 h-3.5 w-3.5" />
                           Copiar para o anúncio
                         </Button>
-                        <Button asChild size="sm" variant="outline">
-                          <a
-                            href={`${link.tracking_url}?tmx_preview=1`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            Testar sem contabilizar
-                          </a>
-                        </Button>
+                        {link.ab_test_id ? (
+                          <>
+                            <Button asChild size="sm" variant="outline">
+                              <a
+                                href={`${link.tracking_url}?tmx_preview=1&tmx_variant=A`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                Testar variante A
+                              </a>
+                            </Button>
+                            <Button asChild size="sm" variant="outline">
+                              <a
+                                href={`${link.tracking_url}?tmx_preview=1&tmx_variant=B`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                Testar variante B
+                              </a>
+                            </Button>
+                          </>
+                        ) : (
+                          <Button asChild size="sm" variant="outline">
+                            <a
+                              href={`${link.tracking_url}?tmx_preview=1`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              Testar sem contabilizar
+                            </a>
+                          </Button>
+                        )}
                         {canManage && !link.ab_test_id && (
                           <Button
                             size="sm"

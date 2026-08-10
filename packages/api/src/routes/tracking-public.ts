@@ -521,6 +521,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const visitorId = cookieValue(req.headers.cookie, '_tmx_entry_v') || ulid();
     const journeyId = ulid();
     const previewRequest = req.query.tmx_preview === '1';
+    const previewVariant = previewRequest ? req.query.tmx_variant?.trim().toLowerCase() : undefined;
     let destinationUrl = link.destination_url;
     let entryVariant: { id: string; label: string } | null = null;
     if (link.ab_test_id) {
@@ -549,7 +550,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           `;
           const bucket =
             createHash('sha256').update(`${test.id}|${visitorId}`).digest().readUInt32BE(0) % 100;
+          const forcedPreviewVariant = previewVariant
+            ? variants.find((variant) => variant.label.trim().toLowerCase() === previewVariant)
+            : undefined;
           const selectedId =
+            forcedPreviewVariant?.id ??
             test.winner_variant_id ??
             existing?.variant_id ??
             (bucket < test.traffic_a ? variants[0]!.id : variants[1]!.id);
@@ -568,7 +573,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     }
     const destination = new URL(destinationUrl);
     for (const [key, value] of Object.entries(req.query)) {
-      if (!value || key === 'tmx_preview') continue;
+      if (!value || key === 'tmx_preview' || key === 'tmx_variant') continue;
       destination.searchParams.set(key, value);
     }
     const source = extractAttributionQuery(req.query);
@@ -606,10 +611,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       env.WEBHOOK_SECRET,
     );
     destination.searchParams.set('src', trackingToken);
-    reply.header(
-      'set-cookie',
-      `_tmx_entry_v=${visitorId}; Path=/; Max-Age=31536000; HttpOnly; Secure; SameSite=Lax`,
-    );
+    if (!previewRequest) {
+      reply.header(
+        'set-cookie',
+        `_tmx_entry_v=${visitorId}; Path=/; Max-Age=31536000; HttpOnly; Secure; SameSite=Lax`,
+      );
+    }
     return reply.redirect(destination.toString(), 302);
   });
 
