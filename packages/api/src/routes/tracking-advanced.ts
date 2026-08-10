@@ -56,6 +56,22 @@ const EntryLinkSchema = z.object({
   name: z.string().trim().min(2).max(120),
   destination_url: z.string().url().max(4096),
 });
+const EntryLinkUpdateSchema = z.object({
+  name: z.string().trim().min(2).max(120).optional(),
+  destination_url: z.string().url().max(4096),
+});
+const EntryLinkAbSchema = z.object({
+  name: z.string().trim().min(2).max(120),
+  traffic_a: z.number().int().min(1).max(99).default(50),
+  variants: z
+    .array(
+      z.object({
+        label: z.string().trim().min(1).max(80),
+        destination_url: z.string().url().max(4096),
+      }),
+    )
+    .length(2),
+});
 const ProductKindSchema = z.object({
   product_id: z.string().trim().min(1).max(256),
   kind: z.enum(['front', 'upsell', 'upsell_2', 'upsell_3']),
@@ -110,7 +126,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         WHERE t.project_id=${p.id}
         GROUP BY t.id ORDER BY t.created_at DESC`,
         app.db`
-        SELECT id, name, slug, destination_url, enabled, created_at, updated_at
+        SELECT id, name, slug, destination_url, ab_test_id, enabled, created_at, updated_at
         FROM tracking_entry_links
         WHERE project_id=${p.id}
         ORDER BY created_at DESC`,
@@ -161,16 +177,97 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     return reply.code(201).send({ ...row, tracking_url: entryUrl(slug) });
   });
 
+  app.patch<{ Params: { id: string; linkId: string } }>(
+    '/offers/:id/tracking/entry-links/:linkId',
+    async (req, reply) => {
+      const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin', true);
+      if (!app.db) return reply.code(503).send(databaseUnavailable);
+      if (!p) return reply.code(404).send({ error: 'tracking_not_configured' });
+      const body = parsed(EntryLinkUpdateSchema, req.body);
+      const [row] = await app.db`
+        UPDATE tracking_entry_links
+        SET name = COALESCE(${body.name ?? null}, name),
+            destination_url = ${body.destination_url},
+            updated_at = now()
+        WHERE id = ${req.params.linkId} AND project_id = ${p.id}
+        RETURNING id, name, slug, destination_url, ab_test_id, enabled, created_at, updated_at
+      `;
+      if (!row) return reply.code(404).send({ error: 'entry_link_not_found' });
+      return reply.send({ ...row, tracking_url: entryUrl(String(row.slug)) });
+    },
+  );
+
+  app.post<{ Params: { id: string; linkId: string } }>(
+    '/offers/:id/tracking/entry-links/:linkId/ab-test',
+    async (req, reply) => {
+      const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin', true);
+      if (!app.db) return reply.code(503).send(databaseUnavailable);
+      if (!p) return reply.code(404).send({ error: 'tracking_not_configured' });
+      const body = parsed(EntryLinkAbSchema, req.body);
+      const testId = ulid();
+      const attached = await app.db.begin(async (sql) => {
+        const [link] = await sql<{ id: string; ab_test_id: string | null }[]>`
+          SELECT id, ab_test_id FROM tracking_entry_links
+          WHERE id = ${req.params.linkId} AND project_id = ${p.id}
+          FOR UPDATE
+        `;
+        if (!link || link.ab_test_id) return false;
+        await sql`
+          INSERT INTO tracking_ab_tests(id, project_id, name, kind, traffic_a)
+          VALUES (${testId}, ${p.id}, ${body.name}, 'presell', ${body.traffic_a ?? 50})
+        `;
+        for (let index = 0; index < 2; index += 1) {
+          const variant = body.variants[index]!;
+          await sql`
+            INSERT INTO tracking_ab_variants
+              (id, test_id, label, destination_url, position)
+            VALUES
+              (${ulid()}, ${testId}, ${variant.label}, ${variant.destination_url}, ${index + 1})
+          `;
+        }
+        await sql`
+          UPDATE tracking_entry_links
+          SET ab_test_id = ${testId}, updated_at = now()
+          WHERE id = ${link.id}
+        `;
+        return true;
+      });
+      if (!attached) {
+        return reply.code(409).send({ error: 'entry_link_already_has_ab_test' });
+      }
+      return reply.code(201).send({
+        test_id: testId,
+        tracking_url: entryUrl(
+          (
+            await app.db<{ slug: string }[]>`
+          SELECT slug FROM tracking_entry_links WHERE id = ${req.params.linkId}
+        `
+          )[0]!.slug,
+        ),
+      });
+    },
+  );
+
   app.delete<{ Params: { id: string; linkId: string } }>(
     '/offers/:id/tracking/entry-links/:linkId',
     async (req, reply) => {
       const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin', true);
       if (!app.db) return reply.code(503).send(databaseUnavailable);
       if (!p) return reply.code(404).send({ error: 'tracking_not_configured' });
-      await app.db`
-        DELETE FROM tracking_entry_links
-        WHERE id=${req.params.linkId} AND project_id=${p.id}
-      `;
+      await app.db.begin(async (sql) => {
+        await sql`
+          UPDATE tracking_ab_tests
+          SET status = 'deleted', deleted_at = now()
+          WHERE id = (
+            SELECT ab_test_id FROM tracking_entry_links
+            WHERE id = ${req.params.linkId} AND project_id = ${p.id}
+          )
+        `;
+        await sql`
+          DELETE FROM tracking_entry_links
+          WHERE id=${req.params.linkId} AND project_id=${p.id}
+        `;
+      });
       return reply.code(204).send();
     },
   );
@@ -487,7 +584,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const body = parsed(AbSchema, req.body);
     const testId = ulid();
     await app.db.begin(async (sql) => {
-      await sql`UPDATE tracking_ab_tests SET status='paused' WHERE project_id=${p.id} AND status='active'`;
+      await sql`
+        UPDATE tracking_ab_tests t SET status='paused'
+        WHERE t.project_id=${p.id} AND t.status='active'
+          AND NOT EXISTS (SELECT 1 FROM tracking_entry_links el WHERE el.ab_test_id=t.id)
+      `;
       await sql`INSERT INTO tracking_ab_tests(id, project_id, name, kind, traffic_a)
         VALUES (${testId}, ${p.id}, ${body.name}, ${body.kind}, ${body.traffic_a ?? 50})`;
       for (let index = 0; index < 2; index += 1) {
@@ -561,8 +662,15 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       const body = parsed(AbControlSchema, req.body);
       if (body.action === 'resume') {
         await app.db.begin(async (sql) => {
-          await sql`UPDATE tracking_ab_tests SET status='paused'
-            WHERE project_id=${p.id} AND status='active'`;
+          await sql`
+            UPDATE tracking_ab_tests t SET status='paused'
+            WHERE t.project_id=${p.id} AND t.status='active'
+              AND NOT EXISTS (SELECT 1 FROM tracking_entry_links el WHERE el.ab_test_id=t.id)
+              AND NOT EXISTS (
+                SELECT 1 FROM tracking_entry_links selected
+                WHERE selected.ab_test_id=${req.params.testId}
+              )
+          `;
           await sql`UPDATE tracking_ab_tests SET status='active'
             WHERE id=${req.params.testId} AND project_id=${p.id} AND deleted_at IS NULL`;
         });

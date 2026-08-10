@@ -1960,6 +1960,7 @@ export const apiClient = {
       name: string;
       slug: string;
       destination_url: string;
+      ab_test_id?: string;
       tracking_url: string;
       enabled: boolean;
       created_at: string;
@@ -2024,6 +2025,32 @@ export const apiClient = {
     body: { name: string; destination_url: string },
   ): Promise<void> {
     await request(`/v1/offers/${id}/tracking/entry-links`, { method: 'POST', body });
+  },
+
+  async updateTrackingEntryLink(
+    id: string,
+    linkId: string,
+    body: { name?: string; destination_url: string },
+  ): Promise<void> {
+    await request(`/v1/offers/${id}/tracking/entry-links/${linkId}`, {
+      method: 'PATCH',
+      body,
+    });
+  },
+
+  async convertTrackingEntryLinkToAbTest(
+    id: string,
+    linkId: string,
+    body: {
+      name: string;
+      traffic_a: number;
+      variants: Array<{ label: string; destination_url: string }>;
+    },
+  ): Promise<{ test_id: string; tracking_url: string }> {
+    return request(`/v1/offers/${id}/tracking/entry-links/${linkId}/ab-test`, {
+      method: 'POST',
+      body,
+    });
   },
 
   async deleteTrackingEntryLink(id: string, linkId: string): Promise<void> {

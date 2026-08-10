@@ -182,6 +182,14 @@ export function TrackingAdvancedCenter({
   const [destinationB, setDestinationB] = useState('');
   const [entryLinkName, setEntryLinkName] = useState('');
   const [entryDestination, setEntryDestination] = useState('');
+  const [editingEntryLinkId, setEditingEntryLinkId] = useState('');
+  const [editingEntryLinkName, setEditingEntryLinkName] = useState('');
+  const [editingEntryDestination, setEditingEntryDestination] = useState('');
+  const [convertingEntryLinkId, setConvertingEntryLinkId] = useState('');
+  const [entryAbName, setEntryAbName] = useState('');
+  const [entryAbDestinationA, setEntryAbDestinationA] = useState('');
+  const [entryAbDestinationB, setEntryAbDestinationB] = useState('');
+  const [entryAbTrafficA, setEntryAbTrafficA] = useState('50');
   const [vendepayWebhook, setVendepayWebhook] = useState('');
   const [vendepayConnectionName, setVendepayConnectionName] = useState('');
   const [selectedVendepayConnectionId, setSelectedVendepayConnectionId] = useState('');
@@ -376,6 +384,39 @@ export function TrackingAdvancedCenter({
     onSuccess: () => {
       void refresh();
       toast.success('Link de entrada removido.');
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
+  const updateEntryLink = useMutation({
+    mutationFn: () =>
+      apiClient.updateTrackingEntryLink(offerId, editingEntryLinkId, {
+        name: editingEntryLinkName,
+        destination_url: editingEntryDestination,
+      }),
+    onSuccess: () => {
+      setEditingEntryLinkId('');
+      void refresh();
+      toast.success('Destino atualizado. A URL pública do anúncio não mudou.');
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
+  const convertEntryLinkToAb = useMutation({
+    mutationFn: () =>
+      apiClient.convertTrackingEntryLinkToAbTest(offerId, convertingEntryLinkId, {
+        name: entryAbName,
+        traffic_a: Number(entryAbTrafficA),
+        variants: [
+          { label: 'A', destination_url: entryAbDestinationA },
+          { label: 'B', destination_url: entryAbDestinationB },
+        ],
+      }),
+    onSuccess: () => {
+      setConvertingEntryLinkId('');
+      setEntryAbName('');
+      setEntryAbDestinationA('');
+      setEntryAbDestinationB('');
+      void refresh();
+      toast.success('Teste A/B ativado na mesma URL já usada no anúncio.');
     },
     onError: (error) => toast.error((error as Error).message),
   });
@@ -2450,8 +2491,97 @@ export function TrackingAdvancedCenter({
                             Destino: {link.destination_url}
                           </p>
                         </div>
-                        <span className="text-xs text-emerald-300">Ativo</span>
+                        <span className="text-xs text-emerald-300">
+                          {link.ab_test_id ? 'Teste A/B ativo' : 'Destino único'}
+                        </span>
                       </div>
+                      {editingEntryLinkId === link.id && (
+                        <div className="mt-3 grid gap-2 rounded-lg border border-cyan-300/15 bg-cyan-300/[0.03] p-3 md:grid-cols-2">
+                          <Input
+                            value={editingEntryLinkName}
+                            onChange={(event) => setEditingEntryLinkName(event.target.value)}
+                            placeholder="Nome do link"
+                          />
+                          <Input
+                            value={editingEntryDestination}
+                            onChange={(event) => setEditingEntryDestination(event.target.value)}
+                            placeholder="Novo destino"
+                          />
+                          <div className="flex gap-2 md:col-span-2">
+                            <Button
+                              size="sm"
+                              disabled={
+                                editingEntryLinkName.trim().length < 2 ||
+                                !editingEntryDestination.startsWith('http') ||
+                                updateEntryLink.isPending
+                              }
+                              onClick={() => updateEntryLink.mutate()}
+                            >
+                              Salvar sem mudar a URL TMX
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setEditingEntryLinkId('')}
+                            >
+                              Cancelar
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      {convertingEntryLinkId === link.id && (
+                        <div className="mt-3 grid gap-2 rounded-lg border border-fuchsia-300/15 bg-fuchsia-300/[0.03] p-3 md:grid-cols-2">
+                          <Input
+                            className="md:col-span-2"
+                            value={entryAbName}
+                            onChange={(event) => setEntryAbName(event.target.value)}
+                            placeholder="Nome do teste A/B"
+                          />
+                          <Input
+                            value={entryAbDestinationA}
+                            onChange={(event) => setEntryAbDestinationA(event.target.value)}
+                            placeholder="Destino A"
+                          />
+                          <Input
+                            value={entryAbDestinationB}
+                            onChange={(event) => setEntryAbDestinationB(event.target.value)}
+                            placeholder="Destino B"
+                          />
+                          <label className="text-xs text-white/60 md:col-span-2">
+                            Tráfego do destino A: {entryAbTrafficA}%
+                            <input
+                              className="mt-2 w-full accent-fuchsia-300"
+                              type="range"
+                              min="10"
+                              max="90"
+                              step="5"
+                              value={entryAbTrafficA}
+                              onChange={(event) => setEntryAbTrafficA(event.target.value)}
+                            />
+                          </label>
+                          <div className="flex gap-2 md:col-span-2">
+                            <Button
+                              size="sm"
+                              disabled={
+                                entryAbName.trim().length < 2 ||
+                                !entryAbDestinationA.startsWith('http') ||
+                                !entryAbDestinationB.startsWith('http') ||
+                                convertEntryLinkToAb.isPending
+                              }
+                              onClick={() => convertEntryLinkToAb.mutate()}
+                            >
+                              Ativar A/B nesta mesma URL
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setConvertingEntryLinkId('')}
+                            >
+                              Cancelar
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                       <code className="mt-3 block overflow-x-auto whitespace-nowrap rounded-lg bg-black/20 p-3 text-xs text-cyan-100/75">
                         {link.tracking_url}
                       </code>
@@ -2475,6 +2605,35 @@ export function TrackingAdvancedCenter({
                             Testar sem contabilizar
                           </a>
                         </Button>
+                        {canManage && !link.ab_test_id && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setConvertingEntryLinkId('');
+                              setEditingEntryLinkId(link.id);
+                              setEditingEntryLinkName(link.name);
+                              setEditingEntryDestination(link.destination_url);
+                            }}
+                          >
+                            Editar destino
+                          </Button>
+                        )}
+                        {canManage && !link.ab_test_id && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setEditingEntryLinkId('');
+                              setConvertingEntryLinkId(link.id);
+                              setEntryAbName(`${link.name} · A/B`);
+                              setEntryAbDestinationA(link.destination_url);
+                              setEntryAbDestinationB('');
+                            }}
+                          >
+                            Transformar em teste A/B
+                          </Button>
+                        )}
                         {canManage && (
                           <Button
                             size="sm"
