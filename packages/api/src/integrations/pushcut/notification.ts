@@ -16,6 +16,8 @@ export interface PushcutOrderInput {
   amountBrlMinor: number | null;
   currency: string;
   country?: string;
+  /** Gateway/account that originated the order, e.g. "Vendepay Iago". */
+  platformName?: string;
   /** Offer/funnel name (e.g. "SLM_ESP"). Resolved from Redis (OfferStore)
    * at webhook-ingestion time, since the delivery worker only has a
    * Postgres connection. */
@@ -37,9 +39,11 @@ export function buildPushcutNotificationPayload(
   const product = input.productName?.trim();
   const amount = money(input.amountBrlMinor);
   const funnel = input.funnelName?.trim();
+  const platform = input.platformName?.trim();
   const kindLabel = input.kind === 'upsell' ? 'Upsell aprovado' : 'Venda aprovada';
   const title = funnel ? `${kindLabel} · ${funnel}` : kindLabel;
-  const text = product ? `${buyer} · ${product} · ${amount}` : `${buyer} · ${amount}`;
+  const details = product ? `${buyer} · ${product} · ${amount}` : `${buyer} · ${amount}`;
+  const text = platform ? `${platform} · ${details}` : details;
   return {
     title,
     text,

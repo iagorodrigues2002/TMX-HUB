@@ -30,6 +30,7 @@ export function createPushcutDeliveryWorker(): Worker<PushcutJobData> | null {
           country: string | null;
           product_name: string | null;
           funnel_name: string | null;
+          platform_name: string | null;
         }>
       >`
         SELECT d.id, pd.secret_encrypted, pd.front_notification_name,
@@ -40,11 +41,20 @@ export function createPushcutDeliveryWorker(): Worker<PushcutJobData> | null {
                COALESCE(o.currency, 'BRL') AS currency,
                o.buyer->>'country' AS country,
                o.product->>'name' AS product_name,
-               d.funnel_name
+               d.funnel_name,
+               COALESCE(gateway.name, initcap(o.provider)) AS platform_name
         FROM tracking_delivery_outbox d
         JOIN tracking_pushcut_destinations pd
           ON pd.id = d.destination_id AND pd.enabled = true
         LEFT JOIN tracking_orders o ON o.id = d.order_id
+        LEFT JOIN LATERAL (
+          SELECT vc.name
+          FROM webhook_receipts wr
+          JOIN vendepay_connections vc ON vc.id = wr.connection_id
+          WHERE wr.order_id = o.id
+          ORDER BY wr.received_at DESC
+          LIMIT 1
+        ) gateway ON true
         WHERE d.id = ${job.data.deliveryId}
           AND d.destination_kind = 'pushcut'
           AND d.state <> 'delivered'
@@ -83,6 +93,7 @@ export function createPushcutDeliveryWorker(): Worker<PushcutJobData> | null {
             currency: row.currency ?? 'BRL',
             country: row.country ?? undefined,
             funnelName: row.funnel_name ?? undefined,
+            platformName: row.platform_name ?? undefined,
           },
           Array.isArray(row.devices) ? row.devices : [],
         );
