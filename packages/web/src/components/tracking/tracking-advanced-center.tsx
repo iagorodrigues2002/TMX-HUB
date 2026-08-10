@@ -2978,15 +2978,17 @@ function AbTestCard({
           >
             Copiar link
           </Button>
-          <Button asChild size="sm" variant="outline">
-            <a
-              href={`${test.redirect_url}?tmx_preview=1`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Testar sem contabilizar
-            </a>
-          </Button>
+          {test.variants.map((variant) => (
+            <Button key={variant.id} asChild size="sm" variant="outline">
+              <a
+                href={`${test.redirect_url}?tmx_preview=1&tmx_variant=${encodeURIComponent(variant.label)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Testar variante {variant.label}
+              </a>
+            </Button>
+          ))}
         </div>
         <p className="mt-3 text-xs leading-5 text-white/50">
           Cole esse endereço no CTA. O TMX mantém a variante do visitante, registra o checkout,

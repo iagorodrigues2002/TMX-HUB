@@ -653,7 +653,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       ORDER BY position
     `;
     if (variants.length !== 2) return reply.code(409).send({ error: 'ab_variants_not_configured' });
-    if (req.query.tmx_preview === '1') {
+    const previewRequest = req.query.tmx_preview === '1';
+    const previewVariant = previewRequest ? req.query.tmx_variant?.trim().toLowerCase() : undefined;
+    if (previewRequest && !previewVariant) {
       return {
         active: true,
         test_id: test.id,
@@ -661,6 +663,21 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         winner_variant_id: test.winner_variant_id,
         variants,
       };
+    }
+    if (previewRequest && previewVariant) {
+      const selected = variants.find(
+        (variant) => variant.label.trim().toLowerCase() === previewVariant,
+      );
+      if (!selected?.destination_url) {
+        return reply.code(404).send({ error: 'ab_preview_variant_not_found' });
+      }
+      const destination = new URL(selected.destination_url);
+      for (const [key, value] of Object.entries(req.query)) {
+        if (!value || key === 'tmx_preview' || key === 'tmx_variant') continue;
+        if (!destination.searchParams.has(key)) destination.searchParams.set(key, value);
+      }
+      destination.searchParams.set('tmx_ab', selected.label);
+      return reply.redirect(destination.toString(), 302);
     }
     const linked = req.query.src ? readTrackingToken(req.query.src, env.WEBHOOK_SECRET) : null;
     const linkedIdentity = linked?.projectId === test.project_id ? linked : null;
