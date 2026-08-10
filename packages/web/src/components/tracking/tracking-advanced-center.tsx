@@ -22,6 +22,7 @@ import {
   Layers3,
   Megaphone,
   Percent,
+  Plus,
   RadioTower,
   RefreshCw,
   Send,
@@ -182,6 +183,8 @@ export function TrackingAdvancedCenter({
   const [entryLinkName, setEntryLinkName] = useState('');
   const [entryDestination, setEntryDestination] = useState('');
   const [vendepayWebhook, setVendepayWebhook] = useState('');
+  const [vendepayConnectionName, setVendepayConnectionName] = useState('');
+  const [selectedVendepayConnectionId, setSelectedVendepayConnectionId] = useState('');
   const [vendepaySigningSecret, setVendepaySigningSecret] = useState('');
   const [vendepayPayload, setVendepayPayload] = useState(vendepaySample);
   const [utmifyToken, setUtmifyToken] = useState('');
@@ -668,15 +671,49 @@ export function TrackingAdvancedCenter({
     onError: (error) => toast.error((error as Error).message),
   });
   const rotateVendepay = useMutation({
-    mutationFn: () => apiClient.rotateVendepayWebhook(offerId),
+    mutationFn: () => {
+      if (!selectedVendepayConnectionId) throw new Error('Selecione uma conta Vendepay.');
+      return apiClient.rotateVendepayConnectionWebhook(offerId, selectedVendepayConnectionId);
+    },
     onSuccess: (result) => {
       setVendepayWebhook(result.vendepay_webhook_url);
-      toast.success('URL real gerada. A URL anterior foi desativada.');
+      toast.success('Nova URL gerada para a conta selecionada.');
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
+  const createVendepayConnection = useMutation({
+    mutationFn: () => apiClient.createVendepayConnection(offerId, vendepayConnectionName),
+    onSuccess: (result) => {
+      setVendepayConnectionName('');
+      setSelectedVendepayConnectionId(result.connection.id);
+      setVendepayWebhook(result.vendepay_webhook_url);
+      void qc.invalidateQueries({ queryKey: ['tracking-config', offerId] });
+      void refresh();
+      toast.success('Conta Vendepay adicionada. Copie o webhook agora.');
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
+  const toggleVendepayConnection = useMutation({
+    mutationFn: (connection: { id: string; enabled: boolean }) =>
+      apiClient.updateVendepayConnection(offerId, connection.id, {
+        enabled: !connection.enabled,
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['tracking-config', offerId] });
+      void refresh();
+      toast.success('Status da conta atualizado.');
     },
     onError: (error) => toast.error((error as Error).message),
   });
   const saveVendepaySigningSecret = useMutation({
-    mutationFn: () => apiClient.saveVendepaySigningSecret(offerId, vendepaySigningSecret),
+    mutationFn: () => {
+      if (!selectedVendepayConnectionId) throw new Error('Selecione uma conta Vendepay.');
+      return apiClient.saveVendepayConnectionSigningSecret(
+        offerId,
+        selectedVendepayConnectionId,
+        vendepaySigningSecret,
+      );
+    },
     onSuccess: () => {
       setVendepaySigningSecret('');
       void qc.invalidateQueries({ queryKey: ['tracking-config', offerId] });
@@ -691,6 +728,16 @@ export function TrackingAdvancedCenter({
     refetchInterval: 30_000,
     retry: false,
   });
+  useEffect(() => {
+    const connections = config.data?.vendepay?.connections ?? [];
+    if (connections.length === 0) {
+      setSelectedVendepayConnectionId('');
+      return;
+    }
+    if (!connections.some((connection) => connection.id === selectedVendepayConnectionId)) {
+      setSelectedVendepayConnectionId(connections[0]?.id ?? '');
+    }
+  }, [config.data?.vendepay?.connections, selectedVendepayConnectionId]);
   const previewVendepay = useMutation({
     mutationFn: () => {
       let payload: unknown;
@@ -770,6 +817,10 @@ export function TrackingAdvancedCenter({
     },
   ];
   const setupReady = setupSteps.filter((step) => step.ready).length;
+  const vendepayConnections = config.data?.vendepay?.connections ?? [];
+  const selectedVendepayConnection = vendepayConnections.find(
+    (connection) => connection.id === selectedVendepayConnectionId,
+  );
 
   return (
     <div className="space-y-5">
@@ -1287,38 +1338,89 @@ export function TrackingAdvancedCenter({
               description="A Vendepay usa o parâmetro src. Conexões podem ser pausadas e o token secreto pode ser rotacionado."
             >
               <div className="space-y-2">
-                {(
-                  advanced.data?.gateways ?? [
-                    { provider: 'vendepay', propagation_param: 'src', enabled: true },
-                  ]
-                ).map((gateway, index) => (
-                  <div
-                    key={`${gateway.provider}-${index}`}
-                    className="flex items-center justify-between rounded border border-white/[0.07] p-4"
+                {vendepayConnections.map((connection) => (
+                  <button
+                    key={connection.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedVendepayConnectionId(connection.id);
+                      setVendepayWebhook('');
+                      setVendepaySigningSecret('');
+                    }}
+                    className={cn(
+                      'flex w-full items-center justify-between rounded border p-4 text-left transition-colors',
+                      selectedVendepayConnectionId === connection.id
+                        ? 'border-cyan-300/35 bg-cyan-300/[0.06]'
+                        : 'border-white/[0.07] hover:border-white/[0.14]',
+                    )}
                   >
                     <div>
-                      <p className="capitalize text-white/75">{gateway.provider}</p>
+                      <p className="text-sm font-medium text-white/80">{connection.name}</p>
                       <p className="mt-1 font-mono text-xs text-cyan-200/60">
-                        atribuição: {gateway.propagation_param}
+                        Vendepay · atribuição: {connection.propagation_param}
                       </p>
                     </div>
-                    <span className="text-xs text-emerald-300">
-                      {gateway.enabled ? 'ativo' : 'pausado'}
+                    <span
+                      className={cn(
+                        'text-xs',
+                        connection.enabled ? 'text-emerald-300' : 'text-white/35',
+                      )}
+                    >
+                      {connection.enabled ? 'ativo' : 'pausado'}
                     </span>
-                  </div>
+                  </button>
                 ))}
+                {canManage && config.data?.configured && (
+                  <div className="flex flex-col gap-2 rounded border border-dashed border-cyan-300/20 p-3 sm:flex-row">
+                    <Input
+                      aria-label="Nome da nova conta Vendepay"
+                      placeholder="Ex.: Vendepay Brasil · Conta 02"
+                      value={vendepayConnectionName}
+                      onChange={(event) => setVendepayConnectionName(event.target.value)}
+                    />
+                    <Button
+                      className="gap-2"
+                      disabled={
+                        vendepayConnectionName.trim().length < 2 ||
+                        createVendepayConnection.isPending
+                      }
+                      onClick={() => createVendepayConnection.mutate()}
+                    >
+                      <Plus className="h-4 w-4" />
+                      {createVendepayConnection.isPending ? 'Adicionando…' : 'Adicionar conta'}
+                    </Button>
+                  </div>
+                )}
               </div>
               {canManage && config.data?.configured && (
                 <div className="mt-5 rounded-md border border-amber-300/15 bg-amber-300/[0.04] p-4">
-                  <p className="text-sm font-medium text-amber-100">URL secreta da Vendepay</p>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-medium text-amber-100">
+                        Webhook · {selectedVendepayConnection?.name ?? 'selecione uma conta'}
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-white/45">
+                        Cada conta possui uma URL exclusiva. Rotacionar afeta somente a selecionada.
+                      </p>
+                    </div>
+                    {selectedVendepayConnection && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={toggleVendepayConnection.isPending}
+                        onClick={() => toggleVendepayConnection.mutate(selectedVendepayConnection)}
+                      >
+                        {selectedVendepayConnection.enabled ? 'Pausar conta' : 'Ativar conta'}
+                      </Button>
+                    )}
+                  </div>
                   <p className="mt-1 text-xs leading-5 text-white/45">
-                    Por segurança, o token só aparece ao gerar a URL. Gerar novamente desativa o
-                    webhook anterior.
+                    Por segurança, o token só aparece ao criar ou gerar novamente a URL.
                   </p>
                   <Button
                     className="mt-3"
                     variant="outline"
-                    disabled={rotateVendepay.isPending}
+                    disabled={!selectedVendepayConnection || rotateVendepay.isPending}
                     onClick={() => rotateVendepay.mutate()}
                   >
                     {rotateVendepay.isPending ? 'Gerando…' : 'Gerar URL real do webhook'}
@@ -1336,7 +1438,7 @@ export function TrackingAdvancedCenter({
               {canManage && config.data?.configured && (
                 <div className="mt-5 rounded-md border border-cyan-300/15 bg-cyan-300/[0.03] p-4">
                   <p className="text-sm font-medium text-cyan-100">
-                    Secret de assinatura da Vendepay
+                    Secret · {selectedVendepayConnection?.name ?? 'selecione uma conta'}
                   </p>
                   <p className="mt-1 text-xs leading-5 text-white/45">
                     Salvo criptografado. Depois de salvar, o valor nunca volta ao navegador.
@@ -1347,7 +1449,7 @@ export function TrackingAdvancedCenter({
                       type="password"
                       autoComplete="new-password"
                       placeholder={
-                        config.data?.vendepay?.signing_secret_configured
+                        selectedVendepayConnection?.signing_secret_configured
                           ? '•••••••••••••••••••••••• (configurado)'
                           : 'Cole o secret exibido pela Vendepay'
                       }
@@ -1357,18 +1459,19 @@ export function TrackingAdvancedCenter({
                     <Button
                       disabled={
                         vendepaySigningSecret.trim().length < 16 ||
+                        !selectedVendepayConnection ||
                         saveVendepaySigningSecret.isPending
                       }
                       onClick={() => saveVendepaySigningSecret.mutate()}
                     >
                       {saveVendepaySigningSecret.isPending
                         ? 'Salvando…'
-                        : config.data?.vendepay?.signing_secret_configured
+                        : selectedVendepayConnection?.signing_secret_configured
                           ? 'Substituir secret'
                           : 'Salvar secret'}
                     </Button>
                   </div>
-                  {config.data?.vendepay?.signing_secret_configured && (
+                  {selectedVendepayConnection?.signing_secret_configured && (
                     <p className="mt-2 text-xs text-emerald-300">
                       ✓ Secret configurado com segurança
                     </p>
@@ -1435,6 +1538,7 @@ export function TrackingAdvancedCenter({
                         <p className="font-mono text-white/70">
                           {receipt.transaction_id ?? 'Sem transação reconhecida'}
                         </p>
+                        <p className="mt-1 text-cyan-200/60">{receipt.connection_name}</p>
                         <p className="mt-1 text-white/35">
                           {new Date(receipt.received_at).toLocaleString('pt-BR')}
                           {receipt.payment_method ? ` · ${receipt.payment_method}` : ''}

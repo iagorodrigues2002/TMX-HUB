@@ -1366,6 +1366,14 @@ export const apiClient = {
       enabled: boolean;
       propagation_param: string;
       signing_secret_configured: boolean;
+      connections: Array<{
+        id: string;
+        name: string;
+        enabled: boolean;
+        propagation_param: string;
+        signing_secret_configured: boolean;
+        created_at: string;
+      }>;
     };
   }> {
     return request(`/v1/offers/${id}/tracking`);
@@ -1387,6 +1395,58 @@ export const apiClient = {
     warning: string;
   }> {
     return request(`/v1/offers/${id}/tracking/vendepay/rotate-token`, { method: 'POST' });
+  },
+
+  async createVendepayConnection(
+    id: string,
+    name: string,
+  ): Promise<{
+    connection: {
+      id: string;
+      name: string;
+      enabled: boolean;
+      propagation_param: string;
+      signing_secret_configured: boolean;
+      created_at: string;
+    };
+    vendepay_webhook_url: string;
+    warning: string;
+  }> {
+    return request(`/v1/offers/${id}/tracking/vendepay/connections`, {
+      method: 'POST',
+      body: { name },
+    });
+  },
+
+  async updateVendepayConnection(
+    id: string,
+    connectionId: string,
+    body: { name?: string; enabled?: boolean },
+  ): Promise<void> {
+    await request(`/v1/offers/${id}/tracking/vendepay/connections/${connectionId}`, {
+      method: 'PATCH',
+      body,
+    });
+  },
+
+  async rotateVendepayConnectionWebhook(
+    id: string,
+    connectionId: string,
+  ): Promise<{ vendepay_webhook_url: string; warning: string }> {
+    return request(`/v1/offers/${id}/tracking/vendepay/connections/${connectionId}/rotate-token`, {
+      method: 'POST',
+    });
+  },
+
+  async saveVendepayConnectionSigningSecret(
+    id: string,
+    connectionId: string,
+    signingSecret: string,
+  ): Promise<{ configured: boolean; updated_at: string }> {
+    return request(
+      `/v1/offers/${id}/tracking/vendepay/connections/${connectionId}/signing-secret`,
+      { method: 'PUT', body: { signing_secret: signingSecret } },
+    );
   },
 
   async saveVendepaySigningSecret(
@@ -1425,6 +1485,8 @@ export const apiClient = {
   async listVendepayReceipts(id: string): Promise<{
     receipts: Array<{
       id: string;
+      connection_id: string;
+      connection_name: string;
       state: string;
       diagnostics?: string[];
       received_at: string;
@@ -1868,6 +1930,7 @@ export const apiClient = {
     }>;
     gateways: Array<{
       id?: string;
+      name?: string;
       provider: string;
       propagation_param: string;
       enabled: boolean;

@@ -88,15 +88,18 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin');
     if (!app.db) return reply.code(503).send(databaseUnavailable);
     if (!p) return { configured: false };
-    const [domains, gateways, rules, tests, entryLinks, vturb] = await Promise.all([
-      app.db`SELECT id, hostname, kind, dns_target, dns_records, dns_verified_at, enabled, status,
+    const [domains, gateways, vendepayConnections, rules, tests, entryLinks, vturb] =
+      await Promise.all([
+        app.db`SELECT id, hostname, kind, dns_target, dns_records, dns_verified_at, enabled, status,
                     last_error, last_checked_at, created_at
              FROM tracking_domains WHERE project_id=${p.id} ORDER BY created_at DESC`,
-      app.db`SELECT id, provider, propagation_param, enabled, created_at
+        app.db`SELECT id, provider, propagation_param, enabled, created_at
              FROM tracking_gateway_connections WHERE project_id=${p.id} ORDER BY provider`,
-      app.db`SELECT attributed_only, minimum_amount_minor, updated_at
+        app.db`SELECT id, name, propagation_param, enabled, created_at
+             FROM vendepay_connections WHERE project_id=${p.id} ORDER BY created_at ASC`,
+        app.db`SELECT attributed_only, minimum_amount_minor, updated_at
              FROM tracking_meta_rules WHERE project_id=${p.id}`,
-      app.db`
+        app.db`
         SELECT t.id, t.name, t.kind, t.status, t.traffic_a, t.winner_variant_id,
                t.winner_locked_at, t.deleted_at, t.created_at,
                COALESCE(json_agg(json_build_object(
@@ -106,25 +109,24 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         FROM tracking_ab_tests t LEFT JOIN tracking_ab_variants v ON v.test_id=t.id
         WHERE t.project_id=${p.id}
         GROUP BY t.id ORDER BY t.created_at DESC`,
-      app.db`
+        app.db`
         SELECT id, name, slug, destination_url, enabled, created_at, updated_at
         FROM tracking_entry_links
         WHERE project_id=${p.id}
         ORDER BY created_at DESC`,
-      app.db`SELECT enabled, endpoint_url, updated_at FROM vturb_integrations WHERE project_id=${p.id}`,
-    ]);
+        app.db`SELECT enabled, endpoint_url, updated_at FROM vturb_integrations WHERE project_id=${p.id}`,
+      ]);
     return {
       configured: true,
       public_key: p.public_key,
       domains,
       gateways: [
         ...gateways,
-        {
+        ...vendepayConnections.map((connection) => ({
+          ...connection,
           provider: 'vendepay',
           managed: true,
-          enabled: true,
-          propagation_param: 'src',
-        },
+        })),
       ],
       meta_rules: rules[0] ?? { attributed_only: true, minimum_amount_minor: 0 },
       ab_tests: tests.map((test) => ({

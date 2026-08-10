@@ -33,6 +33,13 @@ const TrackingPaginationSchema = PaginationSchema.merge(TrackingDateSchema);
 const VendepaySigningSecretSchema = z.object({
   signing_secret: z.string().trim().min(16).max(4096),
 });
+const VendepayConnectionSchema = z.object({
+  name: z.string().trim().min(2).max(120),
+});
+const VendepayConnectionUpdateSchema = z.object({
+  name: z.string().trim().min(2).max(120).optional(),
+  enabled: z.boolean().optional(),
+});
 const UtmifyPixelSchema = z.object({
   pixel_id: z
     .string()
@@ -889,22 +896,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         enabled: boolean;
         created_at: Date;
         updated_at: Date;
-        connection_id: string | null;
-        vendepay_enabled: boolean | null;
-        propagation_param: string | null;
-        connection_created_at: Date | null;
-        vendepay_signing_secret_configured: boolean;
       }>
     >`
-      SELECT
-        p.id, p.public_key, p.enabled, p.created_at, p.updated_at,
-        v.id AS connection_id, v.enabled AS vendepay_enabled,
-        v.propagation_param, v.created_at AS connection_created_at,
-        (v.signing_secret_encrypted IS NOT NULL) AS vendepay_signing_secret_configured
+      SELECT p.id, p.public_key, p.enabled, p.created_at, p.updated_at
       FROM tracking_projects p
-      LEFT JOIN vendepay_connections v ON v.project_id = p.id
       WHERE p.offer_id = ${req.params.id}
-      ORDER BY v.created_at DESC NULLS LAST
       LIMIT 1
     `;
     if (!project) {
@@ -913,6 +909,23 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         offer_id: req.params.id,
       };
     }
+    const connections = await app.db<
+      Array<{
+        id: string;
+        name: string;
+        enabled: boolean;
+        propagation_param: string;
+        created_at: Date;
+        signing_secret_configured: boolean;
+      }>
+    >`
+      SELECT id, name, enabled, propagation_param, created_at,
+             (signing_secret_encrypted IS NOT NULL) AS signing_secret_configured
+      FROM vendepay_connections
+      WHERE project_id = ${project.id}
+      ORDER BY created_at ASC
+    `;
+    const primaryConnection = connections[0];
     return {
       configured: true,
       project: {
@@ -925,14 +938,118 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         updated_at: project.updated_at,
       },
       vendepay: {
-        configured: Boolean(project.connection_id),
-        enabled: project.vendepay_enabled ?? false,
-        propagation_param: project.propagation_param ?? 'src',
-        created_at: project.connection_created_at,
-        signing_secret_configured: project.vendepay_signing_secret_configured,
+        configured: connections.length > 0,
+        enabled: connections.some((connection) => connection.enabled),
+        propagation_param: primaryConnection?.propagation_param ?? 'src',
+        created_at: primaryConnection?.created_at ?? null,
+        signing_secret_configured: connections.some(
+          (connection) => connection.signing_secret_configured,
+        ),
+        connections,
       },
     };
   });
+
+  app.post<{ Params: { id: string } }>(
+    '/offers/:id/tracking/vendepay/connections',
+    async (req, reply) => {
+      await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
+      if (!app.db) return reply.code(503).send(databaseUnavailable);
+      const parsed = VendepayConnectionSchema.safeParse(req.body);
+      if (!parsed.success) throw zodToProblem(parsed.error);
+      const [project] = await app.db<{ id: string }[]>`
+        SELECT id FROM tracking_projects WHERE offer_id = ${req.params.id} LIMIT 1
+      `;
+      if (!project) throw new NotFoundError('Ative o tracking antes de adicionar uma conta.');
+      const token = randomBytes(32).toString('base64url');
+      const [connection] = await app.db<
+        Array<{
+          id: string;
+          name: string;
+          enabled: boolean;
+          propagation_param: string;
+          created_at: Date;
+        }>
+      >`
+        INSERT INTO vendepay_connections (id, project_id, name, token_hash)
+        VALUES (${ulid()}, ${project.id}, ${parsed.data.name}, ${tokenHash(token)})
+        RETURNING id, name, enabled, propagation_param, created_at
+      `;
+      return reply.code(201).send({
+        connection: { ...connection, signing_secret_configured: false },
+        vendepay_webhook_url: webhookUrl(token),
+        warning: 'Copie agora: esta URL secreta será exibida somente nesta criação.',
+      });
+    },
+  );
+
+  app.patch<{ Params: { id: string; connectionId: string } }>(
+    '/offers/:id/tracking/vendepay/connections/:connectionId',
+    async (req, reply) => {
+      await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
+      if (!app.db) return reply.code(503).send(databaseUnavailable);
+      const parsed = VendepayConnectionUpdateSchema.safeParse(req.body);
+      if (!parsed.success) throw zodToProblem(parsed.error);
+      const [connection] = await app.db`
+        UPDATE vendepay_connections v
+        SET name = COALESCE(${parsed.data.name ?? null}, v.name),
+            enabled = COALESCE(${parsed.data.enabled ?? null}, v.enabled)
+        FROM tracking_projects p
+        WHERE v.project_id = p.id AND p.offer_id = ${req.params.id}
+          AND v.id = ${req.params.connectionId}
+        RETURNING v.id, v.name, v.enabled, v.propagation_param, v.created_at,
+          (v.signing_secret_encrypted IS NOT NULL) AS signing_secret_configured
+      `;
+      if (!connection) throw new NotFoundError('Conta Vendepay não encontrada.');
+      return reply.send({ connection });
+    },
+  );
+
+  app.put<{ Params: { id: string; connectionId: string } }>(
+    '/offers/:id/tracking/vendepay/connections/:connectionId/signing-secret',
+    async (req, reply) => {
+      await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
+      if (!app.db || !env.TRACKING_ENCRYPTION_KEY) {
+        return reply.code(503).send({ error: 'tracking_encryption_unavailable' });
+      }
+      const parsed = VendepaySigningSecretSchema.safeParse(req.body);
+      if (!parsed.success) throw zodToProblem(parsed.error);
+      const [updated] = await app.db<{ id: string; signing_secret_updated_at: Date }[]>`
+        UPDATE vendepay_connections v
+        SET signing_secret_encrypted =
+              ${encryptSecret(parsed.data.signing_secret, env.TRACKING_ENCRYPTION_KEY)},
+            signing_secret_updated_at = now()
+        FROM tracking_projects p
+        WHERE v.project_id = p.id AND p.offer_id = ${req.params.id}
+          AND v.id = ${req.params.connectionId}
+        RETURNING v.id, v.signing_secret_updated_at
+      `;
+      if (!updated) throw new NotFoundError('Conta Vendepay não encontrada.');
+      return reply.send({ configured: true, updated_at: updated.signing_secret_updated_at });
+    },
+  );
+
+  app.post<{ Params: { id: string; connectionId: string } }>(
+    '/offers/:id/tracking/vendepay/connections/:connectionId/rotate-token',
+    async (req, reply) => {
+      await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
+      if (!app.db) return reply.code(503).send(databaseUnavailable);
+      const token = randomBytes(32).toString('base64url');
+      const [updated] = await app.db<{ id: string }[]>`
+        UPDATE vendepay_connections v
+        SET token_hash = ${tokenHash(token)}
+        FROM tracking_projects p
+        WHERE v.project_id = p.id AND p.offer_id = ${req.params.id}
+          AND v.id = ${req.params.connectionId}
+        RETURNING v.id
+      `;
+      if (!updated) throw new NotFoundError('Conta Vendepay não encontrada.');
+      return reply.send({
+        vendepay_webhook_url: webhookUrl(token),
+        warning: 'A URL anterior desta conta foi desativada. Copie a nova URL agora.',
+      });
+    },
+  );
 
   app.put<{ Params: { id: string } }>(
     '/offers/:id/tracking/vendepay/signing-secret',
@@ -953,6 +1070,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           signing_secret_updated_at = now()
         FROM tracking_projects p
         WHERE v.project_id = p.id AND p.offer_id = ${req.params.id}
+          AND v.id = (
+            SELECT vc.id FROM vendepay_connections vc
+            WHERE vc.project_id = p.id ORDER BY vc.created_at ASC LIMIT 1
+          )
         RETURNING v.id, v.signing_secret_updated_at
       `;
       if (!updated[0]) {
@@ -977,6 +1098,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         SET token_hash = ${tokenHash(token)}
         FROM tracking_projects p
         WHERE v.project_id = p.id AND p.offer_id = ${req.params.id}
+          AND v.id = (
+            SELECT vc.id FROM vendepay_connections vc
+            WHERE vc.project_id = p.id ORDER BY vc.created_at ASC LIMIT 1
+          )
         RETURNING v.id
       `;
       if (updated.length === 0) {
@@ -1024,6 +1149,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!app.db) return reply.code(503).send({ receipts: [] });
       const receipts = await app.db`
         SELECT r.id, r.state, r.diagnostics, r.received_at, r.processed_at,
+               v.id AS connection_id, v.name AS connection_name,
                r.payload,
                o.external_id AS transaction_id, o.status AS order_status,
                o.amount_minor, o.currency, o.payment_method, o.product
