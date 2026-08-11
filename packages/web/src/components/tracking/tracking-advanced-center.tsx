@@ -26,6 +26,7 @@ import {
   RadioTower,
   RefreshCw,
   Send,
+  Trash2,
   Undo2,
   Video,
 } from 'lucide-react';
@@ -300,6 +301,18 @@ export function TrackingAdvancedCenter({
       setEditingUpsellStageId('');
       void qc.invalidateQueries({ queryKey: ['tracking-upsells', offerId] });
       toast.success(editingUpsellStageId ? 'Etapa atualizada.' : 'Nova etapa salva separadamente.');
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
+  const deleteUpsellStage = useMutation({
+    mutationFn: (stageId: string) => apiClient.deleteTrackingUpsell(offerId, stageId),
+    onSuccess: (_result, stageId) => {
+      if (editingUpsellStageId === stageId) {
+        setEditingUpsellStageId('');
+        setUpsellDestination('');
+      }
+      void qc.invalidateQueries({ queryKey: ['tracking-upsells', offerId] });
+      toast.success('Etapa de upsell apagada.');
     },
     onError: (error) => toast.error((error as Error).message),
   });
@@ -1288,19 +1301,37 @@ export function TrackingAdvancedCenter({
                         <Metric label="Erros da página" value={stage.errors} />
                       </div>
                       {canManage && (
-                        <Button
-                          className="mt-3 w-full"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setEditingUpsellStageId(stage.id);
-                            setUpsellStageKey(stage.stage_key);
-                            setUpsellStageName(stage.name);
-                            setUpsellDestination(stage.destination_url);
-                          }}
-                        >
-                          Editar nome ou URL desta etapa
-                        </Button>
+                        <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setEditingUpsellStageId(stage.id);
+                              setUpsellStageKey(stage.stage_key);
+                              setUpsellStageName(stage.name);
+                              setUpsellDestination(stage.destination_url);
+                            }}
+                          >
+                            Editar nome ou URL
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            aria-label={`Apagar ${stage.name}`}
+                            disabled={deleteUpsellStage.isPending}
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  `Apagar ${stage.name}? A configuração e os dados técnicos dessa etapa serão removidos. Pedidos e webhooks não serão apagados.`,
+                                )
+                              ) {
+                                deleteUpsellStage.mutate(stage.id);
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-red-300" />
+                          </Button>
+                        </div>
                       )}
                       <p className="mt-4 text-[11px] text-white/40">Link TMX opcional — não é necessário trocar na Vendepay</p>
                       <code className="mt-1 block overflow-x-auto whitespace-nowrap rounded bg-black/25 p-2 text-[11px] text-cyan-100">

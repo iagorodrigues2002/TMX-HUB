@@ -300,6 +300,22 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     },
   );
 
+  app.delete<{ Params: { id: string; stageId: string } }>(
+    '/offers/:id/tracking/upsells/:stageId',
+    async (req, reply) => {
+      const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin', true);
+      if (!app.db) return reply.code(503).send(databaseUnavailable);
+      if (!p) return reply.code(404).send({ error: 'tracking_not_configured' });
+      const [removed] = await app.db<Array<{ id: string; stage_key: string }>>`
+        DELETE FROM tracking_upsell_stages
+        WHERE id=${req.params.stageId} AND project_id=${p.id}
+        RETURNING id,stage_key
+      `;
+      if (!removed) return reply.code(404).send({ error: 'upsell_stage_not_found' });
+      return reply.code(204).send();
+    },
+  );
+
   app.post<{ Params: { id: string } }>('/offers/:id/tracking/entry-links', async (req, reply) => {
     const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin', true);
     if (!app.db) return reply.code(503).send(databaseUnavailable);

@@ -2141,6 +2141,10 @@ export const apiClient = {
     await request(`/v1/offers/${id}/tracking/upsells/${stageId}`, { method: 'PATCH', body });
   },
 
+  async deleteTrackingUpsell(id: string, stageId: string): Promise<void> {
+    await request(`/v1/offers/${id}/tracking/upsells/${stageId}`, { method: 'DELETE' });
+  },
+
   async listTrackingEvents(
     id: string,
     page = 1,
