@@ -340,16 +340,39 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       let stored = 0;
       for (const receipt of receipts) {
         const normalized = normalizeVendepay(receipt.payload);
-        if (normalized.kind !== 'processable' || !normalized.event.vendid) continue;
-        found += 1;
+        if (normalized.kind !== 'processable') continue;
         const event = normalized.event;
-        const vendid = event.vendid!;
-        const [order] = await app.db<Array<{ visitor_id: string | null }>>`
-          SELECT visitor_id FROM tracking_orders
+        const [order] = await app.db<Array<{
+          visitor_id: string | null;
+          order_kind: string;
+          buyer: Record<string, string>;
+        }>>`
+          SELECT visitor_id,order_kind,buyer FROM tracking_orders
           WHERE project_id=${p.id} AND external_id=${event.transactionId}
           LIMIT 1
         `;
         if (!order?.visitor_id) continue;
+        let vendid = event.vendid;
+        if (!vendid && order.order_kind === 'front') vendid = event.transactionId;
+        if (!vendid && ['upsell','upsell_2','upsell_3'].includes(order.order_kind)) {
+          const [front] = await app.db<Array<{ external_id: string }>>`
+            SELECT external_id FROM tracking_orders
+            WHERE project_id=${p.id} AND order_kind='front' AND paid_at IS NOT NULL
+              AND occurred_at <= ${event.occurredAt}
+              AND (
+                (${order.buyer.email ?? null}::text IS NOT NULL
+                  AND lower(buyer->>'email')=lower(${order.buyer.email ?? null}::text))
+                OR
+                (${order.buyer.phone ?? null}::text IS NOT NULL
+                  AND regexp_replace(buyer->>'phone','\D','','g')=
+                    regexp_replace(${order.buyer.phone ?? null}::text,'\D','','g'))
+              )
+            ORDER BY occurred_at DESC LIMIT 1
+          `;
+          vendid = front?.external_id;
+        }
+        if (!vendid) continue;
+        found += 1;
         const hash = createHash('sha256').update(vendid).digest('hex');
         await app.db`
           INSERT INTO tracking_upsell_identities

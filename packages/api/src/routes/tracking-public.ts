@@ -1188,9 +1188,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         // incremental order remains tied to the originating campaign.
         const [parentFront] = ['upsell', 'upsell_2', 'upsell_3'].includes(orderKind)
           ? await sql<
-              Array<{ visitor_id: string | null; attribution_source: Record<string, string> }>
+              Array<{ external_id: string; visitor_id: string | null; attribution_source: Record<string, string> }>
             >`
-                SELECT visitor_id, attribution_source
+                SELECT external_id, visitor_id, attribution_source
                 FROM tracking_orders
                 WHERE project_id=${connection.project_id}
                   AND status='paid' AND order_kind='front'
@@ -1208,13 +1208,18 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
               `
           : [];
         attributedVisitorId ??= parentFront?.visitor_id ?? null;
-        if (event.vendid && attributedVisitorId && env.TRACKING_ENCRYPTION_KEY) {
-          const vendidHash = createHash('sha256').update(event.vendid).digest('hex');
+        // Vendepay's front-sale UUID is also the vendid accepted by its upsell
+        // iframe. Some accounts omit an explicit vendid field in webhooks.
+        const effectiveVendid =
+          event.vendid ??
+          (orderKind === 'front' ? event.transactionId : parentFront?.external_id);
+        if (effectiveVendid && attributedVisitorId && env.TRACKING_ENCRYPTION_KEY) {
+          const vendidHash = createHash('sha256').update(effectiveVendid).digest('hex');
           await sql`
             INSERT INTO tracking_upsell_identities
               (id,project_id,visitor_id,vendid_hash,vendid_encrypted)
             VALUES(${ulid()},${connection.project_id},${attributedVisitorId},${vendidHash},
-              ${encryptSecret(event.vendid, env.TRACKING_ENCRYPTION_KEY)})
+              ${encryptSecret(effectiveVendid, env.TRACKING_ENCRYPTION_KEY)})
             ON CONFLICT(project_id,vendid_hash) DO UPDATE SET
               visitor_id=EXCLUDED.visitor_id,last_seen_at=now()
           `;
