@@ -1314,7 +1314,7 @@ export function TrackingAdvancedCenter({
                         <Metric label="Accept Rate" value={`${acceptRate.toFixed(1)}%`} />
                         <Metric label="Recusas" value={stage.declines} />
                         <Metric label="Compras" value={stage.purchases} />
-                        <Metric label="Vendid identificados" value={stage.identified_buyers} />
+                        <Metric label="vendaId identificados" value={stage.identified_buyers} />
                         <Metric label="Saídas sem decisão" value={stage.exits} />
                         <Metric label="Erros da página" value={stage.errors} />
                       </div>
@@ -1406,7 +1406,7 @@ export function TrackingAdvancedCenter({
               <div className="mt-5 overflow-hidden rounded-xl border border-white/[0.08]">
                 <div className="border-b border-white/[0.08] bg-white/[0.025] px-4 py-3">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="font-semibold text-white/80">Vendid e jornadas</p>
+                    <p className="font-semibold text-white/80">vendaId e jornadas</p>
                     {canManage && (
                       <Button
                         size="sm"
@@ -1414,7 +1414,7 @@ export function TrackingAdvancedCenter({
                         disabled={reconcileUpsellIdentities.isPending}
                         onClick={() => reconcileUpsellIdentities.mutate()}
                       >
-                        {reconcileUpsellIdentities.isPending ? 'Reconciliando…' : 'Recuperar vendid dos webhooks'}
+                        {reconcileUpsellIdentities.isPending ? 'Reconciliando…' : 'Recuperar vendaId dos webhooks'}
                       </Button>
                     )}
                   </div>
@@ -1426,7 +1426,7 @@ export function TrackingAdvancedCenter({
                   <table className="w-full min-w-[760px] text-left text-xs">
                     <thead className="text-white/40">
                       <tr className="border-b border-white/[0.06]">
-                        <th className="px-4 py-3 font-medium">Vendid</th>
+                        <th className="px-4 py-3 font-medium">vendaId</th>
                         <th className="px-4 py-3 font-medium">Última identificação</th>
                         <th className="px-4 py-3 font-medium">Abrir upsell</th>
                       </tr>
@@ -1463,7 +1463,7 @@ export function TrackingAdvancedCenter({
                   </table>
                 </div>
                 {!upsellIdentities.isLoading && !upsellIdentities.data?.items.length && (
-                  <p className="px-4 py-5 text-sm text-white/40">Nenhum vendid identificado neste período.</p>
+                  <p className="px-4 py-5 text-sm text-white/40">Nenhum vendaId identificado neste período.</p>
                 )}
               </div>
             </Module>
