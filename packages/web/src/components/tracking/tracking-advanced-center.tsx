@@ -1153,8 +1153,16 @@ export function TrackingAdvancedCenter({
           {section === 'upsells' && (
             <Module
               title="Upsell Intelligence"
-              description="Monitore entrega, carregamento, visualização, decisão e compra de cada etapa sem testes A/B."
+              description="Monitore cada página diretamente pelo script, sem trocar nenhum link configurado na Vendepay."
             >
+              <div className="mb-4 rounded-xl border border-emerald-300/20 bg-emerald-300/[0.05] p-4 text-sm leading-6 text-emerald-50/75">
+                <p className="font-semibold text-emerald-200">Modo somente script</p>
+                <p>
+                  Mantenha os links atuais do funil na Vendepay. Cadastre abaixo a URL que ela já abre e
+                  instale o script gerado nessa página. O TMX captura a visita, o vendid disponível e cruza
+                  tudo com os webhooks automaticamente.
+                </p>
+              </div>
               <div className="rounded-xl border border-cyan-300/20 bg-cyan-300/[0.045] p-4">
                 <p className="hud-label text-cyan-200">Configurar etapa</p>
                 <div className="mt-3 grid gap-3 md:grid-cols-3">
@@ -1197,17 +1205,17 @@ export function TrackingAdvancedCenter({
                     }
                     onClick={() => saveUpsellStage.mutate()}
                   >
-                    {saveUpsellStage.isPending ? 'Salvando…' : 'Salvar e gerar link seguro'}
+                    {saveUpsellStage.isPending ? 'Salvando…' : 'Salvar e gerar script'}
                   </Button>
                 )}
               </div>
 
               <div className="mt-4 grid gap-4 xl:grid-cols-3">
                 {(upsellIntelligence.data?.stages ?? []).map((stage) => {
-                  const redirects = Number(stage.redirects ?? 0);
+                  const eligibleBuyers = Number(stage.eligible_buyers ?? 0);
                   const pageViews = Number(stage.page_views ?? 0);
                   const offerViews = Number(stage.offer_views ?? 0);
-                  const connectRate = redirects ? (pageViews / redirects) * 100 : 0;
+                  const connectRate = eligibleBuyers ? (pageViews / eligibleBuyers) * 100 : 0;
                   const viewRate = pageViews ? (offerViews / pageViews) * 100 : 0;
                   const acceptRate = offerViews ? (Number(stage.accepts) / offerViews) * 100 : 0;
                   return (
@@ -1225,7 +1233,7 @@ export function TrackingAdvancedCenter({
                         </span>
                       </div>
                       <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-                        <Metric label="Redirecionamentos" value={redirects} />
+                        <Metric label="Compradores elegíveis" value={eligibleBuyers} />
                         <Metric label="Página carregada" value={pageViews} />
                         <Metric label="Connect Rate" value={`${connectRate.toFixed(1)}%`} />
                         <Metric label="Oferta visualizada" value={`${viewRate.toFixed(1)}%`} />
@@ -1236,7 +1244,7 @@ export function TrackingAdvancedCenter({
                         <Metric label="Saídas sem decisão" value={stage.exits} />
                         <Metric label="Erros da página" value={stage.errors} />
                       </div>
-                      <p className="mt-4 text-[11px] text-white/40">Link seguro que abre a página</p>
+                      <p className="mt-4 text-[11px] text-white/40">Link TMX opcional — não é necessário trocar na Vendepay</p>
                       <code className="mt-1 block overflow-x-auto whitespace-nowrap rounded bg-black/25 p-2 text-[11px] text-cyan-100">
                         {stage.secure_url}
                       </code>
@@ -1248,7 +1256,7 @@ export function TrackingAdvancedCenter({
                           toast.success('Link seguro do upsell copiado.');
                         }}
                       >
-                        <Copy className="mr-2 h-3.5 w-3.5" /> Copiar link seguro
+                        <Copy className="mr-2 h-3.5 w-3.5" /> Copiar link opcional
                       </Button>
                       <p className="mt-4 text-[11px] text-white/40">Script desta página</p>
                       <code className="mt-1 block max-h-24 overflow-auto rounded bg-black/25 p-2 text-[10px] leading-4 text-cyan-100/75">
@@ -1271,7 +1279,7 @@ export function TrackingAdvancedCenter({
               </div>
               {!upsellIntelligence.isLoading && !upsellIntelligence.data?.stages.length && (
                 <p className="mt-4 rounded-xl border border-dashed border-white/[0.1] p-5 text-sm text-white/45">
-                  Cadastre a primeira etapa para gerar o link seguro e o script de monitoramento.
+                  Cadastre a URL que a Vendepay já abre para gerar o script de monitoramento.
                 </p>
               )}
               <div className="mt-5 rounded-xl border border-white/[0.08] p-4 text-xs leading-6 text-white/50">
@@ -1283,8 +1291,9 @@ export function TrackingAdvancedCenter({
                   {'<a data-tmx-upsell-decline href="...">Não, obrigado</a>'}
                 </code>
                 <p className="mt-2">
-                  O script também detecta botões automaticamente, captura scroll, saída, erros e o
-                  vendid quando ele estiver exposto na URL, página ou armazenamento do navegador.
+                  O script detecta botões automaticamente, captura scroll, saída, erros e o vendid quando
+                  ele estiver exposto na URL, página ou armazenamento do navegador. O Connect Rate é
+                  calculado pela página carregada dividida pelos compradores da etapa anterior.
                 </p>
               </div>
             </Module>

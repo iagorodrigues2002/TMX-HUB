@@ -2107,6 +2107,7 @@ export const apiClient = {
       install_code: string;
       enabled: boolean;
       redirects: number;
+      eligible_buyers: number;
       page_views: number;
       offer_views: number;
       accepts: number;

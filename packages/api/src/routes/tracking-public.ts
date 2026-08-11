@@ -974,8 +974,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!parsed.success) return reply.code(400).send({ accepted: false });
     const input = parsed.data;
     const token = input.token ? readUpsellToken(input.token) : null;
-    const [stage] = await app.db<Array<{ id: string; project_id: string }>>`
-      SELECT us.id,us.project_id FROM tracking_upsell_stages us
+    const [stage] = await app.db<Array<{ id: string; project_id: string; destination_url: string }>>`
+      SELECT us.id,us.project_id,us.destination_url FROM tracking_upsell_stages us
       JOIN tracking_projects p ON p.id=us.project_id
       WHERE p.public_key=${input.public_key} AND us.stage_key=${input.stage_key}
         AND us.enabled=true LIMIT 1
@@ -986,6 +986,14 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const visitorId = token?.visitorId ?? input.visitor_id;
     const journeyId = token?.journeyId ?? input.journey_id;
     const receivedAt = input.client_at ? new Date(input.client_at) : new Date();
+    let trustedStagePage = false;
+    try {
+      const configured = new URL(stage.destination_url);
+      const received = new URL(input.event_url);
+      trustedStagePage = configured.origin === received.origin;
+    } catch {
+      trustedStagePage = false;
+    }
     await app.db.begin(async (sql) => {
       await sql`
         INSERT INTO tracking_events
@@ -996,7 +1004,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           ${sql.json({ ...input.properties, upsell_stage_id: stage.id, upsell_stage_key: input.stage_key })},
           ${req.ip},${req.headers['user-agent'] ?? null},${receivedAt})
       `;
-      if (input.vendid && token && env.TRACKING_ENCRYPTION_KEY) {
+      // A signed TMX redirect is strongest, but it is intentionally optional.
+      // When Vendepay opens the configured upsell URL directly, the installed
+      // script may persist vendid as long as the event came from that origin.
+      if (input.vendid && (token || trustedStagePage) && env.TRACKING_ENCRYPTION_KEY) {
         const hash = createHash('sha256').update(input.vendid).digest('hex');
         await sql`
           INSERT INTO tracking_upsell_identities

@@ -189,6 +189,15 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           (SELECT count(DISTINCT r.visitor_id)::int FROM tracking_upsell_redirects r
            WHERE r.stage_id=s.id AND r.redirected_at >= ${from}::date
              AND r.redirected_at < (${to}::date + interval '1 day')) AS redirects,
+          (SELECT count(*)::int FROM tracking_orders previous
+           WHERE previous.project_id=s.project_id AND previous.status='paid'
+             AND previous.order_kind=CASE s.stage_key
+               WHEN 'upsell_1' THEN 'front'
+               WHEN 'upsell_2' THEN 'upsell'
+               ELSE 'upsell_2'
+             END
+             AND previous.occurred_at >= ${from}::date
+             AND previous.occurred_at < (${to}::date + interval '1 day')) AS eligible_buyers,
           (SELECT count(DISTINCT e.visitor_id)::int FROM tracking_events e
            WHERE e.project_id=s.project_id AND e.event_name='UpsellPageView'
              AND e.properties->>'upsell_stage_id'=s.id AND e.received_at >= ${from}::date
@@ -215,13 +224,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
              AND e.received_at < (${to}::date + interval '1 day')) AS errors,
           (SELECT count(*)::int FROM tracking_orders o
            WHERE o.project_id=s.project_id AND o.status='paid'
-             AND o.order_kind=s.stage_key AND o.occurred_at >= ${from}::date
+             AND o.order_kind=CASE s.stage_key WHEN 'upsell_1' THEN 'upsell' ELSE s.stage_key END
+             AND o.occurred_at >= ${from}::date
              AND o.occurred_at < (${to}::date + interval '1 day')
-             AND EXISTS (
-               SELECT 1 FROM tracking_upsell_redirects r
-               WHERE r.stage_id=s.id AND r.visitor_id=o.visitor_id
-                 AND r.redirected_at <= o.occurred_at
-             )) AS purchases,
+          ) AS purchases,
           (SELECT count(*)::int FROM tracking_upsell_identities i
            WHERE i.project_id=s.project_id) AS identified_buyers
         FROM tracking_upsell_stages s
