@@ -1,15 +1,17 @@
+import { createHash } from 'node:crypto';
 import { resolveCname, resolveTxt } from 'node:dns/promises';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { ulid } from 'ulid';
 import { z } from 'zod';
 import { env } from '../env.js';
+import { normalizeVendepay } from '../integrations/vendepay/normalize.js';
 import {
   type RailwayDnsRecord,
   deleteRailwayDomain,
   provisionRailwayDomain,
 } from '../integrations/railway/domains.js';
 import { zodToProblem } from '../lib/problem.js';
-import { decryptSecret } from '../lib/secret-box.js';
+import { decryptSecret, encryptSecret } from '../lib/secret-box.js';
 import { canonicalTrackingHostname } from '../services/tracking-domain.js';
 import { saoPauloParts } from '../services/intraday-store.js';
 import { saoPauloDayRange } from '../services/utmify-sync.js';
@@ -314,6 +316,52 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           }
         }),
       };
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    '/offers/:id/tracking/upsell-identities/reconcile',
+    async (req, reply) => {
+      const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin', true);
+      if (!app.db) return reply.code(503).send(databaseUnavailable);
+      if (!p) return reply.code(404).send({ error: 'tracking_not_configured' });
+      if (!env.TRACKING_ENCRYPTION_KEY) {
+        return reply.code(503).send({ error: 'tracking_encryption_unavailable' });
+      }
+      const receipts = await app.db<Array<{ payload: unknown }>>`
+        SELECT r.payload
+        FROM webhook_receipts r
+        JOIN vendepay_connections c ON c.id=r.connection_id
+        WHERE c.project_id=${p.id} AND r.received_at >= now()-interval '90 days'
+        ORDER BY r.received_at DESC
+        LIMIT 1000
+      `;
+      let found = 0;
+      let stored = 0;
+      for (const receipt of receipts) {
+        const normalized = normalizeVendepay(receipt.payload);
+        if (normalized.kind !== 'processable' || !normalized.event.vendid) continue;
+        found += 1;
+        const event = normalized.event;
+        const vendid = event.vendid!;
+        const [order] = await app.db<Array<{ visitor_id: string | null }>>`
+          SELECT visitor_id FROM tracking_orders
+          WHERE project_id=${p.id} AND external_id=${event.transactionId}
+          LIMIT 1
+        `;
+        if (!order?.visitor_id) continue;
+        const hash = createHash('sha256').update(vendid).digest('hex');
+        await app.db`
+          INSERT INTO tracking_upsell_identities
+            (id,project_id,visitor_id,vendid_hash,vendid_encrypted)
+          VALUES(${ulid()},${p.id},${order.visitor_id},${hash},
+            ${encryptSecret(vendid, env.TRACKING_ENCRYPTION_KEY)})
+          ON CONFLICT(project_id,vendid_hash) DO UPDATE SET
+            visitor_id=EXCLUDED.visitor_id,last_seen_at=now()
+        `;
+        stored += 1;
+      }
+      return { inspected: receipts.length, vendid_found: found, identities_stored: stored };
     },
   );
 

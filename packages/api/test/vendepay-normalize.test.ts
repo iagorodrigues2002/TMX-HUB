@@ -184,6 +184,17 @@ describe('normalizeVendepay', () => {
     expect(result.event.vendid).toBe('buyer-identity-987');
   });
 
+  it('captura vendid profundamente aninhado e com nome separado', () => {
+    const result = normalizeVendepay({
+      id: 'purchase-vendid-deep-1',
+      event: 'compra.aprovada',
+      payload: { checkout: { buyer: { vend_id: 'buyer-deep-654' } } },
+    });
+    expect(result.kind).toBe('processable');
+    if (result.kind !== 'processable') return;
+    expect(result.event.vendid).toBe('buyer-deep-654');
+  });
+
   it('mapeia moeda 5 da Vendepay para sol peruano', () => {
     const result = normalizeVendepay({
       id: 'slm-pen-1',

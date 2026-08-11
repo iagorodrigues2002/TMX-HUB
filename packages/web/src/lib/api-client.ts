@@ -2156,6 +2156,14 @@ export const apiClient = {
     );
   },
 
+  async reconcileTrackingUpsellIdentities(id: string): Promise<{
+    inspected: number;
+    vendid_found: number;
+    identities_stored: number;
+  }> {
+    return request(`/v1/offers/${id}/tracking/upsell-identities/reconcile`, { method: 'POST' });
+  },
+
   async updateTrackingUpsell(
     id: string,
     stageId: string,

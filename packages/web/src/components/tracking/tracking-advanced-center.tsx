@@ -323,6 +323,16 @@ export function TrackingAdvancedCenter({
     },
     onError: (error) => toast.error((error as Error).message),
   });
+  const reconcileUpsellIdentities = useMutation({
+    mutationFn: () => apiClient.reconcileTrackingUpsellIdentities(offerId),
+    onSuccess: (result) => {
+      void qc.invalidateQueries({ queryKey: ['tracking-upsell-identities', offerId] });
+      toast.success(
+        `${result.vendid_found} vendid encontrados · ${result.identities_stored} identidades recuperadas.`,
+      );
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
   const metaDeliveries = useQuery({
     queryKey: ['tracking-meta-deliveries', offerId],
     queryFn: () => apiClient.listMetaDeliveries(offerId),
@@ -1395,7 +1405,19 @@ export function TrackingAdvancedCenter({
               </div>
               <div className="mt-5 overflow-hidden rounded-xl border border-white/[0.08]">
                 <div className="border-b border-white/[0.08] bg-white/[0.025] px-4 py-3">
-                  <p className="font-semibold text-white/80">Vendid e jornadas</p>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="font-semibold text-white/80">Vendid e jornadas</p>
+                    {canManage && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={reconcileUpsellIdentities.isPending}
+                        onClick={() => reconcileUpsellIdentities.mutate()}
+                      >
+                        {reconcileUpsellIdentities.isPending ? 'Reconciliando…' : 'Recuperar vendid dos webhooks'}
+                      </Button>
+                    )}
+                  </div>
                   <p className="mt-1 text-xs text-white/40">
                     Identificadores recebidos no período. Cada botão abre diretamente a etapa escolhida.
                   </p>

@@ -82,6 +82,31 @@ const textAt = (value: Record<string, unknown>, paths: string[]): string | undef
   return undefined;
 };
 
+const textByNormalizedKey = (
+  value: unknown,
+  normalizedKeys: Set<string>,
+  depth = 0,
+): string | undefined => {
+  if (!value || typeof value !== 'object' || depth > 8) return undefined;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const nested = textByNormalizedKey(item, normalizedKeys, depth + 1);
+      if (nested) return nested;
+    }
+    return undefined;
+  }
+  for (const [key, candidate] of Object.entries(value as Record<string, unknown>)) {
+    const normalizedKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (normalizedKeys.has(normalizedKey)) {
+      if (typeof candidate === 'string' && candidate.trim()) return candidate.trim();
+      if (typeof candidate === 'number' && Number.isFinite(candidate)) return String(candidate);
+    }
+    const nested = textByNormalizedKey(candidate, normalizedKeys, depth + 1);
+    if (nested) return nested;
+  }
+  return undefined;
+};
+
 const normalizeStatus = (raw = ''): VendepayStatus => {
   const status = raw
     .toLowerCase()
@@ -367,7 +392,7 @@ export function normalizeVendepay(raw: unknown, receivedAt = new Date()): Vendep
     'transaction.vendid',
     'customer.vendid',
     'buyer.vendid',
-  ]);
+  ]) ?? textByNormalizedKey(payload, new Set(['vendid']));
   const paymentMethod = paymentMethodCode(
     textAt(payload, [
       'payment_method',
