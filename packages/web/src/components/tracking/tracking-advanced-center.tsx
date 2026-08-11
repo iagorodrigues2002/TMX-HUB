@@ -1297,6 +1297,7 @@ export function TrackingAdvancedCenter({
                         <Metric label="Accept Rate" value={`${acceptRate.toFixed(1)}%`} />
                         <Metric label="Recusas" value={stage.declines} />
                         <Metric label="Compras" value={stage.purchases} />
+                        <Metric label="Vendid identificados" value={stage.identified_buyers} />
                         <Metric label="Saídas sem decisão" value={stage.exits} />
                         <Metric label="Erros da página" value={stage.errors} />
                       </div>
