@@ -92,9 +92,19 @@ function saoPauloDateOffset(daysAgo: number) {
   return saoPauloDate(date);
 }
 
+function Metric({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-lg border border-white/[0.07] bg-white/[0.025] p-3">
+      <p className="text-[10px] uppercase tracking-wider text-white/35">{label}</p>
+      <p className="mono-num mt-1 text-base font-semibold text-white/85">{value}</p>
+    </div>
+  );
+}
+
 type Section =
   | 'tracker'
   | 'funnel'
+  | 'upsells'
   | 'attribution'
   | 'refunds'
   | 'ab'
@@ -112,6 +122,7 @@ type Section =
 const sections: Array<{ id: Section; label: string; icon: LucideIcon; group: string }> = [
   { id: 'tracker', label: 'Tracker', icon: RadioTower, group: 'Operação' },
   { id: 'funnel', label: 'Funil', icon: BarChart3, group: 'Operação' },
+  { id: 'upsells', label: 'Upsell Intelligence', icon: RadioTower, group: 'Operação' },
   { id: 'attribution', label: 'Campanhas e anúncios', icon: Megaphone, group: 'Operação' },
   { id: 'refunds', label: 'Reembolsos e chargeback', icon: Undo2, group: 'Operação' },
   { id: 'ab', label: 'Testes A/B', icon: FlaskConical, group: 'Operação' },
@@ -146,7 +157,7 @@ const trackingAreas: Array<{
     id: 'results',
     label: 'Resultados',
     icon: BarChart3,
-    sections: ['tracker', 'funnel', 'attribution'],
+    sections: ['tracker', 'funnel', 'upsells', 'attribution'],
   },
   { id: 'capture', label: 'Captura e links', icon: Layers3, sections: ['code', 'domains', 'ab'] },
   { id: 'meta', label: 'Meta', icon: Facebook, sections: ['pixels', 'meta'] },
@@ -195,6 +206,11 @@ export function TrackingAdvancedCenter({
   const [selectedVendepayConnectionId, setSelectedVendepayConnectionId] = useState('');
   const [selectedVendepayConnectionName, setSelectedVendepayConnectionName] = useState('');
   const [vendepaySigningSecret, setVendepaySigningSecret] = useState('');
+  const [upsellStageKey, setUpsellStageKey] = useState<'upsell_1' | 'upsell_2' | 'upsell_3'>(
+    'upsell_1',
+  );
+  const [upsellStageName, setUpsellStageName] = useState('Upsell 1');
+  const [upsellDestination, setUpsellDestination] = useState('');
   const [vendepayPayload, setVendepayPayload] = useState(vendepaySample);
   const [utmifyToken, setUtmifyToken] = useState('');
   const [utmifyPixelId, setUtmifyPixelId] = useState('');
@@ -247,6 +263,26 @@ export function TrackingAdvancedCenter({
     queryKey: ['tracking-advanced', offerId],
     queryFn: () => apiClient.getAdvancedTracking(offerId),
     retry: false,
+  });
+  const upsellIntelligence = useQuery({
+    queryKey: ['tracking-upsells', offerId, trackingFrom, trackingTo],
+    queryFn: () =>
+      apiClient.getTrackingUpsells(offerId, { from: trackingFrom, to: trackingTo }),
+    retry: false,
+  });
+  const saveUpsellStage = useMutation({
+    mutationFn: () =>
+      apiClient.saveTrackingUpsell(offerId, {
+        stage_key: upsellStageKey,
+        name: upsellStageName,
+        destination_url: upsellDestination,
+      }),
+    onSuccess: () => {
+      setUpsellDestination('');
+      void qc.invalidateQueries({ queryKey: ['tracking-upsells', offerId] });
+      toast.success('Etapa de upsell salva. O link seguro e o script já estão disponíveis.');
+    },
+    onError: (error) => toast.error((error as Error).message),
   });
   const metaDeliveries = useQuery({
     queryKey: ['tracking-meta-deliveries', offerId],
@@ -1113,6 +1149,145 @@ export function TrackingAdvancedCenter({
               from={trackingFrom}
               to={trackingTo}
             />
+          )}
+          {section === 'upsells' && (
+            <Module
+              title="Upsell Intelligence"
+              description="Monitore entrega, carregamento, visualização, decisão e compra de cada etapa sem testes A/B."
+            >
+              <div className="rounded-xl border border-cyan-300/20 bg-cyan-300/[0.045] p-4">
+                <p className="hud-label text-cyan-200">Configurar etapa</p>
+                <div className="mt-3 grid gap-3 md:grid-cols-3">
+                  <select
+                    aria-label="Etapa do upsell"
+                    className="h-10 rounded-md border border-white/[0.1] bg-black/30 px-3 text-sm text-white outline-none focus:border-cyan-300/40"
+                    value={upsellStageKey}
+                    onChange={(event) => {
+                      const value = event.target.value as 'upsell_1' | 'upsell_2' | 'upsell_3';
+                      setUpsellStageKey(value);
+                      setUpsellStageName(
+                        value === 'upsell_1' ? 'Upsell 1' : value === 'upsell_2' ? 'Upsell 2' : 'Upsell 3',
+                      );
+                    }}
+                  >
+                    <option value="upsell_1">Upsell 1</option>
+                    <option value="upsell_2">Upsell 2</option>
+                    <option value="upsell_3">Upsell 3</option>
+                  </select>
+                  <Input
+                    aria-label="Nome da etapa de upsell"
+                    value={upsellStageName}
+                    onChange={(event) => setUpsellStageName(event.target.value)}
+                    placeholder="Nome da etapa"
+                  />
+                  <Input
+                    aria-label="URL da página de upsell"
+                    value={upsellDestination}
+                    onChange={(event) => setUpsellDestination(event.target.value)}
+                    placeholder="https://seusite.com/upsell-01/"
+                  />
+                </div>
+                {canManage && (
+                  <Button
+                    className="mt-3"
+                    disabled={
+                      upsellStageName.trim().length < 2 ||
+                      !upsellDestination.startsWith('http') ||
+                      saveUpsellStage.isPending
+                    }
+                    onClick={() => saveUpsellStage.mutate()}
+                  >
+                    {saveUpsellStage.isPending ? 'Salvando…' : 'Salvar e gerar link seguro'}
+                  </Button>
+                )}
+              </div>
+
+              <div className="mt-4 grid gap-4 xl:grid-cols-3">
+                {(upsellIntelligence.data?.stages ?? []).map((stage) => {
+                  const redirects = Number(stage.redirects ?? 0);
+                  const pageViews = Number(stage.page_views ?? 0);
+                  const offerViews = Number(stage.offer_views ?? 0);
+                  const connectRate = redirects ? (pageViews / redirects) * 100 : 0;
+                  const viewRate = pageViews ? (offerViews / pageViews) * 100 : 0;
+                  const acceptRate = offerViews ? (Number(stage.accepts) / offerViews) * 100 : 0;
+                  return (
+                    <article
+                      key={stage.id}
+                      className="rounded-xl border border-emerald-300/15 bg-black/15 p-4"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="hud-label text-emerald-200">{stage.stage_key}</p>
+                          <h3 className="mt-1 font-semibold text-white/90">{stage.name}</h3>
+                        </div>
+                        <span className={stage.enabled ? 'text-xs text-emerald-300' : 'text-xs text-white/35'}>
+                          {stage.enabled ? 'ativo' : 'pausado'}
+                        </span>
+                      </div>
+                      <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+                        <Metric label="Redirecionamentos" value={redirects} />
+                        <Metric label="Página carregada" value={pageViews} />
+                        <Metric label="Connect Rate" value={`${connectRate.toFixed(1)}%`} />
+                        <Metric label="Oferta visualizada" value={`${viewRate.toFixed(1)}%`} />
+                        <Metric label="Cliques em aceitar" value={stage.accepts} />
+                        <Metric label="Accept Rate" value={`${acceptRate.toFixed(1)}%`} />
+                        <Metric label="Recusas" value={stage.declines} />
+                        <Metric label="Compras" value={stage.purchases} />
+                        <Metric label="Saídas sem decisão" value={stage.exits} />
+                        <Metric label="Erros da página" value={stage.errors} />
+                      </div>
+                      <p className="mt-4 text-[11px] text-white/40">Link seguro que abre a página</p>
+                      <code className="mt-1 block overflow-x-auto whitespace-nowrap rounded bg-black/25 p-2 text-[11px] text-cyan-100">
+                        {stage.secure_url}
+                      </code>
+                      <Button
+                        className="mt-2 w-full"
+                        size="sm"
+                        onClick={async () => {
+                          await navigator.clipboard.writeText(stage.secure_url);
+                          toast.success('Link seguro do upsell copiado.');
+                        }}
+                      >
+                        <Copy className="mr-2 h-3.5 w-3.5" /> Copiar link seguro
+                      </Button>
+                      <p className="mt-4 text-[11px] text-white/40">Script desta página</p>
+                      <code className="mt-1 block max-h-24 overflow-auto rounded bg-black/25 p-2 text-[10px] leading-4 text-cyan-100/75">
+                        {stage.install_code}
+                      </code>
+                      <Button
+                        className="mt-2 w-full"
+                        size="sm"
+                        variant="outline"
+                        onClick={async () => {
+                          await navigator.clipboard.writeText(stage.install_code);
+                          toast.success('Script do upsell copiado.');
+                        }}
+                      >
+                        Copiar script
+                      </Button>
+                    </article>
+                  );
+                })}
+              </div>
+              {!upsellIntelligence.isLoading && !upsellIntelligence.data?.stages.length && (
+                <p className="mt-4 rounded-xl border border-dashed border-white/[0.1] p-5 text-sm text-white/45">
+                  Cadastre a primeira etapa para gerar o link seguro e o script de monitoramento.
+                </p>
+              )}
+              <div className="mt-5 rounded-xl border border-white/[0.08] p-4 text-xs leading-6 text-white/50">
+                <p className="font-semibold text-white/75">Marcação recomendada dos botões</p>
+                <code className="mt-2 block overflow-x-auto text-cyan-100/75">
+                  {'<a data-tmx-upsell-accept href="...">Sim, quero adicionar</a>'}
+                </code>
+                <code className="block overflow-x-auto text-cyan-100/75">
+                  {'<a data-tmx-upsell-decline href="...">Não, obrigado</a>'}
+                </code>
+                <p className="mt-2">
+                  O script também detecta botões automaticamente, captura scroll, saída, erros e o
+                  vendid quando ele estiver exposto na URL, página ou armazenamento do navegador.
+                </p>
+              </div>
+            </Module>
           )}
           {section === 'attribution' && (
             <TrackingLiveConsole

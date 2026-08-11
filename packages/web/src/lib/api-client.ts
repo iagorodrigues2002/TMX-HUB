@@ -2091,6 +2091,55 @@ export const apiClient = {
     });
   },
 
+  async getTrackingUpsells(
+    id: string,
+    period?: { from: string; to: string },
+  ): Promise<{
+    configured: boolean;
+    install_code?: string;
+    stages: Array<{
+      id: string;
+      stage_key: 'upsell_1' | 'upsell_2' | 'upsell_3';
+      name: string;
+      slug: string;
+      destination_url: string;
+      secure_url: string;
+      install_code: string;
+      enabled: boolean;
+      redirects: number;
+      page_views: number;
+      offer_views: number;
+      accepts: number;
+      declines: number;
+      exits: number;
+      errors: number;
+      purchases: number;
+      identified_buyers: number;
+    }>;
+  }> {
+    const query = period ? `?from=${period.from}&to=${period.to}` : '';
+    return request(`/v1/offers/${id}/tracking/upsells${query}`);
+  },
+
+  async saveTrackingUpsell(
+    id: string,
+    body: {
+      stage_key: 'upsell_1' | 'upsell_2' | 'upsell_3';
+      name: string;
+      destination_url: string;
+    },
+  ): Promise<void> {
+    await request(`/v1/offers/${id}/tracking/upsells`, { method: 'POST', body });
+  },
+
+  async updateTrackingUpsell(
+    id: string,
+    stageId: string,
+    body: { name: string; destination_url: string; enabled?: boolean },
+  ): Promise<void> {
+    await request(`/v1/offers/${id}/tracking/upsells/${stageId}`, { method: 'PATCH', body });
+  },
+
   async listTrackingEvents(
     id: string,
     page = 1,

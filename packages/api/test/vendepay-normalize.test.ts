@@ -173,6 +173,17 @@ describe('normalizeVendepay', () => {
     },
   );
 
+  it('captura o vendid pós-compra para unificar front e upsells', () => {
+    const result = normalizeVendepay({
+      id: 'purchase-vendid-1',
+      event: 'compra.aprovada',
+      data: { vendId: 'buyer-identity-987' },
+    });
+    expect(result.kind).toBe('processable');
+    if (result.kind !== 'processable') return;
+    expect(result.event.vendid).toBe('buyer-identity-987');
+  });
+
   it('mapeia moeda 5 da Vendepay para sol peruano', () => {
     const result = normalizeVendepay({
       id: 'slm-pen-1',

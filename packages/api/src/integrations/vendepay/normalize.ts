@@ -44,6 +44,7 @@ export interface NormalizedVendepayEvent {
   status: VendepayStatus;
   rawStatus?: string;
   trackingSrc?: string;
+  vendid?: string;
   amountMinor?: number;
   currency?: string;
   buyer: {
@@ -356,6 +357,17 @@ export function normalizeVendepay(raw: unknown, receivedAt = new Date()): Vendep
     'order.trackeamentoId',
     'checkout.trackeamentoId',
   ]);
+  const vendid = textAt(payload, [
+    'vendid',
+    'vendId',
+    'vend_id',
+    'data.vendid',
+    'data.vendId',
+    'order.vendid',
+    'transaction.vendid',
+    'customer.vendid',
+    'buyer.vendid',
+  ]);
   const paymentMethod = paymentMethodCode(
     textAt(payload, [
       'payment_method',
@@ -464,6 +476,7 @@ export function normalizeVendepay(raw: unknown, receivedAt = new Date()): Vendep
       status,
       ...(rawStatus ? { rawStatus } : {}),
       ...(trackingSrc ? { trackingSrc } : {}),
+      ...(vendid ? { vendid } : {}),
       ...(amountMinor !== undefined ? { amountMinor } : {}),
       ...(currency ? { currency } : {}),
       buyer: {

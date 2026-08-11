@@ -1,9 +1,10 @@
-import { createHash } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { ulid } from 'ulid';
 import { z } from 'zod';
 import { env } from '../env.js';
 import { normalizeVendepay } from '../integrations/vendepay/normalize.js';
+import { encryptSecret } from '../lib/secret-box.js';
 import { createTrackingToken, readTrackingToken } from '../lib/tracking-token.js';
 import { convertToBrlMinor } from '../services/exchange-rate.js';
 import { buildTrackerScript } from '../services/tracker-script.js';
@@ -43,6 +44,27 @@ const BootstrapSchema = z.object({
 const AbAssignmentSchema = z.object({
   public_key: z.string().min(8).max(120),
   visitor_id: z.string().min(8).max(120),
+});
+const UpsellEventSchema = z.object({
+  public_key: z.string().min(8).max(120),
+  stage_key: z.enum(['upsell_1', 'upsell_2', 'upsell_3']),
+  token: z.string().max(4096).optional(),
+  visitor_id: z.string().min(8).max(128),
+  journey_id: z.string().min(8).max(128),
+  event_name: z.enum([
+    'UpsellPageView',
+    'UpsellOfferView',
+    'UpsellAcceptClick',
+    'UpsellDeclineClick',
+    'UpsellExit',
+    'UpsellPageError',
+    'UpsellScroll',
+  ]),
+  event_url: z.string().url().max(4096),
+  source: z.record(z.string(), z.string().max(2048)).default({}),
+  properties: z.record(z.string(), z.unknown()).default({}),
+  vendid: z.string().trim().min(1).max(1024).optional(),
+  client_at: z.string().datetime().optional(),
 });
 type AbRedirectRequest = FastifyRequest<{
   Params: { testId: string };
@@ -109,6 +131,41 @@ export function safeEventSourceUrl(value: string | undefined) {
     return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : undefined;
   } catch {
     return undefined;
+  }
+}
+
+type UpsellToken = {
+  projectId: string;
+  stageId: string;
+  visitorId: string;
+  journeyId: string;
+  issuedAt: number;
+};
+
+const upsellSignature = (encoded: string) =>
+  createHmac('sha256', env.WEBHOOK_SECRET).update(`upsell|${encoded}`).digest('base64url');
+
+function createUpsellToken(payload: Omit<UpsellToken, 'issuedAt'>) {
+  const encoded = Buffer.from(
+    JSON.stringify({ ...payload, issuedAt: Math.floor(Date.now() / 1000) }),
+  ).toString('base64url');
+  return `${encoded}.${upsellSignature(encoded)}`;
+}
+
+function readUpsellToken(token: string): UpsellToken | null {
+  const [encoded, supplied] = token.split('.');
+  if (!encoded || !supplied) return null;
+  const expected = upsellSignature(encoded);
+  const a = Buffer.from(supplied);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8')) as UpsellToken;
+    return parsed?.projectId && parsed?.stageId && parsed?.visitorId && parsed?.journeyId
+      ? parsed
+      : null;
+  } catch {
+    return null;
   }
 }
 
@@ -832,6 +889,128 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get('/r/:testId', abRedirectHandler);
   app.get('/link/:testId', abRedirectHandler);
 
+  app.get<{ Querystring: { key?: string; stage?: string } }>('/track/upsell/u.js', async (req, reply) => {
+    if (!app.db || !req.query.key || !req.query.stage) {
+      return reply.code(404).type('application/javascript').send('/* TMX Upsell indisponível */');
+    }
+    const [stage] = await app.db<Array<{ stage_key: string }>>`
+      SELECT us.stage_key
+      FROM tracking_upsell_stages us
+      JOIN tracking_projects p ON p.id=us.project_id
+      WHERE p.public_key=${req.query.key} AND p.enabled=true
+        AND us.stage_key=${req.query.stage} AND us.enabled=true
+      LIMIT 1
+    `;
+    if (!stage) {
+      return reply.code(404).type('application/javascript').send('/* Etapa de upsell inválida */');
+    }
+    const config = JSON.stringify({ key: req.query.key, stage: stage.stage_key });
+    const script = `(()=>{const C=${config},S=document.currentScript,O=new URL(S.src).origin,E=O+'/v1/track/upsell/events',P=new URL(location.href).searchParams,VK='_tmx_v',JK='_tmx_j',uuid=()=>crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2);let visitor=localStorage.getItem(VK)||uuid(),journey=localStorage.getItem(JK)||uuid(),decision='',manualVendid='';localStorage.setItem(VK,visitor);localStorage.setItem(JK,journey);const token=P.get('tmx_u')||'',source={};for(const[k,v]of P)if(/^(utm_.*|campaign_.*|adset_.*|ad_.*|placement|site_source_name|fbclid|_fb[cp]|src)$/.test(k))source[k]=v;const read=(store,key)=>{try{return store.getItem(key)||''}catch{return''}},cookie=k=>{try{return decodeURIComponent(document.cookie.split('; ').find(x=>x.startsWith(k+'='))?.split('=').slice(1).join('=')||'')}catch{return''}},vendid=()=>{const v=manualVendid||P.get('vendid')||P.get('vendId')||window.vendid||window.vendId||document.documentElement.dataset.vendid||read(localStorage,'vendid')||read(sessionStorage,'vendid')||cookie('vendid')||'';return v?String(v).slice(0,1024):''};const send=(name,properties={})=>{const body=JSON.stringify({public_key:C.key,stage_key:C.stage,token,visitor_id:visitor,journey_id:journey,event_name:name,event_url:location.href,source,properties,vendid:vendid()||undefined,client_at:new Date().toISOString()});if(navigator.sendBeacon)navigator.sendBeacon(E,new Blob([body],{type:'application/json'}));else fetch(E,{method:'POST',headers:{'content-type':'application/json'},body,keepalive:true}).catch(()=>{})};const started=Date.now();send('UpsellPageView',{title:document.title,load_ms:Math.round(performance.now())});setTimeout(()=>{if(document.visibilityState==='visible')send('UpsellOfferView',{visible_ms:Date.now()-started})},800);document.addEventListener('click',e=>{const el=e.target.closest?.('[data-tmx-upsell-accept],[data-tmx-upsell-decline],a,button');if(!el)return;const label=(el.textContent||el.getAttribute('aria-label')||'').trim().slice(0,160),href=el.href||null,isAccept=el.hasAttribute('data-tmx-upsell-accept')||/sim|quero|adicionar|aceitar|comprar|continuar/i.test(label),isDecline=el.hasAttribute('data-tmx-upsell-decline')||/não|nao|recusar|dispensar|sem.*obrigad/i.test(label);if(isAccept){decision='accept';send('UpsellAcceptClick',{label,href})}else if(isDecline){decision='decline';send('UpsellDeclineClick',{label,href})}},true);const seen=new Set;addEventListener('scroll',()=>{const h=document.documentElement.scrollHeight-innerHeight,p=h>0?Math.round(scrollY/h*100):100;for(const mark of[25,50,75,90])if(p>=mark&&!seen.has(mark)){seen.add(mark);send('UpsellScroll',{percent:mark})}},{passive:true});addEventListener('error',e=>send('UpsellPageError',{message:String(e.message||'resource_error').slice(0,300),source:e.filename||null,line:e.lineno||null}),true);addEventListener('unhandledrejection',e=>send('UpsellPageError',{message:String(e.reason||'unhandled_rejection').slice(0,300)}));addEventListener('pagehide',()=>{if(!decision)send('UpsellExit',{time_ms:Date.now()-started,scroll_percent:[...seen].pop()||0})});window.tmx=window.tmx||{};window.tmx.upsell={track:send,identify:v=>{manualVendid=String(v||'').slice(0,1024);send('UpsellOfferView',{manual_identify:true,vendid_present:Boolean(manualVendid)})}}})();`;
+    reply
+      .header('cache-control', 'public, max-age=60')
+      .type('application/javascript; charset=utf-8')
+      .send(script);
+  });
+
+  app.get<{ Params: { slug: string }; Querystring: Record<string, string | undefined> }>(
+    '/u/:slug',
+    async (req, reply) => {
+      if (!app.db) return reply.code(503).send({ error: 'tracking_unavailable' });
+      const [stage] = await app.db<
+        Array<{ id: string; project_id: string; destination_url: string; enabled: boolean }>
+      >`
+        SELECT id, project_id, destination_url, enabled
+        FROM tracking_upsell_stages WHERE slug=${req.params.slug} LIMIT 1
+      `;
+      if (!stage?.enabled) return reply.code(404).send({ error: 'upsell_stage_inactive' });
+      const linked = req.query.src ? readTrackingToken(req.query.src, env.WEBHOOK_SECRET) : null;
+      const validLinked = linked?.projectId === stage.project_id ? linked : null;
+      const visitorId =
+        validLinked?.visitorId ?? cookieValue(req.headers.cookie, '_tmx_upsell_v') ?? ulid();
+      const journeyId = validLinked?.journeyId ?? ulid();
+      const source = extractAttributionQuery(req.query);
+      const redirectId = ulid();
+      await app.db.begin(async (sql) => {
+        await sql`
+          INSERT INTO tracking_upsell_redirects
+            (id,stage_id,project_id,visitor_id,journey_id,source,client_ip,user_agent)
+          VALUES(${redirectId},${stage.id},${stage.project_id},${visitorId},${journeyId},
+            ${sql.json(source)},${req.ip},${req.headers['user-agent'] ?? null})
+        `;
+        await sql`
+          INSERT INTO tracking_events
+            (id,project_id,visitor_id,journey_id,event_name,event_category,event_url,
+             source,properties,client_ip,user_agent,received_at)
+          VALUES(${redirectId},${stage.project_id},${visitorId},${journeyId},'UpsellRedirect',
+            'commerce',${`${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/u/${req.params.slug}`},
+            ${sql.json(source)},${sql.json({ upsell_stage_id: stage.id })},${req.ip},
+            ${req.headers['user-agent'] ?? null},now())
+        `;
+      });
+      const destination = new URL(stage.destination_url);
+      for (const [key, value] of Object.entries(req.query)) {
+        if (!value || key === 'src' || key === 'tmx_u') continue;
+        if (!destination.searchParams.has(key)) destination.searchParams.set(key, value);
+      }
+      destination.searchParams.set(
+        'tmx_u',
+        createUpsellToken({ projectId: stage.project_id, stageId: stage.id, visitorId, journeyId }),
+      );
+      destination.searchParams.set(
+        'src',
+        createTrackingToken({ projectId: stage.project_id, visitorId, journeyId }, env.WEBHOOK_SECRET),
+      );
+      reply.header(
+        'set-cookie',
+        `_tmx_upsell_v=${visitorId}; Path=/; Max-Age=2592000; HttpOnly; Secure; SameSite=Lax`,
+      );
+      return reply.redirect(destination.toString(), 302);
+    },
+  );
+
+  app.post('/track/upsell/events', { bodyLimit: 32 * 1024 }, async (req, reply) => {
+    if (!app.db) return reply.code(503).send({ accepted: false });
+    const parsed = UpsellEventSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ accepted: false });
+    const input = parsed.data;
+    const token = input.token ? readUpsellToken(input.token) : null;
+    const [stage] = await app.db<Array<{ id: string; project_id: string }>>`
+      SELECT us.id,us.project_id FROM tracking_upsell_stages us
+      JOIN tracking_projects p ON p.id=us.project_id
+      WHERE p.public_key=${input.public_key} AND us.stage_key=${input.stage_key}
+        AND us.enabled=true LIMIT 1
+    `;
+    if (!stage || (token && (token.stageId !== stage.id || token.projectId !== stage.project_id))) {
+      return reply.code(404).send({ accepted: false });
+    }
+    const visitorId = token?.visitorId ?? input.visitor_id;
+    const journeyId = token?.journeyId ?? input.journey_id;
+    const receivedAt = input.client_at ? new Date(input.client_at) : new Date();
+    await app.db.begin(async (sql) => {
+      await sql`
+        INSERT INTO tracking_events
+          (id,project_id,visitor_id,journey_id,event_name,event_category,event_url,
+           source,properties,client_ip,user_agent,received_at)
+        VALUES(${ulid()},${stage.project_id},${visitorId},${journeyId},${input.event_name},
+          'upsell',${input.event_url},${sql.json(input.source)},
+          ${sql.json({ ...input.properties, upsell_stage_id: stage.id, upsell_stage_key: input.stage_key })},
+          ${req.ip},${req.headers['user-agent'] ?? null},${receivedAt})
+      `;
+      if (input.vendid && token && env.TRACKING_ENCRYPTION_KEY) {
+        const hash = createHash('sha256').update(input.vendid).digest('hex');
+        await sql`
+          INSERT INTO tracking_upsell_identities
+            (id,project_id,visitor_id,vendid_hash,vendid_encrypted)
+          VALUES(${ulid()},${stage.project_id},${visitorId},${hash},
+            ${encryptSecret(input.vendid, env.TRACKING_ENCRYPTION_KEY)})
+          ON CONFLICT(project_id,vendid_hash) DO UPDATE SET
+            visitor_id=EXCLUDED.visitor_id,last_seen_at=now()
+        `;
+      }
+    });
+    return reply.code(202).send({ accepted: true });
+  });
+
   app.post('/track/events', { bodyLimit: 64 * 1024 }, async (req, reply) => {
     if (!app.db) return reply.code(503).send({ accepted: false });
     const parsed = EventSchema.safeParse(req.body);
@@ -1018,6 +1197,17 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
               `
           : [];
         attributedVisitorId ??= parentFront?.visitor_id ?? null;
+        if (event.vendid && attributedVisitorId && env.TRACKING_ENCRYPTION_KEY) {
+          const vendidHash = createHash('sha256').update(event.vendid).digest('hex');
+          await sql`
+            INSERT INTO tracking_upsell_identities
+              (id,project_id,visitor_id,vendid_hash,vendid_encrypted)
+            VALUES(${ulid()},${connection.project_id},${attributedVisitorId},${vendidHash},
+              ${encryptSecret(event.vendid, env.TRACKING_ENCRYPTION_KEY)})
+            ON CONFLICT(project_id,vendid_hash) DO UPDATE SET
+              visitor_id=EXCLUDED.visitor_id,last_seen_at=now()
+          `;
+        }
         const [visitorSource] = attributedVisitorId
           ? await sql<
               Array<{ first_source: Record<string, string>; last_source: Record<string, string> }>

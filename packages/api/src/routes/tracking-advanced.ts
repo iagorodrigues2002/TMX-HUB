@@ -77,6 +77,16 @@ const ProductKindSchema = z.object({
   kind: z.enum(['front', 'upsell', 'upsell_2', 'upsell_3']),
   label: z.string().trim().max(120).nullable().optional(),
 });
+const UpsellStageSchema = z.object({
+  stage_key: z.enum(['upsell_1', 'upsell_2', 'upsell_3']),
+  name: z.string().trim().min(2).max(120),
+  destination_url: z.string().url().max(4096),
+});
+const UpsellStageUpdateSchema = z.object({
+  name: z.string().trim().min(2).max(120),
+  destination_url: z.string().url().max(4096),
+  enabled: z.boolean().optional(),
+});
 
 function parsed<T>(schema: z.ZodSchema<T>, value: unknown): T {
   const result = schema.safeParse(value);
@@ -90,6 +100,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     `${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/link/${testId}`;
   const entryUrl = (slug: string) =>
     `${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/c/${slug}`;
+  const upsellUrl = (slug: string) =>
+    `${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/u/${slug}`;
   async function project(offerId: string, userId: string, admin: boolean, manage = false) {
     if (manage) await app.offerStore.assertManager(offerId, userId, admin);
     else await app.offerStore.assertAccess(offerId, userId, admin);
@@ -161,6 +173,107 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       vturb: vturb[0] ?? { enabled: false, endpoint_url: null },
     };
   });
+
+  app.get<{ Params: { id: string }; Querystring: { from?: string; to?: string } }>(
+    '/offers/:id/tracking/upsells',
+    async (req, reply) => {
+      const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin');
+      if (!app.db) return reply.code(503).send(databaseUnavailable);
+      if (!p) return { configured: false, stages: [] };
+      const from = /^\d{4}-\d{2}-\d{2}$/.test(req.query.from ?? '')
+        ? req.query.from!
+        : '2000-01-01';
+      const to = /^\d{4}-\d{2}-\d{2}$/.test(req.query.to ?? '') ? req.query.to! : '2999-12-31';
+      const stages = await app.db`
+        SELECT s.id,s.stage_key,s.name,s.slug,s.destination_url,s.enabled,s.created_at,s.updated_at,
+          (SELECT count(DISTINCT r.visitor_id)::int FROM tracking_upsell_redirects r
+           WHERE r.stage_id=s.id AND r.redirected_at >= ${from}::date
+             AND r.redirected_at < (${to}::date + interval '1 day')) AS redirects,
+          (SELECT count(DISTINCT e.visitor_id)::int FROM tracking_events e
+           WHERE e.project_id=s.project_id AND e.event_name='UpsellPageView'
+             AND e.properties->>'upsell_stage_id'=s.id AND e.received_at >= ${from}::date
+             AND e.received_at < (${to}::date + interval '1 day')) AS page_views,
+          (SELECT count(DISTINCT e.visitor_id)::int FROM tracking_events e
+           WHERE e.project_id=s.project_id AND e.event_name='UpsellOfferView'
+             AND e.properties->>'upsell_stage_id'=s.id AND e.received_at >= ${from}::date
+             AND e.received_at < (${to}::date + interval '1 day')) AS offer_views,
+          (SELECT count(*)::int FROM tracking_events e
+           WHERE e.project_id=s.project_id AND e.event_name='UpsellAcceptClick'
+             AND e.properties->>'upsell_stage_id'=s.id AND e.received_at >= ${from}::date
+             AND e.received_at < (${to}::date + interval '1 day')) AS accepts,
+          (SELECT count(*)::int FROM tracking_events e
+           WHERE e.project_id=s.project_id AND e.event_name='UpsellDeclineClick'
+             AND e.properties->>'upsell_stage_id'=s.id AND e.received_at >= ${from}::date
+             AND e.received_at < (${to}::date + interval '1 day')) AS declines,
+          (SELECT count(*)::int FROM tracking_events e
+           WHERE e.project_id=s.project_id AND e.event_name='UpsellExit'
+             AND e.properties->>'upsell_stage_id'=s.id AND e.received_at >= ${from}::date
+             AND e.received_at < (${to}::date + interval '1 day')) AS exits,
+          (SELECT count(*)::int FROM tracking_events e
+           WHERE e.project_id=s.project_id AND e.event_name='UpsellPageError'
+             AND e.properties->>'upsell_stage_id'=s.id AND e.received_at >= ${from}::date
+             AND e.received_at < (${to}::date + interval '1 day')) AS errors,
+          (SELECT count(*)::int FROM tracking_orders o
+           WHERE o.project_id=s.project_id AND o.status='paid'
+             AND o.order_kind=s.stage_key AND o.occurred_at >= ${from}::date
+             AND o.occurred_at < (${to}::date + interval '1 day')
+             AND EXISTS (
+               SELECT 1 FROM tracking_upsell_redirects r
+               WHERE r.stage_id=s.id AND r.visitor_id=o.visitor_id
+                 AND r.redirected_at <= o.occurred_at
+             )) AS purchases,
+          (SELECT count(*)::int FROM tracking_upsell_identities i
+           WHERE i.project_id=s.project_id) AS identified_buyers
+        FROM tracking_upsell_stages s
+        WHERE s.project_id=${p.id}
+        ORDER BY CASE s.stage_key WHEN 'upsell_1' THEN 1 WHEN 'upsell_2' THEN 2 ELSE 3 END
+      `;
+      return {
+        configured: true,
+        install_code: `<script async src="${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/track/upsell/u.js?key=${p.public_key}&stage=ETAPA"></script>`,
+        stages: stages.map((stage) => ({
+          ...stage,
+          secure_url: upsellUrl(String(stage.slug)),
+          install_code: `<script async src="${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/track/upsell/u.js?key=${p.public_key}&stage=${stage.stage_key}"></script>`,
+        })),
+      };
+    },
+  );
+
+  app.post<{ Params: { id: string } }>('/offers/:id/tracking/upsells', async (req, reply) => {
+    const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin', true);
+    if (!app.db) return reply.code(503).send(databaseUnavailable);
+    if (!p) return reply.code(409).send({ error: 'tracking_not_configured' });
+    const body = parsed(UpsellStageSchema, req.body);
+    const slug = ulid().toLowerCase();
+    const [stage] = await app.db<Array<{ slug: string } & Record<string, unknown>>>`
+      INSERT INTO tracking_upsell_stages(id,project_id,stage_key,name,slug,destination_url)
+      VALUES(${ulid()},${p.id},${body.stage_key},${body.name},${slug},${body.destination_url})
+      ON CONFLICT(project_id,stage_key) DO UPDATE SET
+        name=EXCLUDED.name,destination_url=EXCLUDED.destination_url,enabled=true,updated_at=now()
+      RETURNING id,stage_key,name,slug,destination_url,enabled,created_at,updated_at
+    `;
+    if (!stage) return reply.code(500).send({ error: 'upsell_stage_not_created' });
+    return reply.code(201).send({ ...stage, secure_url: upsellUrl(String(stage.slug)) });
+  });
+
+  app.patch<{ Params: { id: string; stageId: string } }>(
+    '/offers/:id/tracking/upsells/:stageId',
+    async (req, reply) => {
+      const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin', true);
+      if (!app.db) return reply.code(503).send(databaseUnavailable);
+      if (!p) return reply.code(404).send({ error: 'tracking_not_configured' });
+      const body = parsed(UpsellStageUpdateSchema, req.body);
+      const [stage] = await app.db`
+        UPDATE tracking_upsell_stages SET name=${body.name},destination_url=${body.destination_url},
+          enabled=COALESCE(${body.enabled ?? null},enabled),updated_at=now()
+        WHERE id=${req.params.stageId} AND project_id=${p.id}
+        RETURNING id,stage_key,name,slug,destination_url,enabled,created_at,updated_at
+      `;
+      if (!stage) return reply.code(404).send({ error: 'upsell_stage_not_found' });
+      return { ...stage, secure_url: upsellUrl(String(stage.slug)) };
+    },
+  );
 
   app.post<{ Params: { id: string } }>('/offers/:id/tracking/entry-links', async (req, reply) => {
     const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin', true);
