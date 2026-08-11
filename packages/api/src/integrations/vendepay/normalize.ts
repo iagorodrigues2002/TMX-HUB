@@ -392,7 +392,13 @@ export function normalizeVendepay(raw: unknown, receivedAt = new Date()): Vendep
     'transaction.vendid',
     'customer.vendid',
     'buyer.vendid',
-  ]) ?? textByNormalizedKey(payload, new Set(['vendid']));
+    'vendaId',
+    'venda_id',
+    'data.vendaId',
+    'data.venda_id',
+    'order.vendaId',
+    'transaction.vendaId',
+  ]) ?? textByNormalizedKey(payload, new Set(['vendid', 'vendaid']));
   const paymentMethod = paymentMethodCode(
     textAt(payload, [
       'payment_method',

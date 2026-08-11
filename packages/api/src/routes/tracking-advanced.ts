@@ -307,7 +307,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
               last_seen_at: identity.last_seen_at,
               links: stages.map((stage) => {
                 const destination = new URL(stage.destination_url);
-                destination.searchParams.set('vendid', vendid);
+                destination.searchParams.delete('vendid');
+                destination.searchParams.delete('vendId');
+                destination.searchParams.set('vendaId', vendid);
                 return { stage_id: stage.id, stage_key: stage.stage_key, name: stage.name, url: destination.toString() };
               }),
             }];

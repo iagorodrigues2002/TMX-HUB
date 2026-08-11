@@ -195,6 +195,17 @@ describe('normalizeVendepay', () => {
     expect(result.event.vendid).toBe('buyer-deep-654');
   });
 
+  it('captura vendaId usado nos links de upsell da Vendepay', () => {
+    const result = normalizeVendepay({
+      id: 'purchase-venda-id-1',
+      event: 'compra.aprovada',
+      checkout: { session: { vendaId: 'bf81b51c-4112-4713-83c6-21c359d5f5f5' } },
+    });
+    expect(result.kind).toBe('processable');
+    if (result.kind !== 'processable') return;
+    expect(result.event.vendid).toBe('bf81b51c-4112-4713-83c6-21c359d5f5f5');
+  });
+
   it('mapeia moeda 5 da Vendepay para sol peruano', () => {
     const result = normalizeVendepay({
       id: 'slm-pen-1',
