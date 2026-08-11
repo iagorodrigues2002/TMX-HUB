@@ -338,6 +338,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         ORDER BY r.received_at DESC
         LIMIT 1000
       `;
+      const paidFronts = await app.db<Array<{ external_id: string }>>`
+        SELECT external_id FROM tracking_orders
+        WHERE project_id=${p.id} AND order_kind='front' AND paid_at IS NOT NULL
+      `;
+      const validVendid = new Set(paidFronts.map((order) => order.external_id));
       let found = 0;
       let stored = 0;
       for (const receipt of receipts) {
@@ -348,13 +353,15 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           visitor_id: string | null;
           order_kind: string;
           buyer: Record<string, string>;
+          paid_at: Date | null;
         }>>`
-          SELECT visitor_id,order_kind,buyer FROM tracking_orders
+          SELECT visitor_id,order_kind,buyer,paid_at FROM tracking_orders
           WHERE project_id=${p.id} AND external_id=${event.transactionId}
           LIMIT 1
         `;
-        if (!order?.visitor_id) continue;
+        if (!order?.visitor_id || !order.paid_at || event.status !== 'paid') continue;
         let vendid = event.vendid;
+        if (vendid) validVendid.add(vendid);
         if (!vendid && order.order_kind === 'front') vendid = event.transactionId;
         if (!vendid && ['upsell','upsell_2','upsell_3'].includes(order.order_kind)) {
           const [front] = await app.db<Array<{ external_id: string }>>`
@@ -386,7 +393,28 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         `;
         stored += 1;
       }
-      return { inspected: receipts.length, vendid_found: found, identities_stored: stored };
+      const identities = await app.db<Array<{ id: string; vendid_encrypted: string }>>`
+        SELECT id,vendid_encrypted FROM tracking_upsell_identities WHERE project_id=${p.id}
+      `;
+      let removed = 0;
+      for (const identity of identities) {
+        try {
+          const vendid = decryptSecret(identity.vendid_encrypted, env.TRACKING_ENCRYPTION_KEY);
+          if (validVendid.has(vendid)) continue;
+        } catch {
+          // Invalid legacy ciphertext is not a usable approved-sale identity.
+        }
+        await app.db`
+          DELETE FROM tracking_upsell_identities WHERE id=${identity.id} AND project_id=${p.id}
+        `;
+        removed += 1;
+      }
+      return {
+        inspected: receipts.length,
+        vendid_found: found,
+        identities_stored: stored,
+        non_paid_removed: removed,
+      };
     },
   );
 

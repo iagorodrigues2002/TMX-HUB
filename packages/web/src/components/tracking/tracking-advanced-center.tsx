@@ -328,7 +328,7 @@ export function TrackingAdvancedCenter({
     onSuccess: (result) => {
       void qc.invalidateQueries({ queryKey: ['tracking-upsell-identities', offerId] });
       toast.success(
-        `${result.vendid_found} vendid encontrados · ${result.identities_stored} identidades recuperadas.`,
+        `${result.vendid_found} vendaId aprovados encontrados · ${result.identities_stored} recuperados · ${result.non_paid_removed} não aprovados removidos.`,
       );
     },
     onError: (error) => toast.error((error as Error).message),

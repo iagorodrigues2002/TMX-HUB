@@ -1213,7 +1213,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         const effectiveVendid =
           event.vendid ??
           (orderKind === 'front' ? event.transactionId : parentFront?.external_id);
-        if (effectiveVendid && attributedVisitorId && env.TRACKING_ENCRYPTION_KEY) {
+        if (
+          event.status === 'paid' &&
+          effectiveVendid &&
+          attributedVisitorId &&
+          env.TRACKING_ENCRYPTION_KEY
+        ) {
           const vendidHash = createHash('sha256').update(effectiveVendid).digest('hex');
           await sql`
             INSERT INTO tracking_upsell_identities

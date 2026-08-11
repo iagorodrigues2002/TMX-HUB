@@ -2160,6 +2160,7 @@ export const apiClient = {
     inspected: number;
     vendid_found: number;
     identities_stored: number;
+    non_paid_removed: number;
   }> {
     return request(`/v1/offers/${id}/tracking/upsell-identities/reconcile`, { method: 'POST' });
   },
