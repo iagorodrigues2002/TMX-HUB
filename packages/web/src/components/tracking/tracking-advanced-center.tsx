@@ -272,6 +272,13 @@ export function TrackingAdvancedCenter({
       apiClient.getTrackingUpsells(offerId, { from: trackingFrom, to: trackingTo }),
     retry: false,
   });
+  const upsellIdentities = useQuery({
+    queryKey: ['tracking-upsell-identities', offerId, trackingFrom, trackingTo],
+    queryFn: () =>
+      apiClient.getTrackingUpsellIdentities(offerId, { from: trackingFrom, to: trackingTo }),
+    enabled: section === 'upsells',
+    retry: false,
+  });
   const configuredUpsellStages = new Set(
     (upsellIntelligence.data?.stages ?? []).map((stage) => stage.stage_key),
   );
@@ -1385,6 +1392,57 @@ export function TrackingAdvancedCenter({
                   ele estiver exposto na URL, página ou armazenamento do navegador. O Connect Rate é
                   calculado pela página carregada dividida pelos compradores da etapa anterior.
                 </p>
+              </div>
+              <div className="mt-5 overflow-hidden rounded-xl border border-white/[0.08]">
+                <div className="border-b border-white/[0.08] bg-white/[0.025] px-4 py-3">
+                  <p className="font-semibold text-white/80">Vendid e jornadas</p>
+                  <p className="mt-1 text-xs text-white/40">
+                    Identificadores recebidos no período. Cada botão abre diretamente a etapa escolhida.
+                  </p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[760px] text-left text-xs">
+                    <thead className="text-white/40">
+                      <tr className="border-b border-white/[0.06]">
+                        <th className="px-4 py-3 font-medium">Vendid</th>
+                        <th className="px-4 py-3 font-medium">Última identificação</th>
+                        <th className="px-4 py-3 font-medium">Abrir upsell</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(upsellIdentities.data?.items ?? []).map((identity) => (
+                        <tr key={identity.id} className="border-b border-white/[0.05] last:border-0">
+                          <td className="px-4 py-3">
+                            <code className="select-all text-cyan-100">{identity.vendid}</code>
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 text-white/55">
+                            {new Date(identity.last_seen_at).toLocaleString('pt-BR', {
+                              timeZone: 'America/Sao_Paulo',
+                            })}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex flex-wrap gap-2">
+                              {identity.links.map((link) => (
+                                <a
+                                  key={link.stage_id}
+                                  href={link.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="rounded-md border border-cyan-300/20 bg-cyan-300/[0.06] px-2.5 py-1.5 text-cyan-100 transition hover:bg-cyan-300/[0.12]"
+                                >
+                                  {link.name}
+                                </a>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {!upsellIdentities.isLoading && !upsellIdentities.data?.items.length && (
+                  <p className="px-4 py-5 text-sm text-white/40">Nenhum vendid identificado neste período.</p>
+                )}
               </div>
             </Module>
           )}

@@ -2133,6 +2133,29 @@ export const apiClient = {
     await request(`/v1/offers/${id}/tracking/upsells`, { method: 'POST', body });
   },
 
+  async getTrackingUpsellIdentities(
+    id: string,
+    period: { from: string; to: string },
+  ): Promise<{
+    items: Array<{
+      id: string;
+      visitor_id: string;
+      vendid: string;
+      first_seen_at: string;
+      last_seen_at: string;
+      links: Array<{
+        stage_id: string;
+        stage_key: 'upsell_1' | 'upsell_2' | 'upsell_3';
+        name: string;
+        url: string;
+      }>;
+    }>;
+  }> {
+    return request(
+      `/v1/offers/${id}/tracking/upsell-identities?from=${period.from}&to=${period.to}`,
+    );
+  },
+
   async updateTrackingUpsell(
     id: string,
     stageId: string,

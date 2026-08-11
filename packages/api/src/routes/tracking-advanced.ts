@@ -9,6 +9,7 @@ import {
   provisionRailwayDomain,
 } from '../integrations/railway/domains.js';
 import { zodToProblem } from '../lib/problem.js';
+import { decryptSecret } from '../lib/secret-box.js';
 import { canonicalTrackingHostname } from '../services/tracking-domain.js';
 import { saoPauloParts } from '../services/intraday-store.js';
 import { saoPauloDayRange } from '../services/utmify-sync.js';
@@ -252,6 +253,66 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           secure_url: upsellUrl(String(stage.slug)),
           install_code: `<script async src="${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/track/upsell/u.js?key=${p.public_key}&stage=${stage.stage_key}"></script>`,
         })),
+      };
+    },
+  );
+
+  app.get<{ Params: { id: string }; Querystring: { from?: string; to?: string } }>(
+    '/offers/:id/tracking/upsell-identities',
+    async (req, reply) => {
+      const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin');
+      if (!app.db) return reply.code(503).send(databaseUnavailable);
+      if (!p) return { items: [] };
+      if (!env.TRACKING_ENCRYPTION_KEY) {
+        return reply.code(503).send({ error: 'tracking_encryption_unavailable' });
+      }
+      const today = saoPauloParts(new Date()).date;
+      const fromDate = /^\d{4}-\d{2}-\d{2}$/.test(req.query.from ?? '') ? req.query.from! : today;
+      const toDate = /^\d{4}-\d{2}-\d{2}$/.test(req.query.to ?? '') ? req.query.to! : fromDate;
+      const fromInstant = new Date(saoPauloDayRange(fromDate).from);
+      const toInstant = new Date(saoPauloDayRange(toDate).to);
+      const [identities, stages] = await Promise.all([
+        app.db<Array<{
+          id: string;
+          visitor_id: string;
+          vendid_encrypted: string;
+          first_seen_at: Date;
+          last_seen_at: Date;
+        }>>`
+          SELECT id,visitor_id,vendid_encrypted,first_seen_at,last_seen_at
+          FROM tracking_upsell_identities
+          WHERE project_id=${p.id} AND last_seen_at >= ${fromInstant} AND last_seen_at < ${toInstant}
+          ORDER BY last_seen_at DESC
+          LIMIT 500
+        `,
+        app.db<Array<{ id: string; stage_key: string; name: string; destination_url: string }>>`
+          SELECT id,stage_key,name,destination_url
+          FROM tracking_upsell_stages
+          WHERE project_id=${p.id} AND enabled=true
+          ORDER BY CASE stage_key WHEN 'upsell_1' THEN 1 WHEN 'upsell_2' THEN 2 ELSE 3 END
+        `,
+      ]);
+      reply.header('cache-control', 'no-store');
+      return {
+        items: identities.flatMap((identity) => {
+          try {
+            const vendid = decryptSecret(identity.vendid_encrypted, env.TRACKING_ENCRYPTION_KEY!);
+            return [{
+              id: identity.id,
+              visitor_id: identity.visitor_id,
+              vendid,
+              first_seen_at: identity.first_seen_at,
+              last_seen_at: identity.last_seen_at,
+              links: stages.map((stage) => {
+                const destination = new URL(stage.destination_url);
+                destination.searchParams.set('vendid', vendid);
+                return { stage_id: stage.id, stage_key: stage.stage_key, name: stage.name, url: destination.toString() };
+              }),
+            }];
+          } catch {
+            return [];
+          }
+        }),
       };
     },
   );
