@@ -10,6 +10,8 @@ import {
 } from '../integrations/railway/domains.js';
 import { zodToProblem } from '../lib/problem.js';
 import { canonicalTrackingHostname } from '../services/tracking-domain.js';
+import { saoPauloParts } from '../services/intraday-store.js';
+import { saoPauloDayRange } from '../services/utmify-sync.js';
 
 const databaseUnavailable = {
   error: 'tracking_database_unavailable',
@@ -180,53 +182,61 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin');
       if (!app.db) return reply.code(503).send(databaseUnavailable);
       if (!p) return { configured: false, stages: [] };
-      const from = /^\d{4}-\d{2}-\d{2}$/.test(req.query.from ?? '')
-        ? req.query.from!
-        : '2000-01-01';
-      const to = /^\d{4}-\d{2}-\d{2}$/.test(req.query.to ?? '') ? req.query.to! : '2999-12-31';
+      const today = saoPauloParts(new Date()).date;
+      const fromDate = /^\d{4}-\d{2}-\d{2}$/.test(req.query.from ?? '') ? req.query.from! : today;
+      const toDate = /^\d{4}-\d{2}-\d{2}$/.test(req.query.to ?? '') ? req.query.to! : fromDate;
+      const fromInstant = new Date(saoPauloDayRange(fromDate).from);
+      const toInstant = new Date(saoPauloDayRange(toDate).to);
       const stages = await app.db`
         SELECT s.id,s.stage_key,s.name,s.slug,s.destination_url,s.enabled,s.created_at,s.updated_at,
           (SELECT count(DISTINCT r.visitor_id)::int FROM tracking_upsell_redirects r
-           WHERE r.stage_id=s.id AND r.redirected_at >= ${from}::date
-             AND r.redirected_at < (${to}::date + interval '1 day')) AS redirects,
-          (SELECT count(*)::int FROM tracking_orders previous
-           WHERE previous.project_id=s.project_id AND previous.status='paid'
+           WHERE r.stage_id=s.id AND r.redirected_at >= ${fromInstant}
+             AND r.redirected_at < ${toInstant}) AS redirects,
+          (SELECT count(DISTINCT COALESCE(
+             NULLIF(lower(trim(previous.buyer->>'email')),''),
+             NULLIF(regexp_replace(previous.buyer->>'phone','\D','','g'),''),
+             NULLIF(trim(previous.visitor_id),''),previous.external_id))::int
+           FROM tracking_orders previous
+           WHERE previous.project_id=s.project_id AND previous.paid_at IS NOT NULL
              AND previous.order_kind=CASE s.stage_key
                WHEN 'upsell_1' THEN 'front'
                WHEN 'upsell_2' THEN 'upsell'
                ELSE 'upsell_2'
              END
-             AND previous.occurred_at >= ${from}::date
-             AND previous.occurred_at < (${to}::date + interval '1 day')) AS eligible_buyers,
+             AND previous.paid_at >= ${fromInstant}
+             AND previous.paid_at < ${toInstant}) AS eligible_buyers,
           (SELECT count(DISTINCT e.visitor_id)::int FROM tracking_events e
            WHERE e.project_id=s.project_id AND e.event_name='UpsellPageView'
-             AND e.properties->>'upsell_stage_id'=s.id AND e.received_at >= ${from}::date
-             AND e.received_at < (${to}::date + interval '1 day')) AS page_views,
+             AND e.properties->>'upsell_stage_id'=s.id AND e.received_at >= ${fromInstant}
+             AND e.received_at < ${toInstant}) AS page_views,
           (SELECT count(DISTINCT e.visitor_id)::int FROM tracking_events e
            WHERE e.project_id=s.project_id AND e.event_name='UpsellOfferView'
-             AND e.properties->>'upsell_stage_id'=s.id AND e.received_at >= ${from}::date
-             AND e.received_at < (${to}::date + interval '1 day')) AS offer_views,
+             AND e.properties->>'upsell_stage_id'=s.id AND e.received_at >= ${fromInstant}
+             AND e.received_at < ${toInstant}) AS offer_views,
           (SELECT count(*)::int FROM tracking_events e
            WHERE e.project_id=s.project_id AND e.event_name='UpsellAcceptClick'
-             AND e.properties->>'upsell_stage_id'=s.id AND e.received_at >= ${from}::date
-             AND e.received_at < (${to}::date + interval '1 day')) AS accepts,
+             AND e.properties->>'upsell_stage_id'=s.id AND e.received_at >= ${fromInstant}
+             AND e.received_at < ${toInstant}) AS accepts,
           (SELECT count(*)::int FROM tracking_events e
            WHERE e.project_id=s.project_id AND e.event_name='UpsellDeclineClick'
-             AND e.properties->>'upsell_stage_id'=s.id AND e.received_at >= ${from}::date
-             AND e.received_at < (${to}::date + interval '1 day')) AS declines,
+             AND e.properties->>'upsell_stage_id'=s.id AND e.received_at >= ${fromInstant}
+             AND e.received_at < ${toInstant}) AS declines,
           (SELECT count(*)::int FROM tracking_events e
            WHERE e.project_id=s.project_id AND e.event_name='UpsellExit'
-             AND e.properties->>'upsell_stage_id'=s.id AND e.received_at >= ${from}::date
-             AND e.received_at < (${to}::date + interval '1 day')) AS exits,
+             AND e.properties->>'upsell_stage_id'=s.id AND e.received_at >= ${fromInstant}
+             AND e.received_at < ${toInstant}) AS exits,
           (SELECT count(*)::int FROM tracking_events e
            WHERE e.project_id=s.project_id AND e.event_name='UpsellPageError'
-             AND e.properties->>'upsell_stage_id'=s.id AND e.received_at >= ${from}::date
-             AND e.received_at < (${to}::date + interval '1 day')) AS errors,
-          (SELECT count(*)::int FROM tracking_orders o
-           WHERE o.project_id=s.project_id AND o.status='paid'
+             AND e.properties->>'upsell_stage_id'=s.id AND e.received_at >= ${fromInstant}
+             AND e.received_at < ${toInstant}) AS errors,
+          (SELECT count(DISTINCT COALESCE(
+             NULLIF(lower(trim(o.buyer->>'email')),''),
+             NULLIF(regexp_replace(o.buyer->>'phone','\D','','g'),''),
+             NULLIF(trim(o.visitor_id),''),o.external_id))::int FROM tracking_orders o
+           WHERE o.project_id=s.project_id AND o.paid_at IS NOT NULL
              AND o.order_kind=CASE s.stage_key WHEN 'upsell_1' THEN 'upsell' ELSE s.stage_key END
-             AND o.occurred_at >= ${from}::date
-             AND o.occurred_at < (${to}::date + interval '1 day')
+             AND o.paid_at >= ${fromInstant}
+             AND o.paid_at < ${toInstant}
           ) AS purchases,
           (SELECT count(*)::int FROM tracking_upsell_identities i
            WHERE i.project_id=s.project_id) AS identified_buyers
