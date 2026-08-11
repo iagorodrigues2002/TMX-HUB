@@ -252,11 +252,20 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!p) return reply.code(409).send({ error: 'tracking_not_configured' });
     const body = parsed(UpsellStageSchema, req.body);
     const slug = ulid().toLowerCase();
+    const [existing] = await app.db<Array<{ id: string }>>`
+      SELECT id FROM tracking_upsell_stages
+      WHERE project_id=${p.id} AND stage_key=${body.stage_key}
+      LIMIT 1
+    `;
+    if (existing) {
+      return reply.code(409).send({
+        error: 'upsell_stage_already_exists',
+        detail: 'Essa etapa já está cadastrada. Edite a etapa existente em vez de criar outra.',
+      });
+    }
     const [stage] = await app.db<Array<{ slug: string } & Record<string, unknown>>>`
       INSERT INTO tracking_upsell_stages(id,project_id,stage_key,name,slug,destination_url)
       VALUES(${ulid()},${p.id},${body.stage_key},${body.name},${slug},${body.destination_url})
-      ON CONFLICT(project_id,stage_key) DO UPDATE SET
-        name=EXCLUDED.name,destination_url=EXCLUDED.destination_url,enabled=true,updated_at=now()
       RETURNING id,stage_key,name,slug,destination_url,enabled,created_at,updated_at
     `;
     if (!stage) return reply.code(500).send({ error: 'upsell_stage_not_created' });

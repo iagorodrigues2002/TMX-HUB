@@ -211,6 +211,7 @@ export function TrackingAdvancedCenter({
   );
   const [upsellStageName, setUpsellStageName] = useState('Upsell 1');
   const [upsellDestination, setUpsellDestination] = useState('');
+  const [editingUpsellStageId, setEditingUpsellStageId] = useState('');
   const [vendepayPayload, setVendepayPayload] = useState(vendepaySample);
   const [utmifyToken, setUtmifyToken] = useState('');
   const [utmifyPixelId, setUtmifyPixelId] = useState('');
@@ -270,17 +271,35 @@ export function TrackingAdvancedCenter({
       apiClient.getTrackingUpsells(offerId, { from: trackingFrom, to: trackingTo }),
     retry: false,
   });
+  const configuredUpsellStages = new Set(
+    (upsellIntelligence.data?.stages ?? []).map((stage) => stage.stage_key),
+  );
+  useEffect(() => {
+    if (editingUpsellStageId || !upsellIntelligence.data || !configuredUpsellStages.has(upsellStageKey)) return;
+    const next = (['upsell_1', 'upsell_2', 'upsell_3'] as const).find(
+      (stage) => !configuredUpsellStages.has(stage),
+    );
+    if (!next) return;
+    setUpsellStageKey(next);
+    setUpsellStageName(next === 'upsell_1' ? 'Upsell 1' : next === 'upsell_2' ? 'Upsell 2' : 'Upsell 3');
+  }, [editingUpsellStageId, upsellIntelligence.data, upsellStageKey]);
   const saveUpsellStage = useMutation({
     mutationFn: () =>
-      apiClient.saveTrackingUpsell(offerId, {
-        stage_key: upsellStageKey,
-        name: upsellStageName,
-        destination_url: upsellDestination,
-      }),
+      editingUpsellStageId
+        ? apiClient.updateTrackingUpsell(offerId, editingUpsellStageId, {
+            name: upsellStageName,
+            destination_url: upsellDestination,
+          })
+        : apiClient.saveTrackingUpsell(offerId, {
+            stage_key: upsellStageKey,
+            name: upsellStageName,
+            destination_url: upsellDestination,
+          }),
     onSuccess: () => {
       setUpsellDestination('');
+      setEditingUpsellStageId('');
       void qc.invalidateQueries({ queryKey: ['tracking-upsells', offerId] });
-      toast.success('Etapa de upsell salva. O link seguro e o script já estão disponíveis.');
+      toast.success(editingUpsellStageId ? 'Etapa atualizada.' : 'Nova etapa salva separadamente.');
     },
     onError: (error) => toast.error((error as Error).message),
   });
@@ -1168,6 +1187,7 @@ export function TrackingAdvancedCenter({
                 <div className="mt-3 grid gap-3 md:grid-cols-3">
                   <select
                     aria-label="Etapa do upsell"
+                    disabled={Boolean(editingUpsellStageId)}
                     className="h-10 rounded-md border border-white/[0.1] bg-black/30 px-3 text-sm text-white outline-none focus:border-cyan-300/40"
                     value={upsellStageKey}
                     onChange={(event) => {
@@ -1178,9 +1198,15 @@ export function TrackingAdvancedCenter({
                       );
                     }}
                   >
-                    <option value="upsell_1">Upsell 1</option>
-                    <option value="upsell_2">Upsell 2</option>
-                    <option value="upsell_3">Upsell 3</option>
+                    <option value="upsell_1" disabled={configuredUpsellStages.has('upsell_1')}>
+                      Upsell 1 {configuredUpsellStages.has('upsell_1') ? '— já cadastrado' : ''}
+                    </option>
+                    <option value="upsell_2" disabled={configuredUpsellStages.has('upsell_2')}>
+                      Upsell 2 {configuredUpsellStages.has('upsell_2') ? '— já cadastrado' : ''}
+                    </option>
+                    <option value="upsell_3" disabled={configuredUpsellStages.has('upsell_3')}>
+                      Upsell 3 {configuredUpsellStages.has('upsell_3') ? '— já cadastrado' : ''}
+                    </option>
                   </select>
                   <Input
                     aria-label="Nome da etapa de upsell"
@@ -1201,11 +1227,28 @@ export function TrackingAdvancedCenter({
                     disabled={
                       upsellStageName.trim().length < 2 ||
                       !upsellDestination.startsWith('http') ||
+                      (!editingUpsellStageId && configuredUpsellStages.has(upsellStageKey)) ||
                       saveUpsellStage.isPending
                     }
                     onClick={() => saveUpsellStage.mutate()}
                   >
-                    {saveUpsellStage.isPending ? 'Salvando…' : 'Salvar e gerar script'}
+                    {saveUpsellStage.isPending
+                      ? 'Salvando…'
+                      : editingUpsellStageId
+                        ? 'Salvar alterações desta etapa'
+                        : 'Salvar e gerar script'}
+                  </Button>
+                )}
+                {editingUpsellStageId && (
+                  <Button
+                    className="ml-2 mt-3"
+                    variant="outline"
+                    onClick={() => {
+                      setEditingUpsellStageId('');
+                      setUpsellDestination('');
+                    }}
+                  >
+                    Cancelar edição
                   </Button>
                 )}
               </div>
@@ -1244,6 +1287,21 @@ export function TrackingAdvancedCenter({
                         <Metric label="Saídas sem decisão" value={stage.exits} />
                         <Metric label="Erros da página" value={stage.errors} />
                       </div>
+                      {canManage && (
+                        <Button
+                          className="mt-3 w-full"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setEditingUpsellStageId(stage.id);
+                            setUpsellStageKey(stage.stage_key);
+                            setUpsellStageName(stage.name);
+                            setUpsellDestination(stage.destination_url);
+                          }}
+                        >
+                          Editar nome ou URL desta etapa
+                        </Button>
+                      )}
                       <p className="mt-4 text-[11px] text-white/40">Link TMX opcional — não é necessário trocar na Vendepay</p>
                       <code className="mt-1 block overflow-x-auto whitespace-nowrap rounded bg-black/25 p-2 text-[11px] text-cyan-100">
                         {stage.secure_url}
