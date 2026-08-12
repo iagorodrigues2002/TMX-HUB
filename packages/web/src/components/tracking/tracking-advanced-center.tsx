@@ -232,6 +232,7 @@ export function TrackingAdvancedCenter({
   const [upsellConnectionDestinations, setUpsellConnectionDestinations] = useState<
     Record<string, string>
   >({});
+  const [upsellLegacyConnectionId, setUpsellLegacyConnectionId] = useState('');
   const [editingUpsellStageId, setEditingUpsellStageId] = useState('');
   const [upsellBuyerFilter, setUpsellBuyerFilter] = useState<
     'all' | 'front_only' | 'with_upsell'
@@ -338,6 +339,7 @@ export function TrackingAdvancedCenter({
     onSuccess: () => {
       setUpsellDestination('');
       setUpsellConnectionDestinations({});
+      setUpsellLegacyConnectionId('');
       setEditingUpsellStageId('');
       void qc.invalidateQueries({ queryKey: ['tracking-upsells', offerId] });
       toast.success(editingUpsellStageId ? 'Etapa atualizada.' : 'Nova etapa salva separadamente.');
@@ -351,6 +353,7 @@ export function TrackingAdvancedCenter({
         setEditingUpsellStageId('');
         setUpsellDestination('');
         setUpsellConnectionDestinations({});
+        setUpsellLegacyConnectionId('');
       }
       void qc.invalidateQueries({ queryKey: ['tracking-upsells', offerId] });
       toast.success('Etapa de upsell apagada.');
@@ -1315,6 +1318,44 @@ export function TrackingAdvancedCenter({
                         </label>
                       ))}
                     </div>
+                    {editingUpsellStageId && upsellDestination.startsWith('http') && (
+                      <div className="mt-4 border-t border-white/[0.07] pt-3">
+                        <p className="text-xs font-medium text-amber-100/80">
+                          Classificar o link padrão já existente
+                        </p>
+                        <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                          <select
+                            aria-label="Conta do link de upsell existente"
+                            className="h-10 min-w-0 flex-1 rounded-md border border-white/[0.1] bg-black/30 px-3 text-sm text-white outline-none focus:border-cyan-300/40"
+                            value={upsellLegacyConnectionId}
+                            onChange={(event) => setUpsellLegacyConnectionId(event.target.value)}
+                          >
+                            <option value="">Selecione a conta VendePay</option>
+                            {vendepayConnections.map((connection) => (
+                              <option key={connection.id} value={connection.id}>
+                                {connection.name}
+                              </option>
+                            ))}
+                          </select>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={!upsellLegacyConnectionId}
+                            onClick={() => {
+                              if (!upsellLegacyConnectionId) return;
+                              setUpsellConnectionDestinations((current) => ({
+                                ...current,
+                                [upsellLegacyConnectionId]: upsellDestination,
+                              }));
+                              setUpsellLegacyConnectionId('');
+                              toast.info('Link classificado. Clique em salvar para confirmar.');
+                            }}
+                          >
+                            Classificar link
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
                 {canManage && (
@@ -1343,6 +1384,7 @@ export function TrackingAdvancedCenter({
                       setEditingUpsellStageId('');
                       setUpsellDestination('');
                       setUpsellConnectionDestinations({});
+                      setUpsellLegacyConnectionId('');
                     }}
                   >
                     Cancelar edição
@@ -1396,9 +1438,10 @@ export function TrackingAdvancedCenter({
                               setUpsellStageName(stage.name);
                               setUpsellDestination(stage.destination_url);
                               setUpsellConnectionDestinations(stage.connection_destinations ?? {});
+                              setUpsellLegacyConnectionId('');
                             }}
                           >
-                            Editar nome ou URL
+                            Editar e classificar links
                           </Button>
                           <Button
                             size="sm"
@@ -1419,20 +1462,33 @@ export function TrackingAdvancedCenter({
                           </Button>
                         </div>
                       )}
-                      {Object.keys(stage.connection_destinations ?? {}).length > 0 && (
-                        <div className="mt-3 flex flex-wrap gap-1.5">
-                          {vendepayConnections
-                            .filter((connection) => stage.connection_destinations?.[connection.id])
-                            .map((connection) => (
-                              <span
-                                key={connection.id}
-                                className="rounded-full border border-emerald-300/20 bg-emerald-300/[0.06] px-2 py-1 text-[10px] text-emerald-100/75"
-                              >
-                                {connection.name} configurada
+                      <div className="mt-3 space-y-1.5 rounded-lg border border-white/[0.07] bg-black/20 p-2.5">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-white/35">
+                          Destinos configurados
+                        </p>
+                        {vendepayConnections
+                          .filter((connection) => stage.connection_destinations?.[connection.id])
+                          .map((connection) => (
+                            <div key={connection.id} className="flex min-w-0 items-center gap-2 text-[11px]">
+                              <span className="shrink-0 rounded-full border border-emerald-300/20 bg-emerald-300/[0.06] px-2 py-0.5 text-emerald-100/75">
+                                {connection.name}
                               </span>
-                            ))}
-                        </div>
-                      )}
+                              <span className="truncate text-cyan-100/55" title={stage.connection_destinations[connection.id]}>
+                                {stage.connection_destinations[connection.id]}
+                              </span>
+                            </div>
+                          ))}
+                        {!Object.values(stage.connection_destinations ?? {}).includes(stage.destination_url) && (
+                          <div className="flex min-w-0 items-center gap-2 text-[11px]">
+                            <span className="shrink-0 rounded-full border border-amber-300/20 bg-amber-300/[0.06] px-2 py-0.5 text-amber-100/75">
+                              Não classificado
+                            </span>
+                            <span className="truncate text-white/45" title={stage.destination_url}>
+                              {stage.destination_url}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                       <p className="mt-4 text-[11px] text-white/40">Link TMX opcional — não é necessário trocar na Vendepay</p>
                       <code className="mt-1 block overflow-x-auto whitespace-nowrap rounded bg-black/25 p-2 text-[11px] text-cyan-100">
                         {stage.secure_url}
