@@ -81,7 +81,9 @@ function ValidatedUpsellLink({ link }: { link: { stage_id: string; name: string;
   const validation = useQuery({
     queryKey: ['upsell-compatibility', link.stage_id, link.url],
     queryFn: () => apiClient.checkTrackingUpsellCompatibility(link.url),
-    staleTime: 10 * 60_000,
+    staleTime: 30_000,
+    refetchOnMount: 'always',
+    refetchInterval: 60_000,
     retry: 1,
   });
   if (validation.isLoading) {
@@ -342,6 +344,8 @@ export function TrackingAdvancedCenter({
       setUpsellLegacyConnectionId('');
       setEditingUpsellStageId('');
       void qc.invalidateQueries({ queryKey: ['tracking-upsells', offerId] });
+      void qc.invalidateQueries({ queryKey: ['tracking-upsell-identities', offerId] });
+      void qc.invalidateQueries({ queryKey: ['upsell-compatibility'] });
       toast.success(editingUpsellStageId ? 'Etapa atualizada.' : 'Nova etapa salva separadamente.');
     },
     onError: (error) => toast.error((error as Error).message),
