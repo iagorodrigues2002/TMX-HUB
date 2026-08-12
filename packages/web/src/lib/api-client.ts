@@ -2141,6 +2141,7 @@ export const apiClient = {
       id: string;
       visitor_id: string;
       vendid: string;
+      approved_at: string;
       first_seen_at: string;
       last_seen_at: string;
       links: Array<{

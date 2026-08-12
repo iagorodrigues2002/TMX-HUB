@@ -283,9 +283,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         }>>`
           SELECT id,visitor_id,vendid_encrypted,first_seen_at,last_seen_at
           FROM tracking_upsell_identities
-          WHERE project_id=${p.id} AND last_seen_at >= ${fromInstant} AND last_seen_at < ${toInstant}
+          WHERE project_id=${p.id}
           ORDER BY last_seen_at DESC
-          LIMIT 500
+          LIMIT 2000
         `,
         app.db<Array<{ id: string; stage_key: string; name: string; destination_url: string }>>`
           SELECT id,stage_key,name,destination_url
@@ -293,22 +293,27 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           WHERE project_id=${p.id} AND enabled=true
           ORDER BY CASE stage_key WHEN 'upsell_1' THEN 1 WHEN 'upsell_2' THEN 2 ELSE 3 END
         `,
-        app.db<Array<{ external_id: string }>>`
-          SELECT external_id FROM tracking_orders
+        app.db<Array<{ external_id: string; paid_at: Date }>>`
+          SELECT external_id,paid_at FROM tracking_orders
           WHERE project_id=${p.id} AND order_kind='front' AND paid_at IS NOT NULL
+            AND paid_at >= ${fromInstant} AND paid_at < ${toInstant}
         `,
       ]);
-      const approvedFrontIds = new Set(approvedFronts.map((order) => order.external_id));
+      const approvedFrontById = new Map(
+        approvedFronts.map((order) => [order.external_id, order.paid_at]),
+      );
       reply.header('cache-control', 'no-store');
       return {
         items: identities.flatMap((identity) => {
           try {
             const vendid = decryptSecret(identity.vendid_encrypted, env.TRACKING_ENCRYPTION_KEY!);
-            if (!approvedFrontIds.has(vendid)) return [];
+            const approvedAt = approvedFrontById.get(vendid);
+            if (!approvedAt) return [];
             return [{
               id: identity.id,
               visitor_id: identity.visitor_id,
               vendid,
+              approved_at: approvedAt,
               first_seen_at: identity.first_seen_at,
               last_seen_at: identity.last_seen_at,
               links: stages.map((stage) => {

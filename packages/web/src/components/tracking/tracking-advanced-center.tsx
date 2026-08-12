@@ -1419,7 +1419,7 @@ export function TrackingAdvancedCenter({
                     )}
                   </div>
                   <p className="mt-1 text-xs text-white/40">
-                    Identificadores recebidos no período. Cada botão abre diretamente a etapa escolhida.
+                    Somente vendas front aprovadas no período. Cada botão abre diretamente a etapa escolhida.
                   </p>
                 </div>
                 <div className="overflow-x-auto">
@@ -1427,7 +1427,7 @@ export function TrackingAdvancedCenter({
                     <thead className="text-white/40">
                       <tr className="border-b border-white/[0.06]">
                         <th className="px-4 py-3 font-medium">vendaId</th>
-                        <th className="px-4 py-3 font-medium">Última identificação</th>
+                        <th className="px-4 py-3 font-medium">Compra aprovada</th>
                         <th className="px-4 py-3 font-medium">Abrir upsell</th>
                       </tr>
                     </thead>
@@ -1438,7 +1438,7 @@ export function TrackingAdvancedCenter({
                             <code className="select-all text-cyan-100">{identity.vendid}</code>
                           </td>
                           <td className="whitespace-nowrap px-4 py-3 text-white/55">
-                            {new Date(identity.last_seen_at).toLocaleString('pt-BR', {
+                            {new Date(identity.approved_at).toLocaleString('pt-BR', {
                               timeZone: 'America/Sao_Paulo',
                             })}
                           </td>
