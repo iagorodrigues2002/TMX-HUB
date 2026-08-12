@@ -1004,15 +1004,22 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           ${sql.json({ ...input.properties, upsell_stage_id: stage.id, upsell_stage_key: input.stage_key })},
           ${req.ip},${req.headers['user-agent'] ?? null},${receivedAt})
       `;
-      // A signed TMX redirect is strongest, but it is intentionally optional.
-      // When Vendepay opens the configured upsell URL directly, the installed
-      // script may persist vendid as long as the event came from that origin.
-      if (input.vendid && (token || trustedStagePage) && env.TRACKING_ENCRYPTION_KEY) {
+      // Page events are not proof of payment. Keep the vendaId only when the
+      // gateway has already confirmed the matching front order as paid.
+      const [approvedFront] = input.vendid
+        ? await sql<Array<{ visitor_id: string | null }>>`
+            SELECT visitor_id FROM tracking_orders
+            WHERE project_id=${stage.project_id} AND external_id=${input.vendid}
+              AND order_kind='front' AND paid_at IS NOT NULL
+            LIMIT 1
+          `
+        : [];
+      if (input.vendid && approvedFront && (token || trustedStagePage) && env.TRACKING_ENCRYPTION_KEY) {
         const hash = createHash('sha256').update(input.vendid).digest('hex');
         await sql`
           INSERT INTO tracking_upsell_identities
             (id,project_id,visitor_id,vendid_hash,vendid_encrypted)
-          VALUES(${ulid()},${stage.project_id},${visitorId},${hash},
+          VALUES(${ulid()},${stage.project_id},${approvedFront.visitor_id ?? visitorId},${hash},
             ${encryptSecret(input.vendid, env.TRACKING_ENCRYPTION_KEY)})
           ON CONFLICT(project_id,vendid_hash) DO UPDATE SET
             visitor_id=EXCLUDED.visitor_id,last_seen_at=now()
@@ -1215,6 +1222,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           (orderKind === 'front' ? event.transactionId : parentFront?.external_id);
         if (
           event.status === 'paid' &&
+          orderKind === 'front' &&
           effectiveVendid &&
           attributedVisitorId &&
           env.TRACKING_ENCRYPTION_KEY

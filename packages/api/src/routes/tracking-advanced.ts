@@ -273,7 +273,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       const toDate = /^\d{4}-\d{2}-\d{2}$/.test(req.query.to ?? '') ? req.query.to! : fromDate;
       const fromInstant = new Date(saoPauloDayRange(fromDate).from);
       const toInstant = new Date(saoPauloDayRange(toDate).to);
-      const [identities, stages] = await Promise.all([
+      const [identities, stages, approvedFronts] = await Promise.all([
         app.db<Array<{
           id: string;
           visitor_id: string;
@@ -293,12 +293,18 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           WHERE project_id=${p.id} AND enabled=true
           ORDER BY CASE stage_key WHEN 'upsell_1' THEN 1 WHEN 'upsell_2' THEN 2 ELSE 3 END
         `,
+        app.db<Array<{ external_id: string }>>`
+          SELECT external_id FROM tracking_orders
+          WHERE project_id=${p.id} AND order_kind='front' AND paid_at IS NOT NULL
+        `,
       ]);
+      const approvedFrontIds = new Set(approvedFronts.map((order) => order.external_id));
       reply.header('cache-control', 'no-store');
       return {
         items: identities.flatMap((identity) => {
           try {
             const vendid = decryptSecret(identity.vendid_encrypted, env.TRACKING_ENCRYPTION_KEY!);
+            if (!approvedFrontIds.has(vendid)) return [];
             return [{
               id: identity.id,
               visitor_id: identity.visitor_id,
@@ -359,27 +365,16 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           WHERE project_id=${p.id} AND external_id=${event.transactionId}
           LIMIT 1
         `;
-        if (!order?.visitor_id || !order.paid_at || event.status !== 'paid') continue;
+        if (
+          !order?.visitor_id ||
+          !order.paid_at ||
+          order.order_kind !== 'front' ||
+          event.status !== 'paid'
+        ) continue;
         let vendid = event.vendid;
-        if (vendid) validVendid.add(vendid);
-        if (!vendid && order.order_kind === 'front') vendid = event.transactionId;
-        if (!vendid && ['upsell','upsell_2','upsell_3'].includes(order.order_kind)) {
-          const [front] = await app.db<Array<{ external_id: string }>>`
-            SELECT external_id FROM tracking_orders
-            WHERE project_id=${p.id} AND order_kind='front' AND paid_at IS NOT NULL
-              AND occurred_at <= ${event.occurredAt}
-              AND (
-                (${order.buyer.email ?? null}::text IS NOT NULL
-                  AND lower(buyer->>'email')=lower(${order.buyer.email ?? null}::text))
-                OR
-                (${order.buyer.phone ?? null}::text IS NOT NULL
-                  AND regexp_replace(buyer->>'phone','\D','','g')=
-                    regexp_replace(${order.buyer.phone ?? null}::text,'\D','','g'))
-              )
-            ORDER BY occurred_at DESC LIMIT 1
-          `;
-          vendid = front?.external_id;
-        }
+        if (!vendid) vendid = event.transactionId;
+        if (vendid !== event.transactionId) continue;
+        validVendid.add(vendid);
         if (!vendid) continue;
         found += 1;
         const hash = createHash('sha256').update(vendid).digest('hex');
