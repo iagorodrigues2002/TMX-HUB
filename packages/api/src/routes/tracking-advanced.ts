@@ -318,24 +318,25 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       const seen = new Set<string>();
       const resolvedItems = await Promise.all(approvedReceipts.map(async (receipt) => {
           const normalized = normalizeVendepay(receipt.payload);
-          if (
-            normalized.kind !== 'processable' ||
-            normalized.event.status !== 'paid' ||
-            normalized.event.transactionId !== receipt.external_id
-          ) return [];
-          // The transaction UUID is not interchangeable with vendaId. Only
-          // expose the explicit identifier supplied by Vendepay; a fallback
-          // creates links that render but fail the gateway's upsell intent.
-          let vendid = normalized.event.vendid;
+          const normalizedEvent = normalized.kind === 'processable' ? normalized.event : null;
+          const receiptMatchesOrder =
+            normalizedEvent?.status === 'paid' &&
+            normalizedEvent.transactionId === receipt.external_id;
+          // Prefer the explicit vendaId. Vendepay's authoritative full UUID
+          // is also accepted for paid front orders; never accept the short
+          // eight-character code shown in its sales table.
+          let vendid = receiptMatchesOrder ? normalizedEvent.vendid : undefined;
           if (!vendid) {
             const fallback = receipt.external_id;
             const fallbackHash = createHash('sha256').update(fallback).digest('hex');
             const alreadyConfirmed = confirmedHashes.has(fallbackHash);
+            const authoritativeUuid =
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(fallback);
             // Never fan out to Vendepay while rendering the dashboard. That
             // made the whole Tracking page wait on dozens of remote requests.
             // New fallback IDs are confirmed by the explicit reconciliation;
             // identities already confirmed remain immediately available.
-            const validated = alreadyConfirmed ? [true] : [];
+            const validated = alreadyConfirmed || authoritativeUuid ? [true] : [];
             // Some Vendepay payload variants expose the real vendaId only as
             // the primary transaction id. Accept that fallback solely when
             // Vendepay itself confirms it for a configured upsell.
