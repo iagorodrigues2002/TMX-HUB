@@ -90,7 +90,8 @@ function ValidatedUpsellLink({ link }: { link: { stage_id: string; name: string;
     return <span className="rounded-md border border-white/10 px-2.5 py-1.5 text-white/40">{link.name} · verificando</span>;
   }
   if (!validation.data?.compatible) {
-    return <span title="A Vendepay não habilitou esta oferta para este vendaId" className="rounded-md border border-rose-300/20 bg-rose-300/[0.06] px-2.5 py-1.5 text-rose-200/70">{link.name} · indisponível</span>;
+    const accountMissing = validation.data?.reason === 'account_not_configured';
+    return <span title={accountMissing ? 'Cadastre a URL desta etapa para a conta VendePay do comprador' : 'A Vendepay não habilitou esta oferta para este vendaId'} className="rounded-md border border-rose-300/20 bg-rose-300/[0.06] px-2.5 py-1.5 text-rose-200/70">{link.name} · {accountMissing ? 'conta sem URL' : 'indisponível'}</span>;
   }
   return <a title="Elegibilidade confirmada; o TMX validará novamente ao abrir" href={link.url} target="_blank" rel="noreferrer" className="rounded-md border border-emerald-300/25 bg-emerald-300/[0.08] px-2.5 py-1.5 text-emerald-100 transition hover:bg-emerald-300/[0.16]">{link.name} · elegível</a>;
 }
@@ -234,7 +235,6 @@ export function TrackingAdvancedCenter({
   const [upsellConnectionDestinations, setUpsellConnectionDestinations] = useState<
     Record<string, string>
   >({});
-  const [upsellLegacyConnectionId, setUpsellLegacyConnectionId] = useState('');
   const [editingUpsellStageId, setEditingUpsellStageId] = useState('');
   const [upsellBuyerFilter, setUpsellBuyerFilter] = useState<
     'all' | 'front_only' | 'with_upsell'
@@ -325,23 +325,27 @@ export function TrackingAdvancedCenter({
     setUpsellStageName(next === 'upsell_1' ? 'Upsell 1' : next === 'upsell_2' ? 'Upsell 2' : 'Upsell 3');
   }, [editingUpsellStageId, upsellIntelligence.data, upsellStageKey]);
   const saveUpsellStage = useMutation({
-    mutationFn: () =>
-      editingUpsellStageId
+    mutationFn: () => {
+      const accountDestination = Object.values(upsellConnectionDestinations).find((url) =>
+        url.startsWith('http'),
+      );
+      const destinationUrl = accountDestination ?? upsellDestination;
+      return editingUpsellStageId
         ? apiClient.updateTrackingUpsell(offerId, editingUpsellStageId, {
             name: upsellStageName,
-            destination_url: upsellDestination,
+            destination_url: destinationUrl,
             connection_destinations: upsellConnectionDestinations,
           })
         : apiClient.saveTrackingUpsell(offerId, {
             stage_key: upsellStageKey,
             name: upsellStageName,
-            destination_url: upsellDestination,
+            destination_url: destinationUrl,
             connection_destinations: upsellConnectionDestinations,
-          }),
+          });
+    },
     onSuccess: () => {
       setUpsellDestination('');
       setUpsellConnectionDestinations({});
-      setUpsellLegacyConnectionId('');
       setEditingUpsellStageId('');
       void qc.invalidateQueries({ queryKey: ['tracking-upsells', offerId] });
       void qc.invalidateQueries({ queryKey: ['tracking-upsell-identities', offerId] });
@@ -357,7 +361,6 @@ export function TrackingAdvancedCenter({
         setEditingUpsellStageId('');
         setUpsellDestination('');
         setUpsellConnectionDestinations({});
-        setUpsellLegacyConnectionId('');
       }
       void qc.invalidateQueries({ queryKey: ['tracking-upsells', offerId] });
       toast.success('Etapa de upsell apagada.');
@@ -1255,7 +1258,7 @@ export function TrackingAdvancedCenter({
               </div>
               <div className="rounded-xl border border-cyan-300/20 bg-cyan-300/[0.045] p-4">
                 <p className="hud-label text-cyan-200">Configurar etapa</p>
-                <div className="mt-3 grid gap-3 md:grid-cols-3">
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
                   <select
                     aria-label="Etapa do upsell"
                     disabled={Boolean(editingUpsellStageId)}
@@ -1285,19 +1288,13 @@ export function TrackingAdvancedCenter({
                     onChange={(event) => setUpsellStageName(event.target.value)}
                     placeholder="Nome da etapa"
                   />
-                  <Input
-                    aria-label="URL da página de upsell"
-                    value={upsellDestination}
-                    onChange={(event) => setUpsellDestination(event.target.value)}
-                    placeholder="Link padrão (fallback)"
-                  />
                 </div>
                 {vendepayConnections.length > 0 && (
                   <div className="mt-4 rounded-lg border border-white/[0.08] bg-black/20 p-3">
                     <p className="text-xs font-semibold text-white/75">Links por conta VendePay</p>
                     <p className="mt-1 text-[11px] leading-5 text-white/40">
                       O TMX identifica a conta da compra aprovada pelo vendaId e abre automaticamente o
-                      destino correto. Sem um link específico, será usado o link padrão acima.
+                      destino configurado para essa conta. Contas sem URL não serão consideradas elegíveis.
                     </p>
                     <div className="mt-3 grid gap-3 lg:grid-cols-2">
                       {vendepayConnections.map((connection) => (
@@ -1322,44 +1319,6 @@ export function TrackingAdvancedCenter({
                         </label>
                       ))}
                     </div>
-                    {editingUpsellStageId && upsellDestination.startsWith('http') && (
-                      <div className="mt-4 border-t border-white/[0.07] pt-3">
-                        <p className="text-xs font-medium text-amber-100/80">
-                          Classificar o link padrão já existente
-                        </p>
-                        <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-                          <select
-                            aria-label="Conta do link de upsell existente"
-                            className="h-10 min-w-0 flex-1 rounded-md border border-white/[0.1] bg-black/30 px-3 text-sm text-white outline-none focus:border-cyan-300/40"
-                            value={upsellLegacyConnectionId}
-                            onChange={(event) => setUpsellLegacyConnectionId(event.target.value)}
-                          >
-                            <option value="">Selecione a conta VendePay</option>
-                            {vendepayConnections.map((connection) => (
-                              <option key={connection.id} value={connection.id}>
-                                {connection.name}
-                              </option>
-                            ))}
-                          </select>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            disabled={!upsellLegacyConnectionId}
-                            onClick={() => {
-                              if (!upsellLegacyConnectionId) return;
-                              setUpsellConnectionDestinations((current) => ({
-                                ...current,
-                                [upsellLegacyConnectionId]: upsellDestination,
-                              }));
-                              setUpsellLegacyConnectionId('');
-                              toast.info('Link classificado. Clique em salvar para confirmar.');
-                            }}
-                          >
-                            Classificar link
-                          </Button>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )}
                 {canManage && (
@@ -1367,7 +1326,9 @@ export function TrackingAdvancedCenter({
                     className="mt-3"
                     disabled={
                       upsellStageName.trim().length < 2 ||
-                      !upsellDestination.startsWith('http') ||
+                      !Object.values(upsellConnectionDestinations).some((url) =>
+                        url.startsWith('http'),
+                      ) ||
                       (!editingUpsellStageId && configuredUpsellStages.has(upsellStageKey)) ||
                       saveUpsellStage.isPending
                     }
@@ -1388,7 +1349,6 @@ export function TrackingAdvancedCenter({
                       setEditingUpsellStageId('');
                       setUpsellDestination('');
                       setUpsellConnectionDestinations({});
-                      setUpsellLegacyConnectionId('');
                     }}
                   >
                     Cancelar edição
@@ -1442,10 +1402,9 @@ export function TrackingAdvancedCenter({
                               setUpsellStageName(stage.name);
                               setUpsellDestination(stage.destination_url);
                               setUpsellConnectionDestinations(stage.connection_destinations ?? {});
-                              setUpsellLegacyConnectionId('');
                             }}
                           >
-                            Editar e classificar links
+                            Editar links por conta
                           </Button>
                           <Button
                             size="sm"
@@ -1482,15 +1441,10 @@ export function TrackingAdvancedCenter({
                               </span>
                             </div>
                           ))}
-                        {!Object.values(stage.connection_destinations ?? {}).includes(stage.destination_url) && (
-                          <div className="flex min-w-0 items-center gap-2 text-[11px]">
-                            <span className="shrink-0 rounded-full border border-amber-300/20 bg-amber-300/[0.06] px-2 py-0.5 text-amber-100/75">
-                              Não classificado
-                            </span>
-                            <span className="truncate text-white/45" title={stage.destination_url}>
-                              {stage.destination_url}
-                            </span>
-                          </div>
+                        {!Object.keys(stage.connection_destinations ?? {}).length && (
+                          <p className="text-[11px] text-amber-100/55">
+                            Nenhuma conta VendePay configurada nesta etapa.
+                          </p>
                         )}
                       </div>
                       <p className="mt-4 text-[11px] text-white/40">Link TMX opcional — não é necessário trocar na Vendepay</p>

@@ -259,10 +259,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         AND external_id=${vendaId} AND order_kind='front' AND paid_at IS NOT NULL
       ORDER BY paid_at DESC LIMIT 1
     `;
-    const accountUrl = order?.vendepay_connection_id
-      ? stage.connection_destinations?.[order.vendepay_connection_id]
-      : undefined;
-    return accountUrl || stage.destination_url;
+    if (order?.vendepay_connection_id) {
+      return stage.connection_destinations?.[order.vendepay_connection_id] || null;
+    }
+    return stage.destination_url;
   }
   app.post<{
     Querystring: { token?: string };
@@ -949,6 +949,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       `;
       if (!stage?.enabled) return reply.code(404).send({ compatible: false, reason: 'inactive' });
       const destinationUrl = await upsellDestinationForAccount(stage, vendaId);
+      if (!destinationUrl) {
+        return reply.code(200).send({ compatible: false, reason: 'account_not_configured' });
+      }
       const compatible = await checkUpsellCompatibility(destinationUrl, vendaId);
       reply.header('cache-control', 'private, max-age=300');
       return { compatible, reason: compatible ? null : 'vendepay_not_eligible' };
@@ -974,6 +977,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!stage?.enabled) return reply.code(404).send({ error: 'upsell_stage_inactive' });
       const requestedVendaId = req.query.vendaId?.trim();
       const destinationUrl = await upsellDestinationForAccount(stage, requestedVendaId);
+      if (!destinationUrl) {
+        return reply
+          .code(422)
+          .type('text/html; charset=utf-8')
+          .send(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Conta não configurada · TMX</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#06151c;color:#dffaff;font-family:Inter,system-ui,sans-serif}.box{max-width:560px;margin:24px;padding:32px;border:1px solid #1d5866;border-radius:20px;background:#09232c;box-shadow:0 0 50px #00d9ff18}h1{font-size:24px;margin:0 0 12px}p{color:#9cc4cc;line-height:1.6}button{margin-top:12px;border:1px solid #2edcf2;border-radius:10px;padding:10px 16px;background:#0a303a;color:#dffaff;cursor:pointer}</style></head><body><main class="box"><h1>Link não configurado para esta conta VendePay</h1><p>Cadastre o destino desta etapa no Upsell Intelligence antes de abrir este comprador.</p><button onclick="history.back()">Voltar para a lista</button></main></body></html>`);
+      }
       if (requestedVendaId) {
         // Never trust the preview cache for the actual navigation. Confirm the
         // Vendepay intent again at click time so a stale positive cannot send

@@ -62,6 +62,7 @@ const migrations = [
   '047_repair_20260812_pjr_fronts.sql',
   '048_repair_pjr_front_uuid_case.sql',
   '049_upsell_links_by_vendepay_account.sql',
+  '050_classify_existing_upsells_as_iago.sql',
 ];
 
 await sql`
