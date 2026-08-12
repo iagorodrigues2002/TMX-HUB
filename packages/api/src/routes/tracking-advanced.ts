@@ -300,8 +300,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             AND lower(trim(vc.name)) NOT LIKE '%lucas%'
           ORDER BY o.paid_at DESC,r.received_at DESC
         `,
-        app.db<Array<{ id: string; stage_key: string; name: string; destination_url: string }>>`
-          SELECT id,stage_key,name,destination_url
+        app.db<Array<{ id: string; stage_key: string; name: string; slug: string; destination_url: string }>>`
+          SELECT id,stage_key,name,slug,destination_url
           FROM tracking_upsell_stages
           WHERE project_id=${p.id} AND enabled=true
           ORDER BY CASE stage_key WHEN 'upsell_1' THEN 1 WHEN 'upsell_2' THEN 2 ELSE 3 END
@@ -333,11 +333,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
               first_seen_at: receipt.paid_at,
               last_seen_at: receipt.paid_at,
               links: stages.map((stage) => {
-                const destination = new URL(stage.destination_url);
-                destination.searchParams.delete('vendid');
-                destination.searchParams.delete('vendId');
-                destination.searchParams.set('vendaId', vendid);
-                return { stage_id: stage.id, stage_key: stage.stage_key, name: stage.name, url: destination.toString() };
+                const validatedLink = new URL(upsellUrl(stage.slug));
+                validatedLink.searchParams.set('vendaId', vendid);
+                return { stage_id: stage.id, stage_key: stage.stage_key, name: stage.name, url: validatedLink.toString() };
               }),
             }];
         });

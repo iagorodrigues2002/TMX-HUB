@@ -923,6 +923,36 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         FROM tracking_upsell_stages WHERE slug=${req.params.slug} LIMIT 1
       `;
       if (!stage?.enabled) return reply.code(404).send({ error: 'upsell_stage_inactive' });
+      const requestedVendaId = req.query.vendaId?.trim();
+      if (requestedVendaId) {
+        let compatible = false;
+        try {
+          const pageResponse = await fetch(stage.destination_url, {
+            signal: AbortSignal.timeout(6_000),
+            headers: { 'user-agent': 'TMX-Upsell-Validator/1.0' },
+          });
+          const pageHtml = pageResponse.ok ? await pageResponse.text() : '';
+          const upsellId = pageHtml.match(/upsellId=([0-9a-f-]{36})/i)?.[1];
+          if (upsellId) {
+            const intentUrl = new URL('https://bff.vendepay.com/api/up-sell/intent');
+            intentUrl.searchParams.set('upsellId', upsellId);
+            intentUrl.searchParams.set('vendaId', requestedVendaId);
+            const intentResponse = await fetch(intentUrl, {
+              signal: AbortSignal.timeout(6_000),
+              headers: { accept: 'application/json', 'user-agent': 'TMX-Upsell-Validator/1.0' },
+            });
+            compatible = intentResponse.ok;
+          }
+        } catch {
+          compatible = false;
+        }
+        if (!compatible) {
+          return reply
+            .code(422)
+            .type('text/html; charset=utf-8')
+            .send(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Oferta incompatível · TMX</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#06151c;color:#dffaff;font-family:Inter,system-ui,sans-serif}.box{max-width:560px;margin:24px;padding:32px;border:1px solid #1d5866;border-radius:20px;background:#09232c;box-shadow:0 0 50px #00d9ff18}h1{font-size:24px;margin:0 0 12px}p{color:#9cc4cc;line-height:1.6}button{margin-top:12px;border:1px solid #2edcf2;border-radius:10px;padding:10px 16px;background:#0a303a;color:#dffaff;cursor:pointer}</style></head><body><main class="box"><h1>Este comprador não é elegível para este upsell</h1><p>O TMX consultou a Vendepay e ela não reconheceu esta combinação de venda e oferta. Nenhuma página quebrada foi aberta.</p><button onclick="history.back()">Voltar para a lista</button></main></body></html>`);
+        }
+      }
       const linked = req.query.src ? readTrackingToken(req.query.src, env.WEBHOOK_SECRET) : null;
       const validLinked = linked?.projectId === stage.project_id ? linked : null;
       const visitorId =
