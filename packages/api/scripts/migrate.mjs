@@ -60,6 +60,7 @@ const migrations = [
   '045_merge_legacy_vendepay_order_codes.sql',
   '046_repair_order_kind_by_product_name.sql',
   '047_repair_20260812_pjr_fronts.sql',
+  '048_repair_pjr_front_uuid_case.sql',
 ];
 
 await sql`
