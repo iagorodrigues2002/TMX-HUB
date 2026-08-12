@@ -120,13 +120,24 @@ const normalizeStatus = (raw = ''): VendepayStatus => {
       'approved_payment',
       'complete',
       'completed',
+      'completo',
+      'completa',
+      'concluido',
+      'concluida',
+      'finalizado',
+      'finalizada',
+      'success',
+      'sucesso',
       'pago',
       'aprovado',
       'compra.aprovada',
       // Current Vendepay payloads may expose the sale status as its numeric
       // enum. The checkout API returns 6 for a completed/paid sale.
       '6',
-    ].includes(status)
+    ].includes(status) ||
+    /(^|[._])(paid|approved|aprovad[oa]|completed?|complet[oa]|concluid[oa]|finalizad[oa]|success|sucesso)$/.test(
+      status,
+    )
   )
     return 'paid';
   if (['pending', 'waiting', 'processing', 'pendente'].includes(status)) return 'pending';

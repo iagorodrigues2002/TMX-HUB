@@ -237,6 +237,16 @@ describe('normalizeVendepay', () => {
     expect(result.event.status).toBe('paid');
   });
 
+  it.each(['COMPLETO', 'completa', 'compra.completa', 'VENDA_CONCLUIDA', 'payment.success'])(
+    'normaliza o status de conclusão %s da Vendepay como venda paga',
+    (status) => {
+      const result = normalizeVendepay({ id: `paid-${status}`, status, valorPago: 47, moeda: 2 });
+      expect(result.kind).toBe('processable');
+      if (result.kind !== 'processable') return;
+      expect(result.event.status).toBe('paid');
+    },
+  );
+
   it.each(['Falha', 'Recusada', 'compra.recusada', 'compra.falhou'])(
     'normaliza erro da Vendepay %s como recusado',
     (event) => {
