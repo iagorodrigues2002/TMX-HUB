@@ -15,6 +15,7 @@ import { decryptSecret, encryptSecret } from '../lib/secret-box.js';
 import { canonicalTrackingHostname } from '../services/tracking-domain.js';
 import { saoPauloParts } from '../services/intraday-store.js';
 import { saoPauloDayRange } from '../services/utmify-sync.js';
+import { checkUpsellCompatibility } from '../services/upsell-compatibility.js';
 
 const databaseUnavailable = {
   error: 'tracking_database_unavailable',
@@ -309,7 +310,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       ]);
       reply.header('cache-control', 'no-store');
       const seen = new Set<string>();
-      const items = approvedReceipts.flatMap((receipt) => {
+      const resolvedItems = await Promise.all(approvedReceipts.map(async (receipt) => {
           const normalized = normalizeVendepay(receipt.payload);
           if (
             normalized.kind !== 'processable' ||
@@ -319,8 +320,18 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           // The transaction UUID is not interchangeable with vendaId. Only
           // expose the explicit identifier supplied by Vendepay; a fallback
           // creates links that render but fail the gateway's upsell intent.
-          const vendid = normalized.event.vendid;
-          if (!vendid) return [];
+          let vendid = normalized.event.vendid;
+          if (!vendid) {
+            const fallback = receipt.external_id;
+            const validated = await Promise.all(
+              stages.map((stage) => checkUpsellCompatibility(stage.destination_url, fallback)),
+            );
+            // Some Vendepay payload variants expose the real vendaId only as
+            // the primary transaction id. Accept that fallback solely when
+            // Vendepay itself confirms it for a configured upsell.
+            if (!validated.some(Boolean)) return [];
+            vendid = fallback;
+          }
           if (seen.has(vendid)) return [];
           seen.add(vendid);
             return [{
@@ -338,7 +349,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                 return { stage_id: stage.id, stage_key: stage.stage_key, name: stage.name, url: validatedLink.toString() };
               }),
             }];
-        });
+        }));
+      const items = resolvedItems.flat();
       items.sort(
         (left, right) =>
           new Date(right.approved_at).getTime() - new Date(left.approved_at).getTime(),
