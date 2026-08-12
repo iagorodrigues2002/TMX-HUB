@@ -225,6 +225,18 @@ describe('normalizeVendepay', () => {
     });
   });
 
+  it('normaliza status numérico 6 da Vendepay como venda paga', () => {
+    const result = normalizeVendepay({
+      id: 'numeric-paid-1',
+      status: 6,
+      valorPago: 25.5,
+      produtoId: 'front-product',
+    });
+    expect(result.kind).toBe('processable');
+    if (result.kind !== 'processable') return;
+    expect(result.event.status).toBe('paid');
+  });
+
   it.each(['Falha', 'Recusada', 'compra.recusada', 'compra.falhou'])(
     'normaliza erro da Vendepay %s como recusado',
     (event) => {

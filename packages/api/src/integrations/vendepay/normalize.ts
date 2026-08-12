@@ -123,6 +123,9 @@ const normalizeStatus = (raw = ''): VendepayStatus => {
       'pago',
       'aprovado',
       'compra.aprovada',
+      // Current Vendepay payloads may expose the sale status as its numeric
+      // enum. The checkout API returns 6 for a completed/paid sale.
+      '6',
     ].includes(status)
   )
     return 'paid';
