@@ -1429,7 +1429,7 @@ export function TrackingAdvancedCenter({
                     )}
                   </div>
                   <p className="mt-1 text-xs text-white/40">
-                    Compradores com front aprovado, do mais recente para o mais antigo.
+                    Compradores da Vendepay Iago com front aprovado e vendaId confirmado pelo gateway.
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {([

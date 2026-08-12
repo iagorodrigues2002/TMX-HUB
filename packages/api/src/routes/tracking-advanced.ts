@@ -297,6 +297,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           JOIN tracking_orders o ON o.id=r.order_id
           JOIN vendepay_connections vc ON vc.id=r.connection_id
           WHERE o.project_id=${p.id} AND o.order_kind='front' AND o.paid_at IS NOT NULL
+            AND lower(trim(vc.name)) NOT LIKE '%lucas%'
           ORDER BY o.paid_at DESC,r.received_at DESC
         `,
         app.db<Array<{ id: string; stage_key: string; name: string; destination_url: string }>>`
@@ -315,7 +316,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             normalized.event.status !== 'paid' ||
             normalized.event.transactionId !== receipt.external_id
           ) return [];
-          const vendid = normalized.event.vendid ?? receipt.external_id;
+          // The transaction UUID is not interchangeable with vendaId. Only
+          // expose the explicit identifier supplied by Vendepay; a fallback
+          // creates links that render but fail the gateway's upsell intent.
+          const vendid = normalized.event.vendid;
+          if (!vendid) return [];
           if (seen.has(vendid)) return [];
           seen.add(vendid);
             return [{
@@ -385,7 +390,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           event.status !== 'paid'
         ) continue;
         let vendid = event.vendid;
-        if (!vendid) vendid = event.transactionId;
+        if (!vendid) continue;
         validVendid.add(vendid);
         if (!vendid) continue;
         found += 1;
