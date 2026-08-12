@@ -305,8 +305,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         approvedFronts.map((order) => [order.external_id, order]),
       );
       reply.header('cache-control', 'no-store');
-      return {
-        items: identities.flatMap((identity) => {
+      const items = identities.flatMap((identity) => {
           try {
             const vendid = decryptSecret(identity.vendid_encrypted, env.TRACKING_ENCRYPTION_KEY!);
             const approvedFront = approvedFrontById.get(vendid);
@@ -330,8 +329,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           } catch {
             return [];
           }
-        }),
-      };
+        });
+      items.sort(
+        (left, right) =>
+          new Date(right.approved_at).getTime() - new Date(left.approved_at).getTime(),
+      );
+      return { items };
     },
   );
 

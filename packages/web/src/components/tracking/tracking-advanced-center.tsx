@@ -278,6 +278,8 @@ export function TrackingAdvancedCenter({
       apiClient.getTrackingUpsellIdentities(offerId, { from: trackingFrom, to: trackingTo }),
     enabled: section === 'upsells',
     retry: false,
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: true,
   });
   const configuredUpsellStages = new Set(
     (upsellIntelligence.data?.stages ?? []).map((stage) => stage.stage_key),
