@@ -266,7 +266,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin');
       if (!app.db) return reply.code(503).send(databaseUnavailable);
       if (!p) return { items: [] };
-      const [approvedReceipts, stages] = await Promise.all([
+      if (!env.TRACKING_ENCRYPTION_KEY) {
+        return reply.code(503).send({ error: 'tracking_encryption_unavailable' });
+      }
+      const [approvedReceipts, stages, storedIdentities] = await Promise.all([
         app.db<Array<{
           id: string;
           payload: unknown;
@@ -307,8 +310,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           WHERE project_id=${p.id} AND enabled=true
           ORDER BY CASE stage_key WHEN 'upsell_1' THEN 1 WHEN 'upsell_2' THEN 2 ELSE 3 END
         `,
+        app.db<Array<{ vendid_hash: string }>>`
+          SELECT vendid_hash FROM tracking_upsell_identities WHERE project_id=${p.id}
+        `,
       ]);
       reply.header('cache-control', 'no-store');
+      const confirmedHashes = new Set(storedIdentities.map((identity) => identity.vendid_hash));
       const seen = new Set<string>();
       const resolvedItems = await Promise.all(approvedReceipts.map(async (receipt) => {
           const normalized = normalizeVendepay(receipt.payload);
@@ -323,13 +330,29 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           let vendid = normalized.event.vendid;
           if (!vendid) {
             const fallback = receipt.external_id;
-            const validated = await Promise.all(
-              stages.map((stage) => checkUpsellCompatibility(stage.destination_url, fallback)),
-            );
+            const fallbackHash = createHash('sha256').update(fallback).digest('hex');
+            const alreadyConfirmed = confirmedHashes.has(fallbackHash);
+            const validated = alreadyConfirmed
+              ? [true]
+              : await Promise.all(
+                  stages.map((stage) =>
+                    checkUpsellCompatibility(stage.destination_url, fallback),
+                  ),
+                );
             // Some Vendepay payload variants expose the real vendaId only as
             // the primary transaction id. Accept that fallback solely when
             // Vendepay itself confirms it for a configured upsell.
             if (!validated.some(Boolean)) return [];
+            if (!alreadyConfirmed) {
+              await app.db!`
+                INSERT INTO tracking_upsell_identities
+                  (id,project_id,visitor_id,vendid_hash,vendid_encrypted)
+                VALUES(${ulid()},${p.id},${receipt.visitor_id ?? `vendepay:${fallback}`},
+                  ${fallbackHash},${encryptSecret(fallback, env.TRACKING_ENCRYPTION_KEY!)})
+                ON CONFLICT(project_id,vendid_hash) DO UPDATE SET last_seen_at=now()
+              `;
+              confirmedHashes.add(fallbackHash);
+            }
             vendid = fallback;
           }
           if (seen.has(vendid)) return [];
@@ -376,7 +399,14 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         ORDER BY r.received_at DESC
         LIMIT 1000
       `;
-      const validVendid = new Set<string>();
+      const paidFronts = await app.db<Array<{ external_id: string }>>`
+        SELECT external_id FROM tracking_orders
+        WHERE project_id=${p.id} AND order_kind='front' AND paid_at IS NOT NULL
+      `;
+      // Primary IDs enter this set only after the list has validated them once
+      // against Vendepay and persisted the identity. This keeps subsequent
+      // gateway oscillations from deleting an already-confirmed buyer.
+      const validVendid = new Set(paidFronts.map((order) => order.external_id));
       let found = 0;
       let stored = 0;
       for (const receipt of receipts) {
