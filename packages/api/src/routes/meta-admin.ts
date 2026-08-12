@@ -16,6 +16,12 @@ const PixelSchema = z.object({
   access_token: z.string().min(20).max(4096),
   test_event_code: z.string().trim().max(128).optional(),
 });
+const PixelUpdateSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  pixel_id: z.string().regex(/^\d{5,32}$/),
+  access_token: z.string().min(20).max(4096).optional(),
+  test_event_code: z.string().trim().max(128).nullable().optional(),
+});
 const TestEventSchema = z.object({
   event_name: z.enum(['InitiateCheckout', 'Purchase']),
 });
@@ -129,6 +135,59 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       ...(verificationWarning ? { verification_warning: verificationWarning } : {}),
     });
   });
+
+  app.patch<{ Params: { id: string; pixelId: string } }>(
+    '/offers/:id/tracking/meta-pixels/:pixelId',
+    async (req, reply) => {
+      await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
+      if (!app.db || !env.TRACKING_ENCRYPTION_KEY) {
+        return reply.code(503).send({ error: 'meta_configuration_unavailable' });
+      }
+      const parsed = PixelUpdateSchema.safeParse(req.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'invalid_pixel' });
+      const [current] = await app.db<Array<{
+        id: string;
+        pixel_id: string;
+        access_token_encrypted: string;
+      }>>`
+        SELECT mp.id,mp.pixel_id,mp.access_token_encrypted
+        FROM meta_pixels mp
+        JOIN tracking_projects tp ON tp.id=mp.project_id
+        WHERE mp.id=${req.params.pixelId} AND tp.offer_id=${req.params.id} AND mp.enabled=true
+        LIMIT 1
+      `;
+      if (!current) return reply.code(404).send({ error: 'pixel_not_found' });
+      const token = parsed.data.access_token ??
+        decryptSecret(current.access_token_encrypted, env.TRACKING_ENCRYPTION_KEY);
+      if (parsed.data.access_token || parsed.data.pixel_id !== current.pixel_id) {
+        const checkUrl = new URL(
+          `https://graph.facebook.com/${env.META_GRAPH_API_VERSION}/${parsed.data.pixel_id}`,
+        );
+        checkUrl.searchParams.set('fields', 'id,name');
+        checkUrl.searchParams.set('access_token', token);
+        const verification = await fetch(checkUrl, { signal: AbortSignal.timeout(10_000) });
+        const payload = (await verification.json().catch(() => null)) as unknown;
+        const graphError = readMetaGraphError(payload);
+        if (!verification.ok && isDefinitelyInvalidMetaToken(graphError)) {
+          return reply.code(422).send({
+            error: 'meta_credentials_rejected',
+            detail: metaCredentialDetail(verification.status, graphError),
+          });
+        }
+      }
+      const [pixel] = await app.db`
+        UPDATE meta_pixels mp SET
+          name=${parsed.data.name},
+          pixel_id=${parsed.data.pixel_id},
+          access_token_encrypted=${encryptSecret(token, env.TRACKING_ENCRYPTION_KEY)},
+          test_event_code=${parsed.data.test_event_code ?? null}
+        FROM tracking_projects tp
+        WHERE mp.id=${current.id} AND mp.project_id=tp.id AND tp.offer_id=${req.params.id}
+        RETURNING mp.id,mp.name,mp.pixel_id,mp.test_event_code,mp.enabled,mp.created_at
+      `;
+      return reply.send({ pixel });
+    },
+  );
 
   app.post<{ Params: { id: string; pixelId: string } }>(
     '/offers/:id/tracking/meta-pixels/:pixelId/test-event',

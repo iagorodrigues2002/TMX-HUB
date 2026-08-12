@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api-client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Activity, CheckCircle2, Copy, Loader2, Radio, Send, ShoppingCart } from 'lucide-react';
+import { Activity, CheckCircle2, Copy, Loader2, Pencil, Radio, Send, ShoppingCart, X } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -18,6 +18,7 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
   const [pixelId, setPixelId] = useState('');
   const [pixelToken, setPixelToken] = useState('');
   const [testEventCode, setTestEventCode] = useState('');
+  const [editingPixelId, setEditingPixelId] = useState<string | null>(null);
   const [pixelTestCodes, setPixelTestCodes] = useState<Record<string, string>>({});
   const config = useQuery({
     queryKey: ['tracking-config', offerId],
@@ -59,20 +60,47 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
     },
     onError: (error) => toast.error((error as Error).message),
   });
-  const savePixel = useMutation({
-    mutationFn: () =>
-      apiClient.saveMetaPixel(offerId, {
+  const savePixel = useMutation<
+    | { updated: true }
+    | {
+        updated: false;
+        verification: 'verified' | 'pending_event_test';
+        verification_warning?: string;
+        backfill_queued: number;
+      }
+  >({
+    mutationFn: () => {
+      const input = {
         name: pixelName.trim(),
         pixel_id: pixelId.trim(),
-        access_token: pixelToken.trim(),
-        ...(testEventCode.trim() ? { test_event_code: testEventCode.trim() } : {}),
-      }),
+        ...(pixelToken.trim() ? { access_token: pixelToken.trim() } : {}),
+        test_event_code: testEventCode.trim() || null,
+      };
+      if (editingPixelId) {
+        return apiClient
+          .updateMetaPixel(offerId, editingPixelId, input)
+          .then(() => ({ updated: true as const }));
+      }
+      return apiClient
+        .saveMetaPixel(offerId, {
+          name: input.name,
+          pixel_id: input.pixel_id,
+          access_token: pixelToken.trim(),
+          ...(input.test_event_code ? { test_event_code: input.test_event_code } : {}),
+        })
+        .then((result) => ({ updated: false as const, ...result }));
+    },
     onSuccess: (result) => {
       setPixelName('');
       setPixelId('');
       setPixelToken('');
       setTestEventCode('');
+      setEditingPixelId(null);
       void queryClient.invalidateQueries({ queryKey: ['tracking-meta-pixels', offerId] });
+      if (result.updated) {
+        toast.success('Pixel atualizado. O token anterior foi preservado quando deixado em branco.');
+        return;
+      }
       if (result.verification === 'verified') {
         toast.success(
           `Pixel Meta validado. ${result.backfill_queued} conversão(ões) recente(s) enviada(s) para popular o pixel.`,
@@ -247,7 +275,25 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-white/70">{pixel.name}</span>
-                    <code className="text-cyan-200/70">{pixel.pixel_id}</code>
+                    <div className="flex items-center gap-2">
+                      <code className="text-cyan-200/70">{pixel.pixel_id}</code>
+                      {canManage && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 gap-1.5"
+                          onClick={() => {
+                            setEditingPixelId(pixel.id);
+                            setPixelName(pixel.name);
+                            setPixelId(pixel.pixel_id);
+                            setPixelToken('');
+                            setTestEventCode(pixel.test_event_code ?? '');
+                          }}
+                        >
+                          <Pencil className="h-3.5 w-3.5" /> Editar
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   {canManage && (
                     <div className="mt-3 space-y-2">
@@ -333,6 +379,25 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
               ))}
               {canManage && (
                 <div className="mt-4 grid gap-2 md:grid-cols-2">
+                  {editingPixelId && (
+                    <div className="md:col-span-2 flex items-center justify-between rounded-md border border-cyan-300/20 bg-cyan-300/[0.05] px-3 py-2 text-xs text-cyan-100">
+                      <span>Editando pixel existente · deixe o token vazio para manter o atual.</span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 gap-1"
+                        onClick={() => {
+                          setEditingPixelId(null);
+                          setPixelName('');
+                          setPixelId('');
+                          setPixelToken('');
+                          setTestEventCode('');
+                        }}
+                      >
+                        <X className="h-3.5 w-3.5" /> Cancelar
+                      </Button>
+                    </div>
+                  )}
                   <Input
                     value={pixelName}
                     onChange={(event) => setPixelName(event.target.value)}
@@ -361,12 +426,14 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
                     disabled={
                       !pixelName.trim() ||
                       !pixelId.trim() ||
-                      !pixelToken.trim() ||
+                      (!editingPixelId && !pixelToken.trim()) ||
                       savePixel.isPending
                     }
                   >
                     {savePixel.isPending
                       ? 'Validando no Meta…'
+                      : editingPixelId
+                        ? 'Salvar alterações do pixel'
                       : (pixels.data?.pixels.length ?? 0) > 0
                         ? 'Adicionar outro pixel'
                         : 'Adicionar pixel'}

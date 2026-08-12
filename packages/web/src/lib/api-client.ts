@@ -2416,6 +2416,17 @@ export const apiClient = {
     return request(`/v1/offers/${id}/tracking/meta-pixels`, { method: 'POST', body: input });
   },
 
+  async updateMetaPixel(
+    id: string,
+    pixelId: string,
+    input: { name: string; pixel_id: string; access_token?: string; test_event_code?: string | null },
+  ): Promise<void> {
+    await request(`/v1/offers/${id}/tracking/meta-pixels/${pixelId}`, {
+      method: 'PATCH',
+      body: input,
+    });
+  },
+
   async sendMetaTestEvent(
     id: string,
     pixelId: string,
