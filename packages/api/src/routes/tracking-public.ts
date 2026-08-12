@@ -44,10 +44,10 @@ const BootstrapSchema = z.object({
 
 const upsellCompatibilityCache = new Map<string, { compatible: boolean; expiresAt: number }>();
 
-async function checkUpsellCompatibility(destinationUrl: string, vendaId: string) {
+async function checkUpsellCompatibility(destinationUrl: string, vendaId: string, forceRefresh = false) {
   const cacheKey = `${destinationUrl}|${vendaId}`;
   const cached = upsellCompatibilityCache.get(cacheKey);
-  if (cached && cached.expiresAt > Date.now()) return cached.compatible;
+  if (!forceRefresh && cached && cached.expiresAt > Date.now()) return cached.compatible;
   let compatible = false;
   try {
     const pageResponse = await fetch(destinationUrl, {
@@ -973,7 +973,14 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!stage?.enabled) return reply.code(404).send({ error: 'upsell_stage_inactive' });
       const requestedVendaId = req.query.vendaId?.trim();
       if (requestedVendaId) {
-        const compatible = await checkUpsellCompatibility(stage.destination_url, requestedVendaId);
+        // Never trust the preview cache for the actual navigation. Confirm the
+        // Vendepay intent again at click time so a stale positive cannot send
+        // the operator to a widget that is currently unavailable.
+        const compatible = await checkUpsellCompatibility(
+          stage.destination_url,
+          requestedVendaId,
+          true,
+        );
         if (!compatible) {
           return reply
             .code(422)

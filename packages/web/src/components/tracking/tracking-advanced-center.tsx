@@ -89,7 +89,7 @@ function ValidatedUpsellLink({ link }: { link: { stage_id: string; name: string;
   if (!validation.data?.compatible) {
     return <span title="A Vendepay não habilitou esta oferta para este vendaId" className="rounded-md border border-rose-300/20 bg-rose-300/[0.06] px-2.5 py-1.5 text-rose-200/70">{link.name} · indisponível</span>;
   }
-  return <a href={link.url} target="_blank" rel="noreferrer" className="rounded-md border border-emerald-300/25 bg-emerald-300/[0.08] px-2.5 py-1.5 text-emerald-100 transition hover:bg-emerald-300/[0.16]">{link.name} · disponível</a>;
+  return <a title="Elegibilidade confirmada; o TMX validará novamente ao abrir" href={link.url} target="_blank" rel="noreferrer" className="rounded-md border border-emerald-300/25 bg-emerald-300/[0.08] px-2.5 py-1.5 text-emerald-100 transition hover:bg-emerald-300/[0.16]">{link.name} · elegível</a>;
 }
 
 function saoPauloDate(date = new Date()) {
