@@ -1298,6 +1298,29 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         const amountBrlMinor = ingestBrlMinor;
         const exchangeRate = ingestExchangeRate;
         const convertedAt = ingestConvertedAt;
+        // Some emergency/manual imports used Vendepay's visible eight-character
+        // order code (the first UUID segment). When the authoritative webhook
+        // later arrives, promote that row to the full UUID instead of counting
+        // the same purchase twice.
+        const uuidMatch = event.transactionId.match(
+          /^([0-9a-f]{8})-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+        );
+        if (uuidMatch) {
+          const legacyExternalId = uuidMatch[1]!.toUpperCase();
+          await sql`
+            UPDATE tracking_orders legacy
+            SET external_id=${event.transactionId}, updated_at=now()
+            WHERE legacy.project_id=${connection.project_id}
+              AND legacy.provider='vendepay'
+              AND upper(legacy.external_id)=${legacyExternalId}
+              AND NOT EXISTS (
+                SELECT 1 FROM tracking_orders canonical
+                WHERE canonical.project_id=${connection.project_id}
+                  AND canonical.provider='vendepay'
+                  AND canonical.external_id=${event.transactionId}
+              )
+          `;
+        }
         const [order] = await sql<{ id: string; status: string; order_kind: string }[]>`
           INSERT INTO tracking_orders
             (id, project_id, provider, external_id, status, amount_minor, currency,
