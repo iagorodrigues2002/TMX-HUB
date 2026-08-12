@@ -2143,6 +2143,7 @@ export const apiClient = {
       vendid: string;
       approved_at: string;
       connection_name: string;
+      has_upsell: boolean;
       first_seen_at: string;
       last_seen_at: string;
       links: Array<{

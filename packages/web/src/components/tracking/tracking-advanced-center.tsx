@@ -213,6 +213,9 @@ export function TrackingAdvancedCenter({
   const [upsellStageName, setUpsellStageName] = useState('Upsell 1');
   const [upsellDestination, setUpsellDestination] = useState('');
   const [editingUpsellStageId, setEditingUpsellStageId] = useState('');
+  const [upsellBuyerFilter, setUpsellBuyerFilter] = useState<
+    'all' | 'front_only' | 'with_upsell'
+  >('front_only');
   const [vendepayPayload, setVendepayPayload] = useState(vendepaySample);
   const [utmifyToken, setUtmifyToken] = useState('');
   const [utmifyPixelId, setUtmifyPixelId] = useState('');
@@ -280,6 +283,11 @@ export function TrackingAdvancedCenter({
     retry: false,
     refetchInterval: 15_000,
     refetchIntervalInBackground: true,
+  });
+  const filteredUpsellIdentities = (upsellIdentities.data?.items ?? []).filter((identity) => {
+    if (upsellBuyerFilter === 'front_only') return !identity.has_upsell;
+    if (upsellBuyerFilter === 'with_upsell') return identity.has_upsell;
+    return true;
   });
   const configuredUpsellStages = new Set(
     (upsellIntelligence.data?.stages ?? []).map((stage) => stage.stage_key),
@@ -1421,8 +1429,25 @@ export function TrackingAdvancedCenter({
                     )}
                   </div>
                   <p className="mt-1 text-xs text-white/40">
-                    Compradores com front aprovado e nenhum upsell aprovado, do mais recente para o mais antigo.
+                    Compradores com front aprovado, do mais recente para o mais antigo.
                   </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {([
+                      ['all', 'Todos'],
+                      ['front_only', 'Somente front'],
+                      ['with_upsell', 'Comprou upsell'],
+                    ] as const).map(([value, label]) => (
+                      <Button
+                        key={value}
+                        type="button"
+                        size="sm"
+                        variant={upsellBuyerFilter === value ? 'default' : 'outline'}
+                        onClick={() => setUpsellBuyerFilter(value)}
+                      >
+                        {label}
+                      </Button>
+                    ))}
+                  </div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[760px] text-left text-xs">
@@ -1435,7 +1460,7 @@ export function TrackingAdvancedCenter({
                       </tr>
                     </thead>
                     <tbody>
-                      {(upsellIdentities.data?.items ?? []).map((identity) => (
+                      {filteredUpsellIdentities.map((identity) => (
                         <tr key={identity.id} className="border-b border-white/[0.05] last:border-0">
                           <td className="px-4 py-3">
                             <code className="select-all text-cyan-100">{identity.vendid}</code>
@@ -1470,9 +1495,9 @@ export function TrackingAdvancedCenter({
                     </tbody>
                   </table>
                 </div>
-                {!upsellIdentities.isLoading && !upsellIdentities.data?.items.length && (
+                {!upsellIdentities.isLoading && !filteredUpsellIdentities.length && (
                   <p className="px-4 py-5 text-sm text-white/40">
-                    Nenhum comprador somente de front foi identificado.
+                    Nenhum comprador encontrado neste filtro.
                   </p>
                 )}
               </div>
