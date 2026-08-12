@@ -280,6 +280,22 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           JOIN tracking_orders o ON o.id=r.order_id
           JOIN vendepay_connections vc ON vc.id=r.connection_id
           WHERE o.project_id=${p.id} AND o.order_kind='front' AND o.paid_at IS NOT NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM tracking_orders upsell
+              WHERE upsell.project_id=o.project_id
+                AND upsell.order_kind IN ('upsell','upsell_2','upsell_3')
+                AND upsell.paid_at IS NOT NULL
+                AND (
+                  (NULLIF(lower(trim(o.buyer->>'email')),'') IS NOT NULL
+                    AND lower(trim(upsell.buyer->>'email'))=lower(trim(o.buyer->>'email')))
+                  OR
+                  (NULLIF(regexp_replace(o.buyer->>'phone','\D','','g'),'') IS NOT NULL
+                    AND regexp_replace(upsell.buyer->>'phone','\D','','g')=
+                        regexp_replace(o.buyer->>'phone','\D','','g'))
+                  OR
+                  (o.visitor_id IS NOT NULL AND upsell.visitor_id=o.visitor_id)
+                )
+            )
           ORDER BY o.paid_at DESC,r.received_at DESC
         `,
         app.db<Array<{ id: string; stage_key: string; name: string; destination_url: string }>>`

@@ -1421,7 +1421,7 @@ export function TrackingAdvancedCenter({
                     )}
                   </div>
                   <p className="mt-1 text-xs text-white/40">
-                    Histórico completo de vendas front aprovadas, da mais recente para a mais antiga.
+                    Compradores com front aprovado e nenhum upsell aprovado, do mais recente para o mais antigo.
                   </p>
                 </div>
                 <div className="overflow-x-auto">
@@ -1472,7 +1472,7 @@ export function TrackingAdvancedCenter({
                 </div>
                 {!upsellIdentities.isLoading && !upsellIdentities.data?.items.length && (
                   <p className="px-4 py-5 text-sm text-white/40">
-                    Nenhum vendaId de compra front aprovada foi identificado.
+                    Nenhum comprador somente de front foi identificado.
                   </p>
                 )}
               </div>
