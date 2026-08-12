@@ -22,6 +22,7 @@ import {
   Layers3,
   Megaphone,
   Percent,
+  Pencil,
   Plus,
   RadioTower,
   RefreshCw,
@@ -3250,6 +3251,13 @@ function AbTestCard({
   onUpdated: () => void;
 }) {
   const qc = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState(test.name);
+  const [editTrafficA, setEditTrafficA] = useState(String(test.traffic_a));
+  const [editLabels, setEditLabels] = useState(test.variants.map((variant) => variant.label));
+  const [editDestinations, setEditDestinations] = useState(
+    test.variants.map((variant) => variant.destination_url ?? ''),
+  );
   const metrics = useQuery({
     queryKey: ['tracking-ab-metrics', offerId, test.id],
     queryFn: () => apiClient.getTrackingAbTestMetrics(offerId, test.id),
@@ -3274,6 +3282,26 @@ function AbTestCard({
     },
     onError: (error) => toast.error((error as Error).message),
   });
+  const saveConfiguration = useMutation({
+    mutationFn: () =>
+      apiClient.controlTrackingAbTest(offerId, test.id, {
+        action: 'update_config',
+        name: editName.trim(),
+        traffic_a: Number(editTrafficA),
+        variants: test.variants.map((variant, index) => ({
+          id: variant.id,
+          label: (editLabels[index] ?? '').trim(),
+          destination_url: (editDestinations[index] ?? '').trim(),
+        })),
+      }),
+    onSuccess: () => {
+      setEditing(false);
+      onUpdated();
+      void qc.invalidateQueries({ queryKey: ['tracking-ab-metrics', offerId, test.id] });
+      toast.success('Teste A/B editado. O link público e o histórico foram mantidos.');
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
   return (
     <article className="rounded-2xl border border-cyan-100/[0.12] bg-black/10 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -3283,10 +3311,86 @@ function AbTestCard({
           </span>
           <p className="mt-1 text-base font-semibold text-white/90">{test.name}</p>
         </div>
-        <span className={test.status === 'active' ? 'text-emerald-300' : 'text-white/55'}>
-          {test.status === 'active' ? 'Em execução' : 'Pausado'}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className={test.status === 'active' ? 'text-emerald-300' : 'text-white/55'}>
+            {test.status === 'active' ? 'Em execução' : 'Pausado'}
+          </span>
+          {canManage && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 gap-1.5"
+              onClick={() => setEditing((current) => !current)}
+            >
+              <Pencil className="h-3.5 w-3.5" /> {editing ? 'Cancelar' : 'Editar'}
+            </Button>
+          )}
+        </div>
       </div>
+      {editing && (
+        <div className="mt-4 rounded-xl border border-cyan-300/20 bg-cyan-300/[0.04] p-4">
+          <p className="text-xs leading-5 text-cyan-100/70">
+            O link TMX e as métricas existentes não mudam. Novos visitantes usarão a nova divisão;
+            visitantes já atribuídos permanecem na variante original.
+          </p>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <Input
+              aria-label="Nome do teste A/B"
+              value={editName}
+              onChange={(event) => setEditName(event.target.value)}
+              placeholder="Nome do teste"
+            />
+            <label className="text-xs text-white/55">
+              Tráfego da variante A: {editTrafficA}%
+              <input
+                aria-label="Tráfego da variante A"
+                className="mt-2 w-full accent-cyan-300"
+                type="range"
+                min="1"
+                max="99"
+                value={editTrafficA}
+                onChange={(event) => setEditTrafficA(event.target.value)}
+              />
+            </label>
+            {test.variants.map((variant, index) => (
+              <div key={variant.id} className="space-y-2 rounded-lg border border-white/[0.07] p-3">
+                <Input
+                  aria-label={`Nome da variante ${index + 1}`}
+                  value={editLabels[index] ?? ''}
+                  onChange={(event) =>
+                    setEditLabels((current) => current.map((value, item) =>
+                      item === index ? event.target.value : value,
+                    ))
+                  }
+                  placeholder={`Variante ${index + 1}`}
+                />
+                <Input
+                  aria-label={`URL da variante ${index + 1}`}
+                  value={editDestinations[index] ?? ''}
+                  onChange={(event) =>
+                    setEditDestinations((current) => current.map((value, item) =>
+                      item === index ? event.target.value : value,
+                    ))
+                  }
+                  placeholder="https://..."
+                />
+              </div>
+            ))}
+          </div>
+          <Button
+            className="mt-3 w-full"
+            disabled={
+              saveConfiguration.isPending ||
+              editName.trim().length < 2 ||
+              editLabels.some((label) => !label.trim()) ||
+              editDestinations.some((url) => !url.startsWith('http'))
+            }
+            onClick={() => saveConfiguration.mutate()}
+          >
+            {saveConfiguration.isPending ? 'Salvando alterações…' : 'Salvar alterações do teste A/B'}
+          </Button>
+        </div>
+      )}
       <div className="mt-4 grid gap-3 lg:grid-cols-2">
         {test.variants.map((variant, index) => {
           const row = metrics.data?.variants.find((item) => item.id === variant.id);

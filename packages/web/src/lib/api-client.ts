@@ -2083,7 +2083,15 @@ export const apiClient = {
   async controlTrackingAbTest(
     id: string,
     testId: string,
-    body: { action: 'pause' | 'resume' } | { action: 'select_winner'; variant_id: string },
+    body:
+      | { action: 'pause' | 'resume' }
+      | { action: 'select_winner'; variant_id: string }
+      | {
+          action: 'update_config';
+          name: string;
+          traffic_a: number;
+          variants: Array<{ id: string; label: string; destination_url: string }>;
+        },
   ): Promise<void> {
     await request(`/v1/offers/${id}/tracking/ab-tests/${testId}`, {
       method: 'PATCH',

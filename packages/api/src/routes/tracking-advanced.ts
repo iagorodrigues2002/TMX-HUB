@@ -57,6 +57,16 @@ const AbControlSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('pause') }),
   z.object({ action: z.literal('resume') }),
   z.object({ action: z.literal('select_winner'), variant_id: z.string().min(8).max(40) }),
+  z.object({
+    action: z.literal('update_config'),
+    name: z.string().trim().min(2).max(120),
+    traffic_a: z.number().int().min(1).max(99),
+    variants: z.array(z.object({
+      id: z.string().min(8).max(40),
+      label: z.string().trim().min(1).max(80),
+      destination_url: z.string().url().max(4096),
+    })).length(2),
+  }),
 ]);
 const EntryLinkSchema = z.object({
   name: z.string().trim().min(2).max(120),
@@ -1055,7 +1065,27 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!app.db) return reply.code(503).send(databaseUnavailable);
       if (!p) return reply.code(404).send({ error: 'tracking_not_configured' });
       const body = parsed(AbControlSchema, req.body);
-      if (body.action === 'resume') {
+      if (body.action === 'update_config') {
+        const existing = await app.db<Array<{ id: string }>>`
+          SELECT v.id FROM tracking_ab_variants v
+          JOIN tracking_ab_tests t ON t.id=v.test_id
+          WHERE t.id=${req.params.testId} AND t.project_id=${p.id}
+            AND v.id IN (${body.variants[0]!.id},${body.variants[1]!.id})
+        `;
+        if (existing.length !== 2) {
+          return reply.code(400).send({ error: 'ab_variants_mismatch' });
+        }
+        await app.db.begin(async (sql) => {
+          await sql`UPDATE tracking_ab_tests
+            SET name=${body.name},traffic_a=${body.traffic_a}
+            WHERE id=${req.params.testId} AND project_id=${p.id} AND deleted_at IS NULL`;
+          for (const variant of body.variants) {
+            await sql`UPDATE tracking_ab_variants
+              SET label=${variant.label},destination_url=${variant.destination_url}
+              WHERE id=${variant.id} AND test_id=${req.params.testId}`;
+          }
+        });
+      } else if (body.action === 'resume') {
         await app.db.begin(async (sql) => {
           await sql`
             UPDATE tracking_ab_tests t SET status='paused'
