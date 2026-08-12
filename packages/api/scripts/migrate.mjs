@@ -61,6 +61,7 @@ const migrations = [
   '046_repair_order_kind_by_product_name.sql',
   '047_repair_20260812_pjr_fronts.sql',
   '048_repair_pjr_front_uuid_case.sql',
+  '049_upsell_links_by_vendepay_account.sql',
 ];
 
 await sql`

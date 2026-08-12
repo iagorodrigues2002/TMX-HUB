@@ -2111,6 +2111,7 @@ export const apiClient = {
       name: string;
       slug: string;
       destination_url: string;
+      connection_destinations: Record<string, string>;
       secure_url: string;
       install_code: string;
       enabled: boolean;
@@ -2136,6 +2137,7 @@ export const apiClient = {
       stage_key: 'upsell_1' | 'upsell_2' | 'upsell_3';
       name: string;
       destination_url: string;
+      connection_destinations?: Record<string, string>;
     },
   ): Promise<void> {
     await request(`/v1/offers/${id}/tracking/upsells`, { method: 'POST', body });
@@ -2185,7 +2187,12 @@ export const apiClient = {
   async updateTrackingUpsell(
     id: string,
     stageId: string,
-    body: { name: string; destination_url: string; enabled?: boolean },
+    body: {
+      name: string;
+      destination_url: string;
+      connection_destinations?: Record<string, string>;
+      enabled?: boolean;
+    },
   ): Promise<void> {
     await request(`/v1/offers/${id}/tracking/upsells/${stageId}`, { method: 'PATCH', body });
   },

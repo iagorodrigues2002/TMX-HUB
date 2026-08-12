@@ -97,10 +97,12 @@ const UpsellStageSchema = z.object({
   stage_key: z.enum(['upsell_1', 'upsell_2', 'upsell_3']),
   name: z.string().trim().min(2).max(120),
   destination_url: z.string().url().max(4096),
+  connection_destinations: z.record(z.string(), z.string().url().max(4096)).default({}),
 });
 const UpsellStageUpdateSchema = z.object({
   name: z.string().trim().min(2).max(120),
   destination_url: z.string().url().max(4096),
+  connection_destinations: z.record(z.string(), z.string().url().max(4096)).default({}),
   enabled: z.boolean().optional(),
 });
 
@@ -202,7 +204,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       const fromInstant = new Date(saoPauloDayRange(fromDate).from);
       const toInstant = new Date(saoPauloDayRange(toDate).to);
       const stages = await app.db`
-        SELECT s.id,s.stage_key,s.name,s.slug,s.destination_url,s.enabled,s.created_at,s.updated_at,
+        SELECT s.id,s.stage_key,s.name,s.slug,s.destination_url,s.connection_destinations,
+          s.enabled,s.created_at,s.updated_at,
           (SELECT count(DISTINCT r.visitor_id)::int FROM tracking_upsell_redirects r
            WHERE r.stage_id=s.id AND r.redirected_at >= ${fromInstant}
              AND r.redirected_at < ${toInstant}) AS redirects,
@@ -494,6 +497,17 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!app.db) return reply.code(503).send(databaseUnavailable);
     if (!p) return reply.code(409).send({ error: 'tracking_not_configured' });
     const body = parsed(UpsellStageSchema, req.body);
+    const connectionDestinations = body.connection_destinations ?? {};
+    const connectionIds = Object.keys(connectionDestinations);
+    if (connectionIds.length) {
+      const validConnections = await app.db<Array<{ id: string }>>`
+        SELECT id FROM vendepay_connections
+        WHERE project_id=${p.id} AND id IN ${app.db(connectionIds)}
+      `;
+      if (validConnections.length !== connectionIds.length) {
+        return reply.code(400).send({ error: 'invalid_vendepay_connection' });
+      }
+    }
     const slug = ulid().toLowerCase();
     const [existing] = await app.db<Array<{ id: string }>>`
       SELECT id FROM tracking_upsell_stages
@@ -507,9 +521,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       });
     }
     const [stage] = await app.db<Array<{ slug: string } & Record<string, unknown>>>`
-      INSERT INTO tracking_upsell_stages(id,project_id,stage_key,name,slug,destination_url)
-      VALUES(${ulid()},${p.id},${body.stage_key},${body.name},${slug},${body.destination_url})
-      RETURNING id,stage_key,name,slug,destination_url,enabled,created_at,updated_at
+      INSERT INTO tracking_upsell_stages
+        (id,project_id,stage_key,name,slug,destination_url,connection_destinations)
+      VALUES(${ulid()},${p.id},${body.stage_key},${body.name},${slug},${body.destination_url},
+        ${app.db.json(connectionDestinations)})
+      RETURNING id,stage_key,name,slug,destination_url,connection_destinations,
+        enabled,created_at,updated_at
     `;
     if (!stage) return reply.code(500).send({ error: 'upsell_stage_not_created' });
     return reply.code(201).send({ ...stage, secure_url: upsellUrl(String(stage.slug)) });
@@ -522,11 +539,24 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!app.db) return reply.code(503).send(databaseUnavailable);
       if (!p) return reply.code(404).send({ error: 'tracking_not_configured' });
       const body = parsed(UpsellStageUpdateSchema, req.body);
+      const connectionDestinations = body.connection_destinations ?? {};
+      const connectionIds = Object.keys(connectionDestinations);
+      if (connectionIds.length) {
+        const validConnections = await app.db<Array<{ id: string }>>`
+          SELECT id FROM vendepay_connections
+          WHERE project_id=${p.id} AND id IN ${app.db(connectionIds)}
+        `;
+        if (validConnections.length !== connectionIds.length) {
+          return reply.code(400).send({ error: 'invalid_vendepay_connection' });
+        }
+      }
       const [stage] = await app.db`
         UPDATE tracking_upsell_stages SET name=${body.name},destination_url=${body.destination_url},
+          connection_destinations=${app.db.json(connectionDestinations)},
           enabled=COALESCE(${body.enabled ?? null},enabled),updated_at=now()
         WHERE id=${req.params.stageId} AND project_id=${p.id}
-        RETURNING id,stage_key,name,slug,destination_url,enabled,created_at,updated_at
+        RETURNING id,stage_key,name,slug,destination_url,connection_destinations,
+          enabled,created_at,updated_at
       `;
       if (!stage) return reply.code(404).send({ error: 'upsell_stage_not_found' });
       return { ...stage, secure_url: upsellUrl(String(stage.slug)) };

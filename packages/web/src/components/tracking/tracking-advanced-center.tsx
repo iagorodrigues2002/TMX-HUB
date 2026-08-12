@@ -229,6 +229,9 @@ export function TrackingAdvancedCenter({
   );
   const [upsellStageName, setUpsellStageName] = useState('Upsell 1');
   const [upsellDestination, setUpsellDestination] = useState('');
+  const [upsellConnectionDestinations, setUpsellConnectionDestinations] = useState<
+    Record<string, string>
+  >({});
   const [editingUpsellStageId, setEditingUpsellStageId] = useState('');
   const [upsellBuyerFilter, setUpsellBuyerFilter] = useState<
     'all' | 'front_only' | 'with_upsell'
@@ -324,14 +327,17 @@ export function TrackingAdvancedCenter({
         ? apiClient.updateTrackingUpsell(offerId, editingUpsellStageId, {
             name: upsellStageName,
             destination_url: upsellDestination,
+            connection_destinations: upsellConnectionDestinations,
           })
         : apiClient.saveTrackingUpsell(offerId, {
             stage_key: upsellStageKey,
             name: upsellStageName,
             destination_url: upsellDestination,
+            connection_destinations: upsellConnectionDestinations,
           }),
     onSuccess: () => {
       setUpsellDestination('');
+      setUpsellConnectionDestinations({});
       setEditingUpsellStageId('');
       void qc.invalidateQueries({ queryKey: ['tracking-upsells', offerId] });
       toast.success(editingUpsellStageId ? 'Etapa atualizada.' : 'Nova etapa salva separadamente.');
@@ -344,6 +350,7 @@ export function TrackingAdvancedCenter({
       if (editingUpsellStageId === stageId) {
         setEditingUpsellStageId('');
         setUpsellDestination('');
+        setUpsellConnectionDestinations({});
       }
       void qc.invalidateQueries({ queryKey: ['tracking-upsells', offerId] });
       toast.success('Etapa de upsell apagada.');
@@ -1275,9 +1282,41 @@ export function TrackingAdvancedCenter({
                     aria-label="URL da página de upsell"
                     value={upsellDestination}
                     onChange={(event) => setUpsellDestination(event.target.value)}
-                    placeholder="https://seusite.com/upsell-01/"
+                    placeholder="Link padrão (fallback)"
                   />
                 </div>
+                {vendepayConnections.length > 0 && (
+                  <div className="mt-4 rounded-lg border border-white/[0.08] bg-black/20 p-3">
+                    <p className="text-xs font-semibold text-white/75">Links por conta VendePay</p>
+                    <p className="mt-1 text-[11px] leading-5 text-white/40">
+                      O TMX identifica a conta da compra aprovada pelo vendaId e abre automaticamente o
+                      destino correto. Sem um link específico, será usado o link padrão acima.
+                    </p>
+                    <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                      {vendepayConnections.map((connection) => (
+                        <label key={connection.id} className="block">
+                          <span className="mb-1.5 block text-xs text-cyan-100/70">
+                            {connection.name}
+                          </span>
+                          <Input
+                            aria-label={`Link de upsell para ${connection.name}`}
+                            value={upsellConnectionDestinations[connection.id] ?? ''}
+                            onChange={(event) =>
+                              setUpsellConnectionDestinations((current) => {
+                                const next = { ...current };
+                                const value = event.target.value.trim();
+                                if (value) next[connection.id] = value;
+                                else delete next[connection.id];
+                                return next;
+                              })
+                            }
+                            placeholder={`URL usada pela ${connection.name}`}
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {canManage && (
                   <Button
                     className="mt-3"
@@ -1303,6 +1342,7 @@ export function TrackingAdvancedCenter({
                     onClick={() => {
                       setEditingUpsellStageId('');
                       setUpsellDestination('');
+                      setUpsellConnectionDestinations({});
                     }}
                   >
                     Cancelar edição
@@ -1355,6 +1395,7 @@ export function TrackingAdvancedCenter({
                               setUpsellStageKey(stage.stage_key);
                               setUpsellStageName(stage.name);
                               setUpsellDestination(stage.destination_url);
+                              setUpsellConnectionDestinations(stage.connection_destinations ?? {});
                             }}
                           >
                             Editar nome ou URL
@@ -1376,6 +1417,20 @@ export function TrackingAdvancedCenter({
                           >
                             <Trash2 className="h-3.5 w-3.5 text-red-300" />
                           </Button>
+                        </div>
+                      )}
+                      {Object.keys(stage.connection_destinations ?? {}).length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                          {vendepayConnections
+                            .filter((connection) => stage.connection_destinations?.[connection.id])
+                            .map((connection) => (
+                              <span
+                                key={connection.id}
+                                className="rounded-full border border-emerald-300/20 bg-emerald-300/[0.06] px-2 py-1 text-[10px] text-emerald-100/75"
+                              >
+                                {connection.name} configurada
+                              </span>
+                            ))}
                         </div>
                       )}
                       <p className="mt-4 text-[11px] text-white/40">Link TMX opcional — não é necessário trocar na Vendepay</p>

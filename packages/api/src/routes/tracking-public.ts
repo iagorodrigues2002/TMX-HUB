@@ -246,6 +246,24 @@ async function enqueueInitiateCheckout(
 }
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
+  async function upsellDestinationForAccount(stage: {
+    project_id: string;
+    destination_url: string;
+    connection_destinations: Record<string, string> | null;
+  }, vendaId?: string) {
+    if (!app.db || !vendaId) return stage.destination_url;
+    const [order] = await app.db<Array<{ vendepay_connection_id: string | null }>>`
+      SELECT vendepay_connection_id
+      FROM tracking_orders
+      WHERE project_id=${stage.project_id} AND provider='vendepay'
+        AND external_id=${vendaId} AND order_kind='front' AND paid_at IS NOT NULL
+      ORDER BY paid_at DESC LIMIT 1
+    `;
+    const accountUrl = order?.vendepay_connection_id
+      ? stage.connection_destinations?.[order.vendepay_connection_id]
+      : undefined;
+    return accountUrl || stage.destination_url;
+  }
   app.post<{
     Querystring: { token?: string };
     Body: {
@@ -920,12 +938,18 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!app.db) return reply.code(503).send({ compatible: false, reason: 'unavailable' });
       const vendaId = req.query.vendaId?.trim();
       if (!vendaId) return reply.code(400).send({ compatible: false, reason: 'missing_venda_id' });
-      const [stage] = await app.db<Array<{ destination_url: string; enabled: boolean }>>`
-        SELECT destination_url,enabled FROM tracking_upsell_stages
+      const [stage] = await app.db<Array<{
+        project_id: string;
+        destination_url: string;
+        connection_destinations: Record<string, string>;
+        enabled: boolean;
+      }>>`
+        SELECT project_id,destination_url,connection_destinations,enabled FROM tracking_upsell_stages
         WHERE slug=${req.params.slug} LIMIT 1
       `;
       if (!stage?.enabled) return reply.code(404).send({ compatible: false, reason: 'inactive' });
-      const compatible = await checkUpsellCompatibility(stage.destination_url, vendaId);
+      const destinationUrl = await upsellDestinationForAccount(stage, vendaId);
+      const compatible = await checkUpsellCompatibility(destinationUrl, vendaId);
       reply.header('cache-control', 'private, max-age=300');
       return { compatible, reason: compatible ? null : 'vendepay_not_eligible' };
     },
@@ -936,19 +960,26 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     async (req, reply) => {
       if (!app.db) return reply.code(503).send({ error: 'tracking_unavailable' });
       const [stage] = await app.db<
-        Array<{ id: string; project_id: string; destination_url: string; enabled: boolean }>
+        Array<{
+          id: string;
+          project_id: string;
+          destination_url: string;
+          connection_destinations: Record<string, string>;
+          enabled: boolean;
+        }>
       >`
-        SELECT id, project_id, destination_url, enabled
+        SELECT id, project_id, destination_url, connection_destinations, enabled
         FROM tracking_upsell_stages WHERE slug=${req.params.slug} LIMIT 1
       `;
       if (!stage?.enabled) return reply.code(404).send({ error: 'upsell_stage_inactive' });
       const requestedVendaId = req.query.vendaId?.trim();
+      const destinationUrl = await upsellDestinationForAccount(stage, requestedVendaId);
       if (requestedVendaId) {
         // Never trust the preview cache for the actual navigation. Confirm the
         // Vendepay intent again at click time so a stale positive cannot send
         // the operator to a widget that is currently unavailable.
         const compatible = await checkUpsellCompatibility(
-          stage.destination_url,
+          destinationUrl,
           requestedVendaId,
           true,
         );
@@ -983,7 +1014,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             ${req.headers['user-agent'] ?? null},now())
         `;
       });
-      const destination = new URL(stage.destination_url);
+      const destination = new URL(destinationUrl);
       for (const [key, value] of Object.entries(req.query)) {
         if (!value || key === 'src' || key === 'tmx_u') continue;
         if (!destination.searchParams.has(key)) destination.searchParams.set(key, value);
