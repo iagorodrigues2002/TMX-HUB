@@ -1219,12 +1219,21 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           `;
           attributedVisitorId = identityMatch?.visitor_id ?? null;
         }
-        const [productKind] = event.product.id
+        let [productKind] = event.product.id
           ? await sql<{ kind: string }[]>`
               SELECT kind FROM tracking_product_kinds
               WHERE project_id = ${connection.project_id} AND product_id = ${event.product.id}
             `
           : [];
+        if (!productKind && event.product.name) {
+          [productKind] = await sql<{ kind: string }[]>`
+            SELECT order_kind AS kind FROM tracking_orders
+            WHERE project_id=${connection.project_id}
+              AND order_kind <> 'unknown'
+              AND lower(trim(product->>'name'))=lower(trim(${event.product.name}))
+            ORDER BY updated_at DESC LIMIT 1
+          `;
+        }
         const orderKind = productKind?.kind ?? 'unknown';
         // Upsell checkouts frequently omit src/UTMs. Inherit them from the
         // closest prior front sale for the same exact email/phone so every

@@ -58,6 +58,7 @@ const migrations = [
   '043_vendepay_numeric_paid_status.sql',
   '044_vendepay_completed_statuses.sql',
   '045_merge_legacy_vendepay_order_codes.sql',
+  '046_repair_order_kind_by_product_name.sql',
 ];
 
 await sql`
