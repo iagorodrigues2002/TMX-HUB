@@ -54,6 +54,9 @@ const migrations = [
   '039_name_existing_vendepay_connections.sql',
   '040_entry_link_edit_and_ab.sql',
   '041_upsell_intelligence.sql',
+  '042_tracking_order_vendepay_connection.sql',
+  '043_vendepay_numeric_paid_status.sql',
+  '044_vendepay_completed_statuses.sql',
 ];
 
 await sql`
