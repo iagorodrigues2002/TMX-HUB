@@ -268,11 +268,6 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!env.TRACKING_ENCRYPTION_KEY) {
         return reply.code(503).send({ error: 'tracking_encryption_unavailable' });
       }
-      const today = saoPauloParts(new Date()).date;
-      const fromDate = /^\d{4}-\d{2}-\d{2}$/.test(req.query.from ?? '') ? req.query.from! : today;
-      const toDate = /^\d{4}-\d{2}-\d{2}$/.test(req.query.to ?? '') ? req.query.to! : fromDate;
-      const fromInstant = new Date(saoPauloDayRange(fromDate).from);
-      const toInstant = new Date(saoPauloDayRange(toDate).to);
       const [identities, stages, approvedFronts] = await Promise.all([
         app.db<Array<{
           id: string;
@@ -285,7 +280,6 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           FROM tracking_upsell_identities
           WHERE project_id=${p.id}
           ORDER BY last_seen_at DESC
-          LIMIT 2000
         `,
         app.db<Array<{ id: string; stage_key: string; name: string; destination_url: string }>>`
           SELECT id,stage_key,name,destination_url
@@ -298,7 +292,6 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           FROM tracking_orders o
           LEFT JOIN vendepay_connections vc ON vc.id=o.vendepay_connection_id
           WHERE o.project_id=${p.id} AND o.order_kind='front' AND o.paid_at IS NOT NULL
-            AND o.paid_at >= ${fromInstant} AND o.paid_at < ${toInstant}
         `,
       ]);
       const approvedFrontById = new Map(

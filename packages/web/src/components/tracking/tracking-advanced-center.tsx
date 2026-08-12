@@ -1421,7 +1421,7 @@ export function TrackingAdvancedCenter({
                     )}
                   </div>
                   <p className="mt-1 text-xs text-white/40">
-                    Somente vendas front aprovadas no período. Cada botão abre diretamente a etapa escolhida.
+                    Histórico completo de vendas front aprovadas, da mais recente para a mais antiga.
                   </p>
                 </div>
                 <div className="overflow-x-auto">
@@ -1471,7 +1471,9 @@ export function TrackingAdvancedCenter({
                   </table>
                 </div>
                 {!upsellIdentities.isLoading && !upsellIdentities.data?.items.length && (
-                  <p className="px-4 py-5 text-sm text-white/40">Nenhum vendaId identificado neste período.</p>
+                  <p className="px-4 py-5 text-sm text-white/40">
+                    Nenhum vendaId de compra front aprovada foi identificado.
+                  </p>
                 )}
               </div>
             </Module>
