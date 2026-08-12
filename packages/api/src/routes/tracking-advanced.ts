@@ -279,7 +279,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           connection_name: string;
           has_upsell: boolean;
         }>>`
-          SELECT r.id,r.payload,o.visitor_id,o.external_id,o.paid_at,
+          SELECT o.id,NULL::jsonb AS payload,o.visitor_id,o.external_id,o.paid_at,
                  COALESCE(vc.name,'Vendepay') AS connection_name,
                  EXISTS (
                    SELECT 1 FROM tracking_orders upsell
@@ -297,11 +297,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                        (o.visitor_id IS NOT NULL AND upsell.visitor_id=o.visitor_id)
                      )
                  ) AS has_upsell
-          FROM webhook_receipts r
-          JOIN tracking_orders o ON o.id=r.order_id
-          JOIN vendepay_connections vc ON vc.id=r.connection_id
+          FROM tracking_orders o
+          LEFT JOIN vendepay_connections vc ON vc.id=o.vendepay_connection_id
           WHERE o.project_id=${p.id} AND o.order_kind='front' AND o.paid_at IS NOT NULL
-          ORDER BY o.paid_at DESC,r.received_at DESC
+          ORDER BY o.paid_at DESC,o.updated_at DESC
         `,
         app.db<Array<{ id: string; stage_key: string; name: string; slug: string; destination_url: string }>>`
           SELECT id,stage_key,name,slug,destination_url
