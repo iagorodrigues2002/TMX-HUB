@@ -2168,6 +2168,12 @@ export const apiClient = {
     return request(`/v1/offers/${id}/tracking/upsell-identities/reconcile`, { method: 'POST' });
   },
 
+  async checkTrackingUpsellCompatibility(url: string): Promise<{ compatible: boolean; reason: string | null }> {
+    const checkUrl = new URL(url);
+    checkUrl.pathname = `${checkUrl.pathname.replace(/\/$/, '')}/check`;
+    return request(`${checkUrl.pathname}${checkUrl.search}`);
+  },
+
   async updateTrackingUpsell(
     id: string,
     stageId: string,

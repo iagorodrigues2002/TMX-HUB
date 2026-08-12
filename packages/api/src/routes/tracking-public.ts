@@ -41,6 +41,37 @@ const BootstrapSchema = z.object({
   source: z.record(z.string(), z.string().max(2048)).default({}),
   tracking_token: z.string().max(2048).optional(),
 });
+
+const upsellCompatibilityCache = new Map<string, { compatible: boolean; expiresAt: number }>();
+
+async function checkUpsellCompatibility(destinationUrl: string, vendaId: string) {
+  const cacheKey = `${destinationUrl}|${vendaId}`;
+  const cached = upsellCompatibilityCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.compatible;
+  let compatible = false;
+  try {
+    const pageResponse = await fetch(destinationUrl, {
+      signal: AbortSignal.timeout(6_000),
+      headers: { 'user-agent': 'TMX-Upsell-Validator/1.0' },
+    });
+    const pageHtml = pageResponse.ok ? await pageResponse.text() : '';
+    const upsellId = pageHtml.match(/upsellId=([0-9a-f-]{36})/i)?.[1];
+    if (upsellId) {
+      const intentUrl = new URL('https://bff.vendepay.com/api/up-sell/intent');
+      intentUrl.searchParams.set('upsellId', upsellId);
+      intentUrl.searchParams.set('vendaId', vendaId);
+      const intentResponse = await fetch(intentUrl, {
+        signal: AbortSignal.timeout(6_000),
+        headers: { accept: 'application/json', 'user-agent': 'TMX-Upsell-Validator/1.0' },
+      });
+      compatible = intentResponse.ok;
+    }
+  } catch {
+    compatible = false;
+  }
+  upsellCompatibilityCache.set(cacheKey, { compatible, expiresAt: Date.now() + 10 * 60_000 });
+  return compatible;
+}
 const AbAssignmentSchema = z.object({
   public_key: z.string().min(8).max(120),
   visitor_id: z.string().min(8).max(120),
@@ -913,6 +944,23 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   });
 
   app.get<{ Params: { slug: string }; Querystring: Record<string, string | undefined> }>(
+    '/u/:slug/check',
+    async (req, reply) => {
+      if (!app.db) return reply.code(503).send({ compatible: false, reason: 'unavailable' });
+      const vendaId = req.query.vendaId?.trim();
+      if (!vendaId) return reply.code(400).send({ compatible: false, reason: 'missing_venda_id' });
+      const [stage] = await app.db<Array<{ destination_url: string; enabled: boolean }>>`
+        SELECT destination_url,enabled FROM tracking_upsell_stages
+        WHERE slug=${req.params.slug} LIMIT 1
+      `;
+      if (!stage?.enabled) return reply.code(404).send({ compatible: false, reason: 'inactive' });
+      const compatible = await checkUpsellCompatibility(stage.destination_url, vendaId);
+      reply.header('cache-control', 'private, max-age=300');
+      return { compatible, reason: compatible ? null : 'vendepay_not_eligible' };
+    },
+  );
+
+  app.get<{ Params: { slug: string }; Querystring: Record<string, string | undefined> }>(
     '/u/:slug',
     async (req, reply) => {
       if (!app.db) return reply.code(503).send({ error: 'tracking_unavailable' });
@@ -925,27 +973,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!stage?.enabled) return reply.code(404).send({ error: 'upsell_stage_inactive' });
       const requestedVendaId = req.query.vendaId?.trim();
       if (requestedVendaId) {
-        let compatible = false;
-        try {
-          const pageResponse = await fetch(stage.destination_url, {
-            signal: AbortSignal.timeout(6_000),
-            headers: { 'user-agent': 'TMX-Upsell-Validator/1.0' },
-          });
-          const pageHtml = pageResponse.ok ? await pageResponse.text() : '';
-          const upsellId = pageHtml.match(/upsellId=([0-9a-f-]{36})/i)?.[1];
-          if (upsellId) {
-            const intentUrl = new URL('https://bff.vendepay.com/api/up-sell/intent');
-            intentUrl.searchParams.set('upsellId', upsellId);
-            intentUrl.searchParams.set('vendaId', requestedVendaId);
-            const intentResponse = await fetch(intentUrl, {
-              signal: AbortSignal.timeout(6_000),
-              headers: { accept: 'application/json', 'user-agent': 'TMX-Upsell-Validator/1.0' },
-            });
-            compatible = intentResponse.ok;
-          }
-        } catch {
-          compatible = false;
-        }
+        const compatible = await checkUpsellCompatibility(stage.destination_url, requestedVendaId);
         if (!compatible) {
           return reply
             .code(422)
