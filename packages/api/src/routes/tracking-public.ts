@@ -1262,7 +1262,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             (id, project_id, provider, external_id, status, amount_minor, currency,
              amount_brl_minor, exchange_rate, converted_at,
              visitor_id, buyer, raw_status, occurred_at, paid_at, payment_method,
-             product, attribution_source, order_kind, cancelled_at, refunded_at, chargeback_at)
+             product, attribution_source, order_kind, cancelled_at, refunded_at, chargeback_at,
+             vendepay_connection_id)
           VALUES
             (${ulid()}, ${connection.project_id}, 'vendepay', ${event.transactionId},
              ${event.status}, ${event.amountMinor ?? null}, ${event.currency ?? null},
@@ -1272,7 +1273,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
              ${event.paymentMethod ?? null}, ${sql.json(event.product)}, ${sql.json(resolvedAttributionSource)},
              ${orderKind}, ${event.status === 'cancelled' ? event.occurredAt : null},
              ${event.status === 'refunded' ? event.occurredAt : null},
-             ${event.status === 'chargeback' ? event.occurredAt : null})
+             ${event.status === 'chargeback' ? event.occurredAt : null}, ${connection.id})
           ON CONFLICT (project_id, provider, external_id) DO UPDATE SET
             status = CASE
               WHEN tracking_orders.status IN ('refunded', 'chargeback') THEN tracking_orders.status
@@ -1319,6 +1320,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
               WHEN EXCLUDED.order_kind <> 'unknown' THEN EXCLUDED.order_kind
               ELSE tracking_orders.order_kind
             END,
+            vendepay_connection_id = EXCLUDED.vendepay_connection_id,
             updated_at = now()
           RETURNING id, status, order_kind
         `;

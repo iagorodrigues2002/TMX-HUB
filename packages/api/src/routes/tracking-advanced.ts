@@ -293,27 +293,30 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           WHERE project_id=${p.id} AND enabled=true
           ORDER BY CASE stage_key WHEN 'upsell_1' THEN 1 WHEN 'upsell_2' THEN 2 ELSE 3 END
         `,
-        app.db<Array<{ external_id: string; paid_at: Date }>>`
-          SELECT external_id,paid_at FROM tracking_orders
-          WHERE project_id=${p.id} AND order_kind='front' AND paid_at IS NOT NULL
-            AND paid_at >= ${fromInstant} AND paid_at < ${toInstant}
+        app.db<Array<{ external_id: string; paid_at: Date; connection_name: string }>>`
+          SELECT o.external_id,o.paid_at,COALESCE(vc.name,'Vendepay') AS connection_name
+          FROM tracking_orders o
+          LEFT JOIN vendepay_connections vc ON vc.id=o.vendepay_connection_id
+          WHERE o.project_id=${p.id} AND o.order_kind='front' AND o.paid_at IS NOT NULL
+            AND o.paid_at >= ${fromInstant} AND o.paid_at < ${toInstant}
         `,
       ]);
       const approvedFrontById = new Map(
-        approvedFronts.map((order) => [order.external_id, order.paid_at]),
+        approvedFronts.map((order) => [order.external_id, order]),
       );
       reply.header('cache-control', 'no-store');
       return {
         items: identities.flatMap((identity) => {
           try {
             const vendid = decryptSecret(identity.vendid_encrypted, env.TRACKING_ENCRYPTION_KEY!);
-            const approvedAt = approvedFrontById.get(vendid);
-            if (!approvedAt) return [];
+            const approvedFront = approvedFrontById.get(vendid);
+            if (!approvedFront) return [];
             return [{
               id: identity.id,
               visitor_id: identity.visitor_id,
               vendid,
-              approved_at: approvedAt,
+              approved_at: approvedFront.paid_at,
+              connection_name: approvedFront.connection_name,
               first_seen_at: identity.first_seen_at,
               last_seen_at: identity.last_seen_at,
               links: stages.map((stage) => {

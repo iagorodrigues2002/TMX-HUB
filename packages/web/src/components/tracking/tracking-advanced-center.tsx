@@ -1428,6 +1428,7 @@ export function TrackingAdvancedCenter({
                       <tr className="border-b border-white/[0.06]">
                         <th className="px-4 py-3 font-medium">vendaId</th>
                         <th className="px-4 py-3 font-medium">Compra aprovada</th>
+                        <th className="px-4 py-3 font-medium">Origem</th>
                         <th className="px-4 py-3 font-medium">Abrir upsell</th>
                       </tr>
                     </thead>
@@ -1441,6 +1442,11 @@ export function TrackingAdvancedCenter({
                             {new Date(identity.approved_at).toLocaleString('pt-BR', {
                               timeZone: 'America/Sao_Paulo',
                             })}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3">
+                            <span className="rounded-full border border-cyan-300/20 bg-cyan-300/[0.06] px-2.5 py-1 text-cyan-100">
+                              {identity.connection_name}
+                            </span>
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex flex-wrap gap-2">

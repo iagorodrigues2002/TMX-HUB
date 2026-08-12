@@ -2142,6 +2142,7 @@ export const apiClient = {
       visitor_id: string;
       vendid: string;
       approved_at: string;
+      connection_name: string;
       first_seen_at: string;
       last_seen_at: string;
       links: Array<{
