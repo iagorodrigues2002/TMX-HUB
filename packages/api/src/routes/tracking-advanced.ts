@@ -301,7 +301,6 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           JOIN tracking_orders o ON o.id=r.order_id
           JOIN vendepay_connections vc ON vc.id=r.connection_id
           WHERE o.project_id=${p.id} AND o.order_kind='front' AND o.paid_at IS NOT NULL
-            AND lower(trim(vc.name)) NOT LIKE '%lucas%'
           ORDER BY o.paid_at DESC,r.received_at DESC
         `,
         app.db<Array<{ id: string; stage_key: string; name: string; slug: string; destination_url: string }>>`
@@ -426,8 +425,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           LIMIT 1
         `;
         if (
-          !order?.visitor_id ||
-          !order.paid_at ||
+          !order?.paid_at ||
           order.order_kind !== 'front' ||
           event.status !== 'paid'
         ) continue;
@@ -445,10 +443,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         if (!vendid) continue;
         found += 1;
         const hash = createHash('sha256').update(vendid).digest('hex');
+        const identityVisitorId = order.visitor_id ?? `vendepay:${event.transactionId}`;
         await app.db`
           INSERT INTO tracking_upsell_identities
             (id,project_id,visitor_id,vendid_hash,vendid_encrypted)
-          VALUES(${ulid()},${p.id},${order.visitor_id},${hash},
+          VALUES(${ulid()},${p.id},${identityVisitorId},${hash},
             ${encryptSecret(vendid, env.TRACKING_ENCRYPTION_KEY)})
           ON CONFLICT(project_id,vendid_hash) DO UPDATE SET
             visitor_id=EXCLUDED.visitor_id,last_seen_at=now()

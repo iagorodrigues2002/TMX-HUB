@@ -1260,14 +1260,19 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           event.status === 'paid' &&
           orderKind === 'front' &&
           effectiveVendid &&
-          attributedVisitorId &&
           env.TRACKING_ENCRYPTION_KEY
         ) {
+          // A paid gateway order is authoritative even when the browser
+          // journey could not be attributed. Keep its vendaId available for
+          // Upsell Intelligence and reconcile the visitor later if one is
+          // discovered.
+          const identityVisitorId =
+            attributedVisitorId ?? `vendepay:${event.transactionId}`;
           const vendidHash = createHash('sha256').update(effectiveVendid).digest('hex');
           await sql`
             INSERT INTO tracking_upsell_identities
               (id,project_id,visitor_id,vendid_hash,vendid_encrypted)
-            VALUES(${ulid()},${connection.project_id},${attributedVisitorId},${vendidHash},
+            VALUES(${ulid()},${connection.project_id},${identityVisitorId},${vendidHash},
               ${encryptSecret(effectiveVendid, env.TRACKING_ENCRYPTION_KEY)})
             ON CONFLICT(project_id,vendid_hash) DO UPDATE SET
               visitor_id=EXCLUDED.visitor_id,last_seen_at=now()
