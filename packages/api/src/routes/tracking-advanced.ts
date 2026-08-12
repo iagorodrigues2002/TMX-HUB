@@ -265,21 +265,22 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin');
       if (!app.db) return reply.code(503).send(databaseUnavailable);
       if (!p) return { items: [] };
-      if (!env.TRACKING_ENCRYPTION_KEY) {
-        return reply.code(503).send({ error: 'tracking_encryption_unavailable' });
-      }
-      const [identities, stages, approvedFronts] = await Promise.all([
+      const [approvedReceipts, stages] = await Promise.all([
         app.db<Array<{
           id: string;
-          visitor_id: string;
-          vendid_encrypted: string;
-          first_seen_at: Date;
-          last_seen_at: Date;
+          payload: unknown;
+          visitor_id: string | null;
+          external_id: string;
+          paid_at: Date;
+          connection_name: string;
         }>>`
-          SELECT id,visitor_id,vendid_encrypted,first_seen_at,last_seen_at
-          FROM tracking_upsell_identities
-          WHERE project_id=${p.id}
-          ORDER BY last_seen_at DESC
+          SELECT r.id,r.payload,o.visitor_id,o.external_id,o.paid_at,
+                 COALESCE(vc.name,'Vendepay') AS connection_name
+          FROM webhook_receipts r
+          JOIN tracking_orders o ON o.id=r.order_id
+          JOIN vendepay_connections vc ON vc.id=r.connection_id
+          WHERE o.project_id=${p.id} AND o.order_kind='front' AND o.paid_at IS NOT NULL
+          ORDER BY o.paid_at DESC,r.received_at DESC
         `,
         app.db<Array<{ id: string; stage_key: string; name: string; destination_url: string }>>`
           SELECT id,stage_key,name,destination_url
@@ -287,30 +288,27 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           WHERE project_id=${p.id} AND enabled=true
           ORDER BY CASE stage_key WHEN 'upsell_1' THEN 1 WHEN 'upsell_2' THEN 2 ELSE 3 END
         `,
-        app.db<Array<{ external_id: string; paid_at: Date; connection_name: string }>>`
-          SELECT o.external_id,o.paid_at,COALESCE(vc.name,'Vendepay') AS connection_name
-          FROM tracking_orders o
-          LEFT JOIN vendepay_connections vc ON vc.id=o.vendepay_connection_id
-          WHERE o.project_id=${p.id} AND o.order_kind='front' AND o.paid_at IS NOT NULL
-        `,
       ]);
-      const approvedFrontById = new Map(
-        approvedFronts.map((order) => [order.external_id, order]),
-      );
       reply.header('cache-control', 'no-store');
-      const items = identities.flatMap((identity) => {
-          try {
-            const vendid = decryptSecret(identity.vendid_encrypted, env.TRACKING_ENCRYPTION_KEY!);
-            const approvedFront = approvedFrontById.get(vendid);
-            if (!approvedFront) return [];
+      const seen = new Set<string>();
+      const items = approvedReceipts.flatMap((receipt) => {
+          const normalized = normalizeVendepay(receipt.payload);
+          if (
+            normalized.kind !== 'processable' ||
+            normalized.event.status !== 'paid' ||
+            normalized.event.transactionId !== receipt.external_id
+          ) return [];
+          const vendid = normalized.event.vendid ?? receipt.external_id;
+          if (seen.has(vendid)) return [];
+          seen.add(vendid);
             return [{
-              id: identity.id,
-              visitor_id: identity.visitor_id,
+              id: receipt.id,
+              visitor_id: receipt.visitor_id ?? '',
               vendid,
-              approved_at: approvedFront.paid_at,
-              connection_name: approvedFront.connection_name,
-              first_seen_at: identity.first_seen_at,
-              last_seen_at: identity.last_seen_at,
+              approved_at: receipt.paid_at,
+              connection_name: receipt.connection_name,
+              first_seen_at: receipt.paid_at,
+              last_seen_at: receipt.paid_at,
               links: stages.map((stage) => {
                 const destination = new URL(stage.destination_url);
                 destination.searchParams.delete('vendid');
@@ -319,9 +317,6 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                 return { stage_id: stage.id, stage_key: stage.stage_key, name: stage.name, url: destination.toString() };
               }),
             }];
-          } catch {
-            return [];
-          }
         });
       items.sort(
         (left, right) =>
@@ -348,11 +343,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         ORDER BY r.received_at DESC
         LIMIT 1000
       `;
-      const paidFronts = await app.db<Array<{ external_id: string }>>`
-        SELECT external_id FROM tracking_orders
-        WHERE project_id=${p.id} AND order_kind='front' AND paid_at IS NOT NULL
-      `;
-      const validVendid = new Set(paidFronts.map((order) => order.external_id));
+      const validVendid = new Set<string>();
       let found = 0;
       let stored = 0;
       for (const receipt of receipts) {
@@ -377,7 +368,6 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         ) continue;
         let vendid = event.vendid;
         if (!vendid) vendid = event.transactionId;
-        if (vendid !== event.transactionId) continue;
         validVendid.add(vendid);
         if (!vendid) continue;
         found += 1;
