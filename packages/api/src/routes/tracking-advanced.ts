@@ -332,13 +332,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             const fallback = receipt.external_id;
             const fallbackHash = createHash('sha256').update(fallback).digest('hex');
             const alreadyConfirmed = confirmedHashes.has(fallbackHash);
-            const validated = alreadyConfirmed
-              ? [true]
-              : await Promise.all(
-                  stages.map((stage) =>
-                    checkUpsellCompatibility(stage.destination_url, fallback),
-                  ),
-                );
+            // Never fan out to Vendepay while rendering the dashboard. That
+            // made the whole Tracking page wait on dozens of remote requests.
+            // New fallback IDs are confirmed by the explicit reconciliation;
+            // identities already confirmed remain immediately available.
+            const validated = alreadyConfirmed ? [true] : [];
             // Some Vendepay payload variants expose the real vendaId only as
             // the primary transaction id. Accept that fallback solely when
             // Vendepay itself confirms it for a configured upsell.
@@ -399,6 +397,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         ORDER BY r.received_at DESC
         LIMIT 1000
       `;
+      const stages = await app.db<Array<{ destination_url: string }>>`
+        SELECT destination_url FROM tracking_upsell_stages
+        WHERE project_id=${p.id} AND enabled=true
+      `;
       const paidFronts = await app.db<Array<{ external_id: string }>>`
         SELECT external_id FROM tracking_orders
         WHERE project_id=${p.id} AND order_kind='front' AND paid_at IS NOT NULL
@@ -430,7 +432,15 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           event.status !== 'paid'
         ) continue;
         let vendid = event.vendid;
-        if (!vendid) continue;
+        if (!vendid) {
+          const validated = await Promise.all(
+            stages.map((stage) =>
+              checkUpsellCompatibility(stage.destination_url, event.transactionId),
+            ),
+          );
+          if (!validated.some(Boolean)) continue;
+          vendid = event.transactionId;
+        }
         validVendid.add(vendid);
         if (!vendid) continue;
         found += 1;
