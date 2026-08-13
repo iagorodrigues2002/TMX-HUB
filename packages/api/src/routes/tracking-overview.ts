@@ -26,6 +26,8 @@ const DEFAULT_FEE_SETTINGS = {
   reserve_pct: '6.9',
 };
 
+const REFUND_CHARGEBACK_FEE_USD_MINOR = 2_700;
+
 const databaseUnavailable = {
   error: 'tracking_database_unavailable',
   detail: 'A infraestrutura de tracking está temporariamente indisponível.',
@@ -200,11 +202,24 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           const feeVendepayBrlMinor = Math.round((grossBrlMinor * feePct) / 100);
           const reserveBrlMinor = Math.round((grossBrlMinor * reservePct) / 100);
           const feesBrlMinor = feeVendepayBrlMinor + extraFeeBrlMinor;
+          const refundChargebackFeeCount = row.refunded_orders + row.chargeback_orders;
+          const refundChargebackFeeUsdMinor =
+            refundChargebackFeeCount * REFUND_CHARGEBACK_FEE_USD_MINOR;
+          const refundChargebackFeeConversion = await convertToBrlMinor(
+            refundChargebackFeeUsdMinor,
+            'USD',
+            app.db!,
+          );
+          const refundChargebackFeeBrlMinor = refundChargebackFeeConversion?.brlMinor ?? 0;
           // "Total" assumes the reserve is already released; "available"
           // subtracts it too, since Vendepay is still holding it back.
           // total = available + reserve — the reserve is never double-counted.
           const netTotalBrlMinor =
-            grossBrlMinor - refundedBrlMinor - chargebackBrlMinor - feesBrlMinor;
+            grossBrlMinor -
+            refundedBrlMinor -
+            chargebackBrlMinor -
+            feesBrlMinor -
+            refundChargebackFeeBrlMinor;
           const netAvailableBrlMinor = netTotalBrlMinor - reserveBrlMinor;
           return {
             offer_id: row.offer_id,
@@ -223,6 +238,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             chargeback_revenue_usd_minor: String(toUsdMinor(chargebackBrlMinor)),
             fees_brl_minor: String(feesBrlMinor),
             fees_usd_minor: String(toUsdMinor(feesBrlMinor)),
+            refund_chargeback_fee_count: refundChargebackFeeCount,
+            refund_chargeback_fee_brl_minor: String(refundChargebackFeeBrlMinor),
+            refund_chargeback_fee_usd_minor: String(refundChargebackFeeUsdMinor),
             reserve_brl_minor: String(reserveBrlMinor),
             reserve_usd_minor: String(toUsdMinor(reserveBrlMinor)),
             net_revenue_brl_minor: String(netTotalBrlMinor),
@@ -250,6 +268,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           chargeback_revenue_brl_minor:
             acc.chargeback_revenue_brl_minor + Number(offer.chargeback_revenue_brl_minor),
           fees_brl_minor: acc.fees_brl_minor + Number(offer.fees_brl_minor),
+          refund_chargeback_fee_count:
+            acc.refund_chargeback_fee_count + offer.refund_chargeback_fee_count,
+          refund_chargeback_fee_brl_minor:
+            acc.refund_chargeback_fee_brl_minor + Number(offer.refund_chargeback_fee_brl_minor),
           reserve_brl_minor: acc.reserve_brl_minor + Number(offer.reserve_brl_minor),
           net_revenue_brl_minor: acc.net_revenue_brl_minor + Number(offer.net_revenue_brl_minor),
           net_available_brl_minor:
@@ -265,6 +287,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           chargeback_orders: 0,
           chargeback_revenue_brl_minor: 0,
           fees_brl_minor: 0,
+          refund_chargeback_fee_count: 0,
+          refund_chargeback_fee_brl_minor: 0,
           reserve_brl_minor: 0,
           net_revenue_brl_minor: 0,
           net_available_brl_minor: 0,
@@ -291,6 +315,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           chargeback_revenue_usd_minor: String(toUsdMinor(totals.chargeback_revenue_brl_minor)),
           fees_brl_minor: String(totals.fees_brl_minor),
           fees_usd_minor: String(toUsdMinor(totals.fees_brl_minor)),
+          refund_chargeback_fee_count: totals.refund_chargeback_fee_count,
+          refund_chargeback_fee_brl_minor: String(totals.refund_chargeback_fee_brl_minor),
+          refund_chargeback_fee_usd_minor: String(
+            totals.refund_chargeback_fee_count * REFUND_CHARGEBACK_FEE_USD_MINOR,
+          ),
           reserve_brl_minor: String(totals.reserve_brl_minor),
           reserve_usd_minor: String(toUsdMinor(totals.reserve_brl_minor)),
           net_revenue_brl_minor: String(totals.net_revenue_brl_minor),

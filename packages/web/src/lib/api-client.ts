@@ -1533,6 +1533,9 @@ export const apiClient = {
     chargeback_orders: number;
     chargeback_revenue_brl_minor: string;
     chargeback_revenue_usd_minor: string;
+    refund_chargeback_fee_count: number;
+    refund_chargeback_fee_brl_minor: string;
+    refund_chargeback_fee_usd_minor: string;
     webhooks_received: number;
     webhooks_quarantined: number;
     utmify_deliveries_attempted: number;
@@ -1630,6 +1633,9 @@ export const apiClient = {
       chargeback_revenue_usd_minor: string;
       fees_brl_minor: string;
       fees_usd_minor: string;
+      refund_chargeback_fee_count: number;
+      refund_chargeback_fee_brl_minor: string;
+      refund_chargeback_fee_usd_minor: string;
       reserve_brl_minor: string;
       reserve_usd_minor: string;
       net_revenue_brl_minor: string;
@@ -1652,6 +1658,9 @@ export const apiClient = {
       chargeback_revenue_usd_minor: string;
       fees_brl_minor: string;
       fees_usd_minor: string;
+      refund_chargeback_fee_count: number;
+      refund_chargeback_fee_brl_minor: string;
+      refund_chargeback_fee_usd_minor: string;
       reserve_brl_minor: string;
       reserve_usd_minor: string;
       net_revenue_brl_minor: string;

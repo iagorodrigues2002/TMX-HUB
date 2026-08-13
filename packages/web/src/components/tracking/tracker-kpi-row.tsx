@@ -36,6 +36,9 @@ type Summary = {
   refunded_revenue_brl_minor?: string;
   refunded_revenue_usd_minor?: string;
   chargeback_orders?: number;
+  refund_chargeback_fee_count?: number;
+  refund_chargeback_fee_brl_minor?: string;
+  refund_chargeback_fee_usd_minor?: string;
   chargeback_revenue_brl_minor?: string;
   chargeback_revenue_usd_minor?: string;
   fee_vendepay_brl_minor?: string;
@@ -249,6 +252,12 @@ export function TrackerKpiRow({ summary }: { summary?: Summary }) {
               tone="signal"
             />
             <StripReading
+              label="Taxa de reembolso/chargeback"
+              value={pick(s?.refund_chargeback_fee_brl_minor, s?.refund_chargeback_fee_usd_minor)}
+              detail={`${integer(s?.refund_chargeback_fee_count)} ocorrências · US$ 27 cada`}
+              tone={(s?.refund_chargeback_fee_count ?? 0) > 0 ? 'scar' : 'muted'}
+            />
+            <StripReading
               label="Em reserva (retido)"
               value={pick(s?.reserve_brl_minor, s?.reserve_usd_minor)}
               detail={
@@ -261,10 +270,14 @@ export function TrackerKpiRow({ summary }: { summary?: Summary }) {
           </div>
           <div className="tmx-kpi-tier1 mt-2">
             <HeroReading
-              eyebrow="Líquido disponível agora"
+              eyebrow="Disponível real agora"
               value={pick(s?.net_available_brl_minor, s?.net_available_usd_minor)}
               valueVariant="currency"
-              satellite={<span className="tmx-kpi-sat-tag">já descontada a reserva</span>}
+              satellite={
+                <span className="tmx-kpi-sat-tag">
+                  reserva e taxas de reembolso/chargeback descontadas
+                </span>
+              }
             />
             <HeroReading
               eyebrow="Líquido total (reserva já liberada)"

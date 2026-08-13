@@ -92,7 +92,7 @@ export function TrackingOverviewDashboard() {
       ) : (
         <>
           <div data-surface="tracking" className="tmx-kpi rounded-lg">
-            <div className="tmx-kpi-tier2 tmx-kpi-tier2-five">
+            <div className="tmx-kpi-tier2 tmx-kpi-tier2-six">
               <div className="tmx-kpi-strip-cell">
                 <div className="tmx-kpi-strip-head">
                   <span className="tmx-kpi-strip-label">Bruto</span>
@@ -151,15 +151,29 @@ export function TrackingOverviewDashboard() {
                 </p>
                 <p className="tmx-kpi-strip-detail">soma ao líquido quando liberar</p>
               </div>
+              <div className="tmx-kpi-strip-cell">
+                <div className="tmx-kpi-strip-head">
+                  <span className="tmx-kpi-strip-label">Taxa de reembolso/chargeback</span>
+                </div>
+                <p className="mono-num tmx-kpi-strip-value text-red-200">
+                  {pick(
+                    totals?.refund_chargeback_fee_brl_minor,
+                    totals?.refund_chargeback_fee_usd_minor,
+                  )}
+                </p>
+                <p className="tmx-kpi-strip-detail">
+                  {integer(totals?.refund_chargeback_fee_count)} ocorrências · US$ 27 cada
+                </p>
+              </div>
             </div>
             <div className="tmx-kpi-tier1">
               <div className="tmx-kpi-hero">
-                <p className="tmx-kpi-hero-eyebrow">Líquido disponível agora</p>
+                <p className="tmx-kpi-hero-eyebrow">Disponível real agora</p>
                 <p className="mono-num tmx-kpi-hero-value tmx-kpi-hero-value-currency">
                   {pick(totals?.net_available_brl_minor, totals?.net_available_usd_minor)}
                 </p>
                 <div className="tmx-kpi-hero-sat">
-                  <span className="tmx-kpi-sat-tag">já descontada a reserva</span>
+                  <span className="tmx-kpi-sat-tag">reserva e taxa de R/CB descontadas</span>
                 </div>
               </div>
               <div className="tmx-kpi-hero">
@@ -193,6 +207,7 @@ export function TrackingOverviewDashboard() {
                   <th className="p-3 font-medium">Reembolsos</th>
                   <th className="p-3 font-medium">Chargeback</th>
                   <th className="p-3 font-medium">Taxas</th>
+                  <th className="p-3 font-medium">Taxa R/CB</th>
                   <th className="p-3 font-medium">Em reserva</th>
                   <th className="p-3 font-medium">Líquido agora</th>
                   <th className="p-3 font-medium">Líquido total</th>
@@ -225,6 +240,17 @@ export function TrackingOverviewDashboard() {
                     </td>
                     <td className="mono-num p-3 text-white/50">
                       {pick(offer.fees_brl_minor, offer.fees_usd_minor)}
+                    </td>
+                    <td className="mono-num p-3 text-red-200/80">
+                      <span className="block">
+                        {pick(
+                          offer.refund_chargeback_fee_brl_minor,
+                          offer.refund_chargeback_fee_usd_minor,
+                        )}
+                      </span>
+                      <span className="mt-1 block text-[10px] text-white/35">
+                        {integer(offer.refund_chargeback_fee_count)} ocorrências
+                      </span>
                     </td>
                     <td className="mono-num p-3 text-white/50">
                       {pick(offer.reserve_brl_minor, offer.reserve_usd_minor)}

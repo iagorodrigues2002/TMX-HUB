@@ -76,6 +76,8 @@ const DEFAULT_FEE_SETTINGS = {
   payout_days: 5,
 };
 
+const REFUND_CHARGEBACK_FEE_USD_MINOR = 2_700;
+
 const FeeSettingsSchema = z.object({
   vendepay_fee_pct: z.coerce.number().min(0).max(100),
   extra_fee_minor: z.coerce.number().int().min(0),
@@ -1824,6 +1826,16 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       const reserveBrlMinor = Math.round((grossBrlMinor * Number(fee.reserve_pct)) / 100);
       const refundedBrlMinor = Number(summary?.refunded_revenue_brl_minor ?? 0);
       const chargebackBrlMinor = Number(summary?.chargeback_revenue_brl_minor ?? 0);
+      const refundChargebackFeeCount =
+        (summary?.refunded_orders ?? 0) + (summary?.chargeback_orders ?? 0);
+      const refundChargebackFeeUsdMinor =
+        refundChargebackFeeCount * REFUND_CHARGEBACK_FEE_USD_MINOR;
+      const refundChargebackFeeConversion = await convertToBrlMinor(
+        refundChargebackFeeUsdMinor,
+        'USD',
+        app.db,
+      );
+      const refundChargebackFeeBrlMinor = refundChargebackFeeConversion?.brlMinor ?? 0;
       // "Total" includes the reserve as if it were already released; "available"
       // subtracts it too, since Vendepay is still holding it back. The reserve
       // never gets added to either figure twice — total = available + reserve.
@@ -1832,7 +1844,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         refundedBrlMinor -
         chargebackBrlMinor -
         feeVendepayBrlMinor -
-        feeExtraBrlMinor;
+        feeExtraBrlMinor -
+        refundChargebackFeeBrlMinor;
       const netAvailableBrlMinor = netRevenueBrlMinor - reserveBrlMinor;
       const usdRate = await getBrlRate('USD', app.db);
       const toUsdMinor = (brlMinor: number) => (usdRate ? Math.round(brlMinor / usdRate) : 0);
@@ -1883,6 +1896,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         fee_vendepay_usd_minor: String(toUsdMinor(feeVendepayBrlMinor)),
         fee_extra_brl_minor: String(feeExtraBrlMinor),
         fee_extra_usd_minor: String(toUsdMinor(feeExtraBrlMinor)),
+        refund_chargeback_fee_count: refundChargebackFeeCount,
+        refund_chargeback_fee_brl_minor: String(refundChargebackFeeBrlMinor),
+        refund_chargeback_fee_usd_minor: String(refundChargebackFeeUsdMinor),
         reserve_brl_minor: String(reserveBrlMinor),
         reserve_usd_minor: String(toUsdMinor(reserveBrlMinor)),
         net_revenue_brl_minor: String(netRevenueBrlMinor),
