@@ -799,6 +799,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       ...(recentTouch?.source ?? {}),
       ...redirectAttribution,
     };
+    // The Typebot button can be clicked while the landing PageView request is
+    // still committing. Give that first-party touch a brief chance to become
+    // visible before permanently emitting an unattributed checkout.
+    if (userAgent && !hasCampaignAttribution(mergedRecentSource)) {
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    }
     // A landing can reopen in another browser context and lose its URL/local
     // storage while keeping the same network and user agent. If the exact
     // visitor touch is empty, prefer the latest attributed touch from that
