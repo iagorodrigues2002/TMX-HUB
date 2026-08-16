@@ -253,11 +253,24 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   }, vendaId?: string) {
     if (!app.db || !vendaId) return stage.destination_url;
     const [order] = await app.db<Array<{ vendepay_connection_id: string | null }>>`
-      SELECT vendepay_connection_id
-      FROM tracking_orders
-      WHERE project_id=${stage.project_id} AND provider='vendepay'
-        AND external_id=${vendaId} AND order_kind='front' AND paid_at IS NOT NULL
-      ORDER BY paid_at DESC LIMIT 1
+      SELECT o.vendepay_connection_id
+      FROM tracking_orders o
+      WHERE o.project_id=${stage.project_id} AND o.provider='vendepay'
+        AND o.order_kind='front' AND o.paid_at IS NOT NULL
+        AND (
+          o.external_id=${vendaId}
+          OR EXISTS (
+            SELECT 1
+            FROM webhook_receipts wr
+            WHERE wr.order_id=o.id
+              AND jsonb_path_exists(
+                wr.payload,
+                '$.** ? (@ == $vendid)',
+                jsonb_build_object('vendid', ${vendaId}::text)
+              )
+          )
+        )
+      ORDER BY o.paid_at DESC LIMIT 1
     `;
     if (order?.vendepay_connection_id) {
       return stage.connection_destinations?.[order.vendepay_connection_id] || null;
