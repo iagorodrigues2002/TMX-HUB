@@ -11,6 +11,8 @@ import rateLimitPlugin from './plugins/rate-limit.js';
 import storagePlugin from './plugins/storage.js';
 import swaggerPlugin from './plugins/swagger.js';
 import routes from './routes/index.js';
+import { normalizeVendepay } from './integrations/vendepay/normalize.js';
+import { convertToBrlMinor } from './services/exchange-rate.js';
 import { runRecoveryEmailAutomation } from './services/recovery-automation.js';
 import { createBundleWorker } from './workers/bundle.worker.js';
 import { createFunnelWorker } from './workers/funnel.worker.js';
@@ -56,6 +58,47 @@ async function main() {
   const app = await buildApp();
   const recoverTrackingDeliveries = async () => {
     if (!app.db) return;
+    // Repair recent paid orders that reached us before a new Vendepay
+    // proprietary currency code was mapped (or while the FX provider was
+    // temporarily unavailable). This makes accounting self-healing instead
+    // of requiring an operator to replay an already-deduplicated webhook.
+    const incompleteOrders = await app.db<
+      Array<{
+        id: string;
+        amount_minor: number | null;
+        currency: string | null;
+        payload: unknown;
+      }>
+    >`
+      SELECT o.id,o.amount_minor,o.currency,r.payload
+      FROM tracking_orders o
+      LEFT JOIN webhook_receipts r ON r.order_id=o.id
+      WHERE o.paid_at >= now() - interval '30 days'
+        AND o.amount_minor IS NOT NULL
+        AND (o.currency IS NULL OR o.amount_brl_minor IS NULL)
+      ORDER BY o.paid_at DESC
+      LIMIT 100
+    `;
+    for (const order of incompleteOrders) {
+      const normalized = order.payload ? normalizeVendepay(order.payload) : null;
+      const currency =
+        order.currency ??
+        (normalized?.kind === 'processable' ? (normalized.event.currency ?? null) : null);
+      const amountMinor =
+        normalized?.kind === 'processable'
+          ? (normalized.event.amountMinor ?? order.amount_minor)
+          : order.amount_minor;
+      if (!currency || amountMinor == null) continue;
+      const converted = await convertToBrlMinor(amountMinor, currency, app.db);
+      if (!converted) continue;
+      await app.db`
+        UPDATE tracking_orders
+        SET currency=${currency},amount_minor=${amountMinor},
+            amount_brl_minor=${converted.brlMinor},exchange_rate=${converted.rate},
+            converted_at=now()
+        WHERE id=${order.id}
+      `;
+    }
     const pending = await app.db<{ id: string }[]>`
       SELECT id FROM meta_deliveries
       WHERE state IN ('pending', 'failed')
