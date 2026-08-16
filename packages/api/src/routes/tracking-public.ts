@@ -1267,15 +1267,25 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           FROM tracking_upsell_stages
           WHERE project_id=${connection.project_id} AND enabled=true
         `;
-        const compatibility = await Promise.all(
-          candidateStages.map((stage) =>
-            checkUpsellCompatibility(
-              stage.connection_destinations?.[connection.id] || stage.destination_url,
-              normalized.event.transactionId,
+        // The paid webhook can arrive a few seconds before Vendepay finishes
+        // provisioning the upsell intent. Retry with a fresh lookup instead of
+        // caching that short-lived 404 and requiring a manual reconciliation.
+        for (const delayMs of [0, 1_500, 3_000]) {
+          if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
+          const compatibility = await Promise.all(
+            candidateStages.map((stage) =>
+              checkUpsellCompatibility(
+                stage.connection_destinations?.[connection.id] || stage.destination_url,
+                normalized.event.transactionId,
+                true,
+              ),
             ),
-          ),
-        );
-        transactionIdIsUpsellCompatible = compatibility.some(Boolean);
+          );
+          if (compatibility.some(Boolean)) {
+            transactionIdIsUpsellCompatible = true;
+            break;
+          }
+        }
       }
       const outcome = await app.db.begin(async (sql) => {
         const receipts = await sql<{ id: string }[]>`
