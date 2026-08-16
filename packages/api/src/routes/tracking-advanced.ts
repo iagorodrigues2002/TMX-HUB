@@ -22,6 +22,43 @@ const databaseUnavailable = {
   detail: 'A infraestrutura de tracking está temporariamente indisponível.',
 };
 
+const vendaIdCandidateKeys = new Set([
+  'vendid',
+  'vendaid',
+  'venda_id',
+  'checkoutid',
+  'checkout_id',
+  'idepotentialcheckoutid',
+  'potentialcheckoutid',
+]);
+
+function collectVendaIdCandidates(payload: unknown, transactionId?: string): string[] {
+  const candidates: string[] = [];
+  const seen = new Set<string>();
+  const add = (value: unknown) => {
+    if (typeof value !== 'string') return;
+    const candidate = value.trim();
+    if (!candidate || seen.has(candidate)) return;
+    if (!/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(candidate)) return;
+    seen.add(candidate);
+    candidates.push(candidate);
+  };
+  const walk = (value: unknown) => {
+    if (!value || typeof value !== 'object') return;
+    if (Array.isArray(value)) {
+      for (const item of value) walk(item);
+      return;
+    }
+    for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+      if (vendaIdCandidateKeys.has(key.toLowerCase())) add(nested);
+      walk(nested);
+    }
+  };
+  walk(payload);
+  add(transactionId);
+  return candidates;
+}
+
 const DomainSchema = z.object({
   hostname: z
     .string()
@@ -293,10 +330,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           external_id: string;
           paid_at: Date;
           connection_name: string;
+          confirmed_vendid_encrypted: string | null;
           has_upsell: boolean;
         }>>`
           SELECT o.id,receipt.payload,o.visitor_id,o.external_id,o.paid_at,
                  COALESCE(vc.name,'Vendepay') AS connection_name,
+                 identity.vendid_encrypted AS confirmed_vendid_encrypted,
                  EXISTS (
                    SELECT 1 FROM tracking_orders upsell
                    WHERE upsell.project_id=o.project_id
@@ -315,6 +354,13 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                  ) AS has_upsell
           FROM tracking_orders o
           LEFT JOIN vendepay_connections vc ON vc.id=o.vendepay_connection_id
+          LEFT JOIN LATERAL (
+            SELECT i.vendid_encrypted
+            FROM tracking_upsell_identities i
+            WHERE i.project_id=o.project_id AND i.source_order_id=o.id
+            ORDER BY i.last_seen_at DESC
+            LIMIT 1
+          ) identity ON true
           LEFT JOIN LATERAL (
             SELECT wr.payload
             FROM webhook_receipts wr
@@ -357,34 +403,26 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           // Prefer the explicit vendaId. Vendepay's authoritative full UUID
           // is also accepted for paid front orders; never accept the short
           // eight-character code shown in its sales table.
-          let vendid = receiptMatchesOrder ? normalizedEvent.vendid : undefined;
-          if (!vendid) {
-            const fallback = receipt.external_id;
-            const fallbackHash = createHash('sha256').update(fallback).digest('hex');
-            const alreadyConfirmed = confirmedHashes.has(fallbackHash);
-            const authoritativeUuid =
-              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(fallback);
-            // Never fan out to Vendepay while rendering the dashboard. That
-            // made the whole Tracking page wait on dozens of remote requests.
-            // New fallback IDs are confirmed by the explicit reconciliation;
-            // identities already confirmed remain immediately available.
-            const validated = alreadyConfirmed || authoritativeUuid ? [true] : [];
-            // Some Vendepay payload variants expose the real vendaId only as
-            // the primary transaction id. Accept that fallback solely when
-            // Vendepay itself confirms it for a configured upsell.
-            if (!validated.some(Boolean)) return [];
-            if (!alreadyConfirmed) {
-              await app.db!`
-                INSERT INTO tracking_upsell_identities
-                  (id,project_id,visitor_id,vendid_hash,vendid_encrypted)
-                VALUES(${ulid()},${p.id},${receipt.visitor_id ?? `vendepay:${fallback}`},
-                  ${fallbackHash},${encryptSecret(fallback, env.TRACKING_ENCRYPTION_KEY!)})
-                ON CONFLICT(project_id,vendid_hash) DO UPDATE SET last_seen_at=now()
-              `;
-              confirmedHashes.add(fallbackHash);
+          let vendid: string | undefined;
+          if (receipt.confirmed_vendid_encrypted) {
+            try {
+              vendid = decryptSecret(
+                receipt.confirmed_vendid_encrypted,
+                env.TRACKING_ENCRYPTION_KEY!,
+              );
+            } catch {
+              vendid = undefined;
             }
-            vendid = fallback;
           }
+          if (!vendid && receiptMatchesOrder) {
+            vendid = collectVendaIdCandidates(receipt.payload, receipt.external_id).find(
+              (candidate) =>
+                confirmedHashes.has(createHash('sha256').update(candidate).digest('hex')),
+            );
+          }
+          // The dashboard must never advertise a transaction/checkout UUID as
+          // usable until reconciliation has confirmed it with Vendepay.
+          if (!vendid) return [];
           if (seen.has(vendid)) return [];
           seen.add(vendid);
             return [{
@@ -462,39 +500,36 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!env.TRACKING_ENCRYPTION_KEY) {
         return reply.code(503).send({ error: 'tracking_encryption_unavailable' });
       }
-      const receipts = await app.db<Array<{ payload: unknown }>>`
-        SELECT r.payload
+      const receipts = await app.db<Array<{ payload: unknown; connection_id: string }>>`
+        SELECT r.payload,r.connection_id
         FROM webhook_receipts r
         JOIN vendepay_connections c ON c.id=r.connection_id
         WHERE c.project_id=${p.id} AND r.received_at >= now()-interval '90 days'
         ORDER BY r.received_at DESC
         LIMIT 1000
       `;
-      const stages = await app.db<Array<{ destination_url: string }>>`
-        SELECT destination_url FROM tracking_upsell_stages
+      const stages = await app.db<Array<{
+        destination_url: string;
+        connection_destinations: Record<string, string> | null;
+      }>>`
+        SELECT destination_url,connection_destinations FROM tracking_upsell_stages
         WHERE project_id=${p.id} AND enabled=true
       `;
-      const paidFronts = await app.db<Array<{ external_id: string }>>`
-        SELECT external_id FROM tracking_orders
-        WHERE project_id=${p.id} AND order_kind='front' AND paid_at IS NOT NULL
-      `;
-      // Primary IDs enter this set only after the list has validated them once
-      // against Vendepay and persisted the identity. This keeps subsequent
-      // gateway oscillations from deleting an already-confirmed buyer.
-      const validVendid = new Set(paidFronts.map((order) => order.external_id));
       let found = 0;
       let stored = 0;
+      let candidatesTested = 0;
       for (const receipt of receipts) {
         const normalized = normalizeVendepay(receipt.payload);
         if (normalized.kind !== 'processable') continue;
         const event = normalized.event;
         const [order] = await app.db<Array<{
+          id: string;
           visitor_id: string | null;
           order_kind: string;
           buyer: Record<string, string>;
           paid_at: Date | null;
         }>>`
-          SELECT visitor_id,order_kind,buyer,paid_at FROM tracking_orders
+          SELECT id,visitor_id,order_kind,buyer,paid_at FROM tracking_orders
           WHERE project_id=${p.id} AND external_id=${event.transactionId}
           LIMIT 1
         `;
@@ -503,52 +538,48 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           order.order_kind !== 'front' ||
           event.status !== 'paid'
         ) continue;
-        let vendid = event.vendid;
-        if (!vendid) {
+        const candidates = collectVendaIdCandidates(receipt.payload, event.transactionId);
+        let vendid: string | undefined;
+        for (const candidate of candidates) {
+          candidatesTested += 1;
           const validated = await Promise.all(
-            stages.map((stage) =>
-              checkUpsellCompatibility(stage.destination_url, event.transactionId),
-            ),
+            stages.map((stage) => {
+              const destination =
+                stage.connection_destinations?.[receipt.connection_id] || stage.destination_url;
+              return checkUpsellCompatibility(destination, candidate, true);
+            }),
           );
-          if (!validated.some(Boolean)) continue;
-          vendid = event.transactionId;
+          if (validated.some(Boolean)) {
+            vendid = candidate;
+            break;
+          }
         }
-        validVendid.add(vendid);
         if (!vendid) continue;
         found += 1;
         const hash = createHash('sha256').update(vendid).digest('hex');
         const identityVisitorId = order.visitor_id ?? `vendepay:${event.transactionId}`;
         await app.db`
+          DELETE FROM tracking_upsell_identities
+          WHERE project_id=${p.id} AND source_order_id=${order.id} AND vendid_hash<>${hash}
+        `;
+        await app.db`
           INSERT INTO tracking_upsell_identities
-            (id,project_id,visitor_id,vendid_hash,vendid_encrypted)
+            (id,project_id,visitor_id,vendid_hash,vendid_encrypted,source_order_id,
+             vendepay_connection_id)
           VALUES(${ulid()},${p.id},${identityVisitorId},${hash},
-            ${encryptSecret(vendid, env.TRACKING_ENCRYPTION_KEY)})
+            ${encryptSecret(vendid, env.TRACKING_ENCRYPTION_KEY)},${order.id},${receipt.connection_id})
           ON CONFLICT(project_id,vendid_hash) DO UPDATE SET
-            visitor_id=EXCLUDED.visitor_id,last_seen_at=now()
+            visitor_id=EXCLUDED.visitor_id,source_order_id=EXCLUDED.source_order_id,
+            vendepay_connection_id=EXCLUDED.vendepay_connection_id,last_seen_at=now()
         `;
         stored += 1;
       }
-      const identities = await app.db<Array<{ id: string; vendid_encrypted: string }>>`
-        SELECT id,vendid_encrypted FROM tracking_upsell_identities WHERE project_id=${p.id}
-      `;
-      let removed = 0;
-      for (const identity of identities) {
-        try {
-          const vendid = decryptSecret(identity.vendid_encrypted, env.TRACKING_ENCRYPTION_KEY);
-          if (validVendid.has(vendid)) continue;
-        } catch {
-          // Invalid legacy ciphertext is not a usable approved-sale identity.
-        }
-        await app.db`
-          DELETE FROM tracking_upsell_identities WHERE id=${identity.id} AND project_id=${p.id}
-        `;
-        removed += 1;
-      }
       return {
         inspected: receipts.length,
+        candidates_tested: candidatesTested,
         vendid_found: found,
         identities_stored: stored,
-        non_paid_removed: removed,
+        non_paid_removed: 0,
       };
     },
   );

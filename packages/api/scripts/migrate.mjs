@@ -64,6 +64,7 @@ const migrations = [
   '049_upsell_links_by_vendepay_account.sql',
   '050_classify_existing_upsells_as_iago.sql',
   '051_upsell_manual_test_results.sql',
+  '052_upsell_identity_order_source.sql',
 ];
 
 await sql`
