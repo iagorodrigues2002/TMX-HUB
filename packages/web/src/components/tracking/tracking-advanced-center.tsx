@@ -112,62 +112,71 @@ function ValidatedUpsellLink({
     },
     onError: (error) => toast.error((error as Error).message),
   });
-  if (link.force_url) {
-    return (
-      <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-cyan-300/15 bg-cyan-300/[0.04] p-1.5">
-        <a
-          title="Abre a página mesmo sem a validação prévia da VendePay"
-          href={link.force_url}
-          target="_blank"
-          rel="noreferrer"
-          className="rounded-md border border-cyan-300/25 bg-cyan-300/[0.08] px-2.5 py-1.5 text-cyan-100 transition hover:bg-cyan-300/[0.16]"
-        >
-          {link.name} · abrir teste
-        </a>
-        <button
-          type="button"
-          disabled={saveResult.isPending}
-          onClick={() => saveResult.mutate('worked')}
-          className={cn(
-            'rounded px-2 py-1 text-[10px] transition',
-            link.manual_result === 'worked'
-              ? 'bg-emerald-300/20 text-emerald-100'
-              : 'bg-white/[0.05] text-white/45 hover:text-emerald-200',
-          )}
-        >
-          ✓ funcionou
-        </button>
-        <button
-          type="button"
-          disabled={saveResult.isPending}
-          onClick={() => saveResult.mutate('failed')}
-          className={cn(
-            'rounded px-2 py-1 text-[10px] transition',
-            link.manual_result === 'failed'
-              ? 'bg-rose-300/20 text-rose-100'
-              : 'bg-white/[0.05] text-white/45 hover:text-rose-200',
-          )}
-        >
-          × não funcionou
-        </button>
-        {link.manual_checked_at && (
-          <span className="text-[9px] text-white/30">
-            {new Date(link.manual_checked_at).toLocaleString('pt-BR', {
-              timeZone: 'America/Sao_Paulo',
-            })}
-          </span>
+  const withManualResult = (openLink: React.ReactNode) => (
+    <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-cyan-300/15 bg-cyan-300/[0.04] p-1.5">
+      {openLink}
+      <button
+        type="button"
+        disabled={saveResult.isPending}
+        onClick={() => saveResult.mutate('worked')}
+        className={cn(
+          'rounded px-2 py-1 text-[10px] transition',
+          link.manual_result === 'worked'
+            ? 'bg-emerald-300/20 text-emerald-100'
+            : 'bg-white/[0.05] text-white/45 hover:text-emerald-200',
         )}
-      </div>
+      >
+        ✓ funcionou
+      </button>
+      <button
+        type="button"
+        disabled={saveResult.isPending}
+        onClick={() => saveResult.mutate('failed')}
+        className={cn(
+          'rounded px-2 py-1 text-[10px] transition',
+          link.manual_result === 'failed'
+            ? 'bg-rose-300/20 text-rose-100'
+            : 'bg-white/[0.05] text-white/45 hover:text-rose-200',
+        )}
+      >
+        × não funcionou
+      </button>
+      {link.manual_checked_at && (
+        <span className="text-[9px] text-white/30">
+          {new Date(link.manual_checked_at).toLocaleString('pt-BR', {
+            timeZone: 'America/Sao_Paulo',
+          })}
+        </span>
+      )}
+    </div>
+  );
+  if (link.force_url) {
+    return withManualResult(
+      <a
+        title="Abre a página mesmo sem a validação prévia da VendePay"
+        href={link.force_url}
+        target="_blank"
+        rel="noreferrer"
+        className="rounded-md border border-cyan-300/25 bg-cyan-300/[0.08] px-2.5 py-1.5 text-cyan-100 transition hover:bg-cyan-300/[0.16]"
+      >
+        {link.name} · abrir teste
+      </a>,
     );
   }
   if (validation.isLoading) {
-    return <span className="rounded-md border border-white/10 px-2.5 py-1.5 text-white/40">{link.name} · verificando</span>;
+    return (
+      <span className="rounded-md border border-white/10 px-2.5 py-1.5 text-white/40">{link.name} · verificando</span>
+    );
   }
   if (!validation.data?.compatible) {
     const accountMissing = validation.data?.reason === 'account_not_configured';
-    return <span title={accountMissing ? 'Cadastre a URL desta etapa para a conta VendePay do comprador' : 'A Vendepay não habilitou esta oferta para este vendaId'} className="rounded-md border border-rose-300/20 bg-rose-300/[0.06] px-2.5 py-1.5 text-rose-200/70">{link.name} · {accountMissing ? 'conta sem URL' : 'indisponível'}</span>;
+    return withManualResult(
+      <a title={accountMissing ? 'Cadastre a URL desta etapa para a conta VendePay do comprador' : 'Abrir para testar novamente na VendePay'} href={link.url} target="_blank" rel="noreferrer" className="rounded-md border border-rose-300/20 bg-rose-300/[0.06] px-2.5 py-1.5 text-rose-200/70 transition hover:bg-rose-300/[0.12]">{link.name} · {accountMissing ? 'conta sem URL' : 'indisponível'}</a>,
+    );
   }
-  return <a title="Elegibilidade confirmada; o TMX validará novamente ao abrir" href={link.url} target="_blank" rel="noreferrer" className="rounded-md border border-emerald-300/25 bg-emerald-300/[0.08] px-2.5 py-1.5 text-emerald-100 transition hover:bg-emerald-300/[0.16]">{link.name} · elegível</a>;
+  return withManualResult(
+    <a title="Elegibilidade confirmada; o TMX validará novamente ao abrir" href={link.url} target="_blank" rel="noreferrer" className="rounded-md border border-emerald-300/25 bg-emerald-300/[0.08] px-2.5 py-1.5 text-emerald-100 transition hover:bg-emerald-300/[0.16]">{link.name} · elegível</a>,
+  );
 }
 
 function saoPauloDate(date = new Date()) {
@@ -1589,7 +1598,7 @@ export function TrackingAdvancedCenter({
                     )}
                   </div>
                   <p className="mt-1 text-xs text-white/40">
-                    Compradores da Vendepay Iago com front aprovado e vendaId confirmado pelo gateway.
+                    Compradores com front aprovado e vendaId confirmado, separados por conta da VendePay.
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {([
