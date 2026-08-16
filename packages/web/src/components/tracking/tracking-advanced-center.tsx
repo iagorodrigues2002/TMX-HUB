@@ -1598,7 +1598,8 @@ export function TrackingAdvancedCenter({
                     )}
                   </div>
                   <p className="mt-1 text-xs text-white/40">
-                    Compradores com front aprovado e vendaId confirmado, separados por conta da VendePay.
+                    Todas as compras de front aprovadas. O TMX libera os links somente após confirmar
+                    o vendaId no funil correspondente da VendePay.
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {([
@@ -1622,7 +1623,7 @@ export function TrackingAdvancedCenter({
                   <table className="w-full min-w-[760px] text-left text-xs">
                     <thead className="text-white/40">
                       <tr className="border-b border-white/[0.06]">
-                        <th className="px-4 py-3 font-medium">vendaId</th>
+                        <th className="px-4 py-3 font-medium">Identificador</th>
                         <th className="px-4 py-3 font-medium">Compra aprovada</th>
                         <th className="px-4 py-3 font-medium">Origem</th>
                         <th className="px-4 py-3 font-medium">Abrir upsell</th>
@@ -1633,6 +1634,16 @@ export function TrackingAdvancedCenter({
                         <tr key={identity.id} className="border-b border-white/[0.05] last:border-0">
                           <td className="px-4 py-3">
                             <code className="select-all text-cyan-100">{identity.vendid}</code>
+                            <span className={cn(
+                              'mt-1 block w-fit rounded-full border px-2 py-0.5 text-[9px]',
+                              identity.vendid_confirmed
+                                ? 'border-emerald-300/20 bg-emerald-300/[0.07] text-emerald-200'
+                                : 'border-amber-300/20 bg-amber-300/[0.07] text-amber-200',
+                            )}>
+                              {identity.vendid_confirmed
+                                ? 'vendaId confirmado'
+                                : 'compra histórica · aguardando vendaId do funil atual'}
+                            </span>
                           </td>
                           <td className="whitespace-nowrap px-4 py-3 text-white/55">
                             {new Date(identity.approved_at).toLocaleString('pt-BR', {
@@ -1645,7 +1656,7 @@ export function TrackingAdvancedCenter({
                             </span>
                           </td>
                           <td className="px-4 py-3">
-                            <div className="flex flex-wrap gap-2">
+                            {identity.links.length ? <div className="flex flex-wrap gap-2">
                               {identity.links.map((link) => (
                                 <ValidatedUpsellLink
                                   key={link.stage_id}
@@ -1654,7 +1665,11 @@ export function TrackingAdvancedCenter({
                                   link={link}
                                 />
                               ))}
-                            </div>
+                            </div> : (
+                              <span className="text-amber-100/55">
+                                Indisponível para o funil remontado
+                              </span>
+                            )}
                           </td>
                         </tr>
                       ))}

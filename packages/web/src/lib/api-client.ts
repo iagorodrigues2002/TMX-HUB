@@ -2160,6 +2160,7 @@ export const apiClient = {
       id: string;
       visitor_id: string;
       vendid: string;
+      vendid_confirmed: boolean;
       approved_at: string;
       connection_name: string;
       has_upsell: boolean;

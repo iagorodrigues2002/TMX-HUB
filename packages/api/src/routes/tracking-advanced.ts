@@ -420,23 +420,26 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                 confirmedHashes.has(createHash('sha256').update(candidate).digest('hex')),
             );
           }
-          // The dashboard must never advertise a transaction/checkout UUID as
-          // usable until reconciliation has confirmed it with Vendepay.
-          if (!vendid) return [];
-          if (seen.has(vendid)) return [];
-          seen.add(vendid);
+          const vendidConfirmed = Boolean(vendid);
+          // Lucas webhooks expose only the purchase UUID after a funnel was
+          // rebuilt. Keep the approved buyer visible while clearly separating
+          // that identifier from a vendaId confirmed for the current funnel.
+          const displayId = vendid ?? receipt.external_id;
+          if (seen.has(displayId)) return [];
+          seen.add(displayId);
             return [{
               id: receipt.id,
               visitor_id: receipt.visitor_id ?? '',
-              vendid,
+              vendid: displayId,
+              vendid_confirmed: vendidConfirmed,
               approved_at: receipt.paid_at,
               connection_name: receipt.connection_name,
               has_upsell: receipt.has_upsell,
               first_seen_at: receipt.paid_at,
               last_seen_at: receipt.paid_at,
-              links: stages.map((stage) => {
+              links: vendidConfirmed ? stages.map((stage) => {
                 const validatedLink = new URL(upsellUrl(stage.slug));
-                validatedLink.searchParams.set('vendaId', vendid);
+                validatedLink.searchParams.set('vendaId', displayId);
                 const forceLink = new URL(validatedLink);
                 forceLink.searchParams.set('force', '1');
                 const manualResult = resultByOrderStage.get(`${receipt.id}:${stage.id}`);
@@ -449,7 +452,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                   manual_result: manualResult?.result ?? null,
                   manual_checked_at: manualResult?.checked_at ?? null,
                 };
-              }),
+              }) : [],
             }];
         }));
       const items = resolvedItems.flat();
