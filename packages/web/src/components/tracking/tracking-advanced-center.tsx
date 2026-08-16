@@ -322,6 +322,9 @@ export function TrackingAdvancedCenter({
   const [upsellBuyerFilter, setUpsellBuyerFilter] = useState<
     'all' | 'front_only' | 'with_upsell'
   >('front_only');
+  const [upsellTestFilter, setUpsellTestFilter] = useState<
+    'all' | 'worked' | 'failed' | 'unclassified'
+  >('all');
   const [vendepayPayload, setVendepayPayload] = useState(vendepaySample);
   const [utmifyToken, setUtmifyToken] = useState('');
   const [utmifyPixelId, setUtmifyPixelId] = useState('');
@@ -391,8 +394,14 @@ export function TrackingAdvancedCenter({
     refetchIntervalInBackground: true,
   });
   const filteredUpsellIdentities = (upsellIdentities.data?.items ?? []).filter((identity) => {
-    if (upsellBuyerFilter === 'front_only') return !identity.has_upsell;
-    if (upsellBuyerFilter === 'with_upsell') return identity.has_upsell;
+    if (upsellBuyerFilter === 'front_only' && identity.has_upsell) return false;
+    if (upsellBuyerFilter === 'with_upsell' && !identity.has_upsell) return false;
+    const results = identity.links.map((link) => link.manual_result);
+    const hasWorked = results.includes('worked');
+    const hasFailed = results.includes('failed');
+    if (upsellTestFilter === 'worked') return hasWorked;
+    if (upsellTestFilter === 'failed') return hasFailed && !hasWorked;
+    if (upsellTestFilter === 'unclassified') return !hasWorked && !hasFailed;
     return true;
   });
   const configuredUpsellStages = new Set(
@@ -1613,6 +1622,27 @@ export function TrackingAdvancedCenter({
                         size="sm"
                         variant={upsellBuyerFilter === value ? 'default' : 'outline'}
                         onClick={() => setUpsellBuyerFilter(value)}
+                      >
+                        {label}
+                      </Button>
+                    ))}
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className="mr-1 text-[10px] uppercase tracking-[0.16em] text-white/30">
+                      Resultado do teste
+                    </span>
+                    {([
+                      ['all', 'Todos'],
+                      ['worked', 'Funcionou'],
+                      ['failed', 'Não funcionou'],
+                      ['unclassified', 'Não classificados'],
+                    ] as const).map(([value, label]) => (
+                      <Button
+                        key={value}
+                        type="button"
+                        size="sm"
+                        variant={upsellTestFilter === value ? 'default' : 'outline'}
+                        onClick={() => setUpsellTestFilter(value)}
                       >
                         {label}
                       </Button>
