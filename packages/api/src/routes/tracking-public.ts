@@ -1249,6 +1249,34 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         }
       }
       const ingestConvertedAt = ingestBrlMinor != null ? new Date() : null;
+      // Some Vendepay accounts (such as Lucas/SLM) use the paid transaction
+      // UUID as the upsell vendaId, while rebuilt funnels may reject that same
+      // fallback. Ask Vendepay before persisting it so valid funnels become
+      // clickable automatically without reintroducing broken PJR links.
+      let transactionIdIsUpsellCompatible = false;
+      if (
+        normalized.kind === 'processable' &&
+        normalized.event.status === 'paid' &&
+        !normalized.event.vendid
+      ) {
+        const candidateStages = await app.db<Array<{
+          destination_url: string;
+          connection_destinations: Record<string, string> | null;
+        }>>`
+          SELECT destination_url,connection_destinations
+          FROM tracking_upsell_stages
+          WHERE project_id=${connection.project_id} AND enabled=true
+        `;
+        const compatibility = await Promise.all(
+          candidateStages.map((stage) =>
+            checkUpsellCompatibility(
+              stage.connection_destinations?.[connection.id] || stage.destination_url,
+              normalized.event.transactionId,
+            ),
+          ),
+        );
+        transactionIdIsUpsellCompatible = compatibility.some(Boolean);
+      }
       const outcome = await app.db.begin(async (sql) => {
         const receipts = await sql<{ id: string }[]>`
           INSERT INTO webhook_receipts
@@ -1352,7 +1380,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         // iframe. Some accounts omit an explicit vendid field in webhooks.
         const effectiveVendid =
           event.vendid ??
-          (!/lucas/i.test(connection.name)
+          (transactionIdIsUpsellCompatible
             ? (orderKind === 'front' ? event.transactionId : parentFront?.external_id)
             : undefined);
         if (
