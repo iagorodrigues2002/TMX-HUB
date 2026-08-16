@@ -414,7 +414,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
               vendid = undefined;
             }
           }
-          if (!vendid && receiptMatchesOrder) {
+          if (!vendid && receiptMatchesOrder && !/lucas/i.test(receipt.connection_name)) {
             vendid = collectVendaIdCandidates(receipt.payload, receipt.external_id).find(
               (candidate) =>
                 confirmedHashes.has(createHash('sha256').update(candidate).digest('hex')),
@@ -500,8 +500,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!env.TRACKING_ENCRYPTION_KEY) {
         return reply.code(503).send({ error: 'tracking_encryption_unavailable' });
       }
-      const receipts = await app.db<Array<{ payload: unknown; connection_id: string }>>`
-        SELECT r.payload,r.connection_id
+      const receipts = await app.db<Array<{
+        payload: unknown;
+        connection_id: string;
+        connection_name: string;
+      }>>`
+        SELECT r.payload,r.connection_id,c.name AS connection_name
         FROM webhook_receipts r
         JOIN vendepay_connections c ON c.id=r.connection_id
         WHERE c.project_id=${p.id} AND r.received_at >= now()-interval '90 days'
@@ -554,7 +558,15 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             break;
           }
         }
-        if (!vendid) continue;
+        if (!vendid) {
+          if (/lucas/i.test(receipt.connection_name)) {
+            await app.db`
+              DELETE FROM tracking_upsell_identities
+              WHERE project_id=${p.id} AND source_order_id=${order.id}
+            `;
+          }
+          continue;
+        }
         found += 1;
         const hash = createHash('sha256').update(vendid).digest('hex');
         const identityVisitorId = order.visitor_id ?? `vendepay:${event.transactionId}`;

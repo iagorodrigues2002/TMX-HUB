@@ -1069,8 +1069,14 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!parsed.success) return reply.code(400).send({ accepted: false });
     const input = parsed.data;
     const token = input.token ? readUpsellToken(input.token) : null;
-    const [stage] = await app.db<Array<{ id: string; project_id: string; destination_url: string }>>`
-      SELECT us.id,us.project_id,us.destination_url FROM tracking_upsell_stages us
+    const [stage] = await app.db<Array<{
+      id: string;
+      project_id: string;
+      destination_url: string;
+      connection_destinations: Record<string, string>;
+    }>>`
+      SELECT us.id,us.project_id,us.destination_url,us.connection_destinations
+      FROM tracking_upsell_stages us
       JOIN tracking_projects p ON p.id=us.project_id
       WHERE p.public_key=${input.public_key} AND us.stage_key=${input.stage_key}
         AND us.enabled=true LIMIT 1
@@ -1083,12 +1089,19 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const receivedAt = input.client_at ? new Date(input.client_at) : new Date();
     let trustedStagePage = false;
     try {
-      const configured = new URL(stage.destination_url);
       const received = new URL(input.event_url);
-      trustedStagePage = configured.origin === received.origin;
+      const configuredOrigins = new Set([
+        stage.destination_url,
+        ...Object.values(stage.connection_destinations ?? {}),
+      ].map((url) => new URL(url).origin));
+      trustedStagePage = configuredOrigins.has(received.origin);
     } catch {
       trustedStagePage = false;
     }
+    const confirmedByVendepay =
+      Boolean(input.vendid) &&
+      (token || trustedStagePage) &&
+      (await checkUpsellCompatibility(input.event_url, input.vendid!));
     await app.db.begin(async (sql) => {
       await sql`
         INSERT INTO tracking_events
@@ -1099,25 +1112,41 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           ${sql.json({ ...input.properties, upsell_stage_id: stage.id, upsell_stage_key: input.stage_key })},
           ${req.ip},${req.headers['user-agent'] ?? null},${receivedAt})
       `;
-      // Page events are not proof of payment. Keep the vendaId only when the
-      // gateway has already confirmed the matching front order as paid.
+      // A vendaId exposed on the live upsell page is authoritative only after
+      // Vendepay confirms the intent. Link it to the paid front through the
+      // first-party visitor when the vendaId differs from the transaction UUID
+      // (the behavior observed on the Lucas account).
       const [approvedFront] = input.vendid
-        ? await sql<Array<{ visitor_id: string | null }>>`
-            SELECT visitor_id FROM tracking_orders
-            WHERE project_id=${stage.project_id} AND external_id=${input.vendid}
+        ? await sql<Array<{
+            id: string;
+            visitor_id: string | null;
+            vendepay_connection_id: string | null;
+          }>>`
+            SELECT id,visitor_id,vendepay_connection_id FROM tracking_orders
+            WHERE project_id=${stage.project_id}
               AND order_kind='front' AND paid_at IS NOT NULL
+              AND (external_id=${input.vendid} OR visitor_id=${visitorId})
+            ORDER BY (external_id=${input.vendid}) DESC,paid_at DESC
             LIMIT 1
           `
         : [];
-      if (input.vendid && approvedFront && (token || trustedStagePage) && env.TRACKING_ENCRYPTION_KEY) {
+      if (input.vendid && approvedFront && confirmedByVendepay && env.TRACKING_ENCRYPTION_KEY) {
         const hash = createHash('sha256').update(input.vendid).digest('hex');
         await sql`
+          DELETE FROM tracking_upsell_identities
+          WHERE project_id=${stage.project_id} AND source_order_id=${approvedFront.id}
+            AND vendid_hash<>${hash}
+        `;
+        await sql`
           INSERT INTO tracking_upsell_identities
-            (id,project_id,visitor_id,vendid_hash,vendid_encrypted)
+            (id,project_id,visitor_id,vendid_hash,vendid_encrypted,source_order_id,
+             vendepay_connection_id)
           VALUES(${ulid()},${stage.project_id},${approvedFront.visitor_id ?? visitorId},${hash},
-            ${encryptSecret(input.vendid, env.TRACKING_ENCRYPTION_KEY)})
+            ${encryptSecret(input.vendid, env.TRACKING_ENCRYPTION_KEY)},${approvedFront.id},
+            ${approvedFront.vendepay_connection_id})
           ON CONFLICT(project_id,vendid_hash) DO UPDATE SET
-            visitor_id=EXCLUDED.visitor_id,last_seen_at=now()
+            visitor_id=EXCLUDED.visitor_id,source_order_id=EXCLUDED.source_order_id,
+            vendepay_connection_id=EXCLUDED.vendepay_connection_id,last_seen_at=now()
         `;
       }
     });
@@ -1175,9 +1204,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!app.db || !req.query.token) return reply.code(404).send({ accepted: false });
       const candidate = tokenHash(req.query.token);
       const connections = await app.db<
-        Array<{ id: string; project_id: string; token_hash: string; offer_id: string }>
+        Array<{ id: string; project_id: string; token_hash: string; offer_id: string; name: string }>
       >`
-        SELECT vc.id, vc.project_id, vc.token_hash, tp.offer_id
+        SELECT vc.id, vc.project_id, vc.token_hash, tp.offer_id, vc.name
         FROM vendepay_connections vc
         JOIN tracking_projects tp ON tp.id = vc.project_id
         WHERE vc.token_hash = ${candidate} AND vc.enabled = true
@@ -1323,7 +1352,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         // iframe. Some accounts omit an explicit vendid field in webhooks.
         const effectiveVendid =
           event.vendid ??
-          (orderKind === 'front' ? event.transactionId : parentFront?.external_id);
+          (!/lucas/i.test(connection.name)
+            ? (orderKind === 'front' ? event.transactionId : parentFront?.external_id)
+            : undefined);
         if (
           event.status === 'paid' &&
           orderKind === 'front' &&
