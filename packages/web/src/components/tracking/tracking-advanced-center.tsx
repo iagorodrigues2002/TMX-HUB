@@ -77,7 +77,23 @@ const trackingDomainPreview = (value: string) => {
 
 const SAO_PAULO_TIME_ZONE = 'America/Sao_Paulo';
 
-function ValidatedUpsellLink({ link }: { link: { stage_id: string; name: string; url: string } }) {
+function ValidatedUpsellLink({
+  offerId,
+  orderId,
+  link,
+}: {
+  offerId: string;
+  orderId: string;
+  link: {
+    stage_id: string;
+    name: string;
+    url: string;
+    force_url: string | null;
+    manual_result: 'worked' | 'failed' | null;
+    manual_checked_at: string | null;
+  };
+}) {
+  const qc = useQueryClient();
   const validation = useQuery({
     queryKey: ['upsell-compatibility', link.stage_id, link.url],
     queryFn: () => apiClient.checkTrackingUpsellCompatibility(link.url),
@@ -85,7 +101,65 @@ function ValidatedUpsellLink({ link }: { link: { stage_id: string; name: string;
     refetchOnMount: 'always',
     refetchInterval: 60_000,
     retry: 1,
+    enabled: !link.force_url,
   });
+  const saveResult = useMutation({
+    mutationFn: (result: 'worked' | 'failed') =>
+      apiClient.saveTrackingUpsellManualResult(offerId, orderId, link.stage_id, result),
+    onSuccess: (_response, result) => {
+      void qc.invalidateQueries({ queryKey: ['tracking-upsell-identities', offerId] });
+      toast.success(result === 'worked' ? 'Compra confirmada neste upsell.' : 'Falha registrada.');
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
+  if (link.force_url) {
+    return (
+      <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-cyan-300/15 bg-cyan-300/[0.04] p-1.5">
+        <a
+          title="Abre a página mesmo sem a validação prévia da VendePay"
+          href={link.force_url}
+          target="_blank"
+          rel="noreferrer"
+          className="rounded-md border border-cyan-300/25 bg-cyan-300/[0.08] px-2.5 py-1.5 text-cyan-100 transition hover:bg-cyan-300/[0.16]"
+        >
+          {link.name} · abrir teste
+        </a>
+        <button
+          type="button"
+          disabled={saveResult.isPending}
+          onClick={() => saveResult.mutate('worked')}
+          className={cn(
+            'rounded px-2 py-1 text-[10px] transition',
+            link.manual_result === 'worked'
+              ? 'bg-emerald-300/20 text-emerald-100'
+              : 'bg-white/[0.05] text-white/45 hover:text-emerald-200',
+          )}
+        >
+          ✓ funcionou
+        </button>
+        <button
+          type="button"
+          disabled={saveResult.isPending}
+          onClick={() => saveResult.mutate('failed')}
+          className={cn(
+            'rounded px-2 py-1 text-[10px] transition',
+            link.manual_result === 'failed'
+              ? 'bg-rose-300/20 text-rose-100'
+              : 'bg-white/[0.05] text-white/45 hover:text-rose-200',
+          )}
+        >
+          × não funcionou
+        </button>
+        {link.manual_checked_at && (
+          <span className="text-[9px] text-white/30">
+            {new Date(link.manual_checked_at).toLocaleString('pt-BR', {
+              timeZone: 'America/Sao_Paulo',
+            })}
+          </span>
+        )}
+      </div>
+    );
+  }
   if (validation.isLoading) {
     return <span className="rounded-md border border-white/10 px-2.5 py-1.5 text-white/40">{link.name} · verificando</span>;
   }
@@ -1564,7 +1638,12 @@ export function TrackingAdvancedCenter({
                           <td className="px-4 py-3">
                             <div className="flex flex-wrap gap-2">
                               {identity.links.map((link) => (
-                                <ValidatedUpsellLink key={link.stage_id} link={link} />
+                                <ValidatedUpsellLink
+                                  key={link.stage_id}
+                                  offerId={offerId}
+                                  orderId={identity.id}
+                                  link={link}
+                                />
                               ))}
                             </div>
                           </td>

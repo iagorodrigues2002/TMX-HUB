@@ -35,6 +35,9 @@ const MetaRulesSchema = z.object({
   attributed_only: z.boolean(),
   minimum_amount_minor: z.number().int().min(0),
 });
+const UpsellManualResultSchema = z.object({
+  result: z.enum(['worked', 'failed']),
+});
 const GatewaySchema = z.object({
   provider: z.enum(['vendepay', 'cooud']),
   propagation_param: z.string().trim().min(1).max(32).default('src'),
@@ -282,7 +285,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!env.TRACKING_ENCRYPTION_KEY) {
         return reply.code(503).send({ error: 'tracking_encryption_unavailable' });
       }
-      const [approvedReceipts, stages, storedIdentities] = await Promise.all([
+      const [approvedReceipts, stages, storedIdentities, manualResults] = await Promise.all([
         app.db<Array<{
           id: string;
           payload: unknown;
@@ -324,9 +327,17 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         app.db<Array<{ vendid_hash: string }>>`
           SELECT vendid_hash FROM tracking_upsell_identities WHERE project_id=${p.id}
         `,
+        app.db<Array<{ order_id: string; stage_id: string; result: 'worked' | 'failed'; checked_at: Date }>>`
+          SELECT order_id,stage_id,result,checked_at
+          FROM tracking_upsell_manual_test_results
+          WHERE project_id=${p.id}
+        `,
       ]);
       reply.header('cache-control', 'no-store');
       const confirmedHashes = new Set(storedIdentities.map((identity) => identity.vendid_hash));
+      const resultByOrderStage = new Map(
+        manualResults.map((result) => [`${result.order_id}:${result.stage_id}`, result] as const),
+      );
       const seen = new Set<string>();
       const resolvedItems = await Promise.all(approvedReceipts.map(async (receipt) => {
           const normalized = normalizeVendepay(receipt.payload);
@@ -379,7 +390,18 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
               links: stages.map((stage) => {
                 const validatedLink = new URL(upsellUrl(stage.slug));
                 validatedLink.searchParams.set('vendaId', vendid);
-                return { stage_id: stage.id, stage_key: stage.stage_key, name: stage.name, url: validatedLink.toString() };
+                const forceLink = new URL(validatedLink);
+                forceLink.searchParams.set('force', '1');
+                const manualResult = resultByOrderStage.get(`${receipt.id}:${stage.id}`);
+                return {
+                  stage_id: stage.id,
+                  stage_key: stage.stage_key,
+                  name: stage.name,
+                  url: validatedLink.toString(),
+                  force_url: /lucas/i.test(receipt.connection_name) ? forceLink.toString() : null,
+                  manual_result: manualResult?.result ?? null,
+                  manual_checked_at: manualResult?.checked_at ?? null,
+                };
               }),
             }];
         }));
@@ -389,6 +411,36 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           new Date(right.approved_at).getTime() - new Date(left.approved_at).getTime(),
       );
       return { items };
+    },
+  );
+
+  app.put<{
+    Params: { id: string; orderId: string; stageId: string };
+    Body: { result: 'worked' | 'failed' };
+  }>(
+    '/offers/:id/tracking/upsell-identities/:orderId/stages/:stageId/result',
+    async (req, reply) => {
+      const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin', true);
+      if (!app.db) return reply.code(503).send(databaseUnavailable);
+      if (!p) return reply.code(404).send({ error: 'tracking_not_configured' });
+      const parsed = UpsellManualResultSchema.safeParse(req.body);
+      if (!parsed.success) return reply.code(422).send(zodToProblem(parsed.error));
+      const [eligible] = await app.db<Array<{ order_id: string; stage_id: string }>>`
+        SELECT o.id AS order_id,s.id AS stage_id
+        FROM tracking_orders o
+        JOIN tracking_upsell_stages s ON s.project_id=o.project_id
+        WHERE o.id=${req.params.orderId} AND s.id=${req.params.stageId}
+          AND o.project_id=${p.id} AND o.order_kind='front' AND o.paid_at IS NOT NULL
+      `;
+      if (!eligible) return reply.code(404).send({ error: 'upsell_test_target_not_found' });
+      await app.db`
+        INSERT INTO tracking_upsell_manual_test_results
+          (project_id,order_id,stage_id,result,checked_by,checked_at)
+        VALUES(${p.id},${eligible.order_id},${eligible.stage_id},${parsed.data.result},${req.user!.sub},now())
+        ON CONFLICT(order_id,stage_id) DO UPDATE SET
+          result=EXCLUDED.result,checked_by=EXCLUDED.checked_by,checked_at=now()
+      `;
+      return { saved: true, result: parsed.data.result };
     },
   );
 

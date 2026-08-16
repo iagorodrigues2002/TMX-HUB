@@ -2170,6 +2170,9 @@ export const apiClient = {
         stage_key: 'upsell_1' | 'upsell_2' | 'upsell_3';
         name: string;
         url: string;
+        force_url: string | null;
+        manual_result: 'worked' | 'failed' | null;
+        manual_checked_at: string | null;
       }>;
     }>;
   }> {
@@ -2185,6 +2188,18 @@ export const apiClient = {
     non_paid_removed: number;
   }> {
     return request(`/v1/offers/${id}/tracking/upsell-identities/reconcile`, { method: 'POST' });
+  },
+
+  async saveTrackingUpsellManualResult(
+    id: string,
+    orderId: string,
+    stageId: string,
+    result: 'worked' | 'failed',
+  ): Promise<void> {
+    await request(
+      `/v1/offers/${id}/tracking/upsell-identities/${orderId}/stages/${stageId}/result`,
+      { method: 'PUT', body: { result } },
+    );
   },
 
   async checkTrackingUpsellCompatibility(url: string): Promise<{ compatible: boolean; reason: string | null }> {
