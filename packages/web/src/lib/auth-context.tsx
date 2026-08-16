@@ -11,6 +11,7 @@ import {
   useState,
 } from 'react';
 import { type AuthUser, apiClient, authToken } from './api-client';
+import { ApiError } from './query-client';
 
 interface AuthState {
   user: AuthUser | null;
@@ -44,10 +45,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const u = await apiClient.me();
       setUser(u);
-    } catch {
-      // Token is bad → clear it.
-      authToken.clear();
-      setUser(null);
+    } catch (error) {
+      // Clear credentials only when the API explicitly rejects them. Mobile
+      // network transitions and temporary outages must not destroy a valid
+      // session and turn a recoverable request into a login loop.
+      if (error instanceof ApiError && error.status === 401) {
+        authToken.clear();
+        setUser(null);
+      }
     } finally {
       setLoading(false);
     }

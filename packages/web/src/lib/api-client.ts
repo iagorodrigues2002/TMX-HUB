@@ -67,28 +67,75 @@ interface RequestOptions {
 }
 
 const TOKEN_STORAGE_KEY = 'tmx-hub:auth-token';
+const TOKEN_COOKIE_KEY = 'tmx_hub_auth_token';
+let volatileAuthToken: string | null = null;
+
+function authCookie(): string | null {
+  if (typeof document === 'undefined') return null;
+  try {
+    const raw = document.cookie
+      .split('; ')
+      .find((entry) => entry.startsWith(`${TOKEN_COOKIE_KEY}=`))
+      ?.slice(TOKEN_COOKIE_KEY.length + 1);
+    return raw ? decodeURIComponent(raw) : null;
+  } catch {
+    return null;
+  }
+}
 
 export const authToken = {
   get(): string | null {
     if (typeof window === 'undefined') return null;
+    if (volatileAuthToken) return volatileAuthToken;
     try {
-      return window.localStorage.getItem(TOKEN_STORAGE_KEY);
+      const persisted = window.localStorage.getItem(TOKEN_STORAGE_KEY);
+      if (persisted) return (volatileAuthToken = persisted);
     } catch {
-      return null;
+      // Mobile/private browsers may block localStorage. Continue through the
+      // session and cookie fallbacks instead of silently losing the login.
     }
+    try {
+      const session = window.sessionStorage.getItem(TOKEN_STORAGE_KEY);
+      if (session) return (volatileAuthToken = session);
+    } catch {
+      // Cookie fallback below.
+    }
+    return (volatileAuthToken = authCookie());
   },
   set(token: string): void {
     if (typeof window === 'undefined') return;
+    volatileAuthToken = token;
     try {
       window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
     } catch {
-      // ignore
+      // Session/cookie fallbacks keep mobile authentication working.
+    }
+    try {
+      window.sessionStorage.setItem(TOKEN_STORAGE_KEY, token);
+    } catch {
+      // Cookie fallback below.
+    }
+    try {
+      document.cookie = `${TOKEN_COOKIE_KEY}=${encodeURIComponent(token)}; Path=/; Max-Age=1209600; Secure; SameSite=Lax`;
+    } catch {
+      // The in-memory token still authenticates the current app session.
     }
   },
   clear(): void {
     if (typeof window === 'undefined') return;
+    volatileAuthToken = null;
     try {
       window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+    try {
+      window.sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+    try {
+      document.cookie = `${TOKEN_COOKIE_KEY}=; Path=/; Max-Age=0; Secure; SameSite=Lax`;
     } catch {
       // ignore
     }
