@@ -1672,7 +1672,7 @@ export function TrackingAdvancedCenter({
                             )}>
                               {identity.vendid_confirmed
                                 ? 'vendaId confirmado'
-                                : 'compra histórica · aguardando vendaId do funil atual'}
+                                : 'compra aprovada · vendaId aguardando validação'}
                             </span>
                           </td>
                           <td className="whitespace-nowrap px-4 py-3 text-white/55">
@@ -1697,7 +1697,7 @@ export function TrackingAdvancedCenter({
                               ))}
                             </div> : (
                               <span className="text-amber-100/55">
-                                Indisponível para o funil remontado
+                                Aguardando validação na VendePay
                               </span>
                             )}
                           </td>
