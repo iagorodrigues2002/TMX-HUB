@@ -214,8 +214,13 @@ const VENDEPAY_CURRENCY_CODES: Record<string, string> = {
   '6': 'COP', // Colômbia: 31707 COP ≈ $7.90 USD
   '7': 'MXN', // México: 172.70 MXN ≈ $9.60 USD
   '8': 'CAD', // Canadá
+  '9': 'JPY', // Japão
   '10': 'GBP', // Reino Unido
+  '11': 'DKK', // Dinamarca
+  '12': 'NOK', // Noruega
   '13': 'SEK', // Suécia
+  '14': 'PYG', // Paraguai
+  '15': 'CHF', // Suíça
 };
 
 // Full list of currencies we know how to quote against BRL. Used by the

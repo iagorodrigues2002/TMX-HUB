@@ -225,6 +225,25 @@ describe('normalizeVendepay', () => {
     });
   });
 
+  it('mapeia moeda 12 da Vendepay para coroa norueguesa', () => {
+    const result = normalizeVendepay({
+      id: 'pjr-nok-1',
+      event: 'compra.aprovada',
+      valorPago: 626.34,
+      moeda: 12,
+      produtoId: 'pjr-upsell-2',
+    });
+
+    expect(result.kind).toBe('processable');
+    if (result.kind !== 'processable') return;
+    expect(result.event).toMatchObject({
+      transactionId: 'pjr-nok-1',
+      status: 'paid',
+      amountMinor: 62634,
+      currency: 'NOK',
+    });
+  });
+
   it('normaliza status numérico 6 da Vendepay como venda paga', () => {
     const result = normalizeVendepay({
       id: 'numeric-paid-1',
