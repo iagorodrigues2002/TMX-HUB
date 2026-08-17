@@ -260,7 +260,11 @@ async function main() {
       { ...missingEnv },
       'pushcut delivery worker did not start — sale notifications will not be sent',
     );
-  app.utmifySync.start();
+  // Disabled intentionally: this legacy dashboard importer authenticates with
+  // the operator's UTMify login/password once per configured offer. Besides
+  // being unnecessary for server-side order/event delivery (which uses the
+  // API key workers above), it can trigger repeated 429/401 login attempts.
+  // Manual synchronization remains available when explicitly requested.
 
   let shuttingDown = false;
   const shutdown = async (signal: string) => {
