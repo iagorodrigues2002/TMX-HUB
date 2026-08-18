@@ -66,6 +66,7 @@ const migrations = [
   '051_upsell_manual_test_results.sql',
   '052_upsell_identity_order_source.sql',
   '053_unlimited_upsell_stages.sql',
+  '054_meta_front_only.sql',
 ];
 
 await sql`

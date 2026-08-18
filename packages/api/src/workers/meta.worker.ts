@@ -194,6 +194,18 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
         WHERE md.id = ${job.data.deliveryId} AND md.state <> 'delivered'
       `;
       if (!row) return;
+      // Defense in depth for deliveries created by older deployments or
+      // administrative replay paths: only explicitly classified front sales
+      // may leave the TMX as Meta Purchase events.
+      if (row.event_name === 'Purchase' && row.order_kind !== 'front') {
+        await db`
+          UPDATE meta_deliveries
+          SET state='skipped',
+              last_error='Upsell bloqueado: somente compras front são enviadas aos pixels Meta.'
+          WHERE id=${row.id}
+        `;
+        return;
+      }
       let responseStatus: number | null = null;
       let responseResult: Record<string, unknown> = {};
       try {

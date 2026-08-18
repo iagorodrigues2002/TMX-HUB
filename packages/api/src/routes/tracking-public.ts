@@ -1632,9 +1632,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           `;
           if (rows[0]) pushcutDeliveryIds.push(rows[0].id);
         }
-        // Every approved transaction is a real Purchase. Front, upsell 1 and
-        // upsell 2 use distinct transaction/event IDs, so Meta can deduplicate
-        // retries without suppressing legitimate incremental revenue.
+        // Meta pixels are intentionally front-only. Upsells remain available
+        // in TMX, UTMify and Pushcut, but must never populate or optimize any
+        // Meta pixel connected to this offer.
+        if (order.order_kind !== 'front') {
+          return { inserted: true, deliveryIds: [], utmifyDeliveryIds, pushcutDeliveryIds };
+        }
         const [rules] = await sql<
           Array<{ attributed_only: boolean; minimum_amount_minor: number }>
         >`
