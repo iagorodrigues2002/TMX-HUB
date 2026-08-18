@@ -414,16 +414,15 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
               vendid = undefined;
             }
           }
-          if (!vendid && receiptMatchesOrder && !/lucas/i.test(receipt.connection_name)) {
+          if (!vendid && receiptMatchesOrder) {
             vendid = collectVendaIdCandidates(receipt.payload, receipt.external_id).find(
               (candidate) =>
                 confirmedHashes.has(createHash('sha256').update(candidate).digest('hex')),
             );
           }
           const vendidConfirmed = Boolean(vendid);
-          // Lucas webhooks expose only the purchase UUID after a funnel was
-          // rebuilt. Keep the approved buyer visible while clearly separating
-          // that identifier from a vendaId confirmed for the current funnel.
+          // Keep the approved buyer visible while clearly separating the
+          // purchase identifier from a vendaId confirmed by Vendepay.
           const displayId = vendid ?? receipt.external_id;
           if (seen.has(displayId)) return [];
           seen.add(displayId);
@@ -440,15 +439,13 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
               links: vendidConfirmed ? stages.map((stage) => {
                 const validatedLink = new URL(upsellUrl(stage.slug));
                 validatedLink.searchParams.set('vendaId', displayId);
-                const forceLink = new URL(validatedLink);
-                forceLink.searchParams.set('force', '1');
                 const manualResult = resultByOrderStage.get(`${receipt.id}:${stage.id}`);
                 return {
                   stage_id: stage.id,
                   stage_key: stage.stage_key,
                   name: stage.name,
                   url: validatedLink.toString(),
-                  force_url: /lucas/i.test(receipt.connection_name) ? forceLink.toString() : null,
+                  force_url: null,
                   manual_result: manualResult?.result ?? null,
                   manual_checked_at: manualResult?.checked_at ?? null,
                 };
@@ -506,9 +503,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       const receipts = await app.db<Array<{
         payload: unknown;
         connection_id: string;
-        connection_name: string;
       }>>`
-        SELECT r.payload,r.connection_id,c.name AS connection_name
+        SELECT r.payload,r.connection_id
         FROM webhook_receipts r
         JOIN vendepay_connections c ON c.id=r.connection_id
         WHERE c.project_id=${p.id} AND r.received_at >= now()-interval '90 days'
@@ -562,12 +558,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           }
         }
         if (!vendid) {
-          if (/lucas/i.test(receipt.connection_name)) {
-            await app.db`
-              DELETE FROM tracking_upsell_identities
-              WHERE project_id=${p.id} AND source_order_id=${order.id}
-            `;
-          }
+          // Eligibility checks can fail transiently (timeout, rate limiting or
+          // a temporary Vendepay outage). A failed refresh must never erase a
+          // vendaId that was already confirmed for this approved front order.
           continue;
         }
         found += 1;
