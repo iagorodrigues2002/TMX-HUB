@@ -21,6 +21,10 @@ import type { z } from 'zod';
 import { env } from './env.js';
 import { ApiError } from './query-client.js';
 
+export type UpsellStageKey = `upsell_${number}`;
+export type TrackingProductKind = 'front' | 'upsell' | `upsell_${number}`;
+export type TrackingOrderKind = TrackingProductKind | 'unknown';
+
 // The API uses snake_case in the wire format per OpenAPI; shared types use
 // camelCase. The client converts at the boundary so the rest of the app
 // stays in TS-idiomatic shape.
@@ -1638,7 +1642,7 @@ export const apiClient = {
       currency: string | null;
       amount_brl_minor: string | null;
       buyer: { name?: string; email?: string; document?: string };
-      order_kind: 'front' | 'upsell' | 'upsell_2' | 'upsell_3' | 'unknown';
+      order_kind: TrackingOrderKind;
       occurred_at: string;
       updated_at: string;
     }>;
@@ -1830,7 +1834,7 @@ export const apiClient = {
     mapped: Array<{
       id: string;
       product_id: string;
-      kind: 'front' | 'upsell' | 'upsell_2' | 'upsell_3';
+      kind: TrackingProductKind;
       label: string | null;
       created_at: string;
       updated_at: string;
@@ -1849,7 +1853,7 @@ export const apiClient = {
     id: string,
     body: {
       product_id: string;
-      kind: 'front' | 'upsell' | 'upsell_2' | 'upsell_3';
+      kind: TrackingProductKind;
       label?: string | null;
     },
   ): Promise<{
@@ -2163,7 +2167,7 @@ export const apiClient = {
     install_code?: string;
     stages: Array<{
       id: string;
-      stage_key: 'upsell_1' | 'upsell_2' | 'upsell_3';
+      stage_key: UpsellStageKey;
       name: string;
       slug: string;
       destination_url: string;
@@ -2190,7 +2194,7 @@ export const apiClient = {
   async saveTrackingUpsell(
     id: string,
     body: {
-      stage_key: 'upsell_1' | 'upsell_2' | 'upsell_3';
+      stage_key: UpsellStageKey;
       name: string;
       destination_url: string;
       connection_destinations?: Record<string, string>;
@@ -2215,7 +2219,7 @@ export const apiClient = {
       last_seen_at: string;
       links: Array<{
         stage_id: string;
-        stage_key: 'upsell_1' | 'upsell_2' | 'upsell_3';
+        stage_key: UpsellStageKey;
         name: string;
         url: string;
         force_url: string | null;

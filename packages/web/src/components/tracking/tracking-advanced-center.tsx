@@ -5,7 +5,11 @@ import { TrackingLiveConsole } from '@/components/tracking/tracking-live-console
 import { TrackingPanel } from '@/components/tracking/tracking-panel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { apiClient } from '@/lib/api-client';
+import {
+  apiClient,
+  type TrackingProductKind,
+  type UpsellStageKey,
+} from '@/lib/api-client';
 import { formatMoney } from '@/lib/currency-preference';
 import { cn } from '@/lib/utils';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -76,6 +80,14 @@ const trackingDomainPreview = (value: string) => {
 };
 
 const SAO_PAULO_TIME_ZONE = 'America/Sao_Paulo';
+const UPSELL_STAGE_OPTIONS = Array.from(
+  { length: 20 },
+  (_, index) => `upsell_${index + 1}` as UpsellStageKey,
+);
+const upsellStageNumber = (key: UpsellStageKey) => Number(key.slice('upsell_'.length));
+const upsellStageLabel = (key: UpsellStageKey) => `Upsell ${upsellStageNumber(key)}`;
+const stageKeyToProductKind = (key: UpsellStageKey): TrackingProductKind =>
+  key === 'upsell_1' ? 'upsell' : key;
 
 function ValidatedUpsellLink({
   offerId,
@@ -310,9 +322,7 @@ export function TrackingAdvancedCenter({
   const [selectedVendepayConnectionId, setSelectedVendepayConnectionId] = useState('');
   const [selectedVendepayConnectionName, setSelectedVendepayConnectionName] = useState('');
   const [vendepaySigningSecret, setVendepaySigningSecret] = useState('');
-  const [upsellStageKey, setUpsellStageKey] = useState<'upsell_1' | 'upsell_2' | 'upsell_3'>(
-    'upsell_1',
-  );
+  const [upsellStageKey, setUpsellStageKey] = useState<UpsellStageKey>('upsell_1');
   const [upsellStageName, setUpsellStageName] = useState('Upsell 1');
   const [upsellDestination, setUpsellDestination] = useState('');
   const [upsellConnectionDestinations, setUpsellConnectionDestinations] = useState<
@@ -332,7 +342,7 @@ export function TrackingAdvancedCenter({
     'https://api.utmify.com.br/api-credentials/orders',
   );
   const [productKindSelection, setProductKindSelection] = useState<
-    Record<string, 'front' | 'upsell' | 'upsell_2' | 'upsell_3'>
+    Record<string, TrackingProductKind>
   >({});
   const [pushcutName, setPushcutName] = useState('');
   const [pushcutSecret, setPushcutSecret] = useState('');
@@ -409,12 +419,12 @@ export function TrackingAdvancedCenter({
   );
   useEffect(() => {
     if (editingUpsellStageId || !upsellIntelligence.data || !configuredUpsellStages.has(upsellStageKey)) return;
-    const next = (['upsell_1', 'upsell_2', 'upsell_3'] as const).find(
+    const next = UPSELL_STAGE_OPTIONS.find(
       (stage) => !configuredUpsellStages.has(stage),
     );
     if (!next) return;
     setUpsellStageKey(next);
-    setUpsellStageName(next === 'upsell_1' ? 'Upsell 1' : next === 'upsell_2' ? 'Upsell 2' : 'Upsell 3');
+    setUpsellStageName(upsellStageLabel(next));
   }, [editingUpsellStageId, upsellIntelligence.data, upsellStageKey]);
   const saveUpsellStage = useMutation({
     mutationFn: () => {
@@ -766,7 +776,7 @@ export function TrackingAdvancedCenter({
   const saveProductKind = useMutation({
     mutationFn: (input: {
       product_id: string;
-      kind: 'front' | 'upsell' | 'upsell_2' | 'upsell_3';
+      kind: TrackingProductKind;
       label?: string | null;
     }) => apiClient.setTrackingProductKind(offerId, input),
     onSuccess: (result, variables) => {
@@ -1357,22 +1367,21 @@ export function TrackingAdvancedCenter({
                     className="h-10 rounded-md border border-white/[0.1] bg-black/30 px-3 text-sm text-white outline-none focus:border-cyan-300/40"
                     value={upsellStageKey}
                     onChange={(event) => {
-                      const value = event.target.value as 'upsell_1' | 'upsell_2' | 'upsell_3';
+                      const value = event.target.value as UpsellStageKey;
                       setUpsellStageKey(value);
-                      setUpsellStageName(
-                        value === 'upsell_1' ? 'Upsell 1' : value === 'upsell_2' ? 'Upsell 2' : 'Upsell 3',
-                      );
+                      setUpsellStageName(upsellStageLabel(value));
                     }}
                   >
-                    <option value="upsell_1" disabled={configuredUpsellStages.has('upsell_1')}>
-                      Upsell 1 {configuredUpsellStages.has('upsell_1') ? '— já cadastrado' : ''}
-                    </option>
-                    <option value="upsell_2" disabled={configuredUpsellStages.has('upsell_2')}>
-                      Upsell 2 {configuredUpsellStages.has('upsell_2') ? '— já cadastrado' : ''}
-                    </option>
-                    <option value="upsell_3" disabled={configuredUpsellStages.has('upsell_3')}>
-                      Upsell 3 {configuredUpsellStages.has('upsell_3') ? '— já cadastrado' : ''}
-                    </option>
+                    {UPSELL_STAGE_OPTIONS.map((stageKey) => (
+                      <option
+                        key={stageKey}
+                        value={stageKey}
+                        disabled={configuredUpsellStages.has(stageKey)}
+                      >
+                        {upsellStageLabel(stageKey)}{' '}
+                        {configuredUpsellStages.has(stageKey) ? '— já cadastrado' : ''}
+                      </option>
+                    ))}
                   </select>
                   <Input
                     aria-label="Nome da etapa de upsell"
@@ -2632,18 +2641,19 @@ export function TrackingAdvancedCenter({
                               onChange={(event) =>
                                 setProductKindSelection((prev) => ({
                                   ...prev,
-                                  [product.product_id]: event.target.value as
-                                    | 'front'
-                                    | 'upsell'
-                                    | 'upsell_2'
-                                    | 'upsell_3',
+                                  [product.product_id]: event.target.value as TrackingProductKind,
                                 }))
                               }
                             >
                               <option value="front">Front</option>
-                              <option value="upsell">Upsell 1</option>
-                              <option value="upsell_2">Upsell 2</option>
-                              <option value="upsell_3">Upsell 3</option>
+                              {(upsellIntelligence.data?.stages ?? []).map((stage) => (
+                                <option
+                                  key={stage.stage_key}
+                                  value={stageKeyToProductKind(stage.stage_key)}
+                                >
+                                  {stage.name}
+                                </option>
+                              ))}
                             </select>
                             <Button
                               size="sm"
@@ -2716,9 +2726,7 @@ export function TrackingAdvancedCenter({
                             ? 'Front'
                             : mapping.kind === 'upsell'
                               ? 'Upsell 1'
-                              : mapping.kind === 'upsell_2'
-                                ? 'Upsell 2'
-                                : 'Upsell 3'}
+                              : `Upsell ${mapping.kind.replace('upsell_', '')}`}
                         </span>
                         {canManage && (
                           <Button

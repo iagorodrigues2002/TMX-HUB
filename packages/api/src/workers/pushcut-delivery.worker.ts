@@ -63,10 +63,7 @@ export function createPushcutDeliveryWorker(): Worker<PushcutJobData> | null {
       let responseStatus: number | null = null;
       let responseResult: Record<string, unknown> = {};
       try {
-        const kind =
-          row.order_kind && ['upsell', 'upsell_2', 'upsell_3'].includes(row.order_kind)
-            ? 'upsell'
-            : 'front';
+        const kind = row.order_kind && /^upsell(?:_[2-9][0-9]*)?$/.test(row.order_kind) ? 'upsell' : 'front';
         const notificationName =
           kind === 'upsell' ? row.upsell_notification_name : row.front_notification_name;
         if (!notificationName) {

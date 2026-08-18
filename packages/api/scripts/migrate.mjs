@@ -65,6 +65,7 @@ const migrations = [
   '050_classify_existing_upsells_as_iago.sql',
   '051_upsell_manual_test_results.sql',
   '052_upsell_identity_order_source.sql',
+  '053_unlimited_upsell_stages.sql',
 ];
 
 await sql`

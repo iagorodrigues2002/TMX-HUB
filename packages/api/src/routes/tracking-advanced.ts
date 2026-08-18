@@ -130,11 +130,11 @@ const EntryLinkAbSchema = z.object({
 });
 const ProductKindSchema = z.object({
   product_id: z.string().trim().min(1).max(256),
-  kind: z.enum(['front', 'upsell', 'upsell_2', 'upsell_3']),
+  kind: z.string().regex(/^(front|upsell|upsell_[2-9][0-9]*)$/),
   label: z.string().trim().max(120).nullable().optional(),
 });
 const UpsellStageSchema = z.object({
-  stage_key: z.enum(['upsell_1', 'upsell_2', 'upsell_3']),
+  stage_key: z.string().regex(/^upsell_[1-9][0-9]*$/),
   name: z.string().trim().min(2).max(120),
   destination_url: z.string().url().max(4096),
   connection_destinations: z.record(z.string(), z.string().url().max(4096)).default({}),
@@ -255,10 +255,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
              NULLIF(trim(previous.visitor_id),''),previous.external_id))::int
            FROM tracking_orders previous
            WHERE previous.project_id=s.project_id AND previous.paid_at IS NOT NULL
-             AND previous.order_kind=CASE s.stage_key
-               WHEN 'upsell_1' THEN 'front'
-               WHEN 'upsell_2' THEN 'upsell'
-               ELSE 'upsell_2'
+             AND previous.order_kind=CASE
+               WHEN substring(s.stage_key from '[0-9]+')::int=1 THEN 'front'
+               WHEN substring(s.stage_key from '[0-9]+')::int=2 THEN 'upsell'
+               ELSE 'upsell_' || (substring(s.stage_key from '[0-9]+')::int - 1)::text
              END
              AND previous.paid_at >= ${fromInstant}
              AND previous.paid_at < ${toInstant}) AS eligible_buyers,
@@ -299,7 +299,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
            WHERE i.project_id=s.project_id) AS identified_buyers
         FROM tracking_upsell_stages s
         WHERE s.project_id=${p.id}
-        ORDER BY CASE s.stage_key WHEN 'upsell_1' THEN 1 WHEN 'upsell_2' THEN 2 ELSE 3 END
+        ORDER BY substring(s.stage_key from '[0-9]+')::int
       `;
       return {
         configured: true,
@@ -339,7 +339,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                  EXISTS (
                    SELECT 1 FROM tracking_orders upsell
                    WHERE upsell.project_id=o.project_id
-                     AND upsell.order_kind IN ('upsell','upsell_2','upsell_3')
+                     AND (upsell.order_kind='upsell' OR upsell.order_kind ~ '^upsell_[2-9][0-9]*$')
                      AND upsell.paid_at IS NOT NULL
                      AND (
                        (NULLIF(lower(trim(o.buyer->>'email')),'') IS NOT NULL
@@ -377,7 +377,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           SELECT id,stage_key,name,slug,destination_url
           FROM tracking_upsell_stages
           WHERE project_id=${p.id} AND enabled=true
-          ORDER BY CASE stage_key WHEN 'upsell_1' THEN 1 WHEN 'upsell_2' THEN 2 ELSE 3 END
+          ORDER BY substring(stage_key from '[0-9]+')::int
         `,
         app.db<Array<{ vendid_hash: string }>>`
           SELECT vendid_hash FROM tracking_upsell_identities WHERE project_id=${p.id}

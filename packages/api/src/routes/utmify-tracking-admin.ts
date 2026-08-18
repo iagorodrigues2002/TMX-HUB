@@ -156,7 +156,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             ) f ON true
             WHERE u.project_id=${project.id}
               AND u.status='paid'
-              AND u.order_kind IN ('upsell', 'upsell_2', 'upsell_3')
+              AND (u.order_kind='upsell' OR u.order_kind ~ '^upsell_[2-9][0-9]*$')
           )
           UPDATE tracking_orders u
           SET visitor_id=COALESCE(u.visitor_id, matches.front_visitor_id),

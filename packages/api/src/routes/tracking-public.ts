@@ -49,7 +49,7 @@ const AbAssignmentSchema = z.object({
 });
 const UpsellEventSchema = z.object({
   public_key: z.string().min(8).max(120),
-  stage_key: z.enum(['upsell_1', 'upsell_2', 'upsell_3']),
+  stage_key: z.string().regex(/^upsell_[1-9][0-9]*$/),
   token: z.string().max(4096).optional(),
   visitor_id: z.string().min(8).max(128),
   journey_id: z.string().min(8).max(128),
@@ -1364,7 +1364,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         // Upsell checkouts frequently omit src/UTMs. Inherit them from the
         // closest prior front sale for the same exact email/phone so every
         // incremental order remains tied to the originating campaign.
-        const [parentFront] = ['upsell', 'upsell_2', 'upsell_3'].includes(orderKind)
+        const [parentFront] = /^upsell(?:_[2-9][0-9]*)?$/.test(orderKind)
           ? await sql<
               Array<{ external_id: string; visitor_id: string | null; attribution_source: Record<string, string> }>
             >`
@@ -1612,7 +1612,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         `;
         const pushcutDeliveryIds: string[] = [];
         for (const destination of pushcutDestinations) {
-          const notificationName = ['upsell', 'upsell_2', 'upsell_3'].includes(order.order_kind)
+          const notificationName = /^upsell(?:_[2-9][0-9]*)?$/.test(order.order_kind)
             ? destination.upsell_notification_name
             : destination.front_notification_name;
           // Destination opted out of upsell alerts (upsell_notification_name
