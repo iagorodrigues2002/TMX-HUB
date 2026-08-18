@@ -318,6 +318,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     async (req, reply) => {
       const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin');
       if (!app.db) return reply.code(503).send(databaseUnavailable);
+      const db = app.db;
       if (!p) return { items: [] };
       if (!env.TRACKING_ENCRYPTION_KEY) {
         return reply.code(503).send({ error: 'tracking_encryption_unavailable' });
@@ -329,11 +330,13 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           visitor_id: string | null;
           external_id: string;
           paid_at: Date;
+          connection_id: string | null;
           connection_name: string;
           confirmed_vendid_encrypted: string | null;
           has_upsell: boolean;
         }>>`
           SELECT o.id,receipt.payload,o.visitor_id,o.external_id,o.paid_at,
+                 o.vendepay_connection_id AS connection_id,
                  COALESCE(vc.name,'Vendepay') AS connection_name,
                  identity.vendid_encrypted AS confirmed_vendid_encrypted,
                  EXISTS (
@@ -373,8 +376,15 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           WHERE o.project_id=${p.id} AND o.order_kind='front' AND o.paid_at IS NOT NULL
           ORDER BY o.paid_at DESC,o.updated_at DESC
         `,
-        app.db<Array<{ id: string; stage_key: string; name: string; slug: string; destination_url: string }>>`
-          SELECT id,stage_key,name,slug,destination_url
+        app.db<Array<{
+          id: string;
+          stage_key: string;
+          name: string;
+          slug: string;
+          destination_url: string;
+          connection_destinations: Record<string, string> | null;
+        }>>`
+          SELECT id,stage_key,name,slug,destination_url,connection_destinations
           FROM tracking_upsell_stages
           WHERE project_id=${p.id} AND enabled=true
           ORDER BY substring(stage_key from '[0-9]+')::int
@@ -419,6 +429,45 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
               (candidate) =>
                 confirmedHashes.has(createHash('sha256').update(candidate).digest('hex')),
             );
+          }
+          // Vendepay can provision the upsell intent minutes after the paid
+          // webhook. Self-heal recent approved purchases when the operator
+          // opens the list instead of leaving them pending until a manual
+          // reconciliation is requested.
+          if (
+            !vendid &&
+            receiptMatchesOrder &&
+            receipt.connection_id &&
+            Date.now() - new Date(receipt.paid_at).getTime() <= 7 * 24 * 60 * 60_000
+          ) {
+            for (const candidate of collectVendaIdCandidates(receipt.payload, receipt.external_id)) {
+              const validated = await Promise.all(
+                stages.map((stage) =>
+                  checkUpsellCompatibility(
+                    stage.connection_destinations?.[receipt.connection_id!] || stage.destination_url,
+                    candidate,
+                    true,
+                  ),
+                ),
+              );
+              if (!validated.some(Boolean)) continue;
+              vendid = candidate;
+              const hash = createHash('sha256').update(candidate).digest('hex');
+              const identityVisitorId = receipt.visitor_id ?? `vendepay:${receipt.external_id}`;
+              await db`
+                INSERT INTO tracking_upsell_identities
+                  (id,project_id,visitor_id,vendid_hash,vendid_encrypted,source_order_id,
+                   vendepay_connection_id)
+                VALUES(${ulid()},${p.id},${identityVisitorId},${hash},
+                  ${encryptSecret(candidate, env.TRACKING_ENCRYPTION_KEY!)},${receipt.id},
+                  ${receipt.connection_id})
+                ON CONFLICT(project_id,vendid_hash) DO UPDATE SET
+                  visitor_id=EXCLUDED.visitor_id,source_order_id=EXCLUDED.source_order_id,
+                  vendepay_connection_id=EXCLUDED.vendepay_connection_id,last_seen_at=now()
+              `;
+              confirmedHashes.add(hash);
+              break;
+            }
           }
           const vendidConfirmed = Boolean(vendid);
           // Keep the approved buyer visible while clearly separating the
