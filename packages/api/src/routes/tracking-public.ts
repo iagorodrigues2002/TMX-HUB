@@ -277,6 +277,16 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     }
     return stage.destination_url;
   }
+  async function hasConfirmedUpsellIdentity(projectId: string, vendaId?: string) {
+    if (!app.db || !vendaId) return false;
+    const hash = createHash('sha256').update(vendaId).digest('hex');
+    const [identity] = await app.db<Array<{ found: number }>>`
+      SELECT 1 AS found FROM tracking_upsell_identities
+      WHERE project_id=${projectId} AND vendid_hash=${hash}
+      LIMIT 1
+    `;
+    return Boolean(identity);
+  }
   app.post<{
     Querystring: { token?: string };
     Body: {
@@ -971,7 +981,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!destinationUrl) {
         return reply.code(200).send({ compatible: false, reason: 'account_not_configured' });
       }
-      const compatible = await checkUpsellCompatibility(destinationUrl, vendaId);
+      const compatible =
+        (await hasConfirmedUpsellIdentity(stage.project_id, vendaId)) ||
+        (await checkUpsellCompatibility(destinationUrl, vendaId));
       reply.header('cache-control', 'private, max-age=300');
       return { compatible, reason: compatible ? null : 'vendepay_not_eligible' };
     },
@@ -1002,7 +1014,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           .type('text/html; charset=utf-8')
           .send(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Conta não configurada · TMX</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#06151c;color:#dffaff;font-family:Inter,system-ui,sans-serif}.box{max-width:560px;margin:24px;padding:32px;border:1px solid #1d5866;border-radius:20px;background:#09232c;box-shadow:0 0 50px #00d9ff18}h1{font-size:24px;margin:0 0 12px}p{color:#9cc4cc;line-height:1.6}button{margin-top:12px;border:1px solid #2edcf2;border-radius:10px;padding:10px 16px;background:#0a303a;color:#dffaff;cursor:pointer}</style></head><body><main class="box"><h1>Link não configurado para esta conta VendePay</h1><p>Cadastre o destino desta etapa no Upsell Intelligence antes de abrir este comprador.</p><button onclick="history.back()">Voltar para a lista</button></main></body></html>`);
       }
-      if (requestedVendaId && req.query.force !== '1') {
+      if (
+        requestedVendaId &&
+        req.query.force !== '1' &&
+        !(await hasConfirmedUpsellIdentity(stage.project_id, requestedVendaId))
+      ) {
         // Never trust the preview cache for the actual navigation. Confirm the
         // Vendepay intent again at click time so a stale positive cannot send
         // the operator to a widget that is currently unavailable.
@@ -1249,44 +1265,6 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         }
       }
       const ingestConvertedAt = ingestBrlMinor != null ? new Date() : null;
-      // Some Vendepay accounts (such as Lucas/SLM) use the paid transaction
-      // UUID as the upsell vendaId, while rebuilt funnels may reject that same
-      // fallback. Ask Vendepay before persisting it so valid funnels become
-      // clickable automatically without reintroducing broken PJR links.
-      let transactionIdIsUpsellCompatible = false;
-      if (
-        normalized.kind === 'processable' &&
-        normalized.event.status === 'paid' &&
-        !normalized.event.vendid
-      ) {
-        const candidateStages = await app.db<Array<{
-          destination_url: string;
-          connection_destinations: Record<string, string> | null;
-        }>>`
-          SELECT destination_url,connection_destinations
-          FROM tracking_upsell_stages
-          WHERE project_id=${connection.project_id} AND enabled=true
-        `;
-        // The paid webhook can arrive a few seconds before Vendepay finishes
-        // provisioning the upsell intent. Retry with a fresh lookup instead of
-        // caching that short-lived 404 and requiring a manual reconciliation.
-        for (const delayMs of [0, 1_500, 3_000]) {
-          if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
-          const compatibility = await Promise.all(
-            candidateStages.map((stage) =>
-              checkUpsellCompatibility(
-                stage.connection_destinations?.[connection.id] || stage.destination_url,
-                normalized.event.transactionId,
-                true,
-              ),
-            ),
-          );
-          if (compatibility.some(Boolean)) {
-            transactionIdIsUpsellCompatible = true;
-            break;
-          }
-        }
-      }
       const outcome = await app.db.begin(async (sql) => {
         const receipts = await sql<{ id: string }[]>`
           INSERT INTO webhook_receipts
@@ -1390,9 +1368,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         // iframe. Some accounts omit an explicit vendid field in webhooks.
         const effectiveVendid =
           event.vendid ??
-          (transactionIdIsUpsellCompatible
-            ? (orderKind === 'front' ? event.transactionId : parentFront?.external_id)
-            : undefined);
+          (orderKind === 'front' ? event.transactionId : parentFront?.external_id);
         if (
           event.status === 'paid' &&
           orderKind === 'front' &&
@@ -1408,11 +1384,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           const vendidHash = createHash('sha256').update(effectiveVendid).digest('hex');
           await sql`
             INSERT INTO tracking_upsell_identities
-              (id,project_id,visitor_id,vendid_hash,vendid_encrypted)
+              (id,project_id,visitor_id,vendid_hash,vendid_encrypted,vendepay_connection_id)
             VALUES(${ulid()},${connection.project_id},${identityVisitorId},${vendidHash},
-              ${encryptSecret(effectiveVendid, env.TRACKING_ENCRYPTION_KEY)})
+              ${encryptSecret(effectiveVendid, env.TRACKING_ENCRYPTION_KEY)},${connection.id})
             ON CONFLICT(project_id,vendid_hash) DO UPDATE SET
-              visitor_id=EXCLUDED.visitor_id,last_seen_at=now()
+              visitor_id=EXCLUDED.visitor_id,
+              vendepay_connection_id=EXCLUDED.vendepay_connection_id,last_seen_at=now()
           `;
         }
         const [visitorSource] = attributedVisitorId

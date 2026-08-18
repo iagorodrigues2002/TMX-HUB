@@ -425,48 +425,31 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             }
           }
           if (!vendid && receiptMatchesOrder) {
-            vendid = collectVendaIdCandidates(receipt.payload, receipt.external_id).find(
-              (candidate) =>
-                confirmedHashes.has(createHash('sha256').update(candidate).digest('hex')),
-            );
+            const candidates = collectVendaIdCandidates(receipt.payload, receipt.external_id);
+            vendid = candidates.find((candidate) =>
+              confirmedHashes.has(createHash('sha256').update(candidate).digest('hex')),
+            ) ?? candidates[0];
           }
-          // Vendepay can provision the upsell intent minutes after the paid
-          // webhook. Self-heal recent approved purchases when the operator
-          // opens the list instead of leaving them pending until a manual
-          // reconciliation is requested.
-          if (
-            !vendid &&
-            receiptMatchesOrder &&
-            receipt.connection_id &&
-            Date.now() - new Date(receipt.paid_at).getTime() <= 7 * 24 * 60 * 60_000
-          ) {
-            for (const candidate of collectVendaIdCandidates(receipt.payload, receipt.external_id)) {
-              const validated = await Promise.all(
-                stages.map((stage) =>
-                  checkUpsellCompatibility(
-                    stage.connection_destinations?.[receipt.connection_id!] || stage.destination_url,
-                    candidate,
-                    true,
-                  ),
-                ),
-              );
-              if (!validated.some(Boolean)) continue;
-              vendid = candidate;
-              const hash = createHash('sha256').update(candidate).digest('hex');
+          // A paid front webhook is authoritative. Persist its full UUID even
+          // when Vendepay's one-time intent has already been consumed or is
+          // temporarily unavailable; otherwise a link that worked earlier is
+          // incorrectly downgraded to "aguardando validação".
+          if (vendid && receiptMatchesOrder && receipt.connection_id) {
+            const hash = createHash('sha256').update(vendid).digest('hex');
+            if (!confirmedHashes.has(hash)) {
               const identityVisitorId = receipt.visitor_id ?? `vendepay:${receipt.external_id}`;
               await db`
                 INSERT INTO tracking_upsell_identities
                   (id,project_id,visitor_id,vendid_hash,vendid_encrypted,source_order_id,
                    vendepay_connection_id)
                 VALUES(${ulid()},${p.id},${identityVisitorId},${hash},
-                  ${encryptSecret(candidate, env.TRACKING_ENCRYPTION_KEY!)},${receipt.id},
+                  ${encryptSecret(vendid, env.TRACKING_ENCRYPTION_KEY!)},${receipt.id},
                   ${receipt.connection_id})
                 ON CONFLICT(project_id,vendid_hash) DO UPDATE SET
                   visitor_id=EXCLUDED.visitor_id,source_order_id=EXCLUDED.source_order_id,
                   vendepay_connection_id=EXCLUDED.vendepay_connection_id,last_seen_at=now()
               `;
               confirmedHashes.add(hash);
-              break;
             }
           }
           const vendidConfirmed = Boolean(vendid);
