@@ -1402,7 +1402,16 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             count(*)::int AS orders,
             count(*) FILTER (WHERE o.status = 'paid')::int AS paid_orders,
             COALESCE(sum(o.amount_minor) FILTER (WHERE o.status = 'paid'), 0)::text
-              AS paid_revenue_minor
+              AS paid_revenue_minor,
+            COALESCE(sum(o.amount_brl_minor) FILTER (WHERE o.status = 'paid'), 0)::text
+              AS paid_revenue_brl_minor,
+            COALESCE(
+              round(
+                COALESCE(sum(o.amount_brl_minor) FILTER (WHERE o.status = 'paid'), 0)::numeric /
+                NULLIF(count(*) FILTER (WHERE o.status = 'paid'), 0)
+              ),
+              0
+            )::bigint::text AS average_ticket_brl_minor
           FROM tracking_orders o
           JOIN tracking_projects p ON p.id = o.project_id
           LEFT JOIN LATERAL (
@@ -1422,7 +1431,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           COALESCE(e.checkouts, 0)::int AS checkouts,
           COALESCE(o.orders, 0)::int AS orders,
           COALESCE(o.paid_orders, 0)::int AS paid_orders,
-          COALESCE(o.paid_revenue_minor, '0') AS paid_revenue_minor
+          COALESCE(o.paid_revenue_minor, '0') AS paid_revenue_minor,
+          COALESCE(o.paid_revenue_brl_minor, '0') AS paid_revenue_brl_minor,
+          COALESCE(o.average_ticket_brl_minor, '0') AS average_ticket_brl_minor
         FROM event_counts e
         FULL OUTER JOIN order_counts o ON o.country = e.country
         ORDER BY page_views DESC, checkouts DESC, paid_orders DESC

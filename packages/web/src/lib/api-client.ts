@@ -2426,6 +2426,8 @@ export const apiClient = {
       orders: number;
       paid_orders: number;
       paid_revenue_minor: string;
+      paid_revenue_brl_minor: string;
+      average_ticket_brl_minor: string;
     }>;
   }> {
     const params = trackingPeriodParams(period);

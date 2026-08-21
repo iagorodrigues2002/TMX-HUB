@@ -20,6 +20,8 @@ type CountryRow = {
   orders: number;
   paid_orders: number;
   paid_revenue_minor: string;
+  paid_revenue_brl_minor: string;
+  average_ticket_brl_minor: string;
 };
 
 type Metric = 'page_views' | 'checkouts' | 'paid_orders' | 'conversion_rate';
@@ -52,6 +54,13 @@ function formatMetric(value: number, metric: Metric) {
   return metric === 'conversion_rate'
     ? `${value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`
     : value.toLocaleString('pt-BR');
+}
+
+function formatBrl(minor: string) {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(Number(minor || 0) / 100);
 }
 
 function countryName(code: string) {
@@ -191,6 +200,7 @@ export function TrackingCountryMap({ rows }: { rows: CountryRow[] }) {
                       </>
                     )}
                     {lowConversion && ' · ALERTA: conversão baixa'}
+                    {row && ` · ticket médio ${formatBrl(row.average_ticket_brl_minor)}`}
                   </title>
                 </path>
               );
@@ -211,14 +221,19 @@ export function TrackingCountryMap({ rows }: { rows: CountryRow[] }) {
               onClick={() => setSelected(countries.alpha2ToAlpha3(row.country) ?? row.country)}
               className="grid w-full grid-cols-[minmax(0,1fr)_90px_110px] items-center gap-3 px-4 py-3 text-left hover:bg-white/[0.03]"
             >
-              <span className="flex items-center gap-2 text-sm text-white/70">
-                {hasLowConversion(row) && (
-                  <AlertTriangle
-                    className="h-4 w-4 shrink-0 text-rose-400"
-                    aria-label="Alerta de conversão baixa"
-                  />
-                )}
-                {countryName(row.country)}
+              <span className="min-w-0">
+                <span className="flex items-center gap-2 text-sm text-white/70">
+                  {hasLowConversion(row) && (
+                    <AlertTriangle
+                      className="h-4 w-4 shrink-0 text-rose-400"
+                      aria-label="Alerta de conversão baixa"
+                    />
+                  )}
+                  {countryName(row.country)}
+                </span>
+                <span className="mt-1 block truncate font-mono text-[10px] text-amber-100/60">
+                  Ticket médio {formatBrl(row.average_ticket_brl_minor)}
+                </span>
               </span>
               <span className="text-right font-mono text-sm text-cyan-200">
                 {formatMetric(metricValue(row, metric), metric)}
@@ -245,6 +260,9 @@ export function TrackingCountryMap({ rows }: { rows: CountryRow[] }) {
           </span>
           <span className="rounded-full border border-emerald-300/20 bg-emerald-300/[0.07] px-2.5 py-1 font-mono text-emerald-200">
             {formatMetric(conversionRate(selectedRow), 'conversion_rate')} de conversão
+          </span>
+          <span className="rounded-full border border-amber-300/20 bg-amber-300/[0.07] px-2.5 py-1 font-mono text-amber-100">
+            Ticket médio {formatBrl(selectedRow.average_ticket_brl_minor)}
           </span>
           {hasLowConversion(selectedRow) && (
             <span className="flex items-center gap-1.5 rounded-full border border-rose-300/25 bg-rose-300/[0.08] px-2.5 py-1 font-medium text-rose-200">
