@@ -23,9 +23,9 @@ const upsellIdCache = new Map<string, { upsellId: string; expiresAt: number }>()
 const sleep = (delayMs: number) =>
   delayMs > 0 ? new Promise<void>((resolve) => setTimeout(resolve, delayMs)) : Promise.resolve();
 
-async function resolveUpsellId(destinationUrl: string, timeoutMs: number, forceRefresh: boolean) {
+async function resolveUpsellId(destinationUrl: string, timeoutMs: number) {
   const cached = upsellIdCache.get(destinationUrl);
-  if (!forceRefresh && cached && cached.expiresAt > Date.now()) return cached.upsellId;
+  if (cached && cached.expiresAt > Date.now()) return cached.upsellId;
   const pageResponse = await fetch(destinationUrl, {
     signal: AbortSignal.timeout(timeoutMs),
     headers: { 'user-agent': 'TMX-Upsell-Validator/2.0' },
@@ -60,7 +60,7 @@ export async function checkUpsellCompatibilityDetailed(
 
   let upsellId: string;
   try {
-    upsellId = await resolveUpsellId(destinationUrl, timeoutMs, forceRefresh);
+    upsellId = await resolveUpsellId(destinationUrl, timeoutMs);
   } catch (error) {
     result = {
       ...result,
