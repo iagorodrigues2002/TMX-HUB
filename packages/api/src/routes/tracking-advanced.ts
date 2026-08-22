@@ -241,6 +241,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       const today = saoPauloParts(new Date()).date;
       const fromDate = /^\d{4}-\d{2}-\d{2}$/.test(req.query.from ?? '') ? req.query.from! : today;
       const toDate = /^\d{4}-\d{2}-\d{2}$/.test(req.query.to ?? '') ? req.query.to! : fromDate;
+      // Keep A/B attribution aligned with the São Paulo reporting period used by the dashboard.
       const fromInstant = new Date(saoPauloDayRange(fromDate).from);
       const toInstant = new Date(saoPauloDayRange(toDate).to);
       const stages = await app.db`

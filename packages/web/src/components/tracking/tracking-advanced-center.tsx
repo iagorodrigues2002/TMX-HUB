@@ -3660,7 +3660,9 @@ function AbTestCard({
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-white/45">Ticket médio</dt>
+                  <dt className="text-white/45" title="Receita atribuída dividida pelas compras pagas">
+                    Ticket médio
+                  </dt>
                   <dd className="mt-1 text-base font-semibold text-amber-200">
                     {(averageTicketBrlMinor / 100).toLocaleString('pt-BR', {
                       style: 'currency',
