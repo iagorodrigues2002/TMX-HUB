@@ -2124,6 +2124,7 @@ export const apiClient = {
   async getTrackingAbTestMetrics(
     id: string,
     testId: string,
+    period?: string | TrackingPeriod,
   ): Promise<{
     variants: Array<{
       id: string;
@@ -2137,7 +2138,9 @@ export const apiClient = {
       revenue_brl_minor: string;
     }>;
   }> {
-    return request(`/v1/offers/${id}/tracking/ab-tests/${testId}/metrics`);
+    const params = trackingPeriodParams(period);
+    const query = params.size ? `?${params.toString()}` : '';
+    return request(`/v1/offers/${id}/tracking/ab-tests/${testId}/metrics${query}`);
   },
 
   async controlTrackingAbTest(

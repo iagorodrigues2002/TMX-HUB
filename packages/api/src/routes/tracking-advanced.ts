@@ -1151,18 +1151,29 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     return reply.code(201).send({ id: testId, status: 'active' });
   });
 
-  app.get<{ Params: { id: string; testId: string } }>(
+  app.get<{
+    Params: { id: string; testId: string };
+    Querystring: { from?: string; to?: string };
+  }>(
     '/offers/:id/tracking/ab-tests/:testId/metrics',
     async (req, reply) => {
       const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin');
       if (!app.db) return reply.code(503).send(databaseUnavailable);
       if (!p) return reply.code(404).send({ error: 'tracking_not_configured' });
+      const today = saoPauloParts(new Date()).date;
+      const fromDate = /^\d{4}-\d{2}-\d{2}$/.test(req.query.from ?? '') ? req.query.from! : today;
+      const toDate = /^\d{4}-\d{2}-\d{2}$/.test(req.query.to ?? '') ? req.query.to! : fromDate;
+      const fromInstant = new Date(saoPauloDayRange(fromDate).from);
+      const toInstant = new Date(saoPauloDayRange(toDate).to);
       const rows = await app.db`
         SELECT v.id, v.label, v.position, v.destination_url,
-               count(DISTINCT a.visitor_id)::int AS visitors,
+               count(DISTINCT a.visitor_id) FILTER (
+                 WHERE a.created_at >= ${fromInstant} AND a.created_at < ${toInstant}
+               )::int AS visitors,
                (SELECT count(*)::int FROM tracking_events e
                 WHERE e.project_id=t.project_id
                   AND e.event_name='InitiateCheckout'
+                  AND e.received_at >= ${fromInstant} AND e.received_at < ${toInstant}
                   AND (
                     e.properties->>'ab_variant_id'=v.id
                     OR (
@@ -1175,6 +1186,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                   )) AS checkouts,
                (SELECT count(*)::int FROM tracking_orders o
                 WHERE o.project_id=t.project_id
+                  AND o.occurred_at >= ${fromInstant} AND o.occurred_at < ${toInstant}
                   AND (
                     o.attribution_source->>'ab_variant_id'=v.id
                     OR EXISTS (
@@ -1185,6 +1197,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                   )) AS orders,
                (SELECT count(*)::int FROM tracking_orders o
                 WHERE o.project_id=t.project_id AND o.status='paid'
+                  AND o.occurred_at >= ${fromInstant} AND o.occurred_at < ${toInstant}
                   AND (
                     o.attribution_source->>'ab_variant_id'=v.id
                     OR EXISTS (
@@ -1201,6 +1214,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                   )
                 ), 0)::bigint FROM tracking_orders o
                 WHERE o.project_id=t.project_id AND o.status='paid'
+                  AND o.occurred_at >= ${fromInstant} AND o.occurred_at < ${toInstant}
                   AND (
                     o.attribution_source->>'ab_variant_id'=v.id
                     OR EXISTS (

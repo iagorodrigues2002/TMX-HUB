@@ -3404,6 +3404,8 @@ export function TrackingAdvancedCenter({
                   <AbTestCard
                     key={test.id}
                     offerId={offerId}
+                    from={trackingFrom}
+                    to={trackingTo}
                     test={test}
                     canManage={canManage}
                     onUpdated={refresh}
@@ -3437,11 +3439,15 @@ export function TrackingAdvancedCenter({
 
 function AbTestCard({
   offerId,
+  from,
+  to,
   test,
   canManage,
   onUpdated,
 }: {
   offerId: string;
+  from: string;
+  to: string;
   test: {
     id: string;
     name: string;
@@ -3469,8 +3475,8 @@ function AbTestCard({
     test.variants.map((variant) => variant.destination_url ?? ''),
   );
   const metrics = useQuery({
-    queryKey: ['tracking-ab-metrics', offerId, test.id],
-    queryFn: () => apiClient.getTrackingAbTestMetrics(offerId, test.id),
+    queryKey: ['tracking-ab-metrics', offerId, test.id, from, to],
+    queryFn: () => apiClient.getTrackingAbTestMetrics(offerId, test.id, { from, to }),
     refetchInterval: test.status === 'active' ? 30_000 : false,
   });
   const control = useMutation({
@@ -3607,6 +3613,8 @@ function AbTestCard({
           const visitors = Number(row?.visitors ?? 0);
           const paid = Number(row?.paid_orders ?? 0);
           const conversion = visitors ? (paid / visitors) * 100 : 0;
+          const revenueBrlMinor = Number(row?.revenue_brl_minor ?? 0);
+          const averageTicketBrlMinor = paid ? revenueBrlMinor / paid : 0;
           return (
             <div
               key={variant.id}
@@ -3642,10 +3650,19 @@ function AbTestCard({
                     {conversion.toFixed(2)}%
                   </dd>
                 </div>
-                <div className="col-span-2">
+                <div>
                   <dt className="text-white/45">Receita atribuída</dt>
                   <dd className="mt-1 text-base font-semibold text-emerald-300">
-                    {(Number(row?.revenue_brl_minor ?? 0) / 100).toLocaleString('pt-BR', {
+                    {(revenueBrlMinor / 100).toLocaleString('pt-BR', {
+                      style: 'currency',
+                      currency: 'BRL',
+                    })}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-white/45">Ticket médio</dt>
+                  <dd className="mt-1 text-base font-semibold text-amber-200">
+                    {(averageTicketBrlMinor / 100).toLocaleString('pt-BR', {
                       style: 'currency',
                       currency: 'BRL',
                     })}
