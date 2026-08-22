@@ -486,7 +486,7 @@ export function TrackingAdvancedCenter({
       void qc.invalidateQueries({ queryKey: ['tracking-upsell-identities', offerId] });
       void qc.invalidateQueries({ queryKey: ['upsell-compatibility'] });
       toast.success(
-        `${result.recovered} links recuperados de ${result.inspected} · ${result.already_converted} já convertidos · ${result.temporary_failures} falhas temporárias · ${result.definitive_failures} recusas reais.`,
+        `${result.recovered} elegíveis pela API de ${result.inspected} · ${result.already_converted} já convertidos · ${result.temporary_failures} falhas temporárias · ${result.definitive_failures} recusas reais. Suas marcações manuais não foram alteradas.`,
       );
     },
     onError: (error) => toast.error((error as Error).message),
@@ -1634,7 +1634,7 @@ export function TrackingAdvancedCenter({
                           disabled={recoverFailedUpsellLinks.isPending}
                           onClick={() => recoverFailedUpsellLinks.mutate()}
                         >
-                          {recoverFailedUpsellLinks.isPending ? 'Revalidando…' : 'Recuperar reprovados'}
+                          {recoverFailedUpsellLinks.isPending ? 'Verificando…' : 'Verificar API dos reprovados'}
                         </Button>
                       </div>
                     )}
@@ -1644,8 +1644,8 @@ export function TrackingAdvancedCenter({
                     o vendaId no funil correspondente da VendePay.
                   </p>
                   <p className="mt-1 text-xs text-white/35">
-                    Recuperar reprovados consulta novamente a intent real da VendePay e promove
-                    automaticamente os links que voltaram a aceitar o comprador.
+                    A verificação consulta novamente a intent da VendePay, mas nunca altera o histórico
+                    manual de funcionou ou não funcionou.
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {([

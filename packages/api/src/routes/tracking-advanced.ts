@@ -593,14 +593,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           if (result.state === 'definitive_failure') summary.definitive_failures += 1;
           if (result.state === 'recoverable') summary.recoverable += 1;
           if (result.state === 'already_converted') summary.already_converted += 1;
-          if (!result.compatible) continue;
-          await app.db!`
-            UPDATE tracking_upsell_manual_test_results
-            SET result='worked',checked_by=${req.user!.sub},checked_at=now()
-            WHERE project_id=${p.id} AND order_id=${item.order_id} AND stage_id=${item.stage_id}
-              AND result='failed'
-          `;
-          summary.recovered += 1;
+          // API eligibility is diagnostic only. A manual result records what
+          // actually rendered inside Vendepay's cross-origin iframe and must
+          // never be overwritten by a server-side intent check.
+          if (result.compatible) summary.recovered += 1;
         }
       });
       await Promise.all(workers);
