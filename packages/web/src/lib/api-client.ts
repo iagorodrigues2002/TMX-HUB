@@ -147,7 +147,11 @@ export const authToken = {
 };
 
 async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
-  const baseUrl = env.NEXT_PUBLIC_API_URL;
+  // Browsers always use the TMX origin and Next.js proxies /v1 to the API.
+  // This avoids exposing the Railway hostname to DNS filters, privacy
+  // extensions and corporate networks, and removes CORS from the login path.
+  // Server-side calls still need the absolute configured API URL.
+  const baseUrl = typeof window !== 'undefined' ? '' : env.NEXT_PUBLIC_API_URL;
   const url = `${baseUrl}${path}`;
   const headers: Record<string, string> = {
     Accept: 'application/json',
@@ -179,7 +183,7 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
     const pageProto = typeof window !== 'undefined' ? window.location.protocol : 'unknown:';
     let apiProto = 'unknown:';
     try {
-      apiProto = new URL(baseUrl).protocol;
+      apiProto = baseUrl ? new URL(baseUrl).protocol : pageProto;
     } catch {
       // ignore — env validates URL at boot, but be defensive.
     }
@@ -198,7 +202,7 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
       `Falha ao chamar a API: ${cause}${hint}` +
       `\n  URL: ${opts.method ?? 'GET'} ${url}` +
       `\n  Origem: ${pageOrigin}` +
-      `\n  API base: ${baseUrl}`;
+      `\n  API base: ${baseUrl || pageOrigin}`;
 
     if (typeof console !== 'undefined') {
       console.error('[api-client] request failed', {
