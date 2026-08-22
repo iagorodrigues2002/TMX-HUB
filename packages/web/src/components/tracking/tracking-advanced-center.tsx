@@ -480,6 +480,17 @@ export function TrackingAdvancedCenter({
     },
     onError: (error) => toast.error((error as Error).message),
   });
+  const recoverFailedUpsellLinks = useMutation({
+    mutationFn: () => apiClient.recoverFailedTrackingUpsellLinks(offerId),
+    onSuccess: (result) => {
+      void qc.invalidateQueries({ queryKey: ['tracking-upsell-identities', offerId] });
+      void qc.invalidateQueries({ queryKey: ['upsell-compatibility'] });
+      toast.success(
+        `${result.recovered} links recuperados de ${result.inspected} · ${result.already_converted} já convertidos · ${result.temporary_failures} falhas temporárias · ${result.definitive_failures} recusas reais.`,
+      );
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
   const metaDeliveries = useQuery({
     queryKey: ['tracking-meta-deliveries', offerId],
     queryFn: () => apiClient.listMetaDeliveries(offerId),
@@ -1608,19 +1619,33 @@ export function TrackingAdvancedCenter({
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <p className="font-semibold text-white/80">vendaId e jornadas</p>
                     {canManage && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={reconcileUpsellIdentities.isPending}
-                        onClick={() => reconcileUpsellIdentities.mutate()}
-                      >
-                        {reconcileUpsellIdentities.isPending ? 'Reconciliando…' : 'Recuperar vendaId dos webhooks'}
-                      </Button>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={reconcileUpsellIdentities.isPending}
+                          onClick={() => reconcileUpsellIdentities.mutate()}
+                        >
+                          {reconcileUpsellIdentities.isPending ? 'Reconciliando…' : 'Recuperar vendaId dos webhooks'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={recoverFailedUpsellLinks.isPending}
+                          onClick={() => recoverFailedUpsellLinks.mutate()}
+                        >
+                          {recoverFailedUpsellLinks.isPending ? 'Revalidando…' : 'Recuperar reprovados'}
+                        </Button>
+                      </div>
                     )}
                   </div>
                   <p className="mt-1 text-xs text-white/40">
                     Todas as compras de front aprovadas. O TMX libera os links somente após confirmar
                     o vendaId no funil correspondente da VendePay.
+                  </p>
+                  <p className="mt-1 text-xs text-white/35">
+                    Recuperar reprovados consulta novamente a intent real da VendePay e promove
+                    automaticamente os links que voltaram a aceitar o comprador.
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {([

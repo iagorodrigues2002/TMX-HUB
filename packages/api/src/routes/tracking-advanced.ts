@@ -15,7 +15,10 @@ import { decryptSecret, encryptSecret } from '../lib/secret-box.js';
 import { canonicalTrackingHostname } from '../services/tracking-domain.js';
 import { saoPauloParts } from '../services/intraday-store.js';
 import { saoPauloDayRange } from '../services/utmify-sync.js';
-import { checkUpsellCompatibility } from '../services/upsell-compatibility.js';
+import {
+  checkUpsellCompatibility,
+  checkUpsellCompatibilityDetailed,
+} from '../services/upsell-compatibility.js';
 
 const databaseUnavailable = {
   error: 'tracking_database_unavailable',
@@ -521,6 +524,88 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           result=EXCLUDED.result,checked_by=EXCLUDED.checked_by,checked_at=now()
       `;
       return { saved: true, result: parsed.data.result };
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    '/offers/:id/tracking/upsell-identities/recover-failed',
+    async (req, reply) => {
+      const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin', true);
+      if (!app.db) return reply.code(503).send(databaseUnavailable);
+      if (!p) return reply.code(404).send({ error: 'tracking_not_configured' });
+      if (!env.TRACKING_ENCRYPTION_KEY) {
+        return reply.code(503).send({ error: 'tracking_encryption_unavailable' });
+      }
+      const failed = await app.db<Array<{
+        order_id: string;
+        stage_id: string;
+        vendid_encrypted: string;
+        connection_id: string | null;
+        destination_url: string;
+        connection_destinations: Record<string, string> | null;
+      }>>`
+        SELECT mr.order_id,mr.stage_id,i.vendid_encrypted,
+               COALESCE(i.vendepay_connection_id,o.vendepay_connection_id) AS connection_id,
+               s.destination_url,s.connection_destinations
+        FROM tracking_upsell_manual_test_results mr
+        JOIN tracking_orders o ON o.id=mr.order_id AND o.project_id=mr.project_id
+        JOIN tracking_upsell_stages s ON s.id=mr.stage_id AND s.project_id=mr.project_id
+        JOIN LATERAL (
+          SELECT vendid_encrypted,vendepay_connection_id
+          FROM tracking_upsell_identities
+          WHERE project_id=mr.project_id AND source_order_id=mr.order_id
+          ORDER BY last_seen_at DESC LIMIT 1
+        ) i ON true
+        WHERE mr.project_id=${p.id} AND mr.result='failed'
+          AND o.order_kind='front' AND o.paid_at IS NOT NULL AND s.enabled=true
+        ORDER BY mr.checked_at ASC
+      `;
+      const summary = {
+        inspected: failed.length,
+        recovered: 0,
+        recoverable: 0,
+        already_converted: 0,
+        temporary_failures: 0,
+        definitive_failures: 0,
+        skipped: 0,
+      };
+      let cursor = 0;
+      const workers = Array.from({ length: Math.min(4, failed.length) }, async () => {
+        while (cursor < failed.length) {
+          const item = failed[cursor++];
+          if (!item) break;
+          let vendaId: string;
+          try {
+            vendaId = decryptSecret(item.vendid_encrypted, env.TRACKING_ENCRYPTION_KEY!);
+          } catch {
+            summary.skipped += 1;
+            continue;
+          }
+          const destination =
+            (item.connection_id && item.connection_destinations?.[item.connection_id]) ||
+            item.destination_url;
+          if (!destination) {
+            summary.skipped += 1;
+            continue;
+          }
+          const result = await checkUpsellCompatibilityDetailed(destination, vendaId, true);
+          if (result.state === 'temporary_failure') summary.temporary_failures += 1;
+          if (result.state === 'definitive_failure') summary.definitive_failures += 1;
+          if (result.state === 'recoverable') summary.recoverable += 1;
+          if (result.state === 'already_converted') summary.already_converted += 1;
+          if (!result.compatible) continue;
+          await app.db!`
+            UPDATE tracking_upsell_manual_test_results
+            SET result='worked',checked_by=${req.user!.sub},checked_at=now()
+            WHERE project_id=${p.id} AND order_id=${item.order_id} AND stage_id=${item.stage_id}
+              AND result='failed'
+          `;
+          summary.recovered += 1;
+        }
+      });
+      await Promise.all(workers);
+      reply.header('cache-control', 'no-store');
+      return summary;
     },
   );
 

@@ -2245,6 +2245,20 @@ export const apiClient = {
     return request(`/v1/offers/${id}/tracking/upsell-identities/reconcile`, { method: 'POST' });
   },
 
+  async recoverFailedTrackingUpsellLinks(id: string): Promise<{
+    inspected: number;
+    recovered: number;
+    recoverable: number;
+    already_converted: number;
+    temporary_failures: number;
+    definitive_failures: number;
+    skipped: number;
+  }> {
+    return request(`/v1/offers/${id}/tracking/upsell-identities/recover-failed`, {
+      method: 'POST',
+    });
+  },
+
   async saveTrackingUpsellManualResult(
     id: string,
     orderId: string,
