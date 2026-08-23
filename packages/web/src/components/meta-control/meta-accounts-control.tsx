@@ -246,7 +246,19 @@ export function MetaAccountsControl() {
       <section className="rounded-2xl border border-white/[0.08] bg-[#06131b]/75 p-3 sm:p-4">
         <div className="grid gap-3 lg:grid-cols-[1fr_180px_150px]">
           <label className="relative"><Search className="absolute left-3 top-3.5 h-4 w-4 text-white/25" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar conta, ID, BM ou oferta" className="h-11 w-full rounded-lg border border-white/10 bg-black/20 pl-10 pr-4 text-sm text-white outline-none focus:border-cyan-300/35" /></label>
-          <select value={business} onChange={(event) => setBusiness(event.target.value)} className="h-11 rounded-lg border border-white/10 bg-[#071720] px-3 text-sm text-white"><option value="all">Todos os BMs</option>{businesses.map((item) => <option key={item}>{item}</option>)}</select>
+          <select
+            value={business}
+            onChange={(event) => {
+              setBusiness(event.target.value);
+              setFilter('all');
+              setCurrency('all');
+              setSearch('');
+            }}
+            className="h-11 rounded-lg border border-white/10 bg-[#071720] px-3 text-sm text-white"
+          >
+            <option value="all">Todos os BMs</option>
+            {businesses.map((item) => <option key={item} value={item}>{item}</option>)}
+          </select>
           <select value={currency} onChange={(event) => setCurrency(event.target.value)} className="h-11 rounded-lg border border-white/10 bg-[#071720] px-3 text-sm text-white"><option value="all">Todas moedas</option><option value="BRL">BRL</option><option value="USD">USD</option></select>
         </div>
         <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
