@@ -131,6 +131,23 @@ export function MetaAccountsControl() {
     () => [...new Set(accounts.map((account) => account.business_name ?? 'Sem BM'))].sort(),
     [accounts],
   );
+  const businessStates = useMemo(() => {
+    const grouped = new Map<string, MetaControlAccount[]>();
+    for (const account of accounts) {
+      if (!account.business_name) continue;
+      grouped.set(account.business_name, [...(grouped.get(account.business_name) ?? []), account]);
+    }
+    return new Map(
+      [...grouped.entries()].map(([name, items]) => [
+        name,
+        {
+          usable: items.filter((item) => item.account_status === 1).length,
+          total: items.length,
+          off: !items.some((item) => item.account_status === 1),
+        },
+      ]),
+    );
+  }, [accounts]);
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return accounts.filter((account) => {
@@ -214,13 +231,14 @@ export function MetaAccountsControl() {
         </div>
       )}
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
         {[
           { label: 'Contas', value: accounts.length, icon: WalletCards, tone: 'text-cyan-200' },
           { label: 'Veiculando', value: counts.delivering, icon: Zap, tone: 'text-emerald-200' },
           { label: 'Ativas sem mídia', value: counts.idle, icon: Activity, tone: 'text-cyan-100' },
           { label: 'Desativadas', value: counts.disabled, icon: ShieldAlert, tone: 'text-red-200' },
           { label: 'Pendência', value: counts.unsettled, icon: AlertTriangle, tone: 'text-amber-200' },
+          { label: 'BMs sem conta utilizável', value: [...businessStates.values()].filter((item) => item.off).length, icon: Building2, tone: 'text-red-200' },
           { label: 'Não associadas', value: accounts.filter((item) => !item.primary_offer_id).length, icon: Link2, tone: 'text-orange-200' },
         ].map(({ label, value, icon: Icon, tone }) => (
           <div key={label} className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-4"><Icon className={cn('h-4 w-4', tone)} /><p className="mt-4 font-mono text-2xl text-white">{value}</p><p className="mt-1 text-[10px] uppercase tracking-[0.15em] text-white/35">{label}</p></div>
@@ -258,10 +276,11 @@ export function MetaAccountsControl() {
           {filtered.map((account) => {
             const accountCampaigns = campaignsByAccount.get(account.id) ?? [];
             const isOpen = expanded === account.id;
+            const businessState = account.business_name ? businessStates.get(account.business_name) : null;
             return (
               <article key={account.id} className="overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.022]">
                 <div className="grid gap-4 p-4 sm:p-5 xl:grid-cols-[1.5fr_1fr_1fr_1fr_auto] xl:items-center">
-                  <div className="flex items-start gap-3"><HealthRing score={account.health_score} /><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate font-semibold text-white">{account.name}</h2><span className={cn('rounded-full border px-2 py-1 text-[10px] uppercase tracking-wider', statusTone[account.operational_state])}>{statusCopy[account.operational_state]}</span></div><p className="mt-1 font-mono text-[11px] text-white/35">act_{account.external_id}</p><p className="mt-2 flex items-center gap-1.5 text-xs text-white/45"><Building2 className="h-3.5 w-3.5" /> {account.business_name ?? 'Conta pessoal'}</p></div></div>
+                  <div className="flex items-start gap-3"><HealthRing score={account.health_score} /><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate font-semibold text-white">{account.name}</h2><span className={cn('rounded-full border px-2 py-1 text-[10px] uppercase tracking-wider', statusTone[account.operational_state])}>{statusCopy[account.operational_state]}</span>{businessState?.off && <span className="rounded-full border border-red-300/25 bg-red-300/[0.08] px-2 py-1 text-[10px] uppercase tracking-wider text-red-200">BM sem contas utilizáveis</span>}</div><p className="mt-1 font-mono text-[11px] text-white/35">act_{account.external_id}</p><p className="mt-2 flex items-center gap-1.5 text-xs text-white/45"><Building2 className="h-3.5 w-3.5" /> {account.business_name ?? 'Conta pessoal'}{businessState && <span className={businessState.off ? 'text-red-200/70' : 'text-emerald-200/60'}>· {businessState.usable}/{businessState.total} utilizável(is)</span>}</p></div></div>
                   <div>
                     <p className="hud-label">Gasto histórico</p>
                     <p className="mt-2 font-mono text-lg text-white">{money(account.amount_spent_minor, account.currency)}</p>
