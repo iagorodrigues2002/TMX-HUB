@@ -1073,10 +1073,109 @@ function fromDashboardSummaryWire(w: DashboardSummaryWire): DashboardSummary {
   };
 }
 
+export interface MetaControlConnection {
+  id: string;
+  name: string;
+  app_id: string;
+  token_type?: string | null;
+  token_expires_at?: string | null;
+  enabled: boolean;
+  last_sync_at?: string | null;
+  last_sync_error?: string | null;
+}
+
+export interface MetaControlAccount {
+  id: string;
+  external_id: string;
+  name: string;
+  business_id?: string | null;
+  business_name?: string | null;
+  account_status: number;
+  disable_reason: number;
+  currency: string;
+  timezone_name?: string | null;
+  amount_spent_minor: string;
+  balance_minor: string;
+  spend_cap_minor: string;
+  primary_offer_id?: string | null;
+  primary_offer_name?: string | null;
+  last_synced_at: string;
+  spend_30d_minor: string;
+  impressions_30d: string;
+  reach_30d: string;
+  clicks_30d: string;
+  link_clicks_30d: string;
+  purchases_30d: string;
+  purchase_value_30d: string;
+  campaigns_total: number;
+  campaigns_active: number;
+  status_label: 'active' | 'disabled' | 'unsettled' | 'closed' | 'attention';
+  operational_state: 'delivering' | 'idle' | 'disabled' | 'unsettled' | 'attention';
+  health_score: number;
+}
+
+export interface MetaControlCampaign {
+  id: string;
+  account_id: string;
+  external_id: string;
+  name: string;
+  configured_status?: string | null;
+  effective_status?: string | null;
+  objective?: string | null;
+  offer_id?: string | null;
+  daily_budget_minor?: string | null;
+  lifetime_budget_minor?: string | null;
+}
+
+export interface MetaControlDashboard {
+  accounts: MetaControlAccount[];
+  campaigns: MetaControlCampaign[];
+  offers: Array<{ id: string; name: string }>;
+  synced_at?: string | null;
+}
+
 // ---- public methods ----
 
 export const apiClient = {
   baseUrl: env.NEXT_PUBLIC_API_URL,
+
+  async getMetaControlConnection(): Promise<MetaControlConnection | null> {
+    const response = await request<{ connection: MetaControlConnection | null }>(
+      '/v1/meta-control/connection',
+    );
+    return response.connection;
+  },
+
+  async saveMetaControlConnection(input: {
+    name: string;
+    app_id: string;
+    app_secret: string;
+    access_token: string;
+  }): Promise<{ connection: MetaControlConnection; warning?: string }> {
+    return request('/v1/meta-control/connection', { method: 'POST', body: input });
+  },
+
+  async syncMetaControl(): Promise<{ accounts: number; campaigns: number }> {
+    return request('/v1/meta-control/sync', { method: 'POST' });
+  },
+
+  async getMetaControlDashboard(): Promise<MetaControlDashboard> {
+    return request('/v1/meta-control/dashboard');
+  },
+
+  async assignMetaAccountOffer(accountId: string, offerId: string | null): Promise<void> {
+    await request(`/v1/meta-control/accounts/${accountId}/offer`, {
+      method: 'PATCH',
+      body: { offer_id: offerId },
+    });
+  },
+
+  async assignMetaCampaignOffer(campaignId: string, offerId: string | null): Promise<void> {
+    await request(`/v1/meta-control/campaigns/${campaignId}/offer`, {
+      method: 'PATCH',
+      body: { offer_id: offerId },
+    });
+  },
 
   async login(email: string, password: string): Promise<{ user: AuthUser; token: string }> {
     const wire = await request<AuthSessionWire>('/v1/auth/login', {

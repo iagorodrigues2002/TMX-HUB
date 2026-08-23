@@ -12,6 +12,7 @@ import inspectRoutes from './inspect.js';
 import linksRoutes from './links.js';
 import mediaJobsRoutes from './media-jobs.js';
 import metaAdminRoutes from './meta-admin.js';
+import metaControlRoutes from './meta-control.js';
 import nichesRoutes from './niches.js';
 import offersRoutes from './offers.js';
 import previewRoutes from './preview.js';
@@ -107,6 +108,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         await protectedRoutes.register(shieldJobsRoutes);
         await protectedRoutes.register(mediaJobsRoutes);
         await protectedRoutes.register(metaAdminRoutes);
+        await protectedRoutes.register(metaControlRoutes);
         await protectedRoutes.register(utmifyTrackingAdminRoutes);
         await protectedRoutes.register(pushcutAdminRoutes);
         await protectedRoutes.register(recoveryAdminRoutes);
