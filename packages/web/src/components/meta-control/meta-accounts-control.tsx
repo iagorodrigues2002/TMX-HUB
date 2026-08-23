@@ -235,7 +235,7 @@ export function MetaAccountsControl() {
                 {connections.data.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               </select>
             </label>
-            {selectedConnection && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/[0.07] bg-black/10 px-4 py-3 text-xs text-white/40"><span className="flex items-center gap-2"><Signal className="h-3.5 w-3.5 text-emerald-300" /> App {selectedConnection.app_id}</span><span>Última sincronização: {dateTime(selectedConnection.last_sync_at)}</span>{selectedConnection.last_sync_error && <span className="text-red-200">{selectedConnection.last_sync_error}</span>}</div>}
+            {selectedConnection && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/[0.07] bg-black/10 px-4 py-3 text-xs text-white/40"><span className="flex items-center gap-2"><Signal className="h-3.5 w-3.5 text-emerald-300" /> App {selectedConnection.app_id}</span>{selectedConnection.last_sync_at ? <span>Última sincronização: {dateTime(selectedConnection.last_sync_at)}</span> : <span className="flex items-center gap-2 text-cyan-100/70"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Importando dados da Meta…</span>}{selectedConnection.last_sync_error && <span className="text-red-200">{selectedConnection.last_sync_error}</span>}</div>}
           </div>
         </section>
       )}

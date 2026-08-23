@@ -86,6 +86,7 @@ export async function validateMetaMarketingCredentials(
 ): Promise<{ id: string; name: string | null }> {
   const profile = await graphGet('me', token, appSecret, { fields: 'id,name' });
   if (!profile.id) throw new Error('A Meta não retornou o usuário associado ao token.');
+  await graphGet('me/adaccounts', token, appSecret, { fields: 'id', limit: '1' });
   return {
     id: String(profile.id),
     name: profile.name ? String(profile.name) : null,
