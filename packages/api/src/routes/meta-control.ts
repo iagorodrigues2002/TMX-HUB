@@ -12,6 +12,8 @@ const ConnectionSchema = z.object({
   access_token: z.string().trim().min(40).max(4096),
 });
 const AssignmentSchema = z.object({ offer_id: z.string().trim().min(1).nullable() });
+const ConnectionQuerySchema = z.object({ connection_id: z.string().trim().min(1).optional() });
+const SyncSchema = z.object({ connection_id: z.string().trim().min(1) });
 
 function assertAdmin(req: { user?: { role: string } }): void {
   if (req.user?.role !== 'admin') {
@@ -49,14 +51,33 @@ function healthScore(status: number, activeCampaigns: number, spend30d: number):
 }
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
-  app.get('/meta-control/connection', async (req, reply) => {
+  app.get('/meta-control/connections', async (req, reply) => {
     assertAdmin(req);
-    if (!app.db) return reply.code(503).send({ connection: null });
-    const [connection] = await app.db`
+    if (!app.db) return reply.code(503).send({ connections: [] });
+    const connections = await app.db`
       SELECT id,name,app_id,token_type,token_expires_at,enabled,last_sync_at,last_sync_error,
              created_at,updated_at
-      FROM meta_marketing_connections ORDER BY created_at DESC LIMIT 1
+      FROM meta_marketing_connections ORDER BY created_at DESC
     `;
+    return reply.send({ connections });
+  });
+
+  app.get<{ Querystring: { connection_id?: string } }>('/meta-control/connection', async (req, reply) => {
+    assertAdmin(req);
+    if (!app.db) return reply.code(503).send({ connection: null });
+    const parsed = ConnectionQuerySchema.safeParse(req.query);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid_connection_query' });
+    const [connection] = parsed.data.connection_id
+      ? await app.db`
+          SELECT id,name,app_id,token_type,token_expires_at,enabled,last_sync_at,last_sync_error,
+                 created_at,updated_at
+          FROM meta_marketing_connections WHERE id=${parsed.data.connection_id} LIMIT 1
+        `
+      : await app.db`
+          SELECT id,name,app_id,token_type,token_expires_at,enabled,last_sync_at,last_sync_error,
+                 created_at,updated_at
+          FROM meta_marketing_connections ORDER BY created_at DESC LIMIT 1
+        `;
     return reply.send({ connection: connection ?? null });
   });
 
@@ -96,6 +117,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.post('/meta-control/sync', async (req, reply) => {
     assertAdmin(req);
     if (!app.db) return reply.code(503).send({ error: 'database_unavailable' });
+    const parsed = SyncSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid_connection' });
     const [connection] = await app.db<
       Array<{
         id: string;
@@ -105,15 +128,25 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       }>
     >`
       SELECT id,app_id,app_secret_encrypted,access_token_encrypted
-      FROM meta_marketing_connections WHERE enabled=true ORDER BY created_at DESC LIMIT 1
+      FROM meta_marketing_connections WHERE enabled=true AND id=${parsed.data.connection_id} LIMIT 1
     `;
     if (!connection) return reply.code(409).send({ error: 'meta_connection_missing' });
     return reply.send(await syncMetaMarketingConnection(app, connection));
   });
 
-  app.get('/meta-control/dashboard', async (req, reply) => {
+  app.get<{ Querystring: { connection_id?: string } }>('/meta-control/dashboard', async (req, reply) => {
     assertAdmin(req);
     if (!app.db) return reply.code(503).send({ accounts: [], campaigns: [] });
+    const parsed = ConnectionQuerySchema.safeParse(req.query);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid_connection_query' });
+    let connectionId = parsed.data.connection_id;
+    if (!connectionId) {
+      const [latest] = await app.db<{ id: string }[]>`
+        SELECT id FROM meta_marketing_connections WHERE enabled=true ORDER BY created_at DESC LIMIT 1
+      `;
+      connectionId = latest?.id;
+    }
+    if (!connectionId) return reply.send({ accounts: [], campaigns: [], offers: [], synced_at: null });
     const offers = await app.offerStore.listAccessible(req.user!.sub, true);
     const offerMap = new Map(offers.map((offer) => [offer.id, offer.name]));
     const accounts = await app.db<
@@ -160,12 +193,16 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         SELECT * FROM meta_ad_account_snapshots x WHERE x.account_id=a.id
         ORDER BY x.snapshot_date DESC LIMIT 1
       ) s ON true
+      WHERE a.connection_id=${connectionId}
       ORDER BY a.account_status, a.business_name NULLS LAST, a.name
     `;
     const campaigns = await app.db`
       SELECT c.id,c.account_id,c.external_id,c.name,c.configured_status,c.effective_status,
              c.objective,c.offer_id,c.daily_budget_minor::text,c.lifetime_budget_minor::text
-      FROM meta_ad_campaigns c ORDER BY c.updated_at DESC
+      FROM meta_ad_campaigns c
+      JOIN meta_ad_accounts a ON a.id=c.account_id
+      WHERE a.connection_id=${connectionId}
+      ORDER BY c.updated_at DESC
     `;
     const normalized = accounts.map((account) => {
       const active = Number(account.campaigns_active);
@@ -250,7 +287,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   const timer = setInterval(() => {
     if (!app.db) return;
     void (async () => {
-      const [connection] = await app.db!<
+      const connections = await app.db!<
         Array<{
           id: string;
           app_id: string;
@@ -259,9 +296,15 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         }>
       >`
         SELECT id,app_id,app_secret_encrypted,access_token_encrypted
-        FROM meta_marketing_connections WHERE enabled=true ORDER BY created_at DESC LIMIT 1
+        FROM meta_marketing_connections WHERE enabled=true ORDER BY created_at DESC
       `;
-      if (connection) await syncMetaMarketingConnection(app, connection);
+      for (const connection of connections) {
+        try {
+          await syncMetaMarketingConnection(app, connection);
+        } catch (error) {
+          app.log.warn({ error, connectionId: connection.id }, 'scheduled Meta dashboard sync failed');
+        }
+      }
     })().catch((error) => app.log.warn({ error }, 'scheduled Meta account sync failed'));
   }, 15 * 60_000);
   timer.unref();

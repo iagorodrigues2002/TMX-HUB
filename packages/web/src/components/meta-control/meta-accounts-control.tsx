@@ -16,17 +16,18 @@ import {
   ChevronRight,
   CircleDollarSign,
   Link2,
+  LayoutDashboard,
   Loader2,
   Orbit,
+  Plus,
   RefreshCw,
   Search,
-  Settings2,
   ShieldAlert,
   Signal,
   WalletCards,
   Zap,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 type Filter = 'all' | 'delivering' | 'idle' | 'disabled' | 'unsettled' | 'attention';
@@ -77,6 +78,7 @@ export function MetaAccountsControl() {
   const [currency, setCurrency] = useState('all');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showConnection, setShowConnection] = useState(false);
+  const [selectedConnectionId, setSelectedConnectionId] = useState('');
   const [connectionForm, setConnectionForm] = useState({
     name: 'Meta · TheMinex',
     app_id: '',
@@ -84,21 +86,27 @@ export function MetaAccountsControl() {
     access_token: '',
   });
 
-  const connection = useQuery({
-    queryKey: ['meta-control-connection'],
-    queryFn: () => apiClient.getMetaControlConnection(),
+  const connections = useQuery({
+    queryKey: ['meta-control-connections'],
+    queryFn: () => apiClient.getMetaControlConnections(),
   });
+  useEffect(() => {
+    if (!selectedConnectionId && connections.data?.[0]) {
+      setSelectedConnectionId(connections.data[0].id);
+    }
+  }, [connections.data, selectedConnectionId]);
+  const selectedConnection = connections.data?.find((item) => item.id === selectedConnectionId) ?? null;
   const dashboard = useQuery({
-    queryKey: ['meta-control-dashboard'],
-    queryFn: () => apiClient.getMetaControlDashboard(),
-    enabled: Boolean(connection.data),
+    queryKey: ['meta-control-dashboard', selectedConnectionId],
+    queryFn: () => apiClient.getMetaControlDashboard(selectedConnectionId),
+    enabled: Boolean(selectedConnectionId),
   });
   const sync = useMutation({
-    mutationFn: () => apiClient.syncMetaControl(),
+    mutationFn: () => apiClient.syncMetaControl(selectedConnectionId),
     onSuccess: (result) => {
       toast.success(`${result.accounts} contas e ${result.campaigns} campanhas sincronizadas.`);
       void queryClient.invalidateQueries({ queryKey: ['meta-control-dashboard'] });
-      void queryClient.invalidateQueries({ queryKey: ['meta-control-connection'] });
+      void queryClient.invalidateQueries({ queryKey: ['meta-control-connections'] });
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : 'Falha na sincronização.'),
   });
@@ -107,8 +115,9 @@ export function MetaAccountsControl() {
     onSuccess: (result) => {
       toast.success(result.warning ? `Conexão salva: ${result.warning}` : 'Conexão validada e salva.');
       setShowConnection(false);
+      setSelectedConnectionId(result.connection.id);
       setConnectionForm((current) => ({ ...current, app_secret: '', access_token: '' }));
-      void queryClient.invalidateQueries({ queryKey: ['meta-control-connection'] });
+      void queryClient.invalidateQueries({ queryKey: ['meta-control-connections'] });
       void queryClient.invalidateQueries({ queryKey: ['meta-control-dashboard'] });
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : 'Não foi possível conectar.'),
@@ -194,17 +203,17 @@ export function MetaAccountsControl() {
             <p className="mt-3 max-w-2xl text-sm leading-6 text-white/50">Status operacional, investimento, campanhas e ofertas conectados em uma única central.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => setShowConnection((value) => !value)} className="gap-2 border-white/10 bg-white/[0.03]"><Settings2 className="h-4 w-4" /> Conexão</Button>
-            <Button onClick={() => sync.mutate()} disabled={!connection.data || sync.isPending} className="gap-2 bg-cyan-300 text-slate-950 hover:bg-cyan-200">
+            <Button variant="outline" onClick={() => setShowConnection((value) => !value)} className="gap-2 border-white/10 bg-white/[0.03]"><Plus className="h-4 w-4" /> Novo dashboard</Button>
+            <Button onClick={() => sync.mutate()} disabled={!selectedConnection || sync.isPending} className="gap-2 bg-cyan-300 text-slate-950 hover:bg-cyan-200">
               {sync.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Atualizar
             </Button>
           </div>
         </div>
       </header>
 
-      {(showConnection || !connection.data) && (
+      {(showConnection || (!connections.isLoading && !connections.data?.length)) && (
         <section className="rounded-2xl border border-cyan-300/15 bg-[#071720]/90 p-5 sm:p-6">
-          <div className="flex items-start gap-3"><ShieldAlert className="mt-0.5 h-5 w-5 text-cyan-300" /><div><h2 className="font-semibold text-white">Conectar aplicativo Meta</h2><p className="mt-1 text-xs leading-5 text-white/40">As credenciais são criptografadas. Para produção, utilize token de usuário do sistema.</p></div></div>
+          <div className="flex items-start gap-3"><ShieldAlert className="mt-0.5 h-5 w-5 text-cyan-300" /><div><h2 className="font-semibold text-white">Criar dashboard independente</h2><p className="mt-1 text-xs leading-5 text-white/40">Defina um nome e conecte outro aplicativo Meta. As contas e campanhas ficarão isoladas dos demais dashboards.</p></div></div>
           <div className="mt-5 grid gap-3 md:grid-cols-2">
             <input aria-label="Nome da conexão" value={connectionForm.name} onChange={(event) => setConnectionForm({ ...connectionForm, name: event.target.value })} placeholder="Nome da conexão" className="h-11 rounded-lg border border-white/10 bg-black/20 px-4 text-sm text-white outline-none focus:border-cyan-300/40" />
             <input aria-label="ID do aplicativo" value={connectionForm.app_id} onChange={(event) => setConnectionForm({ ...connectionForm, app_id: event.target.value })} placeholder="ID do aplicativo" className="h-11 rounded-lg border border-white/10 bg-black/20 px-4 text-sm text-white outline-none focus:border-cyan-300/40" />
@@ -215,12 +224,18 @@ export function MetaAccountsControl() {
         </section>
       )}
 
-      {connection.data && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] px-4 py-3 text-xs text-white/40">
-          <span className="flex items-center gap-2"><Signal className="h-3.5 w-3.5 text-emerald-300" /> {connection.data.name} · App {connection.data.app_id}</span>
-          <span>Última sincronização: {dateTime(connection.data.last_sync_at)}</span>
-          {connection.data.last_sync_error && <span className="text-red-200">{connection.data.last_sync_error}</span>}
-        </div>
+      {!!connections.data?.length && (
+        <section className="rounded-2xl border border-cyan-300/15 bg-gradient-to-r from-cyan-300/[0.055] to-transparent p-4 sm:p-5">
+          <div className="grid gap-4 lg:grid-cols-[minmax(240px,420px)_1fr] lg:items-center">
+            <label>
+              <span className="mb-2 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-cyan-100/50"><LayoutDashboard className="h-3.5 w-3.5" /> Dashboard da empresa</span>
+              <select value={selectedConnectionId} onChange={(event) => { setSelectedConnectionId(event.target.value); setExpanded(null); setBusiness('all'); setCurrency('all'); setFilter('all'); setSearch(''); }} className="h-12 w-full rounded-xl border border-cyan-300/20 bg-[#071720] px-4 text-sm font-medium text-white outline-none focus:border-cyan-300/50">
+                {connections.data.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+              </select>
+            </label>
+            {selectedConnection && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/[0.07] bg-black/10 px-4 py-3 text-xs text-white/40"><span className="flex items-center gap-2"><Signal className="h-3.5 w-3.5 text-emerald-300" /> App {selectedConnection.app_id}</span><span>Última sincronização: {dateTime(selectedConnection.last_sync_at)}</span>{selectedConnection.last_sync_error && <span className="text-red-200">{selectedConnection.last_sync_error}</span>}</div>}
+          </div>
+        </section>
       )}
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-7">

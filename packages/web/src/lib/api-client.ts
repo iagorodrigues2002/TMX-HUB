@@ -1146,6 +1146,13 @@ export const apiClient = {
     return response.connection;
   },
 
+  async getMetaControlConnections(): Promise<MetaControlConnection[]> {
+    const response = await request<{ connections: MetaControlConnection[] }>(
+      '/v1/meta-control/connections',
+    );
+    return response.connections;
+  },
+
   async saveMetaControlConnection(input: {
     name: string;
     app_id: string;
@@ -1155,12 +1162,13 @@ export const apiClient = {
     return request('/v1/meta-control/connection', { method: 'POST', body: input });
   },
 
-  async syncMetaControl(): Promise<{ accounts: number; campaigns: number }> {
-    return request('/v1/meta-control/sync', { method: 'POST' });
+  async syncMetaControl(connectionId: string): Promise<{ accounts: number; campaigns: number }> {
+    return request('/v1/meta-control/sync', { method: 'POST', body: { connection_id: connectionId } });
   },
 
-  async getMetaControlDashboard(): Promise<MetaControlDashboard> {
-    return request('/v1/meta-control/dashboard');
+  async getMetaControlDashboard(connectionId: string): Promise<MetaControlDashboard> {
+    const params = new URLSearchParams({ connection_id: connectionId });
+    return request(`/v1/meta-control/dashboard?${params.toString()}`);
   },
 
   async assignMetaAccountOffer(accountId: string, offerId: string | null): Promise<void> {
