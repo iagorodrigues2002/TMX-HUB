@@ -163,6 +163,14 @@ export function MetaAccountsControl() {
     for (const account of accounts) out[account.currency] = (out[account.currency] ?? 0) + Number(account.amount_spent_minor);
     return out;
   }, [accounts]);
+  const unsettledBalances = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const account of accounts) {
+      if (account.operational_state !== 'unsettled') continue;
+      out[account.currency] = (out[account.currency] ?? 0) + Number(account.balance_minor);
+    }
+    return out;
+  }, [accounts]);
 
   return (
     <div className="signal-reveal space-y-6">
@@ -223,6 +231,13 @@ export function MetaAccountsControl() {
         {Object.entries(totals).map(([code, total]) => (
           <div key={code} className="rounded-xl border border-cyan-300/10 bg-gradient-to-r from-cyan-300/[0.05] to-transparent p-5"><div className="flex items-center gap-2 text-white/40"><CircleDollarSign className="h-4 w-4 text-cyan-300" /><span className="hud-label">Gasto histórico · {code}</span></div><p className="mt-3 font-mono text-2xl text-white">{money(total, code)}</p></div>
         ))}
+        {Object.entries(unsettledBalances).map(([code, total]) => (
+          <div key={`pending-${code}`} className="rounded-xl border border-amber-300/20 bg-gradient-to-r from-amber-300/[0.08] to-transparent p-5">
+            <div className="flex items-center gap-2 text-amber-100/60"><AlertTriangle className="h-4 w-4 text-amber-300" /><span className="hud-label">Pendência informada pela Meta · {code}</span></div>
+            <p className="mt-3 font-mono text-2xl text-amber-100">{money(total, code)}</p>
+            <p className="mt-1 text-xs text-white/35">Soma do campo financeiro das {accounts.filter((item) => item.operational_state === 'unsettled' && item.currency === code).length} conta(s) com pendência.</p>
+          </div>
+        ))}
       </section>
 
       <section className="rounded-2xl border border-white/[0.08] bg-[#06131b]/75 p-3 sm:p-4">
@@ -247,7 +262,18 @@ export function MetaAccountsControl() {
               <article key={account.id} className="overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.022]">
                 <div className="grid gap-4 p-4 sm:p-5 xl:grid-cols-[1.5fr_1fr_1fr_1fr_auto] xl:items-center">
                   <div className="flex items-start gap-3"><HealthRing score={account.health_score} /><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate font-semibold text-white">{account.name}</h2><span className={cn('rounded-full border px-2 py-1 text-[10px] uppercase tracking-wider', statusTone[account.operational_state])}>{statusCopy[account.operational_state]}</span></div><p className="mt-1 font-mono text-[11px] text-white/35">act_{account.external_id}</p><p className="mt-2 flex items-center gap-1.5 text-xs text-white/45"><Building2 className="h-3.5 w-3.5" /> {account.business_name ?? 'Conta pessoal'}</p></div></div>
-                  <div><p className="hud-label">Gasto histórico</p><p className="mt-2 font-mono text-lg text-white">{money(account.amount_spent_minor, account.currency)}</p><p className="mt-1 text-xs text-white/35">30 dias: {money(account.spend_30d_minor, account.currency)}</p></div>
+                  <div>
+                    <p className="hud-label">Gasto histórico</p>
+                    <p className="mt-2 font-mono text-lg text-white">{money(account.amount_spent_minor, account.currency)}</p>
+                    <p className="mt-1 text-xs text-white/35">30 dias: {money(account.spend_30d_minor, account.currency)}</p>
+                    {account.operational_state === 'unsettled' && (
+                      <div className="mt-3 rounded-lg border border-amber-300/15 bg-amber-300/[0.06] px-3 py-2">
+                        <p className="text-[10px] uppercase tracking-[0.14em] text-amber-200/55">Pendência informada</p>
+                        <p className="mt-1 font-mono text-base text-amber-100">{money(account.balance_minor, account.currency)}</p>
+                        {Number(account.balance_minor) === 0 && <p className="mt-1 text-[10px] leading-4 text-white/35">A Meta sinalizou a conta, mas retornou saldo financeiro zero.</p>}
+                      </div>
+                    )}
+                  </div>
                   <div><p className="hud-label">Operação</p><p className="mt-2 text-sm text-white/70">{account.campaigns_active} ativa(s) · {account.campaigns_total} total</p><p className="mt-1 text-xs text-white/35">{Number(account.impressions_30d).toLocaleString('pt-BR')} impressões</p></div>
                   <div><p className="hud-label">Oferta principal</p><select aria-label={`Oferta da conta ${account.name}`} value={account.primary_offer_id ?? ''} onChange={(event) => assignAccount.mutate({ accountId: account.id, offerId: event.target.value || null })} className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#071720] px-3 text-sm text-white"><option value="">Não associada</option>{(dashboard.data?.offers ?? []).map((offer) => <option key={offer.id} value={offer.id}>{offer.name}</option>)}</select></div>
                   <button onClick={() => setExpanded(isOpen ? null : account.id)} className="flex h-10 items-center justify-center gap-2 rounded-lg border border-white/10 px-3 text-xs text-white/50 hover:bg-white/[0.04] hover:text-white">{isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />} Campanhas</button>
