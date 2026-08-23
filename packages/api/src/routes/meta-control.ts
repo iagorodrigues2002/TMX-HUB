@@ -58,9 +58,14 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     assertAdmin(req);
     if (!app.db) return reply.code(503).send({ connections: [] });
     const connections = await app.db`
-      SELECT id,name,app_id,token_type,token_expires_at,enabled,last_sync_at,last_sync_error,
-             created_at,updated_at
-      FROM meta_marketing_connections ORDER BY created_at DESC
+      SELECT * FROM (
+        SELECT DISTINCT ON (app_id)
+               id,name,app_id,token_type,token_expires_at,enabled,last_sync_at,last_sync_error,
+               created_at,updated_at
+        FROM meta_marketing_connections
+        ORDER BY app_id,created_at DESC
+      ) latest
+      ORDER BY created_at DESC
     `;
     return reply.send({ connections });
   });
@@ -99,25 +104,36 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         detail: error instanceof Error ? error.message : String(error),
       });
     }
-    const id = ulid();
     const encryptedSecret = encryptSecret(parsed.data.app_secret, env.TRACKING_ENCRYPTION_KEY);
     const encryptedToken = encryptSecret(parsed.data.access_token, env.TRACKING_ENCRYPTION_KEY);
-    const [connection] = await app.db`
-      INSERT INTO meta_marketing_connections
-        (id,name,app_id,app_secret_encrypted,access_token_encrypted)
-      VALUES
-        (${id},${parsed.data.name},${parsed.data.app_id},
-         ${encryptedSecret},
-         ${encryptedToken})
-      RETURNING id,name,app_id,enabled,last_sync_at,last_sync_error,created_at,updated_at
+    const [existing] = await app.db<{ id: string }[]>`
+      SELECT id FROM meta_marketing_connections
+      WHERE app_id=${parsed.data.app_id}
+      ORDER BY created_at DESC LIMIT 1
     `;
+    const id = existing?.id ?? ulid();
+    const [connection] = existing
+      ? await app.db`
+          UPDATE meta_marketing_connections
+          SET name=${parsed.data.name},app_secret_encrypted=${encryptedSecret},
+              access_token_encrypted=${encryptedToken},enabled=true,last_sync_error=NULL,updated_at=now()
+          WHERE id=${id}
+          RETURNING id,name,app_id,enabled,last_sync_at,last_sync_error,created_at,updated_at
+        `
+      : await app.db`
+          INSERT INTO meta_marketing_connections
+            (id,name,app_id,app_secret_encrypted,access_token_encrypted)
+          VALUES
+            (${id},${parsed.data.name},${parsed.data.app_id},${encryptedSecret},${encryptedToken})
+          RETURNING id,name,app_id,enabled,last_sync_at,last_sync_error,created_at,updated_at
+        `;
     void syncMetaMarketingConnection(app, {
         id,
         app_id: parsed.data.app_id,
         app_secret_encrypted: encryptedSecret,
         access_token_encrypted: encryptedToken,
       }).catch((error) => app.log.warn({ error, connectionId: id }, 'initial Meta dashboard sync failed'));
-    return reply.code(201).send({ connection, syncing: true });
+    return reply.code(existing ? 200 : 201).send({ connection, syncing: true });
   });
 
   app.post('/meta-control/sync', async (req, reply) => {
