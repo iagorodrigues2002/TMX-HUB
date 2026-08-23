@@ -1158,7 +1158,7 @@ export const apiClient = {
     app_id: string;
     app_secret: string;
     access_token: string;
-  }): Promise<{ connection: MetaControlConnection; warning?: string }> {
+  }): Promise<{ connection: MetaControlConnection; warning?: string; syncing?: boolean }> {
     return request('/v1/meta-control/connection', { method: 'POST', body: input });
   },
 

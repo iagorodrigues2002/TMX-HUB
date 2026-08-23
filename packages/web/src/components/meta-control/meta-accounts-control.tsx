@@ -89,6 +89,7 @@ export function MetaAccountsControl() {
   const connections = useQuery({
     queryKey: ['meta-control-connections'],
     queryFn: () => apiClient.getMetaControlConnections(),
+    refetchInterval: 15_000,
   });
   useEffect(() => {
     if (!selectedConnectionId && connections.data?.[0]) {
@@ -100,6 +101,7 @@ export function MetaAccountsControl() {
     queryKey: ['meta-control-dashboard', selectedConnectionId],
     queryFn: () => apiClient.getMetaControlDashboard(selectedConnectionId),
     enabled: Boolean(selectedConnectionId),
+    refetchInterval: 15_000,
   });
   const sync = useMutation({
     mutationFn: () => apiClient.syncMetaControl(selectedConnectionId),
@@ -113,7 +115,7 @@ export function MetaAccountsControl() {
   const saveConnection = useMutation({
     mutationFn: () => apiClient.saveMetaControlConnection(connectionForm),
     onSuccess: (result) => {
-      toast.success(result.warning ? `Conexão salva: ${result.warning}` : 'Conexão validada e salva.');
+      toast.success(result.syncing ? 'Dashboard conectado. Importando contas em segundo plano…' : result.warning ? `Conexão salva: ${result.warning}` : 'Conexão validada e salva.');
       setShowConnection(false);
       setSelectedConnectionId(result.connection.id);
       setConnectionForm((current) => ({ ...current, app_secret: '', access_token: '' }));

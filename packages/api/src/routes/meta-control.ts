@@ -3,7 +3,10 @@ import { ulid } from 'ulid';
 import { z } from 'zod';
 import { env } from '../env.js';
 import { encryptSecret } from '../lib/secret-box.js';
-import { syncMetaMarketingConnection } from '../services/meta-marketing.js';
+import {
+  syncMetaMarketingConnection,
+  validateMetaMarketingCredentials,
+} from '../services/meta-marketing.js';
 
 const ConnectionSchema = z.object({
   name: z.string().trim().min(1).max(80),
@@ -88,30 +91,33 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     }
     const parsed = ConnectionSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: 'invalid_connection' });
+    try {
+      await validateMetaMarketingCredentials(parsed.data.access_token, parsed.data.app_secret);
+    } catch (error) {
+      return reply.code(400).send({
+        title: 'A Meta recusou a conexão',
+        detail: error instanceof Error ? error.message : String(error),
+      });
+    }
     const id = ulid();
+    const encryptedSecret = encryptSecret(parsed.data.app_secret, env.TRACKING_ENCRYPTION_KEY);
+    const encryptedToken = encryptSecret(parsed.data.access_token, env.TRACKING_ENCRYPTION_KEY);
     const [connection] = await app.db`
       INSERT INTO meta_marketing_connections
         (id,name,app_id,app_secret_encrypted,access_token_encrypted)
       VALUES
         (${id},${parsed.data.name},${parsed.data.app_id},
-         ${encryptSecret(parsed.data.app_secret, env.TRACKING_ENCRYPTION_KEY)},
-         ${encryptSecret(parsed.data.access_token, env.TRACKING_ENCRYPTION_KEY)})
+         ${encryptedSecret},
+         ${encryptedToken})
       RETURNING id,name,app_id,enabled,last_sync_at,last_sync_error,created_at,updated_at
     `;
-    try {
-      const result = await syncMetaMarketingConnection(app, {
+    void syncMetaMarketingConnection(app, {
         id,
         app_id: parsed.data.app_id,
-        app_secret_encrypted: encryptSecret(parsed.data.app_secret, env.TRACKING_ENCRYPTION_KEY),
-        access_token_encrypted: encryptSecret(parsed.data.access_token, env.TRACKING_ENCRYPTION_KEY),
-      });
-      return reply.code(201).send({ connection, result });
-    } catch (error) {
-      return reply.code(201).send({
-        connection,
-        warning: error instanceof Error ? error.message : String(error),
-      });
-    }
+        app_secret_encrypted: encryptedSecret,
+        access_token_encrypted: encryptedToken,
+      }).catch((error) => app.log.warn({ error, connectionId: id }, 'initial Meta dashboard sync failed'));
+    return reply.code(201).send({ connection, syncing: true });
   });
 
   app.post('/meta-control/sync', async (req, reply) => {

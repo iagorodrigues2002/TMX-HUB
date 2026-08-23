@@ -80,6 +80,18 @@ async function graphAll(
   return out;
 }
 
+export async function validateMetaMarketingCredentials(
+  token: string,
+  appSecret: string,
+): Promise<{ id: string; name: string | null }> {
+  const profile = await graphGet('me', token, appSecret, { fields: 'id,name' });
+  if (!profile.id) throw new Error('A Meta não retornou o usuário associado ao token.');
+  return {
+    id: String(profile.id),
+    name: profile.name ? String(profile.name) : null,
+  };
+}
+
 export async function syncMetaMarketingConnection(
   app: FastifyInstance,
   connection: MetaConnectionRow,
