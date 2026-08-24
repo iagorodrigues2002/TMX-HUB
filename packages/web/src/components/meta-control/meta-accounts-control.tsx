@@ -11,6 +11,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Activity,
   AlertTriangle,
+  BellRing,
   Building2,
   ChevronDown,
   ChevronRight,
@@ -22,6 +23,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Send,
   ShieldAlert,
   Signal,
   WalletCards,
@@ -78,7 +80,9 @@ export function MetaAccountsControl() {
   const [currency, setCurrency] = useState('all');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showConnection, setShowConnection] = useState(false);
+  const [showPushcut, setShowPushcut] = useState(false);
   const [selectedConnectionId, setSelectedConnectionId] = useState('');
+  const [pushcutForm, setPushcutForm] = useState({ secret: '', notification_name: '', devices: '', enabled: true });
   const [connectionForm, setConnectionForm] = useState({
     name: 'Meta · TheMinex',
     app_id: '',
@@ -103,6 +107,20 @@ export function MetaAccountsControl() {
     enabled: Boolean(selectedConnectionId),
     refetchInterval: 15_000,
   });
+  const pushcutConfig = useQuery({
+    queryKey: ['meta-payment-pushcut', selectedConnectionId],
+    queryFn: () => apiClient.getMetaPaymentPushcut(selectedConnectionId),
+    enabled: Boolean(selectedConnectionId),
+  });
+  useEffect(() => {
+    if (!pushcutConfig.data) return;
+    setPushcutForm({
+      secret: '',
+      notification_name: pushcutConfig.data.notification_name ?? '',
+      devices: pushcutConfig.data.devices.join(', '),
+      enabled: pushcutConfig.data.enabled,
+    });
+  }, [pushcutConfig.data]);
   const sync = useMutation({
     mutationFn: () => apiClient.syncMetaControl(selectedConnectionId),
     onSuccess: (result) => {
@@ -123,6 +141,25 @@ export function MetaAccountsControl() {
       void queryClient.invalidateQueries({ queryKey: ['meta-control-dashboard'] });
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : 'Não foi possível conectar.'),
+  });
+  const savePushcut = useMutation({
+    mutationFn: () => apiClient.saveMetaPaymentPushcut(selectedConnectionId, {
+      ...(pushcutForm.secret.trim() ? { secret: pushcutForm.secret.trim() } : {}),
+      notification_name: pushcutForm.notification_name.trim(),
+      devices: pushcutForm.devices.split(',').map((item) => item.trim()).filter(Boolean),
+      enabled: pushcutForm.enabled,
+    }),
+    onSuccess: () => {
+      toast.success('Alerta de pagamento Pushcut salvo.');
+      setPushcutForm((current) => ({ ...current, secret: '' }));
+      void queryClient.invalidateQueries({ queryKey: ['meta-payment-pushcut', selectedConnectionId] });
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'Falha ao salvar o Pushcut.'),
+  });
+  const testPushcut = useMutation({
+    mutationFn: () => apiClient.testMetaPaymentPushcut(selectedConnectionId),
+    onSuccess: () => toast.success('Notificação de teste enviada ao Pushcut.'),
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'O Pushcut recusou o teste.'),
   });
   const assignAccount = useMutation({
     mutationFn: ({ accountId, offerId }: { accountId: string; offerId: string | null }) =>
@@ -206,6 +243,7 @@ export function MetaAccountsControl() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => setShowConnection((value) => !value)} className="gap-2 border-white/10 bg-white/[0.03]"><Plus className="h-4 w-4" /> Novo dashboard</Button>
+            <Button variant="outline" onClick={() => setShowPushcut((value) => !value)} disabled={!selectedConnection} className="gap-2 border-amber-300/15 bg-amber-300/[0.04] text-amber-100 hover:bg-amber-300/[0.08]"><BellRing className="h-4 w-4" /> Alertas Pushcut</Button>
             <Button onClick={() => sync.mutate()} disabled={!selectedConnection || sync.isPending} className="gap-2 bg-cyan-300 text-slate-950 hover:bg-cyan-200">
               {sync.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Atualizar
             </Button>
@@ -223,6 +261,24 @@ export function MetaAccountsControl() {
             <input type="password" aria-label="Token de acesso" value={connectionForm.access_token} onChange={(event) => setConnectionForm({ ...connectionForm, access_token: event.target.value })} placeholder="Token de usuário do sistema" className="h-11 rounded-lg border border-white/10 bg-black/20 px-4 text-sm text-white outline-none focus:border-cyan-300/40" />
           </div>
           <div className="mt-4 flex justify-end"><Button onClick={() => saveConnection.mutate()} disabled={saveConnection.isPending || !connectionForm.app_id || !connectionForm.app_secret || !connectionForm.access_token}>{saveConnection.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Validar e conectar</Button></div>
+        </section>
+      )}
+
+      {showPushcut && selectedConnection && (
+        <section className="rounded-2xl border border-amber-300/20 bg-gradient-to-br from-amber-300/[0.07] via-[#071720] to-transparent p-5 sm:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex items-start gap-3"><BellRing className="mt-0.5 h-5 w-5 text-amber-300" /><div><h2 className="font-semibold text-white">Conta travada por pagamento</h2><p className="mt-1 text-xs leading-5 text-white/40">Configuração exclusiva do dashboard {selectedConnection.name}. O alerta dispara uma vez por bloqueio e rearma quando a conta normaliza.</p></div></div>
+            <label className="flex items-center gap-2 text-xs text-white/60"><input type="checkbox" checked={pushcutForm.enabled} onChange={(event) => setPushcutForm({ ...pushcutForm, enabled: event.target.checked })} className="h-4 w-4 accent-amber-300" /> Alertas ativos</label>
+          </div>
+          <div className="mt-5 grid gap-3 md:grid-cols-2">
+            <input type="password" aria-label="Secret Pushcut" value={pushcutForm.secret} onChange={(event) => setPushcutForm({ ...pushcutForm, secret: event.target.value })} placeholder={pushcutConfig.data?.secret_configured ? 'Secret já salvo — deixe vazio para manter' : 'Secret da API Pushcut'} className="h-11 rounded-lg border border-white/10 bg-black/20 px-4 text-sm text-white outline-none focus:border-amber-300/40" />
+            <input aria-label="Nome da notificação Pushcut" value={pushcutForm.notification_name} onChange={(event) => setPushcutForm({ ...pushcutForm, notification_name: event.target.value })} placeholder="Nome ou Reference ID da notificação" className="h-11 rounded-lg border border-white/10 bg-black/20 px-4 text-sm text-white outline-none focus:border-amber-300/40" />
+            <input aria-label="Dispositivos Pushcut" value={pushcutForm.devices} onChange={(event) => setPushcutForm({ ...pushcutForm, devices: event.target.value })} placeholder="Dispositivos opcionais, separados por vírgula" className="h-11 rounded-lg border border-white/10 bg-black/20 px-4 text-sm text-white outline-none focus:border-amber-300/40 md:col-span-2" />
+          </div>
+          <div className="mt-4 flex flex-wrap justify-end gap-2">
+            <Button variant="outline" onClick={() => testPushcut.mutate()} disabled={!pushcutConfig.data?.secret_configured || testPushcut.isPending} className="gap-2 border-white/10"><Send className="h-4 w-4" /> Enviar teste</Button>
+            <Button onClick={() => savePushcut.mutate()} disabled={savePushcut.isPending || !pushcutForm.notification_name.trim() || (!pushcutForm.secret.trim() && !pushcutConfig.data?.secret_configured)} className="bg-amber-300 text-slate-950 hover:bg-amber-200">{savePushcut.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Salvar alerta</Button>
+          </div>
         </section>
       )}
 

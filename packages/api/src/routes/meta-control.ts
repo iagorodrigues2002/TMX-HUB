@@ -2,8 +2,9 @@ import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { ulid } from 'ulid';
 import { z } from 'zod';
 import { env } from '../env.js';
-import { encryptSecret } from '../lib/secret-box.js';
+import { decryptSecret, encryptSecret } from '../lib/secret-box.js';
 import {
+  sendMetaPaymentPushcut,
   syncMetaMarketingConnection,
   validateMetaMarketingCredentials,
 } from '../services/meta-marketing.js';
@@ -17,6 +18,12 @@ const ConnectionSchema = z.object({
 const AssignmentSchema = z.object({ offer_id: z.string().trim().min(1).nullable() });
 const ConnectionQuerySchema = z.object({ connection_id: z.string().trim().min(1).optional() });
 const SyncSchema = z.object({ connection_id: z.string().trim().min(1) });
+const PaymentPushcutSchema = z.object({
+  secret: z.string().trim().min(8).max(256).optional(),
+  notification_name: z.string().trim().min(1).max(200),
+  devices: z.array(z.string().trim().min(1).max(120)).max(20).default([]),
+  enabled: z.boolean().default(true),
+});
 
 function assertAdmin(req: { user?: { role: string } }): void {
   if (req.user?.role !== 'admin') {
@@ -246,6 +253,102 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       synced_at: normalized[0]?.last_synced_at ?? null,
     });
   });
+
+  app.get<{ Params: { connectionId: string } }>(
+    '/meta-control/connections/:connectionId/pushcut',
+    async (req, reply) => {
+      assertAdmin(req);
+      if (!app.db) return reply.code(503).send({ config: null });
+      const [config] = await app.db`
+        SELECT id,payment_pushcut_notification_name AS notification_name,
+               payment_pushcut_devices AS devices,payment_pushcut_enabled AS enabled,
+               (payment_pushcut_secret_encrypted IS NOT NULL) AS secret_configured
+        FROM meta_marketing_connections WHERE id=${req.params.connectionId}
+      `;
+      if (!config) return reply.code(404).send({ error: 'connection_not_found' });
+      return reply.send({ config });
+    },
+  );
+
+  app.patch<{ Params: { connectionId: string } }>(
+    '/meta-control/connections/:connectionId/pushcut',
+    async (req, reply) => {
+      assertAdmin(req);
+      if (!app.db || !env.TRACKING_ENCRYPTION_KEY) {
+        return reply.code(503).send({ error: 'tracking_encryption_unavailable' });
+      }
+      const parsed = PaymentPushcutSchema.safeParse(req.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'invalid_pushcut_config' });
+      const [existing] = await app.db<{ payment_pushcut_secret_encrypted: string | null }[]>`
+        SELECT payment_pushcut_secret_encrypted FROM meta_marketing_connections
+        WHERE id=${req.params.connectionId}
+      `;
+      if (!existing) return reply.code(404).send({ error: 'connection_not_found' });
+      if (!parsed.data.secret && !existing.payment_pushcut_secret_encrypted) {
+        return reply.code(400).send({ error: 'pushcut_secret_required' });
+      }
+      const encrypted = parsed.data.secret
+        ? encryptSecret(parsed.data.secret, env.TRACKING_ENCRYPTION_KEY)
+        : existing.payment_pushcut_secret_encrypted;
+      const [config] = await app.db`
+        UPDATE meta_marketing_connections
+        SET payment_pushcut_secret_encrypted=${encrypted},
+            payment_pushcut_notification_name=${parsed.data.notification_name},
+            payment_pushcut_devices=${app.db.json(parsed.data.devices)},
+            payment_pushcut_enabled=${parsed.data.enabled},updated_at=now()
+        WHERE id=${req.params.connectionId}
+        RETURNING id,payment_pushcut_notification_name AS notification_name,
+                  payment_pushcut_devices AS devices,payment_pushcut_enabled AS enabled,
+                  true AS secret_configured
+      `;
+      if (parsed.data.enabled) {
+        await app.db`
+          UPDATE meta_ad_accounts
+          SET payment_alert_active=(account_status=3),updated_at=now()
+          WHERE connection_id=${req.params.connectionId}
+        `;
+      }
+      return reply.send({ config });
+    },
+  );
+
+  app.post<{ Params: { connectionId: string } }>(
+    '/meta-control/connections/:connectionId/pushcut/test',
+    async (req, reply) => {
+      assertAdmin(req);
+      if (!app.db || !env.TRACKING_ENCRYPTION_KEY) {
+        return reply.code(503).send({ error: 'tracking_encryption_unavailable' });
+      }
+      const [config] = await app.db<
+        Array<{
+          name: string;
+          payment_pushcut_secret_encrypted: string | null;
+          payment_pushcut_notification_name: string | null;
+          payment_pushcut_devices: string[];
+        }>
+      >`
+        SELECT name,payment_pushcut_secret_encrypted,payment_pushcut_notification_name,
+               payment_pushcut_devices
+        FROM meta_marketing_connections WHERE id=${req.params.connectionId}
+      `;
+      if (!config?.payment_pushcut_secret_encrypted || !config.payment_pushcut_notification_name) {
+        return reply.code(409).send({ error: 'pushcut_not_configured' });
+      }
+      await sendMetaPaymentPushcut({
+        secret: decryptSecret(config.payment_pushcut_secret_encrypted, env.TRACKING_ENCRYPTION_KEY),
+        notificationName: config.payment_pushcut_notification_name,
+        devices: Array.isArray(config.payment_pushcut_devices) ? config.payment_pushcut_devices : [],
+        dashboardName: config.name,
+        accountName: 'Conta de teste TMX',
+        accountExternalId: 'TESTE',
+        businessName: 'Business Manager de teste',
+        balanceMinor: 100,
+        currency: 'BRL',
+        test: true,
+      });
+      return reply.send({ accepted: true });
+    },
+  );
 
   app.patch<{ Params: { accountId: string } }>(
     '/meta-control/accounts/:accountId/offer',

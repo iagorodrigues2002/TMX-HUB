@@ -93,6 +93,41 @@ export async function validateMetaMarketingCredentials(
   };
 }
 
+export async function sendMetaPaymentPushcut(input: {
+  secret: string;
+  notificationName: string;
+  devices: string[];
+  dashboardName: string;
+  accountName: string;
+  accountExternalId: string;
+  businessName: string | null;
+  balanceMinor: number;
+  currency: string;
+  test?: boolean;
+}): Promise<void> {
+  const balance = new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: input.currency,
+  }).format(input.balanceMinor / 100);
+  const response = await fetch(
+    `https://api.pushcut.io/${input.secret}/notifications/${encodeURIComponent(input.notificationName)}`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        title: input.test ? `Teste de alerta · ${input.dashboardName}` : `Conta travada por pagamento · ${input.dashboardName}`,
+        text: `${input.accountName} · act_${input.accountExternalId} · ${input.businessName ?? 'Conta pessoal'} · ${balance}`,
+        ...(input.devices.length ? { devices: input.devices } : {}),
+      }),
+      signal: AbortSignal.timeout(15_000),
+    },
+  );
+  if (!response.ok) {
+    const detail = (await response.text()).slice(0, 500);
+    throw new Error(`Pushcut HTTP ${response.status}${detail ? `: ${detail}` : ''}`);
+  }
+}
+
 export async function syncMetaMarketingConnection(
   app: FastifyInstance,
   connection: MetaConnectionRow,
@@ -101,6 +136,19 @@ export async function syncMetaMarketingConnection(
   const token = decryptSecret(connection.access_token_encrypted, env.TRACKING_ENCRYPTION_KEY);
   const secret = decryptSecret(connection.app_secret_encrypted, env.TRACKING_ENCRYPTION_KEY);
   try {
+    const [pushcut] = await app.db<
+      Array<{
+        name: string;
+        payment_pushcut_secret_encrypted: string | null;
+        payment_pushcut_notification_name: string | null;
+        payment_pushcut_devices: string[];
+        payment_pushcut_enabled: boolean;
+      }>
+    >`
+      SELECT name,payment_pushcut_secret_encrypted,payment_pushcut_notification_name,
+             payment_pushcut_devices,payment_pushcut_enabled
+      FROM meta_marketing_connections WHERE id=${connection.id}
+    `;
     const accounts = await graphAll('me/adaccounts', token, secret, {
       fields:
         'id,account_id,name,account_status,disable_reason,amount_spent,balance,spend_cap,currency,timezone_name,business{id,name},created_time',
@@ -110,7 +158,7 @@ export async function syncMetaMarketingConnection(
     for (const account of accounts) {
       const externalId = String(account.account_id ?? String(account.id ?? '').replace(/^act_/, ''));
       const business = (account.business ?? {}) as Record<string, unknown>;
-      const [storedAccount] = await app.db<{ id: string }[]>`
+      const [storedAccount] = await app.db<{ id: string; payment_alert_active: boolean }[]>`
         INSERT INTO meta_ad_accounts
           (id, connection_id, external_id, name, business_id, business_name,
            account_status, disable_reason, currency, timezone_name, amount_spent_minor,
@@ -128,9 +176,43 @@ export async function syncMetaMarketingConnection(
           currency=EXCLUDED.currency, timezone_name=EXCLUDED.timezone_name,
           amount_spent_minor=EXCLUDED.amount_spent_minor, balance_minor=EXCLUDED.balance_minor,
           spend_cap_minor=EXCLUDED.spend_cap_minor, last_synced_at=now(), updated_at=now()
-        RETURNING id
+        RETURNING id,payment_alert_active
       `;
       if (!storedAccount) continue;
+      const accountStatus = asInt(account.account_status);
+      if (accountStatus !== 3 && storedAccount.payment_alert_active) {
+        await app.db`
+          UPDATE meta_ad_accounts SET payment_alert_active=false,updated_at=now()
+          WHERE id=${storedAccount.id}
+        `;
+      } else if (
+        accountStatus === 3 &&
+        !storedAccount.payment_alert_active &&
+        pushcut?.payment_pushcut_enabled &&
+        pushcut.payment_pushcut_secret_encrypted &&
+        pushcut.payment_pushcut_notification_name
+      ) {
+        try {
+          await sendMetaPaymentPushcut({
+            secret: decryptSecret(pushcut.payment_pushcut_secret_encrypted, env.TRACKING_ENCRYPTION_KEY),
+            notificationName: pushcut.payment_pushcut_notification_name,
+            devices: Array.isArray(pushcut.payment_pushcut_devices) ? pushcut.payment_pushcut_devices : [],
+            dashboardName: pushcut.name,
+            accountName: String(account.name ?? externalId),
+            accountExternalId: externalId,
+            businessName: business.name ? String(business.name) : null,
+            balanceMinor: asInt(account.balance),
+            currency: String(account.currency ?? 'BRL'),
+          });
+          await app.db`
+            UPDATE meta_ad_accounts
+            SET payment_alert_active=true,payment_alerted_at=now(),updated_at=now()
+            WHERE id=${storedAccount.id}
+          `;
+        } catch (error) {
+          app.log.warn({ error, accountId: storedAccount.id }, 'Meta payment Pushcut alert failed');
+        }
+      }
       const accountNode = `act_${externalId}`;
       const [campaigns, insightPage] = await Promise.all([
         graphAll(`${accountNode}/campaigns`, token, secret, {

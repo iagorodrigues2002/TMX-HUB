@@ -1134,6 +1134,14 @@ export interface MetaControlDashboard {
   synced_at?: string | null;
 }
 
+export interface MetaPaymentPushcutConfig {
+  id: string;
+  notification_name: string | null;
+  devices: string[];
+  enabled: boolean;
+  secret_configured: boolean;
+}
+
 // ---- public methods ----
 
 export const apiClient = {
@@ -1169,6 +1177,30 @@ export const apiClient = {
   async getMetaControlDashboard(connectionId: string): Promise<MetaControlDashboard> {
     const params = new URLSearchParams({ connection_id: connectionId });
     return request(`/v1/meta-control/dashboard?${params.toString()}`);
+  },
+
+  async getMetaPaymentPushcut(connectionId: string): Promise<MetaPaymentPushcutConfig> {
+    const response = await request<{ config: MetaPaymentPushcutConfig }>(
+      `/v1/meta-control/connections/${connectionId}/pushcut`,
+    );
+    return response.config;
+  },
+
+  async saveMetaPaymentPushcut(connectionId: string, input: {
+    secret?: string;
+    notification_name: string;
+    devices: string[];
+    enabled: boolean;
+  }): Promise<MetaPaymentPushcutConfig> {
+    const response = await request<{ config: MetaPaymentPushcutConfig }>(
+      `/v1/meta-control/connections/${connectionId}/pushcut`,
+      { method: 'PATCH', body: input },
+    );
+    return response.config;
+  },
+
+  async testMetaPaymentPushcut(connectionId: string): Promise<void> {
+    await request(`/v1/meta-control/connections/${connectionId}/pushcut/test`, { method: 'POST' });
   },
 
   async assignMetaAccountOffer(accountId: string, offerId: string | null): Promise<void> {
