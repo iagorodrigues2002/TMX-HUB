@@ -2,11 +2,12 @@
 
 import { InvitesSection } from '@/components/settings/invites-section';
 import { UsersSection } from '@/components/settings/users-section';
+import { UtmifyGlobalCenter } from '@/components/utmify/utmify-global-center';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
 import { useQuery } from '@tanstack/react-query';
-import { Activity, Clock3, Loader2, ShieldCheck, UserCog, Users } from 'lucide-react';
+import { Activity, Cable, Clock3, Loader2, ScrollText, ShieldCheck, UserCog, Users } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
@@ -83,10 +84,12 @@ export function AdminDashboard() {
       </section>
 
       <Tabs defaultValue="overview">
-        <TabsList className="mb-5">
+        <TabsList className="mb-5 flex h-auto justify-start overflow-x-auto">
           <TabsTrigger value="overview">Visão geral</TabsTrigger>
           <TabsTrigger value="users">Usuários e acessos</TabsTrigger>
           <TabsTrigger value="invites">Convites</TabsTrigger>
+          <TabsTrigger value="activity" className="gap-2"><ScrollText className="h-4 w-4" /> Atividade</TabsTrigger>
+          <TabsTrigger value="utmify" className="gap-2"><Cable className="h-4 w-4" /> UTMify Geral</TabsTrigger>
         </TabsList>
         <TabsContent value="overview" className="grid gap-5 xl:grid-cols-[1fr_1.2fr]">
           <section className="glass-card overflow-hidden">
@@ -148,6 +151,33 @@ export function AdminDashboard() {
         </TabsContent>
         <TabsContent value="invites">
           <InvitesSection />
+        </TabsContent>
+        <TabsContent value="activity">
+          <section className="glass-card overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] p-4">
+              <div>
+                <p className="hud-label">Atividade administrativa</p>
+                <p className="mt-1 text-sm text-white/45">Ações recentes de todos os usuários do TMX.</p>
+              </div>
+              <span className="text-xs text-white/35">Atualização automática a cada 30 segundos</span>
+            </div>
+            <div className="max-h-[680px] divide-y divide-white/[0.05] overflow-y-auto">
+              {(data?.recentActivity ?? []).map((entry) => (
+                <div key={`${entry.userId}-${entry.kind}-${entry.id}`} className="flex items-start gap-3 px-4 py-3">
+                  <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-cyan-300/60" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm text-white/75">{entry.label}</p>
+                    <p className="text-xs text-white/40">{entry.userName} · {entry.kind} · {entry.status}</p>
+                  </div>
+                  <span className="shrink-0 text-[11px] text-white/35">{relativeDate(entry.createdAt)}</span>
+                </div>
+              ))}
+              {(data?.recentActivity.length ?? 0) === 0 && <p className="p-8 text-center text-sm text-white/40">Nenhuma atividade registrada.</p>}
+            </div>
+          </section>
+        </TabsContent>
+        <TabsContent value="utmify">
+          <UtmifyGlobalCenter />
         </TabsContent>
       </Tabs>
     </div>
