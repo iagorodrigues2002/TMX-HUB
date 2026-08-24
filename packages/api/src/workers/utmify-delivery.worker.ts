@@ -13,9 +13,7 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
     max: 3,
     ssl: env.NODE_ENV === 'production' ? 'require' : false,
   });
-  const worker = new Worker<UtmifyDeliveryJobData>(
-    UTMIFY_DELIVERY_QUEUE_NAME,
-    async (job) => {
+  const processDelivery = async (deliveryId: string) => {
       const [row] = await db<
         Array<{
           id: string;
@@ -80,7 +78,7 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
         LEFT JOIN tracking_orders o ON o.id = d.order_id
         LEFT JOIN tracking_events direct_event
           ON direct_event.project_id = d.project_id AND direct_event.id = d.event_id
-        WHERE d.id = ${job.data.deliveryId}
+        WHERE d.id = ${deliveryId}
           AND d.destination_kind = 'utmify'
           AND d.state <> 'delivered'
       `;
@@ -182,7 +180,10 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
         `;
         throw error;
       }
-    },
+  };
+  const worker = new Worker<UtmifyDeliveryJobData>(
+    UTMIFY_DELIVERY_QUEUE_NAME,
+    async (job) => processDelivery(job.data.deliveryId),
     {
       connection: makeRedis(env.REDIS_URL, {
         maxRetriesPerRequest: null,
@@ -191,10 +192,52 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
       // UTMify applies a strict token-level rate limit. A concurrency-only
       // setting still creates bursts, so pace the whole queue explicitly.
       concurrency: 1,
-      limiter: { max: 1, duration: 1_000 },
+      limiter: { max: 1, duration: 5_000 },
     },
   );
+  let pumpRunning = false;
+  const pump = async () => {
+    if (pumpRunning) return;
+    pumpRunning = true;
+    try {
+      const [candidate] = await db<{ id: string }[]>`
+        WITH candidate AS (
+          SELECT d.id
+          FROM tracking_delivery_outbox d
+          LEFT JOIN tracking_orders o ON o.id=d.order_id
+          LEFT JOIN tracking_utmify_destinations u ON u.id=d.destination_id
+          WHERE d.destination_kind='utmify'
+            AND d.state IN ('pending','failed')
+            AND d.next_attempt_at <= now()
+          ORDER BY CASE
+            WHEN u.scope='global' AND o.status='paid' THEN 1
+            WHEN u.scope='global' AND o.status IN ('refunded','chargeback') THEN 2
+            WHEN u.scope='global' AND o.status IN ('abandoned','refused') THEN 3
+            ELSE 4
+          END,d.created_at ASC
+          FOR UPDATE OF d SKIP LOCKED
+          LIMIT 1
+        )
+        UPDATE tracking_delivery_outbox d
+        SET state='processing'
+        FROM candidate
+        WHERE d.id=candidate.id
+        RETURNING d.id
+      `;
+      if (candidate) await processDelivery(candidate.id);
+    } catch (error) {
+      logger.error({ error }, 'utmify database delivery pump error');
+    } finally {
+      pumpRunning = false;
+    }
+  };
+  void pump();
+  const pumpTimer = setInterval(() => void pump(), 1_200);
+  pumpTimer.unref();
   worker.on('error', (error) => logger.error({ error }, 'utmify delivery worker error'));
-  worker.on('closed', () => void db.end({ timeout: 5 }));
+  worker.on('closed', () => {
+    clearInterval(pumpTimer);
+    void db.end({ timeout: 5 });
+  });
   return worker;
 }
