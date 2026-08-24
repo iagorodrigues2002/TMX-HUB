@@ -91,6 +91,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       SELECT id FROM tracking_utmify_destinations WHERE scope='global' AND enabled=true LIMIT 1
     `;
     if (!destination) return reply.code(409).send({ error: 'utmify_global_not_configured' });
+    // Pause state is persisted by BullMQ in Redis. A transient operational
+    // pause must never leave financial reconciliation silently stranded.
+    await app.utmifyDeliveryQueue.resume();
     const [project] = await app.db<{ id: string }[]>`
       SELECT id FROM tracking_projects WHERE enabled=true ORDER BY created_at ASC LIMIT 1
     `;
@@ -129,6 +132,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       SELECT id FROM tracking_utmify_destinations WHERE scope='global' AND enabled=true LIMIT 1
     `;
     if (!destination) return reply.code(409).send({ error: 'utmify_global_not_configured' });
+    await app.utmifyDeliveryQueue.resume();
     const inserted = await app.db<{ id: string }[]>`
       INSERT INTO tracking_delivery_outbox
         (id,project_id,destination_kind,destination_id,order_id,event_id,event_type,state,last_error)

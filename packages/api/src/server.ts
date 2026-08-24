@@ -56,6 +56,7 @@ export async function buildApp() {
 
 async function main() {
   const app = await buildApp();
+  await app.utmifyDeliveryQueue.resume();
   const recoverTrackingDeliveries = async () => {
     if (!app.db) return;
     // Repair recent paid orders that reached us before a new Vendepay
