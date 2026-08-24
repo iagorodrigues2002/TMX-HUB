@@ -183,7 +183,16 @@ async function main() {
       ),
     );
   };
-  await recoverTrackingDeliveries();
+  // Never block HTTP startup on a historical replay. A large backlog can take
+  // several minutes to enqueue (and FX repair performs network calls); awaiting
+  // it here makes Railway keep the previous deployment alive, so the new worker
+  // that should drain the backlog never becomes the active replica.
+  const trackingRecoveryStartupTimer = setTimeout(() => {
+    void recoverTrackingDeliveries().catch((error) =>
+      app.log.error({ error }, 'initial tracking delivery recovery failed'),
+    );
+  }, 1_000);
+  trackingRecoveryStartupTimer.unref();
   const trackingRecoveryTimer = setInterval(() => {
     void recoverTrackingDeliveries().catch((error) =>
       app.log.error({ error }, 'tracking delivery recovery failed'),
@@ -295,6 +304,7 @@ async function main() {
     app.log.info({ signal }, 'shutdown initiated');
     try {
       clearInterval(trackingRecoveryTimer);
+      clearTimeout(trackingRecoveryStartupTimer);
       app.utmifySync.stop();
       // Stop accepting new requests first.
       await app.close();
