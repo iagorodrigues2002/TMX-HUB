@@ -148,13 +148,28 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     // A previous bulk replay could have inserted the outbox row but failed to
     // publish its Redis job. Always recover every non-delivered global row,
     // rather than enqueueing only rows inserted by this request.
-    const pending = await app.db<{ id: string }[]>`
+    await app.db`
       UPDATE tracking_delivery_outbox
       SET state='pending', next_attempt_at=now(), last_error=NULL
       WHERE destination_kind='utmify'
         AND destination_id=${destination.id}
         AND state NOT IN ('delivered','skipped')
-      RETURNING id
+    `;
+    const pending = await app.db<{ id: string; status: string }[]>`
+      SELECT d.id,o.status
+      FROM tracking_delivery_outbox d
+      JOIN tracking_orders o ON o.id=d.order_id
+      WHERE d.destination_kind='utmify'
+        AND d.destination_id=${destination.id}
+        AND d.state NOT IN ('delivered','skipped')
+      ORDER BY CASE o.status
+        WHEN 'paid' THEN 1
+        WHEN 'refunded' THEN 2
+        WHEN 'chargeback' THEN 3
+        WHEN 'refused' THEN 4
+        WHEN 'abandoned' THEN 5
+        ELSE 6
+      END, d.created_at ASC
     `;
 
     let queued = 0;
@@ -165,10 +180,14 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       const batch = pending.slice(offset, offset + batchSize);
       try {
         const jobs = await app.utmifyDeliveryQueue.addBulk(
-          batch.map(({ id }) => ({
+          batch.map(({ id, status }) => ({
             name: 'send',
             data: { deliveryId: id },
-            opts: { jobId: `global-replay-${replayRunId}-${id}` },
+            opts: {
+              jobId: `global-replay-${replayRunId}-${id}`,
+              lifo: true,
+              priority: ['paid', 'refunded', 'chargeback'].includes(status) ? 1 : 10,
+            },
           })),
         );
         queued += jobs.length;
