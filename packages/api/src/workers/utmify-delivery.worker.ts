@@ -123,7 +123,10 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
           isTest: row.provider === 'tmx-test',
           orderId: row.external_id,
           provider: row.provider,
-          status: row.event_type === 'event.initiate_checkout.neutralize' ? 'refused' : row.status,
+          status:
+            row.event_type === 'event.initiate_checkout.neutralize' || row.status === 'abandoned'
+              ? 'refused'
+              : row.status,
           amountMinor: outboundMinor,
           currency: outboundCurrency,
           createdAt: row.occurred_at,

@@ -160,13 +160,22 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     let queued = 0;
     let queueFailed = 0;
     const batchSize = 50;
+    const replayRunId = Date.now();
     for (let offset = 0; offset < pending.length; offset += batchSize) {
       const batch = pending.slice(offset, offset + batchSize);
-      const results = await Promise.allSettled(
-        batch.map(({ id }) => app.utmifyDeliveryQueue.add('send', { deliveryId: id })),
-      );
-      queued += results.filter((result) => result.status === 'fulfilled').length;
-      queueFailed += results.filter((result) => result.status === 'rejected').length;
+      try {
+        const jobs = await app.utmifyDeliveryQueue.addBulk(
+          batch.map(({ id }) => ({
+            name: 'send',
+            data: { deliveryId: id },
+            opts: { jobId: `global-replay-${replayRunId}-${id}` },
+          })),
+        );
+        queued += jobs.length;
+      } catch (error) {
+        queueFailed += batch.length;
+        app.log.error({ error, offset, batchSize: batch.length }, 'utmify global replay batch enqueue failed');
+      }
     }
     return reply.code(202).send({
       orders_found: inserted.length,
