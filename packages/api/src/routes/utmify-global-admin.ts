@@ -133,7 +133,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       INSERT INTO tracking_delivery_outbox
         (id,project_id,destination_kind,destination_id,order_id,event_id,event_type,state,last_error)
       SELECT
-        'UG' || upper(substr(md5(o.id || ':' || o.status),1,24)),
+        'UG' || upper(substr(md5('reconcile-v2:' || o.id || ':' || o.status),1,24)),
         o.project_id,'utmify',${destination.id},o.id,
         'utmify-global-reconcile-v2:' || o.id || ':' || o.status,
         'order.' || o.status || '.global_reconcile_v2',
