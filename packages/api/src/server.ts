@@ -59,6 +59,41 @@ async function main() {
   await app.utmifyDeliveryQueue.resume();
   const recoverTrackingDeliveries = async () => {
     if (!app.db) return;
+    // Financial delivery recovery must run before any network-bound FX repair.
+    // Otherwise a slow exchange-rate provider can strand paid/refunded orders
+    // and abandoned-order neutralizations behind it for an entire cycle.
+    await app.utmifyDeliveryQueue.resume();
+    const urgentUtmify = await app.db<{ id: string; status: string }[]>`
+      SELECT d.id,COALESCE(o.status,'pending') AS status
+      FROM tracking_delivery_outbox d
+      LEFT JOIN tracking_orders o ON o.id=d.order_id
+      LEFT JOIN tracking_utmify_destinations u ON u.id=d.destination_id
+      WHERE d.destination_kind='utmify'
+        AND d.state IN ('pending','failed','processing')
+        AND d.next_attempt_at <= now()
+      ORDER BY CASE
+        WHEN u.scope='global' AND o.status='paid' THEN 1
+        WHEN u.scope='global' AND o.status IN ('refunded','chargeback') THEN 2
+        WHEN u.scope='global' AND o.status='abandoned' THEN 3
+        ELSE 4
+      END,d.created_at ASC
+      LIMIT 5000
+    `;
+    const recoveryRunId = Date.now();
+    for (let offset = 0; offset < urgentUtmify.length; offset += 100) {
+      const batch = urgentUtmify.slice(offset, offset + 100);
+      await app.utmifyDeliveryQueue.addBulk(
+        batch.map(({ id, status }) => ({
+          name: 'send',
+          data: { deliveryId: id },
+          opts: {
+            jobId: `urgent-${recoveryRunId}-${id}`,
+            lifo: true,
+            priority: ['paid','refunded','chargeback'].includes(status) ? 1 : status === 'abandoned' ? 2 : 10,
+          },
+        })),
+      );
+    }
     // Repair recent paid orders that reached us before a new Vendepay
     // proprietary currency code was mapped (or while the FX provider was
     // temporarily unavailable). This makes accounting self-healing instead
@@ -109,23 +144,6 @@ async function main() {
     `;
     await Promise.allSettled(
       pending.map(({ id }) => app.metaQueue.add('send', { deliveryId: id })),
-    );
-    const pendingUtmify = await app.db<{ id: string }[]>`
-      SELECT id FROM tracking_delivery_outbox
-      WHERE destination_kind = 'utmify'
-        AND state IN ('pending', 'failed', 'processing')
-        AND next_attempt_at <= now()
-      ORDER BY created_at ASC
-      LIMIT 1000
-    `;
-    await Promise.allSettled(
-      pendingUtmify.map(({ id }) =>
-        app.utmifyDeliveryQueue.add(
-          'send',
-          { deliveryId: id },
-          { jobId: `${id}-recovery-${Math.floor(Date.now() / 30_000)}` },
-        ),
-      ),
     );
     const pendingUtmifyWebEvents = await app.db<{ id: string }[]>`
       SELECT id FROM tracking_utmify_web_events
