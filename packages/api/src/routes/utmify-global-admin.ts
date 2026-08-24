@@ -8,7 +8,7 @@ const GlobalSchema = z.object({
   name: z.string().trim().min(1).max(80).default('UTMify Geral'),
   api_token: z.string().trim().min(16).max(4096).optional(),
   endpoint_url: z.string().url().default('https://api.utmify.com.br/api-credentials/orders'),
-  pixel_id: z.string().trim().regex(/^[a-f0-9]{24}$/i),
+  pixel_id: z.string().trim().regex(/^[a-f0-9]{24}$/i).nullish(),
   enabled: z.boolean().default(true),
 });
 
@@ -66,7 +66,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       ? await app.db`
           UPDATE tracking_utmify_destinations
           SET name=${parsed.data.name},api_token_encrypted=${encryptedToken},
-              endpoint_url=${parsed.data.endpoint_url},external_pixel_id=${parsed.data.pixel_id},
+              endpoint_url=${parsed.data.endpoint_url},external_pixel_id=${parsed.data.pixel_id ?? null},
               enabled=${parsed.data.enabled},updated_at=now()
           WHERE id=${id}
           RETURNING id,name,endpoint_url,external_pixel_id AS pixel_id,enabled,
@@ -77,7 +77,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             (id,project_id,name,api_token_encrypted,endpoint_url,enabled,scope,external_pixel_id)
           VALUES
             (${id},NULL,${parsed.data.name},${encryptedToken},${parsed.data.endpoint_url},
-             ${parsed.data.enabled},'global',${parsed.data.pixel_id})
+             ${parsed.data.enabled},'global',${parsed.data.pixel_id ?? null})
           RETURNING id,name,endpoint_url,external_pixel_id AS pixel_id,enabled,
                     true AS token_configured,created_at,updated_at
         `;
@@ -120,6 +120,35 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     });
     await app.utmifyDeliveryQueue.add('send', { deliveryId });
     return reply.code(202).send({ accepted: true, delivery_id: deliveryId, transaction_id: transactionId });
+  });
+
+  app.post('/utmify-global/replay', async (req, reply) => {
+    assertAdmin(req);
+    if (!app.db) return reply.code(503).send({ error: 'database_unavailable' });
+    const [destination] = await app.db<{ id: string }[]>`
+      SELECT id FROM tracking_utmify_destinations WHERE scope='global' AND enabled=true LIMIT 1
+    `;
+    if (!destination) return reply.code(409).send({ error: 'utmify_global_not_configured' });
+    const deliveries = await app.db<{ id: string }[]>`
+      INSERT INTO tracking_delivery_outbox
+        (id,project_id,destination_kind,destination_id,order_id,event_id,event_type,state,last_error)
+      SELECT
+        'UG' || upper(substr(md5(o.id || ':' || o.status),1,24)),
+        o.project_id,'utmify',${destination.id},o.id,
+        'utmify-global-backfill:' || o.id || ':' || o.status,
+        'order.' || o.status || '.global_backfill',
+        CASE WHEN o.status='cancelled' THEN 'skipped' ELSE 'pending' END,
+        CASE WHEN o.status='cancelled' THEN 'Cancelamento não é aceito pela UTMify.' ELSE NULL END
+      FROM tracking_orders o
+      WHERE o.provider <> 'tmx-test'
+      ON CONFLICT (destination_kind,destination_id,event_id) DO NOTHING
+      RETURNING id
+    `;
+    const queued = deliveries.filter((item) => item.id);
+    await Promise.allSettled(
+      queued.map(({ id }) => app.utmifyDeliveryQueue.add('send', { deliveryId: id })),
+    );
+    return reply.code(202).send({ orders_found: queued.length, queued: queued.length });
   });
 };
 

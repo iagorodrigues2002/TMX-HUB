@@ -1148,7 +1148,7 @@ export interface UtmifyGlobalConfig {
     id: string;
     name: string;
     endpoint_url: string;
-    pixel_id: string;
+    pixel_id: string | null;
     enabled: boolean;
     token_configured: boolean;
     created_at: string;
@@ -1232,7 +1232,7 @@ export const apiClient = {
     name: string;
     api_token?: string;
     endpoint_url: string;
-    pixel_id: string;
+    pixel_id?: string | null;
     enabled: boolean;
   }): Promise<void> {
     await request('/v1/utmify-global', { method: 'PUT', body: input });
@@ -1240,6 +1240,10 @@ export const apiClient = {
 
   async testUtmifyGlobal(): Promise<{ transaction_id: string }> {
     return request('/v1/utmify-global/test', { method: 'POST' });
+  },
+
+  async replayUtmifyGlobal(): Promise<{ orders_found: number; queued: number }> {
+    return request('/v1/utmify-global/replay', { method: 'POST' });
   },
 
   async assignMetaAccountOffer(accountId: string, offerId: string | null): Promise<void> {
