@@ -1142,6 +1142,27 @@ export interface MetaPaymentPushcutConfig {
   secret_configured: boolean;
 }
 
+export interface UtmifyGlobalConfig {
+  configured: boolean;
+  destination: null | {
+    id: string;
+    name: string;
+    endpoint_url: string;
+    pixel_id: string;
+    enabled: boolean;
+    token_configured: boolean;
+    created_at: string;
+    updated_at: string;
+  };
+  stats: null | {
+    orders_7d: number;
+    orders_delivered_7d: number;
+    orders_failed_7d: number;
+    web_events_7d: number;
+    web_events_delivered_7d: number;
+  };
+}
+
 // ---- public methods ----
 
 export const apiClient = {
@@ -1201,6 +1222,24 @@ export const apiClient = {
 
   async testMetaPaymentPushcut(connectionId: string): Promise<void> {
     await request(`/v1/meta-control/connections/${connectionId}/pushcut/test`, { method: 'POST' });
+  },
+
+  async getUtmifyGlobal(): Promise<UtmifyGlobalConfig> {
+    return request('/v1/utmify-global');
+  },
+
+  async saveUtmifyGlobal(input: {
+    name: string;
+    api_token?: string;
+    endpoint_url: string;
+    pixel_id: string;
+    enabled: boolean;
+  }): Promise<void> {
+    await request('/v1/utmify-global', { method: 'PUT', body: input });
+  },
+
+  async testUtmifyGlobal(): Promise<{ transaction_id: string }> {
+    return request('/v1/utmify-global/test', { method: 'POST' });
   },
 
   async assignMetaAccountOffer(accountId: string, offerId: string | null): Promise<void> {

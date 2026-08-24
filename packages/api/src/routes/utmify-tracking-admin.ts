@@ -20,7 +20,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         SELECT u.id, u.name, u.endpoint_url, u.enabled, u.created_at, u.updated_at
         FROM tracking_utmify_destinations u
         JOIN tracking_projects p ON p.id = u.project_id
-        WHERE p.offer_id = ${req.params.id}
+        WHERE p.offer_id = ${req.params.id} AND u.scope='offer'
       `;
       return { configured: Boolean(destination), destination: destination ?? null };
     },
@@ -47,7 +47,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           (${ulid()}, ${project.id}, ${parsed.data.name},
            ${encryptSecret(parsed.data.api_token, env.TRACKING_ENCRYPTION_KEY)},
            ${parsed.data.endpoint_url})
-        ON CONFLICT (project_id) DO UPDATE SET
+        ON CONFLICT (project_id) WHERE scope='offer' DO UPDATE SET
           name = EXCLUDED.name,
           api_token_encrypted = EXCLUDED.api_token_encrypted,
           endpoint_url = EXCLUDED.endpoint_url,
@@ -67,7 +67,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       await app.db`
         UPDATE tracking_utmify_destinations u SET enabled = false, updated_at = now()
         FROM tracking_projects p
-        WHERE u.project_id = p.id AND p.offer_id = ${req.params.id}
+        WHERE u.project_id = p.id AND p.offer_id = ${req.params.id} AND u.scope='offer'
       `;
       return reply.code(204).send();
     },
@@ -84,6 +84,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                COALESCE(o.external_id, 'TMX-IC-' || d.event_id) AS transaction_id,
                COALESCE(o.status, 'pending') AS order_status
         FROM tracking_delivery_outbox d
+        JOIN tracking_utmify_destinations u ON u.id=d.destination_id AND u.scope='offer'
         JOIN tracking_projects p ON p.id = d.project_id
         LEFT JOIN tracking_orders o ON o.id = d.order_id
         WHERE p.offer_id = ${req.params.id} AND d.destination_kind = 'utmify'
@@ -213,7 +214,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       const [destination] = await app.db<{ id: string }[]>`
         SELECT id
         FROM tracking_utmify_destinations
-        WHERE project_id = ${project.id} AND enabled = true
+        WHERE project_id = ${project.id} AND enabled = true AND scope='offer'
       `;
       if (!destination) return reply.code(409).send({ error: 'utmify_not_configured' });
 

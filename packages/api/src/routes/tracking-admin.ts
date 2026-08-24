@@ -580,7 +580,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                 VALUES
                   (${ulid()}, ${project.id}, NULL, ${project.utmify_pixel_id},
                    ${event.id}, 'InitiateCheckout')
-                ON CONFLICT (project_id, event_id) DO UPDATE SET
+                ON CONFLICT (project_id, external_pixel_id, event_id) DO UPDATE SET
                   external_pixel_id = EXCLUDED.external_pixel_id,
                   state = 'pending',
                   attempts = 0,

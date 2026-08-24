@@ -70,6 +70,7 @@ const migrations = [
   '055_restore_manual_upsell_results.sql',
   '056_meta_account_control.sql',
   '057_meta_payment_pushcut.sql',
+  '058_utmify_global_dashboard.sql',
 ];
 
 await sql`

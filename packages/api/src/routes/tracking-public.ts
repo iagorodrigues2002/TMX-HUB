@@ -221,15 +221,24 @@ async function enqueueInitiateCheckout(
       `;
       if (rows[0]) meta.push(rows[0]);
     }
+    const globalPixels = await sql<{ external_pixel_id: string }[]>`
+      SELECT external_pixel_id
+      FROM tracking_utmify_destinations
+      WHERE scope='global' AND enabled=true AND external_pixel_id IS NOT NULL
+    `;
     const utmify: Array<{ id: string }> = [];
-    if (project?.utmify_pixel_id) {
+    const utmifyPixelIds = [...new Set([
+      ...(project?.utmify_pixel_id ? [project.utmify_pixel_id] : []),
+      ...globalPixels.map((item) => item.external_pixel_id),
+    ])];
+    for (const externalPixelId of utmifyPixelIds) {
       const webEvents = await sql<{ id: string }[]>`
         INSERT INTO tracking_utmify_web_events
           (id, project_id, pixel_id, external_pixel_id, event_id, event_name)
         VALUES
-          (${ulid()}, ${input.projectId}, NULL, ${project.utmify_pixel_id},
+          (${ulid()}, ${input.projectId}, NULL, ${externalPixelId},
            ${input.eventId}, 'InitiateCheckout')
-        ON CONFLICT (project_id, event_id) DO NOTHING
+        ON CONFLICT (project_id, external_pixel_id, event_id) DO NOTHING
         RETURNING id
       `;
       if (webEvents[0]) utmify.push(webEvents[0]);
@@ -1547,7 +1556,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         }
         const utmify = await sql<{ id: string }[]>`
           SELECT id FROM tracking_utmify_destinations
-          WHERE project_id = ${connection.project_id} AND enabled = true
+          WHERE enabled = true
+            AND (project_id = ${connection.project_id} OR scope='global')
         `;
         const utmifyDeliveryIds: string[] = [];
         for (const destination of utmify) {
