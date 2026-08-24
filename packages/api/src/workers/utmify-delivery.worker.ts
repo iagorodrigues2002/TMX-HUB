@@ -223,6 +223,9 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
             AND d.state IN ('pending','failed')
             AND d.next_attempt_at <= now()
           ORDER BY CASE
+            WHEN u.scope='global'
+              AND d.event_id NOT LIKE 'utmify-global-backfill:%'
+              AND d.event_id NOT LIKE 'utmify-global-reconcile-%' THEN 0
             WHEN u.scope='global' AND o.status='paid' THEN 1
             WHEN u.scope='global' AND o.status IN ('refunded','chargeback') THEN 2
             WHEN u.scope='global' AND o.status IN ('abandoned','refused') THEN 3
