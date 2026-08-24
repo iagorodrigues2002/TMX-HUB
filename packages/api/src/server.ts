@@ -71,6 +71,29 @@ async function main() {
     // Otherwise a slow exchange-rate provider can strand paid/refunded orders
     // and abandoned-order neutralizations behind it for an entire cycle.
     await app.utmifyDeliveryQueue.resume();
+    // Historical reconciliation used versioned delivery ids. Keep only the
+    // newest global delivery for each durable order; older rows would send the
+    // exact same current order status and waste the provider's request quota.
+    await app.db`
+      WITH redundant AS (
+        SELECT d.id,
+               row_number() OVER (
+                 PARTITION BY d.destination_id,d.order_id
+                 ORDER BY d.created_at DESC,d.id DESC
+               ) AS position
+        FROM tracking_delivery_outbox d
+        JOIN tracking_utmify_destinations u
+          ON u.id=d.destination_id AND u.scope='global'
+        WHERE d.destination_kind='utmify'
+          AND d.order_id IS NOT NULL
+          AND d.state <> 'delivered'
+      )
+      UPDATE tracking_delivery_outbox d
+      SET state='skipped',
+          last_error='Entrega global histórica substituída por versão mais recente.'
+      FROM redundant r
+      WHERE d.id=r.id AND r.position > 1
+    `;
     // A historical replay can exceed UTMify's per-token request rate. Those
     // responses are transient, so never leave an order permanently dead only
     // because all BullMQ retries happened inside the provider's rate window.

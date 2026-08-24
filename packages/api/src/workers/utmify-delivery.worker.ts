@@ -82,7 +82,7 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
           ON direct_event.project_id = d.project_id AND direct_event.id = d.event_id
         WHERE d.id = ${deliveryId}
           AND d.destination_kind = 'utmify'
-          AND d.state <> 'delivered'
+          AND d.state IN ('pending','failed','processing')
       `;
       if (!row) return;
       // UTMify rejects any status outside {waiting_payment, paid, refused,
