@@ -56,6 +56,10 @@ export async function buildApp() {
 
 async function main() {
   const app = await buildApp();
+  // Start the financial consumer before seeding/recovering any backlog.
+  // Recovery also performs network-bound FX repair and must never delay the
+  // worker responsible for paid/refunded/chargeback delivery.
+  const utmifyDeliveryWorker = createUtmifyDeliveryWorker();
   await app.utmifyDeliveryQueue.resume();
   const recoverTrackingDeliveries = async () => {
     if (!app.db) return;
@@ -251,7 +255,6 @@ async function main() {
     storage: app.storage,
   });
   const metaWorker = createMetaWorker();
-  const utmifyDeliveryWorker = createUtmifyDeliveryWorker();
   const utmifyWebEventWorker = createUtmifyWebEventWorker();
   const pushcutDeliveryWorker = createPushcutDeliveryWorker();
   const missingEnv = {
