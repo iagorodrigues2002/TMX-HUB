@@ -171,6 +171,15 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
               response = ${db.json(result as never)}, last_error = NULL, delivered_at = now()
           WHERE id = ${row.id}
         `;
+        logger.info(
+          {
+            deliveryId: row.id,
+            transactionId: row.external_id,
+            status: row.status,
+            responseStatus: response.status,
+          },
+          'utmify order delivery succeeded',
+        );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (message.includes('RATE_LIMIT_REACHED') || message.includes('UTMify HTTP 429'))
