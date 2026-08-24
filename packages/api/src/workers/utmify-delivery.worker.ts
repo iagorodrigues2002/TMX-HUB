@@ -13,7 +13,9 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
     max: 3,
     ssl: env.NODE_ENV === 'production' ? 'require' : false,
   });
+  let rateLimitedUntil = 0;
   const processDelivery = async (deliveryId: string) => {
+      if (Date.now() < rateLimitedUntil) return;
       const [row] = await db<
         Array<{
           id: string;
@@ -171,6 +173,8 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
         `;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
+        if (message.includes('RATE_LIMIT_REACHED') || message.includes('UTMify HTTP 429'))
+          rateLimitedUntil = Date.now() + 120_000;
         await db`
           UPDATE tracking_delivery_outbox
           SET state = CASE WHEN attempts >= 8 THEN 'dead' ELSE 'failed' END,
@@ -192,12 +196,12 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
       // UTMify applies a strict token-level rate limit. A concurrency-only
       // setting still creates bursts, so pace the whole queue explicitly.
       concurrency: 1,
-      limiter: { max: 1, duration: 5_000 },
+      limiter: { max: 1, duration: 60_000 },
     },
   );
   let pumpRunning = false;
   const pump = async () => {
-    if (pumpRunning) return;
+    if (pumpRunning || Date.now() < rateLimitedUntil) return;
     pumpRunning = true;
     try {
       const [candidate] = await db<{ id: string }[]>`
@@ -226,13 +230,16 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
       `;
       if (candidate) await processDelivery(candidate.id);
     } catch (error) {
-      logger.error({ error }, 'utmify database delivery pump error');
+      logger.error(
+        { error: error instanceof Error ? { message: error.message, stack: error.stack } : String(error) },
+        'utmify database delivery pump error',
+      );
     } finally {
       pumpRunning = false;
     }
   };
   void pump();
-  const pumpTimer = setInterval(() => void pump(), 1_200);
+  const pumpTimer = setInterval(() => void pump(), 2_100);
   pumpTimer.unref();
   worker.on('error', (error) => logger.error({ error }, 'utmify delivery worker error'));
   worker.on('closed', () => {

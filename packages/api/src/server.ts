@@ -81,7 +81,7 @@ async function main() {
       FROM tracking_utmify_destinations u
       WHERE u.id=d.destination_id
         AND d.destination_kind='utmify'
-        AND d.state IN ('dead','failed')
+        AND d.state='dead'
         AND d.last_error LIKE '%RATE_LIMIT_REACHED%'
     `;
     const urgentUtmify = await app.db<
