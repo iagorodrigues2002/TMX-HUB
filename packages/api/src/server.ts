@@ -61,6 +61,10 @@ async function main() {
   // worker responsible for paid/refunded/chargeback delivery.
   const utmifyDeliveryWorker = createUtmifyDeliveryWorker();
   await app.utmifyDeliveryQueue.resume();
+  // PostgreSQL is the durable outbox. Redis may contain thousands of duplicate
+  // recovery jobs from an interrupted replay, so rebuild the transient queue
+  // from the database whenever a new replica takes ownership.
+  await app.utmifyDeliveryQueue.drain(true);
   const recoverTrackingDeliveries = async () => {
     if (!app.db) return;
     // Financial delivery recovery must run before any network-bound FX repair.
@@ -80,8 +84,10 @@ async function main() {
         AND d.state IN ('dead','failed')
         AND d.last_error LIKE '%RATE_LIMIT_REACHED%'
     `;
-    const urgentUtmify = await app.db<{ id: string; status: string }[]>`
-      SELECT d.id,COALESCE(o.status,'pending') AS status
+    const urgentUtmify = await app.db<
+      { id: string; status: string; next_attempt_at: Date }[]
+    >`
+      SELECT d.id,COALESCE(o.status,'pending') AS status,d.next_attempt_at
       FROM tracking_delivery_outbox d
       LEFT JOIN tracking_orders o ON o.id=d.order_id
       LEFT JOIN tracking_utmify_destinations u ON u.id=d.destination_id
@@ -96,15 +102,16 @@ async function main() {
       END,d.created_at ASC
       LIMIT 5000
     `;
-    const recoveryRunId = Date.now();
     for (let offset = 0; offset < urgentUtmify.length; offset += 100) {
       const batch = urgentUtmify.slice(offset, offset + 100);
       await app.utmifyDeliveryQueue.addBulk(
-        batch.map(({ id, status }) => ({
+        batch.map(({ id, status, next_attempt_at: nextAttemptAt }) => ({
           name: 'send',
           data: { deliveryId: id },
           opts: {
-            jobId: `urgent-${recoveryRunId}-${id}`,
+            // Stable while an outbox row is pending. A real failed attempt
+            // changes next_attempt_at and therefore creates one fresh job.
+            jobId: `outbox-${id}-${nextAttemptAt.getTime()}`,
             lifo: true,
             priority: ['paid','refunded','chargeback'].includes(status) ? 1 : status === 'abandoned' ? 2 : 10,
           },
