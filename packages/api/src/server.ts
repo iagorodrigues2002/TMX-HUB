@@ -67,6 +67,19 @@ async function main() {
     // Otherwise a slow exchange-rate provider can strand paid/refunded orders
     // and abandoned-order neutralizations behind it for an entire cycle.
     await app.utmifyDeliveryQueue.resume();
+    // A historical replay can exceed UTMify's per-token request rate. Those
+    // responses are transient, so never leave an order permanently dead only
+    // because all BullMQ retries happened inside the provider's rate window.
+    await app.db`
+      UPDATE tracking_delivery_outbox d
+      SET state='failed', attempts=0, next_attempt_at=now(),
+          last_error='RATE_LIMIT_REACHED: aguardando reenvio controlado'
+      FROM tracking_utmify_destinations u
+      WHERE u.id=d.destination_id
+        AND d.destination_kind='utmify'
+        AND d.state='dead'
+        AND d.last_error LIKE '%RATE_LIMIT_REACHED%'
+    `;
     const urgentUtmify = await app.db<{ id: string; status: string }[]>`
       SELECT d.id,COALESCE(o.status,'pending') AS status
       FROM tracking_delivery_outbox d

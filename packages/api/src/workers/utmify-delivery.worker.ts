@@ -188,7 +188,10 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
         maxRetriesPerRequest: null,
         enableReadyCheck: false,
       }),
-      concurrency: 5,
+      // UTMify applies a strict token-level rate limit. A concurrency-only
+      // setting still creates bursts, so pace the whole queue explicitly.
+      concurrency: 2,
+      limiter: { max: 2, duration: 1_000 },
     },
   );
   worker.on('error', (error) => logger.error({ error }, 'utmify delivery worker error'));
