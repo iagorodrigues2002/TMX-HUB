@@ -27,7 +27,7 @@ export function UtmifyGlobalCenter() {
   });
   const replay = useMutation({
     mutationFn: () => apiClient.replayUtmifyGlobal(),
-    onSuccess: (result) => { toast.success(`${result.queued} pedido(s) histórico(s) enfileirado(s) para a UTMify Geral.`); void qc.invalidateQueries({ queryKey: ['utmify-global'] }); },
+    onSuccess: (result) => { toast.success(`${result.queued} pedido(s) histórico(s) enfileirado(s); ${result.recovered} pendência(s) recuperada(s).`); void qc.invalidateQueries({ queryKey: ['utmify-global'] }); },
     onError: (error) => toast.error(error instanceof Error ? error.message : 'Não foi possível reenviar o histórico.'),
   });
   const stats = config.data?.stats;

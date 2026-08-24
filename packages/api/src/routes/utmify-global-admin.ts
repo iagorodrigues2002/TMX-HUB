@@ -129,7 +129,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       SELECT id FROM tracking_utmify_destinations WHERE scope='global' AND enabled=true LIMIT 1
     `;
     if (!destination) return reply.code(409).send({ error: 'utmify_global_not_configured' });
-    const deliveries = await app.db<{ id: string }[]>`
+    const inserted = await app.db<{ id: string }[]>`
       INSERT INTO tracking_delivery_outbox
         (id,project_id,destination_kind,destination_id,order_id,event_id,event_type,state,last_error)
       SELECT
@@ -144,11 +144,37 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       ON CONFLICT (destination_kind,destination_id,event_id) DO NOTHING
       RETURNING id
     `;
-    const queued = deliveries.filter((item) => item.id);
-    await Promise.allSettled(
-      queued.map(({ id }) => app.utmifyDeliveryQueue.add('send', { deliveryId: id })),
-    );
-    return reply.code(202).send({ orders_found: queued.length, queued: queued.length });
+
+    // A previous bulk replay could have inserted the outbox row but failed to
+    // publish its Redis job. Always recover every non-delivered global row,
+    // rather than enqueueing only rows inserted by this request.
+    const pending = await app.db<{ id: string }[]>`
+      UPDATE tracking_delivery_outbox
+      SET state='pending', next_attempt_at=now(), last_error=NULL
+      WHERE destination_kind='utmify'
+        AND destination_id=${destination.id}
+        AND state NOT IN ('delivered','skipped')
+      RETURNING id
+    `;
+
+    let queued = 0;
+    let queueFailed = 0;
+    const batchSize = 50;
+    for (let offset = 0; offset < pending.length; offset += batchSize) {
+      const batch = pending.slice(offset, offset + batchSize);
+      const results = await Promise.allSettled(
+        batch.map(({ id }) => app.utmifyDeliveryQueue.add('send', { deliveryId: id })),
+      );
+      queued += results.filter((result) => result.status === 'fulfilled').length;
+      queueFailed += results.filter((result) => result.status === 'rejected').length;
+    }
+    return reply.code(202).send({
+      orders_found: inserted.length,
+      inserted: inserted.length,
+      recovered: pending.length,
+      queued,
+      queue_failed: queueFailed,
+    });
   });
 };
 

@@ -1242,7 +1242,7 @@ export const apiClient = {
     return request('/v1/utmify-global/test', { method: 'POST' });
   },
 
-  async replayUtmifyGlobal(): Promise<{ orders_found: number; queued: number }> {
+  async replayUtmifyGlobal(): Promise<{ orders_found: number; inserted: number; recovered: number; queued: number; queue_failed: number }> {
     return request('/v1/utmify-global/replay', { method: 'POST' });
   },
 
