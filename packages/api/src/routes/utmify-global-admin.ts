@@ -135,8 +135,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       SELECT
         'UG' || upper(substr(md5(o.id || ':' || o.status),1,24)),
         o.project_id,'utmify',${destination.id},o.id,
-        'utmify-global-backfill:' || o.id || ':' || o.status,
-        'order.' || o.status || '.global_backfill',
+        'utmify-global-reconcile-v2:' || o.id || ':' || o.status,
+        'order.' || o.status || '.global_reconcile_v2',
         CASE WHEN o.status='cancelled' THEN 'skipped' ELSE 'pending' END,
         CASE WHEN o.status='cancelled' THEN 'Cancelamento não é aceito pela UTMify.' ELSE NULL END
       FROM tracking_orders o

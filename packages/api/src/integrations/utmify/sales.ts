@@ -7,6 +7,7 @@ export interface UtmifyOrderInput {
   currency: string;
   createdAt: Date;
   paidAt?: Date | null;
+  refundedAt?: Date | null;
   buyer: {
     name?: string;
     email?: string;
@@ -75,9 +76,13 @@ export function buildUtmifyOrderPayload(input: UtmifyOrderInput) {
     paymentMethod: source.payment_method ?? 'unknown',
     status: statusMap[input.status] ?? 'waiting_payment',
     createdAt: input.createdAt.toISOString(),
-    approvedDate: input.paidAt?.toISOString() ?? null,
+    approvedDate:
+      input.paidAt?.toISOString() ??
+      (['paid', 'refunded', 'chargeback'].includes(input.status)
+        ? input.createdAt.toISOString()
+        : null),
     refundedAt: ['refunded', 'chargeback'].includes(input.status)
-      ? input.createdAt.toISOString()
+      ? (input.refundedAt ?? input.createdAt).toISOString()
       : null,
     customer: {
       name: input.buyer.name ?? 'Cliente',

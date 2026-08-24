@@ -38,6 +38,7 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
           };
           occurred_at: Date;
           paid_at: Date | null;
+          lifecycle_at: Date | null;
           source: Record<string, string>;
           client_ip: string | null;
         }>
@@ -52,6 +53,7 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
                COALESCE(o.buyer, '{}'::jsonb) AS buyer,
                COALESCE(o.occurred_at, direct_event.received_at, d.created_at) AS occurred_at,
                o.paid_at,
+               COALESCE(o.chargeback_at, o.refunded_at) AS lifecycle_at,
                COALESCE(o.attribution_source, '{}'::jsonb) ||
                jsonb_strip_nulls(jsonb_build_object(
                  'payment_method', COALESCE(o.payment_method, 'pix'),
@@ -126,6 +128,7 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
           currency: outboundCurrency,
           createdAt: row.occurred_at,
           paidAt: row.paid_at,
+          refundedAt: row.lifecycle_at,
           buyer: row.buyer,
           source: row.source,
           // UTMify rejects checkout records without an IP. Legacy ICs created before IP
