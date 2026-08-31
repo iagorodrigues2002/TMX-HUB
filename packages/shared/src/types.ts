@@ -521,6 +521,7 @@ export interface MediaJob {
   extensionMode: MediaExtensionMode;
   targetSeconds?: number;
   phaseCancel: boolean;
+  useWhiteAudio: boolean;
   nicheId?: string;
   nicheName?: string;
   whiteId?: string;
@@ -547,6 +548,7 @@ export interface CreateMediaJobRequest {
   extension_mode?: MediaExtensionMode;
   target_seconds?: number;
   phase_cancel?: boolean;
+  use_white_audio?: boolean;
   niche_id?: string;
   white_volume_db?: number;
   verify_transcript?: boolean;

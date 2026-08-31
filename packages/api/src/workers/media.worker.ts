@@ -81,20 +81,24 @@ export function createMediaWorker(args: {
         await fs.writeFile(input, object.body);
         let processingInput = input;
         if (job.phaseCancel) {
-          if (!job.nicheId || !job.whiteId || job.whiteVolumeDb === undefined) {
-            throw new Error('Configuração do Phase Cancel está incompleta.');
+          let selectedWhiteAudio: string | undefined;
+          if (job.useWhiteAudio) {
+            if (!job.nicheId || !job.whiteId || job.whiteVolumeDb === undefined) {
+              throw new Error('Configuração do Phase Cancel está incompleta.');
+            }
+            const niche = await args.nicheStore.get(job.nicheId);
+            const white = niche.whites.find((candidate) => candidate.id === job.whiteId);
+            if (!white) throw new Error(`Áudio white "${job.whiteId}" não foi encontrado.`);
+            const whiteObject = await args.storage.get(white.storageKey);
+            await fs.writeFile(whiteAudio, whiteObject.body);
+            selectedWhiteAudio = whiteAudio;
           }
-          const niche = await args.nicheStore.get(job.nicheId);
-          const white = niche.whites.find((candidate) => candidate.id === job.whiteId);
-          if (!white) throw new Error(`Áudio white "${job.whiteId}" não foi encontrado.`);
-          const whiteObject = await args.storage.get(white.storageKey);
-          await fs.writeFile(whiteAudio, whiteObject.body);
           await runPhaseCancelFfmpeg(
             {
               inputVideo: input,
-              whiteAudio,
+              ...(selectedWhiteAudio ? { whiteAudio: selectedWhiteAudio } : {}),
               output: phaseOutput,
-              whiteVolumeDb: job.whiteVolumeDb,
+              whiteVolumeDb: job.whiteVolumeDb ?? -22,
               compression: 'balanced',
             },
             log.child({ jobId }),

@@ -37,6 +37,7 @@ function toWire(job: MediaJob, downloadUrl?: string): Record<string, unknown> {
       extension_mode: job.extensionMode,
       target_seconds: job.targetSeconds,
       phase_cancel: job.phaseCancel,
+      use_white_audio: job.useWhiteAudio,
       niche: job.nicheId ? { id: job.nicheId, name: job.nicheName } : undefined,
       white: job.whiteId
         ? { id: job.whiteId, label: job.whiteLabel, volume_db: job.whiteVolumeDb }
@@ -88,6 +89,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       ...(fields.extension_mode ? { extension_mode: fields.extension_mode } : {}),
       ...(fields.target_seconds ? { target_seconds: Number(fields.target_seconds) } : {}),
       ...(fields.phase_cancel ? { phase_cancel: bool(fields.phase_cancel) } : {}),
+      ...(fields.use_white_audio ? { use_white_audio: bool(fields.use_white_audio) } : {}),
       ...(fields.niche_id ? { niche_id: fields.niche_id } : {}),
       ...(fields.white_volume_db ? { white_volume_db: Number(fields.white_volume_db) } : {}),
       ...(fields.verify_transcript ? { verify_transcript: bool(fields.verify_transcript) } : {}),
@@ -103,7 +105,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           whiteVolumeDb: number;
         }
       | undefined;
-    if (parsed.data.phase_cancel && parsed.data.niche_id) {
+    const useWhiteAudio = Boolean(
+      parsed.data.phase_cancel && parsed.data.use_white_audio !== false,
+    );
+    if (useWhiteAudio && parsed.data.niche_id) {
       const niche = await app.nicheStore.get(parsed.data.niche_id);
       if (niche.whites.length === 0) {
         throw new BadRequestError(`Nicho "${niche.name}" não tem áudio white cadastrado.`);
@@ -138,6 +143,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       extensionMode: parsed.data.extension_mode ?? 'none',
       ...(parsed.data.target_seconds ? { targetSeconds: parsed.data.target_seconds } : {}),
       phaseCancel: parsed.data.phase_cancel ?? false,
+      useWhiteAudio,
       ...(phaseConfig ?? {}),
       verifyTranscript:
         (parsed.data.phase_cancel ?? false) && (parsed.data.verify_transcript ?? false),

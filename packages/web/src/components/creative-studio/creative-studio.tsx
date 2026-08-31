@@ -94,6 +94,7 @@ export function CreativeStudio({
   const [extensionMode, setExtensionMode] = useState<MediaExtensionMode>('none');
   const [targetSeconds, setTargetSeconds] = useState(30);
   const [phaseCancel, setPhaseCancel] = useState(false);
+  const [useWhiteAudio, setUseWhiteAudio] = useState(true);
   const [nicheId, setNicheId] = useState('');
   const [whiteVolumeDb, setWhiteVolumeDb] = useState(-22);
   const [verifyTranscript, setVerifyTranscript] = useState(false);
@@ -167,7 +168,7 @@ export function CreativeStudio({
       (item) => item.status === 'pending' || item.status === 'failed',
     );
     if (pending.length === 0) return;
-    if (phaseCancel && !nicheId) {
+    if (phaseCancel && useWhiteAudio && !nicheId) {
       toast.error('Selecione um nicho para usar o Phase Cancel.');
       return;
     }
@@ -202,7 +203,13 @@ export function CreativeStudio({
               extensionMode,
               ...(extensionMode !== 'none' ? { targetSeconds } : {}),
               phaseCancel,
-              ...(phaseCancel ? { nicheId, whiteVolumeDb, verifyTranscript } : {}),
+              useWhiteAudio,
+              ...(phaseCancel
+                ? {
+                    ...(useWhiteAudio ? { nicheId, whiteVolumeDb } : {}),
+                    verifyTranscript,
+                  }
+                : {}),
             },
             (progress) =>
               setUploadItems((items) =>
@@ -498,7 +505,31 @@ export function CreativeStudio({
 
           {phaseCancel && (
             <div className="mt-4 grid gap-4 border-t border-cyan-300/10 pt-4 md:grid-cols-2">
-              <Field label="Nicho do White Audio">
+              <div className="md:col-span-2">
+                <Field label="Modo do áudio">
+                  <Select
+                    value={useWhiteAudio ? 'white' : 'inversion-only'}
+                    onValueChange={(value) => setUseWhiteAudio(value === 'white')}
+                  >
+                    <SelectTrigger aria-label="Modo do áudio">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="white">Inversão + áudio white</SelectItem>
+                      <SelectItem value="inversion-only">
+                        Somente inversão · sem áudio white
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+                {!useWhiteAudio && (
+                  <p className="mt-2 text-xs text-cyan-200/70">
+                    Nenhuma faixa adicional será adicionada. O vídeo manterá somente a inversão de
+                    fase.
+                  </p>
+                )}
+              </div>
+              {useWhiteAudio && <Field label="Nicho do White Audio">
                 <Select value={nicheId} onValueChange={setNicheId}>
                   <SelectTrigger aria-label="Nicho do White Audio">
                     <SelectValue placeholder="Selecione um nicho" />
@@ -513,8 +544,8 @@ export function CreativeStudio({
                       ))}
                   </SelectContent>
                 </Select>
-              </Field>
-              <Field label={`Volume do White Audio · ${whiteVolumeDb} dB`}>
+              </Field>}
+              {useWhiteAudio && <Field label={`Volume do White Audio · ${whiteVolumeDb} dB`}>
                 <input
                   aria-label="Volume do White Audio"
                   type="range"
@@ -525,7 +556,7 @@ export function CreativeStudio({
                   onChange={(event) => setWhiteVolumeDb(Number(event.target.value))}
                   className="h-11 w-full accent-cyan-300"
                 />
-              </Field>
+              </Field>}
               <div className="md:col-span-2">
                 <ToggleCard
                   icon={BrainCircuit}
@@ -535,7 +566,7 @@ export function CreativeStudio({
                   onChange={setVerifyTranscript}
                 />
               </div>
-              {niches.filter((niche) => niche.whites.length > 0).length === 0 && (
+              {useWhiteAudio && niches.filter((niche) => niche.whites.length > 0).length === 0 && (
                 <p className="md:col-span-2 text-xs text-amber-200">
                   Cadastre um nicho com pelo menos um White Audio na seção abaixo.
                 </p>
@@ -549,7 +580,7 @@ export function CreativeStudio({
           disabled={
             uploadItems.every((item) => item.status !== 'pending' && item.status !== 'failed') ||
             isUploading ||
-            (phaseCancel && !nicheId)
+            (phaseCancel && useWhiteAudio && !nicheId)
           }
         >
           {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}

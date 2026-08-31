@@ -273,6 +273,7 @@ export const CreateMediaJobBodySchema = z
     extension_mode: MediaExtensionModeSchema.optional(),
     target_seconds: z.number().int().min(1).max(3600).optional(),
     phase_cancel: z.boolean().optional(),
+    use_white_audio: z.boolean().optional(),
     niche_id: z.string().min(1).max(64).optional(),
     white_volume_db: z.number().min(-40).max(-5).optional(),
     verify_transcript: z.boolean().optional(),
@@ -289,7 +290,7 @@ export const CreateMediaJobBodySchema = z
         message: 'target_seconds é obrigatório quando a extensão está ativa.',
       });
     }
-    if (value.phase_cancel && !value.niche_id) {
+    if (value.phase_cancel && value.use_white_audio !== false && !value.niche_id) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['niche_id'],

@@ -3293,7 +3293,8 @@ export const apiClient = {
     fd.append('extension_mode', args.extensionMode);
     if (args.targetSeconds) fd.append('target_seconds', String(args.targetSeconds));
     fd.append('phase_cancel', args.phaseCancel ? '1' : '0');
-    if (args.phaseCancel && args.nicheId) fd.append('niche_id', args.nicheId);
+    fd.append('use_white_audio', args.useWhiteAudio ? '1' : '0');
+    if (args.phaseCancel && args.useWhiteAudio && args.nicheId) fd.append('niche_id', args.nicheId);
     if (args.phaseCancel && args.whiteVolumeDb !== undefined) {
       fd.append('white_volume_db', String(args.whiteVolumeDb));
     }
@@ -3532,6 +3533,7 @@ export interface CreateMediaJobInput {
   extensionMode: MediaExtensionMode;
   targetSeconds?: number;
   phaseCancel: boolean;
+  useWhiteAudio: boolean;
   nicheId?: string;
   whiteVolumeDb?: number;
   verifyTranscript?: boolean;
@@ -3549,6 +3551,7 @@ export interface MediaJobView {
     extension_mode: MediaExtensionMode;
     target_seconds?: number;
     phase_cancel: boolean;
+    use_white_audio: boolean;
     niche?: { id: string; name?: string };
     white?: { id: string; label?: string; volume_db?: number };
     verify_transcript: boolean;
