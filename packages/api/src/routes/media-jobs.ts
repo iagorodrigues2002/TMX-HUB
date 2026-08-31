@@ -200,16 +200,18 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     // em lotes grandes.
     const archive = archiver('zip', { store: true });
     const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
-    reply.raw.writeHead(200, {
-      'content-type': 'application/zip',
-      'content-disposition': `attachment; filename="video-studio-${stamp}.zip"`,
-      'cache-control': 'no-store',
-    });
+    reply.header('content-type', 'application/zip');
+    reply.header('content-disposition', `attachment; filename="video-studio-${stamp}.zip"`);
+    reply.header('cache-control', 'private, no-store');
     archive.on('error', (error) => {
       app.log.error({ error }, 'media jobs bulk download failed');
-      reply.raw.destroy(error);
+      archive.destroy(error);
     });
-    archive.pipe(reply.raw);
+
+    // Entrega o stream pelo Fastify para preservar CORS e os demais hooks da
+    // resposta. Escrever diretamente em reply.raw fazia o navegador bloquear
+    // o ZIP com "Failed to fetch" mesmo após o preflight ter sido aceito.
+    reply.send(archive);
 
     const usedNames = new Map<string, number>();
     for (const job of jobs) {
