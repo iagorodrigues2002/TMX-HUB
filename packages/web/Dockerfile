@@ -16,7 +16,7 @@ RUN pnpm install --frozen-lockfile
 
 # ---- build stage ----
 FROM deps AS build
-ARG TMX_BUILD_REV=20260831-video-studio-direct-download
+ARG TMX_BUILD_REV=20260831-video-studio-download-final
 RUN echo "$TMX_BUILD_REV" > /tmp/tmx-build-revision
 COPY packages/shared ./packages/shared
 COPY packages/web ./packages/web

@@ -3276,7 +3276,7 @@ export const apiClient = {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
     return { filename, bytes: blob.size };
   },
 
@@ -3335,7 +3335,7 @@ export const apiClient = {
     document.body.appendChild(anchor);
     anchor.click();
     document.body.removeChild(anchor);
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
     return { filename, bytes: blob.size };
   },
   async deleteMediaJob(id: string): Promise<void> {
@@ -3371,7 +3371,7 @@ export const apiClient = {
     document.body.appendChild(anchor);
     anchor.click();
     document.body.removeChild(anchor);
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
     return { filename, bytes: blob.size };
   },
 
