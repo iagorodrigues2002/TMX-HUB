@@ -58,6 +58,7 @@ function jobToWire(j: ShieldJob, downloadUrl?: string): Record<string, unknown> 
     status: j.status,
     niche: { id: j.nicheId, name: j.nicheName },
     white: { id: j.whiteId, label: j.whiteLabel, volume_db: j.whiteVolumeDb },
+    use_white_audio: j.useWhiteAudio,
     compression: j.compression,
     verify_transcript: j.verifyTranscript,
     input: { filename: j.inputFilename, bytes: j.inputBytes },
@@ -95,7 +96,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   // POST /v1/shield-jobs
   // multipart/form-data:
   //   - file: the input video/audio
-  //   - niche_id: required
+  //   - niche_id: required only when use_white_audio is enabled
+  //   - use_white_audio: optional boolean, default true
   //   - white_volume_db: optional number, default -22
   //   - compression: 'none' | 'lossless' | 'balanced' | 'small', default 'none'
   //   - verify_transcript: '1' | 'true' to enable
@@ -139,6 +141,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     // Parse + validate body fields.
     const parsedBody = CreateShieldJobBodySchema.safeParse({
       niche_id: fields.niche_id,
+      ...(fields.use_white_audio
+        ? { use_white_audio: fields.use_white_audio === '1' || fields.use_white_audio === 'true' }
+        : {}),
       ...(fields.white_volume_db ? { white_volume_db: Number(fields.white_volume_db) } : {}),
       ...(fields.compression ? { compression: fields.compression } : {}),
       ...(fields.verify_transcript
@@ -147,15 +152,29 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     });
     if (!parsedBody.success) throw zodToProblem(parsedBody.error, req.url);
 
-    // Niches são globais — qualquer usuário autenticado pode USAR.
-    // Só validamos que o niche existe e tem ao menos 1 white.
-    const niche = await app.nicheStore.get(parsedBody.data.niche_id);
-    if (niche.whites.length === 0) {
-      throw new BadRequestError(
-        `Nicho "${niche.name}" não tem nenhum áudio white cadastrado. Adicione pelo menos um.`,
-      );
+    const useWhiteAudio = parsedBody.data.use_white_audio ?? true;
+    let nicheId = '';
+    let nicheName = 'Sem nicho';
+    let whiteId = '';
+    let whiteLabel = 'Sem áudio white';
+
+    if (useWhiteAudio) {
+      if (!parsedBody.data.niche_id) {
+        throw new BadRequestError('Selecione um nicho para usar áudio white.');
+      }
+      // Niches são globais — qualquer usuário autenticado pode USAR.
+      const niche = await app.nicheStore.get(parsedBody.data.niche_id);
+      if (niche.whites.length === 0) {
+        throw new BadRequestError(
+          `Nicho "${niche.name}" não tem nenhum áudio white cadastrado. Adicione pelo menos um.`,
+        );
+      }
+      const picked = app.nicheStore.pickRandomWhite(niche);
+      nicheId = niche.id;
+      nicheName = niche.name;
+      whiteId = picked.id;
+      whiteLabel = picked.label || picked.filename;
     }
-    const picked = app.nicheStore.pickRandomWhite(niche);
 
     // Stream upload pra R2 com multipart paralelo (4 parts simultâneas, 5MB cada).
     // Não buffera o arquivo inteiro em memória; parts vão pra R2 enquanto o
@@ -180,11 +199,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       inputStorageKey: storageKey,
       inputFilename: filePart.filename,
       inputBytes: result.bytes,
-      nicheId: niche.id,
-      nicheName: niche.name,
-      whiteId: picked.id,
-      whiteLabel: picked.label || picked.filename,
+      nicheId,
+      nicheName,
+      whiteId,
+      whiteLabel,
       whiteVolumeDb: parsedBody.data.white_volume_db ?? -22,
+      useWhiteAudio,
       compression: parsedBody.data.compression ?? 'none',
       verifyTranscript: parsedBody.data.verify_transcript ?? false,
     });

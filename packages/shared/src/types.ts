@@ -461,6 +461,8 @@ export interface ShieldJob {
   whiteLabel: string;
   /** White audio gain in dB (negative; e.g. -22). */
   whiteVolumeDb: number;
+  /** False processes only the phase inversion, without mixing a white track. */
+  useWhiteAudio: boolean;
   /** Compression mode applied. */
   compression: ShieldCompressionMode;
   /** Whether to run AssemblyAI verification on the output. */
@@ -492,7 +494,8 @@ export interface UpdateNicheRequest {
 }
 
 export interface CreateShieldJobRequest {
-  niche_id: string;
+  niche_id?: string;
+  use_white_audio?: boolean; // default true
   white_volume_db?: number; // default -22
   compression?: ShieldCompressionMode; // default 'none'
   verify_transcript?: boolean; // default false

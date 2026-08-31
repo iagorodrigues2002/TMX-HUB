@@ -14,7 +14,7 @@ import type { StorageService } from '../services/storage.js';
 
 export interface PhaseCancelFfmpegArgs {
   inputVideo: string;
-  whiteAudio: string;
+  whiteAudio?: string;
   output: string;
   whiteVolumeDb: number;
   compression: 'none' | 'lossless' | 'balanced' | 'small';
@@ -30,7 +30,15 @@ export interface PhaseCancelFfmpegArgs {
  *    "wide" feel (no phantom center) plus the white track barely audible.
  *  - Metadata stripped (-map_metadata -1) to remove fingerprints.
  */
-function buildFilterComplex(whiteVolumeDb: number): string {
+function buildFilterComplex(whiteVolumeDb: number, useWhiteAudio: boolean): string {
+  if (!useWhiteAudio) {
+    return [
+      '[0:a]aformat=channel_layouts=mono[origMono]',
+      '[origMono]asplit=2[Lsrc][Rsrc]',
+      '[Rsrc]volume=-1.0[Rinv]',
+      '[Lsrc][Rinv]join=inputs=2:channel_layout=stereo[outA]',
+    ].join(';');
+  }
   return [
     '[0:a]aformat=channel_layouts=mono[origMono]',
     '[origMono]asplit=2[Lsrc][Rsrc]',
@@ -65,6 +73,7 @@ function videoCompressionArgs(mode: PhaseCancelFfmpegArgs['compression']): strin
 
 export function runPhaseCancelFfmpeg(args: PhaseCancelFfmpegArgs, log: Logger): Promise<void> {
   return new Promise((resolve, reject) => {
+    const useWhiteAudio = Boolean(args.whiteAudio);
     const ffArgs = [
       '-y',
       '-hide_banner',
@@ -72,10 +81,9 @@ export function runPhaseCancelFfmpeg(args: PhaseCancelFfmpegArgs, log: Logger): 
       'warning',
       '-i',
       args.inputVideo,
-      '-i',
-      args.whiteAudio,
+      ...(args.whiteAudio ? ['-i', args.whiteAudio] : []),
       '-filter_complex',
-      buildFilterComplex(args.whiteVolumeDb),
+      buildFilterComplex(args.whiteVolumeDb, useWhiteAudio),
       '-map',
       '0:v',
       '-map',
@@ -198,27 +206,30 @@ export function createShieldWorker(args: {
         const meta = await jobStore.get(jobId);
         await jobStore.setStatus(jobId, 'processing');
 
-        // Resolve white audio storage key from the niche.
-        const niche = await nicheStore.get(meta.nicheId);
-        const white = niche.whites.find((w) => w.id === meta.whiteId);
-        if (!white) {
-          throw new Error(`White audio "${meta.whiteId}" not found in niche "${niche.name}".`);
+        let whiteStorageKey: string | undefined;
+        if (meta.useWhiteAudio) {
+          const niche = await nicheStore.get(meta.nicheId);
+          const white = niche.whites.find((w) => w.id === meta.whiteId);
+          if (!white) {
+            throw new Error(`White audio "${meta.whiteId}" not found in niche "${niche.name}".`);
+          }
+          whiteStorageKey = white.storageKey;
+          jobLog.info({ niche: niche.name, white: white.filename }, 'downloading inputs');
+        } else {
+          jobLog.info('downloading input for phase inversion without white audio');
         }
 
-        jobLog.info({ niche: niche.name, white: white.filename }, 'downloading inputs');
-
-        // Download both source files locally.
         const [inputObj, whiteObj] = await Promise.all([
           storage.get(meta.inputStorageKey),
-          storage.get(white.storageKey),
+          whiteStorageKey ? storage.get(whiteStorageKey) : Promise.resolve(undefined),
         ]);
         await fs.writeFile(localInput, inputObj.body);
-        await fs.writeFile(localWhite, whiteObj.body);
+        if (whiteObj) await fs.writeFile(localWhite, whiteObj.body);
 
         await runPhaseCancelFfmpeg(
           {
             inputVideo: localInput,
-            whiteAudio: localWhite,
+            ...(whiteObj ? { whiteAudio: localWhite } : {}),
             output: localOutput,
             whiteVolumeDb: meta.whiteVolumeDb,
             compression: meta.compression,

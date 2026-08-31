@@ -119,6 +119,7 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
   const qc = useQueryClient();
   const [slots, setSlots] = useState<UploadSlot[]>([]);
   const [nicheId, setNicheId] = useState<string>('');
+  const [useWhiteAudio, setUseWhiteAudio] = useState(true);
   const [whiteVolumeDb, setWhiteVolumeDb] = useState(-22);
   const [compression, setCompression] = useState<ShieldCompressionMode>('none');
   const [verifyTranscript, setVerifyTranscript] = useState(false);
@@ -298,7 +299,8 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
       const job = await apiClient.createShieldJob(
         {
           file: slot.file,
-          nicheId,
+          ...(useWhiteAudio ? { nicheId } : {}),
+          useWhiteAudio,
           whiteVolumeDb,
           compression,
           verifyTranscript,
@@ -330,11 +332,11 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
       toast.error('Selecione pelo menos um vídeo.');
       return;
     }
-    if (!nicheId) {
+    if (useWhiteAudio && !nicheId) {
       toast.error('Selecione um nicho.');
       return;
     }
-    if (!selectedNiche || selectedNiche.whites.length === 0) {
+    if (useWhiteAudio && (!selectedNiche || selectedNiche.whites.length === 0)) {
       toast.error('Esse nicho não tem áudios white.');
       return;
     }
@@ -366,7 +368,7 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
       <div>
         <p className="hud-label">Processar vídeos</p>
         <h2 className="mt-1 text-[16px] font-semibold text-white">
-          Phase Cancel + White (envio em massa)
+          Phase Cancel {useWhiteAudio ? '+ White' : 'sem White'} (envio em massa)
         </h2>
       </div>
 
@@ -469,55 +471,81 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
           )}
         </div>
 
-        {/* Niche */}
         <div className="space-y-2">
-          <Label className="hud-label">Nicho do white audio</Label>
-          <Select value={nicheId} onValueChange={setNicheId} disabled={submitting}>
+          <Label className="hud-label">Modo do áudio</Label>
+          <Select
+            value={useWhiteAudio ? 'white' : 'inversion-only'}
+            onValueChange={(value) => setUseWhiteAudio(value === 'white')}
+            disabled={submitting}
+          >
             <SelectTrigger>
-              <SelectValue placeholder="Escolha um nicho…" />
+              <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {niches.map((n) => (
-                <SelectItem key={n.id} value={n.id} disabled={n.whites.length === 0}>
-                  {n.name} · {n.whites.length} white(s)
-                </SelectItem>
-              ))}
+              <SelectItem value="white">Inversão + áudio white</SelectItem>
+              <SelectItem value="inversion-only">Somente inversão · sem áudio white</SelectItem>
             </SelectContent>
           </Select>
-          {selectedNiche && selectedNiche.whites.length === 0 && (
-            <p className="flex items-start gap-1.5 text-[11px] text-amber-300/85">
-              <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
-              Esse nicho ainda não tem áudios. Adicione pelo menos 1 na seção <strong>Nichos</strong>.
-            </p>
-          )}
-          {selectedNiche && selectedNiche.whites.length > 0 && slots.length > 1 && (
-            <p className="text-[11px] text-white/40">
-              <Shuffle className="mr-1 inline h-3 w-3 text-cyan-300/70" />
-              Cada vídeo do batch sorteia 1 dos {selectedNiche.whites.length} áudios independentemente.
+          {!useWhiteAudio && (
+            <p className="text-[11px] text-cyan-300/70">
+              Nenhuma faixa adicional será criada ou misturada. O resultado terá apenas a inversão de fase.
             </p>
           )}
         </div>
 
-        {/* Volume slider */}
-        <div className="space-y-2">
-          <Label className="hud-label flex items-center justify-between">
-            <span>Volume do white (dB)</span>
-            <span className="font-mono text-[11px] text-white/65">{whiteVolumeDb} dB</span>
-          </Label>
-          <input
-            type="range"
-            min={-40}
-            max={-5}
-            step={1}
-            value={whiteVolumeDb}
-            onChange={(e) => setWhiteVolumeDb(Number(e.target.value))}
-            disabled={submitting}
-            className="w-full accent-cyan-400"
-          />
-          <p className="text-[10px] text-white/40">
-            Recomendado: -22 dB. Mais baixo = menos audível pra humano.
-          </p>
-        </div>
+        {useWhiteAudio && (
+          <>
+            {/* Niche */}
+            <div className="space-y-2">
+              <Label className="hud-label">Nicho do white audio</Label>
+              <Select value={nicheId} onValueChange={setNicheId} disabled={submitting}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Escolha um nicho…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {niches.map((n) => (
+                    <SelectItem key={n.id} value={n.id} disabled={n.whites.length === 0}>
+                      {n.name} · {n.whites.length} white(s)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedNiche && selectedNiche.whites.length === 0 && (
+                <p className="flex items-start gap-1.5 text-[11px] text-amber-300/85">
+                  <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+                  Esse nicho ainda não tem áudios. Adicione pelo menos 1 na seção <strong>Nichos</strong>.
+                </p>
+              )}
+              {selectedNiche && selectedNiche.whites.length > 0 && slots.length > 1 && (
+                <p className="text-[11px] text-white/40">
+                  <Shuffle className="mr-1 inline h-3 w-3 text-cyan-300/70" />
+                  Cada vídeo do batch sorteia 1 dos {selectedNiche.whites.length} áudios independentemente.
+                </p>
+              )}
+            </div>
+
+            {/* Volume slider */}
+            <div className="space-y-2">
+              <Label className="hud-label flex items-center justify-between">
+                <span>Volume do white (dB)</span>
+                <span className="font-mono text-[11px] text-white/65">{whiteVolumeDb} dB</span>
+              </Label>
+              <input
+                type="range"
+                min={-40}
+                max={-5}
+                step={1}
+                value={whiteVolumeDb}
+                onChange={(e) => setWhiteVolumeDb(Number(e.target.value))}
+                disabled={submitting}
+                className="w-full accent-cyan-400"
+              />
+              <p className="text-[10px] text-white/40">
+                Recomendado: -22 dB. Mais baixo = menos audível pra humano.
+              </p>
+            </div>
+          </>
+        )}
 
         {/* Compression */}
         <div className="space-y-2">

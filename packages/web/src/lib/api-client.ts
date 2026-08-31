@@ -3208,7 +3208,8 @@ export const apiClient = {
   async createShieldJob(
     args: {
       file: File;
-      nicheId: string;
+      nicheId?: string;
+      useWhiteAudio?: boolean;
       whiteVolumeDb?: number;
       compression?: ShieldCompressionMode;
       verifyTranscript?: boolean;
@@ -3218,7 +3219,8 @@ export const apiClient = {
     const fd = new FormData();
     // Fields MUST come before the file — backend stops iterating at the file
     // part to stream it; later fields would never be parsed.
-    fd.append('niche_id', args.nicheId);
+    fd.append('use_white_audio', args.useWhiteAudio === false ? '0' : '1');
+    if (args.useWhiteAudio !== false && args.nicheId) fd.append('niche_id', args.nicheId);
     if (args.whiteVolumeDb !== undefined) fd.append('white_volume_db', String(args.whiteVolumeDb));
     if (args.compression) fd.append('compression', args.compression);
     if (args.verifyTranscript) fd.append('verify_transcript', '1');
@@ -3504,6 +3506,7 @@ export interface ShieldJobView {
   status: ShieldJobStatusView;
   niche: { id: string; name: string };
   white: { id: string; label: string; volumeDb: number };
+  useWhiteAudio: boolean;
   compression: ShieldCompressionMode;
   verifyTranscript: boolean;
   input: { filename: string; bytes: number };
@@ -3564,6 +3567,7 @@ interface ShieldJobWire {
   status: ShieldJobStatusView;
   niche: { id: string; name: string };
   white: { id: string; label: string; volume_db: number };
+  use_white_audio?: boolean;
   compression: ShieldCompressionMode;
   verify_transcript: boolean;
   input: { filename: string; bytes: number };
@@ -3582,6 +3586,7 @@ function fromShieldJobWire(w: ShieldJobWire): ShieldJobView {
     status: w.status,
     niche: w.niche,
     white: { id: w.white.id, label: w.white.label, volumeDb: w.white.volume_db },
+    useWhiteAudio: w.use_white_audio ?? true,
     compression: w.compression,
     verifyTranscript: w.verify_transcript,
     input: w.input,

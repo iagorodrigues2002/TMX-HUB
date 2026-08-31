@@ -250,7 +250,8 @@ export const UpdateNicheRequestSchema = z
 
 export const CreateShieldJobBodySchema = z
   .object({
-    niche_id: z.string().min(1).max(64),
+    niche_id: z.string().min(1).max(64).optional(),
+    use_white_audio: z.boolean().optional(),
     white_volume_db: z.number().min(-40).max(-5).optional(),
     compression: ShieldCompressionSchema.optional(),
     verify_transcript: z.boolean().optional(),

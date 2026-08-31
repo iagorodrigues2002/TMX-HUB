@@ -24,6 +24,7 @@ export class ShieldJobStore {
     whiteId: string;
     whiteLabel: string;
     whiteVolumeDb: number;
+    useWhiteAudio: boolean;
     compression: ShieldCompressionMode;
     verifyTranscript: boolean;
   }): Promise<ShieldJob> {
@@ -39,6 +40,7 @@ export class ShieldJobStore {
       whiteId: args.whiteId,
       whiteLabel: args.whiteLabel,
       whiteVolumeDb: args.whiteVolumeDb,
+      useWhiteAudio: args.useWhiteAudio,
       compression: args.compression,
       verifyTranscript: args.verifyTranscript,
       status: 'queued',
@@ -155,6 +157,7 @@ export class ShieldJobStore {
       whiteId: j.whiteId,
       whiteLabel: j.whiteLabel,
       whiteVolumeDb: String(j.whiteVolumeDb),
+      useWhiteAudio: j.useWhiteAudio ? '1' : '0',
       compression: j.compression,
       verifyTranscript: j.verifyTranscript ? '1' : '0',
       status: j.status,
@@ -183,6 +186,8 @@ export class ShieldJobStore {
       whiteId: d.whiteId ?? '',
       whiteLabel: d.whiteLabel ?? '',
       whiteVolumeDb: Number(d.whiteVolumeDb) || -22,
+      // Jobs created before this option always used a white track.
+      useWhiteAudio: d.useWhiteAudio !== '0',
       compression: (d.compression as ShieldCompressionMode) || 'none',
       verifyTranscript: d.verifyTranscript === '1',
       status: (d.status as ShieldJobStatus) || 'queued',
