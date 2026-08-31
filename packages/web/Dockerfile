@@ -16,6 +16,8 @@ RUN pnpm install --frozen-lockfile
 
 # ---- build stage ----
 FROM deps AS build
+ARG TMX_BUILD_REV=20260831-phase-inversion-without-white-audio
+RUN echo "$TMX_BUILD_REV" > /tmp/tmx-build-revision
 COPY packages/shared ./packages/shared
 COPY packages/web ./packages/web
 ENV NEXT_TELEMETRY_DISABLED=1

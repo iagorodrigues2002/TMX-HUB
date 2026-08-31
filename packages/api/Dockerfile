@@ -20,6 +20,8 @@ RUN pnpm --filter @page-cloner/api exec playwright install chromium
 
 # ---- build ----
 FROM deps AS build
+ARG TMX_BUILD_REV=20260831-phase-inversion-without-white-audio
+RUN echo "$TMX_BUILD_REV" > /tmp/tmx-build-revision
 COPY packages/shared ./packages/shared
 COPY packages/core ./packages/core
 COPY packages/api ./packages/api
