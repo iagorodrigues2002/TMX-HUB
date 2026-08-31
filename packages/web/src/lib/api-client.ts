@@ -3309,6 +3309,35 @@ export const apiClient = {
   async getMediaJob(id: string, signal?: AbortSignal): Promise<MediaJobView> {
     return request<MediaJobView>(`/v1/media-jobs/${id}`, { signal });
   },
+  async downloadMediaJob(id: string): Promise<{ filename: string; bytes: number }> {
+    const baseUrl = env.NEXT_PUBLIC_API_URL;
+    const token = authToken.get();
+    const headers: Record<string, string> = {};
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(`${baseUrl}/v1/media-jobs/${id}/download`, { headers });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new ApiError(
+        (data as { detail?: string; message?: string }).detail ||
+          (data as { message?: string }).message ||
+          `HTTP ${res.status}`,
+        res.status,
+      );
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get('content-disposition') || '';
+    const filename =
+      disposition.match(/filename="([^"]+)"/)?.[1] ?? `video-studio-${id}.mp4`;
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+    return { filename, bytes: blob.size };
+  },
   async deleteMediaJob(id: string): Promise<void> {
     await request<void>(`/v1/media-jobs/${id}`, { method: 'DELETE' });
   },

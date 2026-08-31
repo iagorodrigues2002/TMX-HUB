@@ -87,6 +87,7 @@ export function CreativeStudio({
   const [isUploading, setIsUploading] = useState(false);
   const [selectedJobs, setSelectedJobs] = useState<Set<string>>(new Set());
   const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadingJobId, setDownloadingJobId] = useState<string | null>(null);
   const [compression, setCompression] = useState<MediaCompressionMode>('balanced');
   const [aspectRatio, setAspectRatio] = useState<MediaAspectRatio>('original');
   const [stripMetadata, setStripMetadata] = useState(true);
@@ -265,6 +266,18 @@ export function CreativeStudio({
       toast.error(error instanceof Error ? error.message : 'Falha ao gerar o ZIP.');
     } finally {
       setIsDownloading(false);
+    }
+  };
+
+  const downloadJob = async (id: string) => {
+    setDownloadingJobId(id);
+    try {
+      await apiClient.downloadMediaJob(id);
+      toast.success('Download iniciado.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao baixar o vídeo.');
+    } finally {
+      setDownloadingJobId(null);
     }
   };
 
@@ -679,12 +692,18 @@ export function CreativeStudio({
               )}
             </div>
             {job.output?.download_url && (
-              <a href={job.output.download_url}>
-                <Button variant="outline">
+              <Button
+                variant="outline"
+                disabled={downloadingJobId === job.id}
+                onClick={() => downloadJob(job.id)}
+              >
+                {downloadingJobId === job.id ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
                   <Download className="mr-2 h-4 w-4" />
-                  Baixar
-                </Button>
-              </a>
+                )}
+                {downloadingJobId === job.id ? 'Baixando…' : 'Baixar'}
+              </Button>
             )}
             <Button
               variant="ghost"

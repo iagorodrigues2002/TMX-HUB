@@ -243,6 +243,23 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     return toWire(job, url);
   });
 
+  app.get<{ Params: { id: string } }>('/media-jobs/:id/download', async (req, reply) => {
+    if (!req.user) throw new BadRequestError('No user attached.');
+    const job = await app.mediaJobStore.assertOwner(req.params.id, req.user.sub);
+    if (job.status !== 'ready' || !job.outputStorageKey) {
+      throw new BadRequestError(`O vídeo ainda não está pronto (status: ${job.status}).`);
+    }
+    const object = await app.storage.getStream(job.outputStorageKey).catch((error) => {
+      throw new NotFoundError(`Falha ao ler o vídeo processado: ${(error as Error).message}`);
+    });
+    const filename = (job.outputFilename || `${job.id}.mp4`).replace(/["\\\r\n]/g, '_');
+    reply.header('content-type', 'video/mp4');
+    reply.header('content-disposition', `attachment; filename="${filename}"`);
+    reply.header('cache-control', 'private, no-store');
+    if (job.outputBytes !== undefined) reply.header('content-length', String(job.outputBytes));
+    return reply.send(object.body);
+  });
+
   app.delete<{ Params: { id: string } }>('/media-jobs/:id', async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');
     const job = await app.mediaJobStore.assertOwner(req.params.id, req.user.sub);
