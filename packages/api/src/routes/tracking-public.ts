@@ -78,6 +78,14 @@ type EntryRedirectRequest = FastifyRequest<{
 }>;
 
 const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex');
+
+async function provisionYoutubeRewardsAccount(input: { email: string; name?: string | null; transactionId: string }) {
+  if (!env.YOUTUBE_REWARDS_WEBHOOK_URL || !env.YOUTUBE_REWARDS_WEBHOOK_SECRET) return;
+  const headers: Record<string, string> = { 'content-type': 'application/json', 'x-tmxhub-secret': env.YOUTUBE_REWARDS_WEBHOOK_SECRET };
+  if (env.YOUTUBE_REWARDS_SITE_BYPASS_TOKEN) headers.authorization = `Bearer ${env.YOUTUBE_REWARDS_SITE_BYPASS_TOKEN}`;
+  const response = await fetch(env.YOUTUBE_REWARDS_WEBHOOK_URL, { method: 'POST', headers, body: JSON.stringify({ offer: 'PJR_ENG', status: 'paid', email: input.email, name: input.name, transactionId: input.transactionId }), signal: AbortSignal.timeout(8000) });
+  if (!response.ok) throw new Error(`YouTube Rewards provisioning failed with HTTP ${response.status}`);
+}
 const transparentGif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==', 'base64');
 const attributionQueryKeys = new Set([
   'utm_source',
@@ -1670,6 +1678,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           app.pushcutQueue.add('send', { deliveryId }),
         ),
       );
+      if (outcome.inserted && funnelName?.trim().toUpperCase() === 'PJR_ENG' && normalized.kind === 'processable' && normalized.event.status === 'paid' && normalized.event.buyer.email) {
+        provisionYoutubeRewardsAccount({ email: normalized.event.buyer.email, name: normalized.event.buyer.name, transactionId: normalized.event.transactionId }).catch((error) => req.log.error({ error, transactionId: normalized.event.transactionId }, 'youtube rewards account provisioning failed'));
+      }
       return reply.code(outcome.inserted ? 202 : 200).send({
         accepted: true,
         receipt_id: receiptId,
