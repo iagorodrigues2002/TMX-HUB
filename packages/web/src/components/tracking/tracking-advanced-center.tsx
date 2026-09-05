@@ -105,6 +105,7 @@ function ValidatedUpsellLink({
   link: {
     stage_id: string;
     name: string;
+    already_purchased: boolean;
     url: string;
     force_url: string | null;
     manual_result: 'worked' | 'failed' | null;
@@ -119,7 +120,7 @@ function ValidatedUpsellLink({
     refetchOnMount: 'always',
     refetchInterval: 60_000,
     retry: 1,
-    enabled: !link.force_url,
+    enabled: !link.force_url && !link.already_purchased,
   });
   const saveResult = useMutation({
     mutationFn: (result: 'worked' | 'failed') =>
@@ -168,6 +169,16 @@ function ValidatedUpsellLink({
       )}
     </div>
   );
+  if (link.already_purchased) {
+    return (
+      <span
+        title="A VendePay já consumiu esta oferta para este comprador; o botão não pode ser carregado novamente."
+        className="rounded-md border border-violet-300/25 bg-violet-300/[0.08] px-2.5 py-1.5 text-violet-100"
+      >
+        {link.name} · já comprado
+      </span>
+    );
+  }
   if (link.force_url) {
     return withManualResult(
       <a

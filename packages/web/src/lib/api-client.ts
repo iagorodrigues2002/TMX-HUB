@@ -2468,6 +2468,7 @@ export const apiClient = {
         stage_id: string;
         stage_key: UpsellStageKey;
         name: string;
+        already_purchased: boolean;
         url: string;
         force_url: string | null;
         manual_result: 'worked' | 'failed' | null;
@@ -2515,7 +2516,11 @@ export const apiClient = {
     );
   },
 
-  async checkTrackingUpsellCompatibility(url: string): Promise<{ compatible: boolean; reason: string | null }> {
+  async checkTrackingUpsellCompatibility(url: string): Promise<{
+    compatible: boolean;
+    state: 'recoverable' | 'already_converted' | 'temporary_failure' | 'definitive_failure';
+    reason: string | null;
+  }> {
     const checkUrl = new URL(url);
     checkUrl.pathname = `${checkUrl.pathname.replace(/\/$/, '')}/check`;
     return request(`${checkUrl.pathname}${checkUrl.search}`);

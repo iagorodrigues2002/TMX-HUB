@@ -434,6 +434,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           connection_name: string;
           confirmed_vendid_encrypted: string | null;
           has_upsell: boolean;
+          purchased_stage_keys: string[];
         }>>`
           SELECT o.id,receipt.payload,o.visitor_id,o.external_id,o.paid_at,
                  o.vendepay_connection_id AS connection_id,
@@ -455,6 +456,26 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                        (o.visitor_id IS NOT NULL AND upsell.visitor_id=o.visitor_id)
                      )
                  ) AS has_upsell
+                 ,ARRAY(
+                   SELECT DISTINCT CASE
+                     WHEN upsell.order_kind='upsell' THEN 'upsell_1'
+                     ELSE upsell.order_kind
+                   END
+                   FROM tracking_orders upsell
+                   WHERE upsell.project_id=o.project_id
+                     AND (upsell.order_kind='upsell' OR upsell.order_kind ~ '^upsell_[2-9][0-9]*$')
+                     AND upsell.paid_at IS NOT NULL
+                     AND (
+                       (NULLIF(lower(trim(o.buyer->>'email')),'') IS NOT NULL
+                         AND lower(trim(upsell.buyer->>'email'))=lower(trim(o.buyer->>'email')))
+                       OR
+                       (NULLIF(regexp_replace(o.buyer->>'phone','\D','','g'),'') IS NOT NULL
+                         AND regexp_replace(upsell.buyer->>'phone','\D','','g')=
+                             regexp_replace(o.buyer->>'phone','\D','','g'))
+                       OR
+                       (o.visitor_id IS NOT NULL AND upsell.visitor_id=o.visitor_id)
+                     )
+                 ) AS purchased_stage_keys
           FROM tracking_orders o
           LEFT JOIN vendepay_connections vc ON vc.id=o.vendepay_connection_id
           LEFT JOIN LATERAL (
@@ -576,6 +597,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                   stage_id: stage.id,
                   stage_key: stage.stage_key,
                   name: stage.name,
+                  already_purchased: receipt.purchased_stage_keys.includes(stage.stage_key),
                   url: validatedLink.toString(),
                   force_url: null,
                   manual_result: manualResult?.result ?? null,

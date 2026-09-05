@@ -8,7 +8,10 @@ import { encryptSecret } from '../lib/secret-box.js';
 import { createTrackingToken, readTrackingToken } from '../lib/tracking-token.js';
 import { convertToBrlMinor } from '../services/exchange-rate.js';
 import { buildTrackerScript } from '../services/tracker-script.js';
-import { checkUpsellCompatibility } from '../services/upsell-compatibility.js';
+import {
+  checkUpsellCompatibility,
+  checkUpsellCompatibilityDetailed,
+} from '../services/upsell-compatibility.js';
 
 const EventSchema = z.object({
   public_key: z.string().min(16).max(128),
@@ -1003,11 +1006,16 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!destinationUrl) {
         return reply.code(200).send({ compatible: false, reason: 'account_not_configured' });
       }
-      const compatible =
-        (await hasConfirmedUpsellIdentity(stage.project_id, vendaId)) ||
-        (await checkUpsellCompatibility(destinationUrl, vendaId));
+      // A confirmed front vendaId proves ownership, not that every upsell intent
+      // is still usable. Vendepay consumes/removes an intent after conversion and
+      // also rejects IDs that belong to another checkout funnel.
+      const result = await checkUpsellCompatibilityDetailed(destinationUrl, vendaId);
       reply.header('cache-control', 'private, max-age=300');
-      return { compatible, reason: compatible ? null : 'vendepay_not_eligible' };
+      return {
+        compatible: result.compatible && result.state === 'recoverable',
+        state: result.state,
+        reason: result.reason,
+      };
     },
   );
 
@@ -1039,17 +1047,17 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (
         requestedVendaId &&
         req.query.force !== '1' &&
-        !(await hasConfirmedUpsellIdentity(stage.project_id, requestedVendaId))
+        requestedVendaId
       ) {
         // Never trust the preview cache for the actual navigation. Confirm the
         // Vendepay intent again at click time so a stale positive cannot send
         // the operator to a widget that is currently unavailable.
-        const compatible = await checkUpsellCompatibility(
+        const result = await checkUpsellCompatibilityDetailed(
           destinationUrl,
           requestedVendaId,
           true,
         );
-        if (!compatible) {
+        if (!result.compatible || result.state !== 'recoverable') {
           return reply
             .code(422)
             .type('text/html; charset=utf-8')
