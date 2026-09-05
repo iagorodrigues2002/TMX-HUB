@@ -14,6 +14,7 @@ import routes from './routes/index.js';
 import { normalizeVendepay } from './integrations/vendepay/normalize.js';
 import { convertToBrlMinor } from './services/exchange-rate.js';
 import { runRecoveryEmailAutomation } from './services/recovery-automation.js';
+import { runVturbDeliveries } from './services/vturb.js';
 import { createBundleWorker } from './workers/bundle.worker.js';
 import { createFunnelWorker } from './workers/funnel.worker.js';
 import { createMediaWorker } from './workers/media.worker.js';
@@ -272,6 +273,27 @@ async function main() {
     );
   }, 30_000);
   emailRecoveryTimer.unref();
+
+  let vturbRunning = false;
+  const runVturb = async () => {
+    if (vturbRunning || !app.db) return;
+    vturbRunning = true;
+    try {
+      const result = await runVturbDeliveries(app.db);
+      if (result.queued || result.sent || result.failed)
+        app.log.info(result, 'vturb conversion delivery cycle completed');
+    } finally {
+      vturbRunning = false;
+    }
+  };
+  const vturbStartupTimer = setTimeout(() => {
+    void runVturb().catch((error) => app.log.error({ error }, 'initial vturb delivery failed'));
+  }, 3_000);
+  vturbStartupTimer.unref();
+  const vturbTimer = setInterval(() => {
+    void runVturb().catch((error) => app.log.error({ error }, 'vturb delivery cycle failed'));
+  }, 30_000);
+  vturbTimer.unref();
 
   // NOTE(workers): For dev simplicity we run the workers in the same Node
   // process as the HTTP server. In production these should run as separate

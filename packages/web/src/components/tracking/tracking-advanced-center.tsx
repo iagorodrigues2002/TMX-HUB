@@ -15,6 +15,8 @@ import { cn } from '@/lib/utils';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   BarChart3,
+  Activity,
+  AlertTriangle,
   BellRing,
   Braces,
   Cable,
@@ -26,6 +28,10 @@ import {
   Layers3,
   Megaphone,
   Percent,
+  PlayCircle,
+  Eye,
+  MousePointerClick,
+  Clock3,
   Pencil,
   Plus,
   RadioTower,
@@ -213,6 +219,165 @@ function Metric({ label, value }: { label: string; value: string | number }) {
     <div className="rounded-lg border border-white/[0.07] bg-white/[0.025] p-3">
       <p className="text-[10px] uppercase tracking-wider text-white/35">{label}</p>
       <p className="mono-num mt-1 text-base font-semibold text-white/85">{value}</p>
+    </div>
+  );
+}
+
+function formatDuration(seconds = 0) {
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}:${String(Math.max(0, Math.round(seconds % 60))).padStart(2, '0')}`;
+}
+
+function VturbIntelligence({
+  offerId,
+  canManage,
+  from,
+  to,
+  config,
+}: {
+  offerId: string;
+  canManage: boolean;
+  from: string;
+  to: string;
+  config?: {
+    enabled: boolean;
+    endpoint_url?: string;
+    player_id?: string;
+    conversion_param?: string;
+    analytics_token_configured?: boolean;
+    last_validated_at?: string;
+    last_error?: string;
+  };
+}) {
+  const qc = useQueryClient();
+  const [token, setToken] = useState('');
+  const [endpoint, setEndpoint] = useState(config?.endpoint_url ?? '');
+  const [playerId, setPlayerId] = useState(config?.player_id ?? '');
+  const [conversionParam, setConversionParam] = useState(config?.conversion_param ?? 'vtid');
+  useEffect(() => {
+    setEndpoint(config?.endpoint_url ?? '');
+    setPlayerId(config?.player_id ?? '');
+    setConversionParam(config?.conversion_param ?? 'vtid');
+  }, [config?.endpoint_url, config?.player_id, config?.conversion_param]);
+  const players = useQuery({
+    queryKey: ['vturb-players', offerId],
+    queryFn: () => apiClient.getVturbPlayers(offerId),
+    enabled: Boolean(config?.analytics_token_configured),
+    retry: 1,
+  });
+  const selectedPlayerId = playerId || config?.player_id || '';
+  const analytics = useQuery({
+    queryKey: ['vturb-analytics', offerId, selectedPlayerId, from, to],
+    queryFn: () => apiClient.getVturbAnalytics(offerId, { from, to }, selectedPlayerId),
+    enabled: Boolean(config?.analytics_token_configured && selectedPlayerId),
+    retry: 1,
+  });
+  const save = useMutation({
+    mutationFn: () => apiClient.saveVturbIntegration(offerId, {
+      enabled: true,
+      analytics_api_token: token.trim() || undefined,
+      endpoint_url: endpoint.trim(),
+      player_id: playerId || null,
+      conversion_param: conversionParam,
+    }),
+    onSuccess: (result) => {
+      setToken('');
+      if (!playerId && result.players[0]) setPlayerId(result.players[0].id);
+      void qc.invalidateQueries({ queryKey: ['tracking-advanced', offerId] });
+      void qc.invalidateQueries({ queryKey: ['vturb-players', offerId] });
+      toast.success('VTurb validada e vinculada à oferta.');
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
+  const countries = analytics.data?.countries ?? [];
+  const sum = (field: keyof (typeof countries)[number]) => countries.reduce((total, row) => total + Number(row[field] ?? 0), 0);
+  const views = sum('total_viewed_device_uniq');
+  const plays = sum('total_started_device_uniq');
+  const pitchAudience = sum('total_over_pitch');
+  const clicks = sum('total_clicked_device_uniq');
+  const conversions = sum('total_conversions');
+  const pitchRate = plays ? (pitchAudience / plays) * 100 : 0;
+  const curve = analytics.data?.engagement?.grouped_timed ?? [];
+  const maxCurve = Math.max(1, ...curve.map((point) => point.total_users));
+
+  return (
+    <div className="space-y-5">
+      <div className="relative overflow-hidden rounded-2xl border border-cyan-300/20 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.12),transparent_38%),linear-gradient(135deg,rgba(6,25,31,0.96),rgba(3,12,17,0.98))] p-5">
+        <div className="absolute inset-0 opacity-25 [background-image:linear-gradient(rgba(34,211,238,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,.08)_1px,transparent_1px)] [background-size:24px_24px]" />
+        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-cyan-200"><Activity size={17} /><span className="text-[10px] font-semibold uppercase tracking-[.28em]">VTurb Intelligence</span></div>
+            <h3 className="mt-2 text-xl font-semibold text-white">A VSL conectada à receita da oferta</h3>
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-white/48">Descubra onde o público abandona, quantos chegam ao pitch e quais países transformam atenção em venda.</p>
+          </div>
+          <div className={cn('rounded-full border px-3 py-1.5 text-xs', config?.last_error ? 'border-rose-300/30 bg-rose-300/10 text-rose-200' : config?.analytics_token_configured ? 'border-emerald-300/30 bg-emerald-300/10 text-emerald-200' : 'border-amber-300/30 bg-amber-300/10 text-amber-200')}>
+            {config?.last_error ? 'Integração com alerta' : config?.analytics_token_configured ? 'API conectada' : 'Configuração necessária'}
+          </div>
+        </div>
+      </div>
+
+      {canManage && (
+        <div className="grid gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4 lg:grid-cols-2">
+          <label className="text-[10px] uppercase tracking-wider text-white/40">Chave da API Analytics
+            <Input className="mt-2" type="password" value={token} onChange={(event) => setToken(event.target.value)} placeholder={config?.analytics_token_configured ? '•••••••• salva — preencha apenas para trocar' : 'Cole a chave da VTurb'} />
+          </label>
+          <label className="text-[10px] uppercase tracking-wider text-white/40">VSL desta oferta
+            <select className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#071820] px-3 text-sm text-white outline-none focus:border-cyan-300/50" value={playerId} onChange={(event) => setPlayerId(event.target.value)}>
+              <option value="">Selecione a VSL</option>
+              {players.data?.players.map((player) => <option key={player.id} value={player.id}>{player.name} · pitch {formatDuration(player.pitch_time)}</option>)}
+            </select>
+          </label>
+          <label className="text-[10px] uppercase tracking-wider text-white/40">Webhook de conversão gerado pela VTurb
+            <Input className="mt-2" value={endpoint} onChange={(event) => setEndpoint(event.target.value)} placeholder="https://tracker.vturb.com/conversions/make?t=..." />
+          </label>
+          <label className="text-[10px] uppercase tracking-wider text-white/40">Parâmetro da Conversion Key
+            <select className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#071820] px-3 text-sm text-white outline-none focus:border-cyan-300/50" value={conversionParam} onChange={(event) => setConversionParam(event.target.value)}>
+              {['vtid','sck','sid','src','subid','xcod',...Array.from({ length: 20 }, (_, index) => `sub${index + 1}`)].map((value) => <option key={value} value={value}>{value}</option>)}
+            </select>
+          </label>
+          <div className="lg:col-span-2 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-cyan-300/10 bg-cyan-300/[0.035] p-3 text-xs text-white/45">
+            <span>O mesmo parâmetro deve ser selecionado no rastreamento da VTurb. O TMX preserva a chave <code className="text-cyan-200">v3_…</code> até o webhook da VendePay.</span>
+            <Button onClick={() => save.mutate()} disabled={save.isPending || (!token.trim() && !config?.analytics_token_configured)}>{save.isPending ? 'Validando…' : 'Validar e salvar'}</Button>
+          </div>
+        </div>
+      )}
+
+      {selectedPlayerId && (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+            <Metric label="Visualizações" value={views.toLocaleString('pt-BR')} />
+            <Metric label="Plays" value={plays.toLocaleString('pt-BR')} />
+            <Metric label="Tempo do pitch" value={formatDuration(analytics.data?.player.pitch_time)} />
+            <Metric label="Retenção no pitch" value={`${pitchRate.toFixed(1)}%`} />
+            <Metric label="Cliques" value={clicks.toLocaleString('pt-BR')} />
+            <Metric label="Conversões VTurb" value={conversions.toLocaleString('pt-BR')} />
+          </div>
+          <div className="grid gap-4 xl:grid-cols-[1.35fr_.65fr]">
+            <div className="rounded-2xl border border-white/[0.08] bg-[#06151b]/80 p-4">
+              <div className="flex items-center justify-between"><div><p className="text-sm font-medium text-white/85">Curva de retenção</p><p className="text-xs text-white/35">O marcador mostra o momento do pitch.</p></div><span className="rounded-full bg-cyan-300/10 px-3 py-1 text-xs text-cyan-200">média {Number(analytics.data?.engagement?.engagement_rate ?? 0).toFixed(1)}%</span></div>
+              <div className="relative mt-6 flex h-44 items-end gap-px overflow-hidden rounded-xl border border-white/[0.06] bg-black/15 p-3">
+                {curve.filter((_, index) => index % Math.max(1, Math.floor(curve.length / 90)) === 0).map((point) => <div key={point.timed} title={`${formatDuration(point.timed)} · ${point.total_users}`} className="min-w-[2px] flex-1 rounded-t bg-gradient-to-t from-cyan-500/35 to-emerald-300/90" style={{ height: `${Math.max(2, (point.total_users / maxCurve) * 100)}%` }} />)}
+                {analytics.data?.player.duration ? <div className="absolute bottom-3 top-3 w-px bg-amber-300 shadow-[0_0_12px_rgba(252,211,77,.7)]" style={{ left: `${Math.min(100, (analytics.data.player.pitch_time / analytics.data.player.duration) * 100)}%` }}><span className="absolute -top-5 -translate-x-1/2 whitespace-nowrap text-[9px] uppercase tracking-wider text-amber-200">pitch</span></div> : null}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-white/[0.08] bg-[#06151b]/80 p-4">
+              <p className="text-sm font-medium text-white/85">Diagnóstico rápido</p>
+              <div className="mt-4 space-y-3 text-xs text-white/50">
+                <div className="flex gap-3"><PlayCircle className="text-cyan-300" size={17}/><span>Play rate: <strong className="text-white/85">{views ? ((plays / views) * 100).toFixed(1) : '0.0'}%</strong></span></div>
+                <div className="flex gap-3"><Clock3 className="text-amber-300" size={17}/><span>Tempo médio: <strong className="text-white/85">{formatDuration(analytics.data?.engagement?.average_watched_time)}</strong></span></div>
+                <div className="flex gap-3"><MousePointerClick className="text-emerald-300" size={17}/><span>CTR por play: <strong className="text-white/85">{plays ? ((clicks / plays) * 100).toFixed(1) : '0.0'}%</strong></span></div>
+                {pitchRate < 20 && plays > 20 ? <div className="flex gap-3 rounded-lg border border-rose-300/20 bg-rose-300/[0.06] p-3 text-rose-100/80"><AlertTriangle size={17}/><span>Poucos espectadores chegam ao pitch. Avalie antecipar a oferta ou fortalecer a abertura.</span></div> : null}
+              </div>
+            </div>
+          </div>
+          <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#06151b]/80">
+            <div className="flex items-center gap-2 border-b border-white/[0.07] p-4"><Eye size={16} className="text-cyan-300"/><div><p className="text-sm font-medium text-white/85">Performance por país</p><p className="text-xs text-white/35">Retenção, intenção e receita lado a lado.</p></div></div>
+            <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-xs"><thead className="text-[9px] uppercase tracking-wider text-white/30"><tr>{['País','Views','Play rate','Retenção pitch','Engajamento','Cliques','Conversões','Receita'].map((label) => <th key={label} className="px-4 py-3 font-medium">{label}</th>)}</tr></thead><tbody>{countries.map((country) => <tr key={country.grouped_field} className="border-t border-white/[0.05] text-white/65"><td className="px-4 py-3 font-medium text-white/85">{country.grouped_field}</td><td className="px-4 py-3">{country.total_viewed_device_uniq}</td><td className="px-4 py-3">{Number(country.play_rate).toFixed(1)}%</td><td className={cn('px-4 py-3', Number(country.over_pitch_rate) < 20 && 'text-rose-300')}>{Number(country.over_pitch_rate).toFixed(1)}%</td><td className="px-4 py-3">{Number(country.engagement_rate).toFixed(1)}%</td><td className="px-4 py-3">{country.total_clicked_device_uniq}</td><td className="px-4 py-3 text-emerald-200">{country.total_conversions}</td><td className="px-4 py-3">{country.total_amount_brl ? formatMoney(country.total_amount_brl * 100, 'BRL') : country.total_amount_usd ? formatMoney(country.total_amount_usd * 100, 'USD') : '—'}</td></tr>)}</tbody></table></div>
+          </div>
+        </>
+      )}
+      {analytics.isLoading && <div className="rounded-xl border border-cyan-300/10 p-6 text-center text-sm text-cyan-100/55">Sincronizando inteligência da VSL…</div>}
+      {analytics.isError && <div className="rounded-xl border border-rose-300/20 bg-rose-300/[0.05] p-4 text-sm text-rose-200">{(analytics.error as Error).message}</div>}
     </div>
   );
 }
@@ -3444,19 +3609,16 @@ export function TrackingAdvancedCenter({
           )}
           {section === 'vturb' && (
             <Module
-              title="Conversões vTurb"
-              description="Central de reenvio de vendas para recuperar a atribuição da vTurb."
+              title="VTurb Intelligence"
+              description="Retenção da VSL, pitch, países e conversões conectados à oferta."
             >
-              <div className="rounded border border-white/[0.07] p-4 text-sm text-white/55">
-                Estado:{' '}
-                <span className="text-amber-300">
-                  {advanced.data?.vturb?.enabled ? 'enviando' : 'aguardando configuração'}
-                </span>
-                <p className="mt-2 text-xs text-white/35">
-                  As vendas seguem o ciclo recebida → ID capturado → enviada, com tentativas
-                  registradas.
-                </p>
-              </div>
+              <VturbIntelligence
+                offerId={offerId}
+                canManage={canManage}
+                from={trackingFrom}
+                to={trackingTo}
+                config={advanced.data?.vturb}
+              />
             </Module>
           )}
         </div>

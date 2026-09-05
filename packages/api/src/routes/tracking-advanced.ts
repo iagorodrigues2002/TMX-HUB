@@ -19,6 +19,7 @@ import {
   checkUpsellCompatibility,
   checkUpsellCompatibilityDetailed,
 } from '../services/upsell-compatibility.js';
+import { vturbAnalyticsRequest } from '../services/vturb.js';
 
 const databaseUnavailable = {
   error: 'tracking_database_unavailable',
@@ -131,6 +132,13 @@ const EntryLinkAbSchema = z.object({
     )
     .length(2),
 });
+const VturbConfigSchema = z.object({
+  enabled: z.boolean(),
+  analytics_api_token: z.string().trim().min(20).max(512).optional(),
+  endpoint_url: z.string().url().max(2048).optional().or(z.literal('')),
+  player_id: z.string().trim().max(128).optional().nullable(),
+  conversion_param: z.string().trim().regex(/^[a-zA-Z0-9_]{1,32}$/).default('vtid'),
+});
 const ProductKindSchema = z.object({
   product_id: z.string().trim().min(1).max(256),
   kind: z.string().regex(/^(front|upsell|upsell_[2-9][0-9]*)$/),
@@ -203,7 +211,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         FROM tracking_entry_links
         WHERE project_id=${p.id}
         ORDER BY created_at DESC`,
-        app.db`SELECT enabled, endpoint_url, updated_at FROM vturb_integrations WHERE project_id=${p.id}`,
+        app.db`SELECT enabled, endpoint_url, player_id, conversion_param,
+                    (analytics_token_encrypted IS NOT NULL) AS analytics_token_configured,
+                    last_validated_at,last_error,updated_at
+               FROM vturb_integrations WHERE project_id=${p.id}`,
       ]);
     return {
       configured: true,
@@ -234,6 +245,91 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       vturb: vturb[0] ?? { enabled: false, endpoint_url: null },
     };
   });
+
+  app.patch<{ Params: { id: string }; Body: unknown }>(
+    '/offers/:id/tracking/vturb',
+    async (req, reply) => {
+      const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin', true);
+      if (!app.db) return reply.code(503).send(databaseUnavailable);
+      if (!p) return reply.code(404).send({ error: 'tracking_not_configured' });
+      if (!env.TRACKING_ENCRYPTION_KEY)
+        return reply.code(503).send({ error: 'tracking_encryption_unavailable' });
+      const value = parsed(VturbConfigSchema, req.body);
+      if (value.endpoint_url) {
+        const endpoint = new URL(value.endpoint_url);
+        if (endpoint.protocol !== 'https:' || endpoint.hostname !== 'tracker.vturb.com')
+          return reply.code(422).send({ error: 'vturb_endpoint_invalid', detail: 'Use o webhook HTTPS gerado em tracker.vturb.com.' });
+      }
+      const [existing] = await app.db<Array<{ analytics_token_encrypted: string | null }>>`
+        SELECT analytics_token_encrypted FROM vturb_integrations WHERE project_id=${p.id}
+      `;
+      if (!value.analytics_api_token && !existing?.analytics_token_encrypted)
+        return reply.code(422).send({ error: 'vturb_api_token_required' });
+      const encryptedToken = value.analytics_api_token
+        ? encryptSecret(value.analytics_api_token, env.TRACKING_ENCRYPTION_KEY)
+        : existing!.analytics_token_encrypted;
+      let players: Array<{ id: string; name: string; pitch_time: number; duration: number }> = [];
+      try {
+        players = await vturbAnalyticsRequest(value.analytics_api_token ?? decryptSecret(encryptedToken!, env.TRACKING_ENCRYPTION_KEY), '/players/list?timezone=America%2FSao_Paulo');
+      } catch (error) {
+        return reply.code(422).send({ error: 'vturb_validation_failed', detail: error instanceof Error ? error.message : String(error) });
+      }
+      if (value.player_id && !players.some((player) => player.id === value.player_id))
+        return reply.code(422).send({ error: 'vturb_player_not_found' });
+      await app.db`
+        INSERT INTO vturb_integrations(project_id,enabled,endpoint_url,analytics_token_encrypted,player_id,conversion_param,last_validated_at,last_error)
+        VALUES(${p.id},${value.enabled},${value.endpoint_url || null},${encryptedToken},${value.player_id || null},${value.conversion_param ?? 'vtid'},now(),NULL)
+        ON CONFLICT(project_id) DO UPDATE SET enabled=EXCLUDED.enabled,endpoint_url=EXCLUDED.endpoint_url,
+          analytics_token_encrypted=EXCLUDED.analytics_token_encrypted,player_id=EXCLUDED.player_id,
+          conversion_param=EXCLUDED.conversion_param,last_validated_at=now(),last_error=NULL,updated_at=now()
+      `;
+      return { ok: true, players };
+    },
+  );
+
+  app.get<{ Params: { id: string } }>('/offers/:id/tracking/vturb/players', async (req, reply) => {
+    const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin');
+    if (!app.db) return reply.code(503).send(databaseUnavailable);
+    if (!p || !env.TRACKING_ENCRYPTION_KEY) return reply.code(404).send({ error: 'vturb_not_configured' });
+    const [integration] = await app.db<Array<{ analytics_token_encrypted: string | null; player_id: string | null }>>`
+      SELECT analytics_token_encrypted,player_id FROM vturb_integrations WHERE project_id=${p.id}
+    `;
+    if (!integration?.analytics_token_encrypted) return { players: [], selected_player_id: null };
+    const token = decryptSecret(integration.analytics_token_encrypted, env.TRACKING_ENCRYPTION_KEY);
+    const players = await vturbAnalyticsRequest(token, '/players/list?timezone=America%2FSao_Paulo');
+    return { players, selected_player_id: integration.player_id };
+  });
+
+  app.get<{ Params: { id: string }; Querystring: { from?: string; to?: string; player_id?: string } }>(
+    '/offers/:id/tracking/vturb/analytics',
+    async (req, reply) => {
+      const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin');
+      if (!app.db) return reply.code(503).send(databaseUnavailable);
+      if (!p || !env.TRACKING_ENCRYPTION_KEY) return reply.code(404).send({ error: 'vturb_not_configured' });
+      const [integration] = await app.db<Array<{ analytics_token_encrypted: string | null; player_id: string | null }>>`
+        SELECT analytics_token_encrypted,player_id FROM vturb_integrations WHERE project_id=${p.id}
+      `;
+      if (!integration?.analytics_token_encrypted) return reply.code(422).send({ error: 'vturb_api_token_required' });
+      const token = decryptSecret(integration.analytics_token_encrypted, env.TRACKING_ENCRYPTION_KEY);
+      const players = await vturbAnalyticsRequest<Array<{ id: string; name: string; pitch_time: number; duration: number }>>(token, '/players/list?timezone=America%2FSao_Paulo');
+      const playerId = req.query.player_id || integration.player_id;
+      const player = players.find((item) => item.id === playerId);
+      if (!player) return reply.code(422).send({ error: 'vturb_player_required' });
+      const validDate = (value: string | undefined, fallback: string) => /^\d{4}-\d{2}-\d{2}$/.test(value ?? '') ? value! : fallback;
+      const today = saoPauloParts(new Date()).date;
+      const from = validDate(req.query.from, today);
+      const to = validDate(req.query.to, today);
+      const body = { player_id: player.id, start_date: `${from} 00:00:00`, end_date: `${to} 23:59:59`, video_duration: player.duration, pitch_time: player.pitch_time, timezone: 'America/Sao_Paulo' };
+      const [overallRows, countries, engagement, clicks, conversions] = await Promise.all([
+        vturbAnalyticsRequest<unknown[]>(token, '/sessions/stats', body),
+        vturbAnalyticsRequest<unknown[]>(token, '/sessions/stats_by_field', { ...body, field: 'country' }),
+        vturbAnalyticsRequest<Record<string, unknown>>(token, '/times/user_engagement', body),
+        vturbAnalyticsRequest<unknown[]>(token, '/clicks/total_by_company_timed', body),
+        vturbAnalyticsRequest<Record<string, unknown>>(token, '/conversions/stats_by_day', body),
+      ]);
+      return { player, period: { from, to }, overall: Array.isArray(overallRows) ? overallRows[0] ?? {} : overallRows, countries, engagement, clicks, conversions };
+    },
+  );
 
   app.get<{ Params: { id: string }; Querystring: { from?: string; to?: string } }>(
     '/offers/:id/tracking/upsells',

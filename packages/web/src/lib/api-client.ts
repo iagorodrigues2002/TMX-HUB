@@ -23,6 +23,36 @@ import { ApiError } from './query-client.js';
 
 export type UpsellStageKey = `upsell_${number}`;
 export type TrackingProductKind = 'front' | 'upsell' | `upsell_${number}`;
+export type VturbPlayer = {
+  id: string;
+  name: string;
+  pitch_time: number;
+  duration: number;
+  created_at?: string;
+};
+export type VturbCountryMetric = {
+  grouped_field: string;
+  total_viewed_device_uniq: number;
+  total_started_device_uniq: number;
+  total_clicked_device_uniq: number;
+  engagement_rate: number;
+  total_over_pitch: number;
+  over_pitch_rate: number;
+  total_conversions: number;
+  overall_conversion_rate: number;
+  total_amount_brl: number;
+  total_amount_usd: number;
+  play_rate: number;
+};
+export type VturbAnalytics = {
+  player: VturbPlayer;
+  period: { from: string; to: string };
+  overall: Record<string, number>;
+  countries: VturbCountryMetric[];
+  engagement: { average_watched_time?: number; engagement_rate?: number; grouped_timed?: Array<{ timed: number; total_users: number }> };
+  clicks: Array<{ timed: number; total_users: number }>;
+  conversions: Record<string, unknown>;
+};
 export type TrackingOrderKind = TrackingProductKind | 'unknown';
 
 // The API uses snake_case in the wire format per OpenAPI; shared types use
@@ -2212,10 +2242,38 @@ export const apiClient = {
       created_at: string;
       updated_at: string;
     }>;
-    vturb: { enabled: boolean; endpoint_url?: string };
+    vturb: {
+      enabled: boolean;
+      endpoint_url?: string;
+      player_id?: string;
+      conversion_param?: string;
+      analytics_token_configured?: boolean;
+      last_validated_at?: string;
+      last_error?: string;
+    };
     domain_setup: { record_type: 'CNAME'; target: string; note: string };
   }> {
     return request(`/v1/offers/${id}/tracking/advanced`);
+  },
+
+  async saveVturbIntegration(id: string, body: {
+    enabled: boolean;
+    analytics_api_token?: string;
+    endpoint_url?: string;
+    player_id?: string | null;
+    conversion_param: string;
+  }): Promise<{ ok: boolean; players: VturbPlayer[] }> {
+    return request(`/v1/offers/${id}/tracking/vturb`, { method: 'PATCH', body });
+  },
+
+  async getVturbPlayers(id: string): Promise<{ players: VturbPlayer[]; selected_player_id: string | null }> {
+    return request(`/v1/offers/${id}/tracking/vturb/players`);
+  },
+
+  async getVturbAnalytics(id: string, period: { from: string; to: string }, playerId?: string): Promise<VturbAnalytics> {
+    const params = new URLSearchParams({ from: period.from, to: period.to });
+    if (playerId) params.set('player_id', playerId);
+    return request(`/v1/offers/${id}/tracking/vturb/analytics?${params.toString()}`);
   },
 
   async addTrackingDomain(
