@@ -37,6 +37,7 @@ describe('reliable tracking foundation', () => {
     expect(script).toContain('connect.facebook.net');
     expect(script).toContain('123456789');
     expect(script).toContain('campaign_id');
+    expect(script).toContain('vtid');
     expect(script).toContain('adset_id');
     expect(script).toContain('ad_id');
     expect(script).toContain('_fbclid_ts');
@@ -64,6 +65,8 @@ describe('reliable tracking foundation', () => {
         fbclid: 'click-id',
         _fbp: 'fb.1.browser',
         _fbc: 'fb.1.click-id',
+        vtid: 'v3_session_player_720',
+        sub20: 'v3_fallback_key',
         src: 'signed-tracking-token',
         unknown: 'discarded',
       }),
@@ -77,6 +80,8 @@ describe('reliable tracking foundation', () => {
       fbclid: 'click-id',
       _fbp: 'fb.1.browser',
       _fbc: 'fb.1.click-id',
+      vtid: 'v3_session_player_720',
+      sub20: 'v3_fallback_key',
     });
   });
 
