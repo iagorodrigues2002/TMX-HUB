@@ -1394,34 +1394,6 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
               `
           : [];
         attributedVisitorId ??= parentFront?.visitor_id ?? null;
-        // Vendepay's front-sale UUID is also the vendid accepted by its upsell
-        // iframe. Some accounts omit an explicit vendid field in webhooks.
-        const effectiveVendid =
-          event.vendid ??
-          (orderKind === 'front' ? event.transactionId : parentFront?.external_id);
-        if (
-          event.status === 'paid' &&
-          orderKind === 'front' &&
-          effectiveVendid &&
-          env.TRACKING_ENCRYPTION_KEY
-        ) {
-          // A paid gateway order is authoritative even when the browser
-          // journey could not be attributed. Keep its vendaId available for
-          // Upsell Intelligence and reconcile the visitor later if one is
-          // discovered.
-          const identityVisitorId =
-            attributedVisitorId ?? `vendepay:${event.transactionId}`;
-          const vendidHash = createHash('sha256').update(effectiveVendid).digest('hex');
-          await sql`
-            INSERT INTO tracking_upsell_identities
-              (id,project_id,visitor_id,vendid_hash,vendid_encrypted,vendepay_connection_id)
-            VALUES(${ulid()},${connection.project_id},${identityVisitorId},${vendidHash},
-              ${encryptSecret(effectiveVendid, env.TRACKING_ENCRYPTION_KEY)},${connection.id})
-            ON CONFLICT(project_id,vendid_hash) DO UPDATE SET
-              visitor_id=EXCLUDED.visitor_id,
-              vendepay_connection_id=EXCLUDED.vendepay_connection_id,last_seen_at=now()
-          `;
-        }
         const [visitorSource] = attributedVisitorId
           ? await sql<
               Array<{ first_source: Record<string, string>; last_source: Record<string, string> }>
@@ -1534,6 +1506,33 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         `;
         if (!order) {
           return { inserted: true, deliveryIds: [], utmifyDeliveryIds: [], pushcutDeliveryIds: [] };
+        }
+        // Only an explicit vendaId/vendid is authoritative at ingestion time.
+        // Generic transaction and checkout UUIDs are validated against the
+        // configured VendePay intent by Upsell Intelligence before storage.
+        if (
+          order.status === 'paid' &&
+          order.order_kind === 'front' &&
+          event.vendid &&
+          env.TRACKING_ENCRYPTION_KEY
+        ) {
+          const identityVisitorId = attributedVisitorId ?? `vendepay:${event.transactionId}`;
+          const vendidHash = createHash('sha256').update(event.vendid).digest('hex');
+          await sql`
+            DELETE FROM tracking_upsell_identities
+            WHERE project_id=${connection.project_id} AND source_order_id=${order.id}
+              AND vendid_hash<>${vendidHash}
+          `;
+          await sql`
+            INSERT INTO tracking_upsell_identities
+              (id,project_id,visitor_id,vendid_hash,vendid_encrypted,source_order_id,
+               vendepay_connection_id)
+            VALUES(${ulid()},${connection.project_id},${identityVisitorId},${vendidHash},
+              ${encryptSecret(event.vendid, env.TRACKING_ENCRYPTION_KEY)},${order.id},${connection.id})
+            ON CONFLICT(project_id,vendid_hash) DO UPDATE SET
+              visitor_id=EXCLUDED.visitor_id,source_order_id=EXCLUDED.source_order_id,
+              vendepay_connection_id=EXCLUDED.vendepay_connection_id,last_seen_at=now()
+          `;
         }
         await sql`
           UPDATE webhook_receipts

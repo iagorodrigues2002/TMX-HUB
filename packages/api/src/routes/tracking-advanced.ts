@@ -20,48 +20,12 @@ import {
   checkUpsellCompatibilityDetailed,
 } from '../services/upsell-compatibility.js';
 import { vturbAnalyticsRequest } from '../services/vturb.js';
+import { collectCheckoutIds, collectVendaIdCandidates } from '../services/vendepay-venda-id.js';
 
 const databaseUnavailable = {
   error: 'tracking_database_unavailable',
   detail: 'A infraestrutura de tracking está temporariamente indisponível.',
 };
-
-const vendaIdCandidateKeys = new Set([
-  'vendid',
-  'vendaid',
-  'venda_id',
-  'checkoutid',
-  'checkout_id',
-  'idepotentialcheckoutid',
-  'potentialcheckoutid',
-]);
-
-function collectVendaIdCandidates(payload: unknown, transactionId?: string): string[] {
-  const candidates: string[] = [];
-  const seen = new Set<string>();
-  const add = (value: unknown) => {
-    if (typeof value !== 'string') return;
-    const candidate = value.trim();
-    if (!candidate || seen.has(candidate)) return;
-    if (!/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(candidate)) return;
-    seen.add(candidate);
-    candidates.push(candidate);
-  };
-  const walk = (value: unknown) => {
-    if (!value || typeof value !== 'object') return;
-    if (Array.isArray(value)) {
-      for (const item of value) walk(item);
-      return;
-    }
-    for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
-      if (vendaIdCandidateKeys.has(key.toLowerCase())) add(nested);
-      walk(nested);
-    }
-  };
-  walk(payload);
-  add(transactionId);
-  return candidates;
-}
 
 const DomainSchema = z.object({
   hostname: z
@@ -423,7 +387,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!env.TRACKING_ENCRYPTION_KEY) {
         return reply.code(503).send({ error: 'tracking_encryption_unavailable' });
       }
-      const [approvedReceipts, stages, storedIdentities, manualResults] = await Promise.all([
+      const [approvedReceipts, stages, manualResults] = await Promise.all([
         app.db<Array<{
           id: string;
           payload: unknown;
@@ -510,9 +474,6 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           WHERE project_id=${p.id} AND enabled=true
           ORDER BY substring(stage_key from '[0-9]+')::int
         `,
-        app.db<Array<{ vendid_hash: string }>>`
-          SELECT vendid_hash FROM tracking_upsell_identities WHERE project_id=${p.id}
-        `,
         app.db<Array<{ order_id: string; stage_id: string; result: 'worked' | 'failed'; checked_at: Date }>>`
           SELECT order_id,stage_id,result,checked_at
           FROM tracking_upsell_manual_test_results
@@ -520,7 +481,6 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         `,
       ]);
       reply.header('cache-control', 'no-store');
-      const confirmedHashes = new Set(storedIdentities.map((identity) => identity.vendid_hash));
       const resultByOrderStage = new Map(
         manualResults.map((result) => [`${result.order_id}:${result.stage_id}`, result] as const),
       );
@@ -531,47 +491,75 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           const receiptMatchesOrder =
             normalizedEvent?.status === 'paid' &&
             normalizedEvent.transactionId === receipt.external_id;
-          // Prefer the explicit vendaId. Vendepay's authoritative full UUID
-          // is also accepted for paid front orders; never accept the short
-          // eight-character code shown in its sales table.
-          let vendid: string | undefined;
+          let storedVendid: string | undefined;
           if (receipt.confirmed_vendid_encrypted) {
             try {
-              vendid = decryptSecret(
+              storedVendid = decryptSecret(
                 receipt.confirmed_vendid_encrypted,
                 env.TRACKING_ENCRYPTION_KEY!,
               );
             } catch {
-              vendid = undefined;
+              storedVendid = undefined;
             }
           }
-          if (!vendid && receiptMatchesOrder) {
+          let vendid: string | undefined;
+          let hadTemporaryFailure = false;
+          let testedCandidate = false;
+          if (receiptMatchesOrder) {
             const candidates = collectVendaIdCandidates(receipt.payload, receipt.external_id);
-            vendid = candidates.find((candidate) =>
-              confirmedHashes.has(createHash('sha256').update(candidate).digest('hex')),
-            ) ?? candidates[0];
+            const checkoutIds = new Set(collectCheckoutIds(receipt.payload));
+            const storedIsCheckoutId = Boolean(storedVendid && checkoutIds.has(storedVendid));
+            // Preserve known-good historic identities. Revalidation is needed
+            // only when the former bug stored a checkout id, or no identity
+            // has been established for this front purchase yet.
+            if (storedVendid && !storedIsCheckoutId) vendid = storedVendid;
+            if (!vendid && normalizedEvent?.vendid) vendid = normalizedEvent.vendid;
+            for (const candidate of vendid ? [] : candidates.filter((id) => !checkoutIds.has(id))) {
+              testedCandidate = true;
+              const checks = await Promise.all(stages.map((stage) => {
+                const destination =
+                  (receipt.connection_id && stage.connection_destinations?.[receipt.connection_id]) ||
+                  stage.destination_url;
+                return checkUpsellCompatibilityDetailed(destination, candidate, false, {
+                  retryDelaysMs: [0],
+                  timeoutMs: 5_000,
+                });
+              }));
+              if (checks.some((check) => check.compatible)) {
+                vendid = candidate;
+                break;
+              }
+              hadTemporaryFailure ||= checks.some((check) => check.state === 'temporary_failure');
+            }
+            // A consumed upsell intent can no longer be validated. In that
+            // case only an explicit vendaId from the paid webhook is trusted;
+            // a checkoutId or other generic UUID never is.
           }
-          // A paid front webhook is authoritative. Persist its full UUID even
-          // when Vendepay's one-time intent has already been consumed or is
-          // temporarily unavailable; otherwise a link that worked earlier is
-          // incorrectly downgraded to "aguardando validação".
           if (vendid && receiptMatchesOrder && receipt.connection_id) {
             const hash = createHash('sha256').update(vendid).digest('hex');
-            if (!confirmedHashes.has(hash)) {
-              const identityVisitorId = receipt.visitor_id ?? `vendepay:${receipt.external_id}`;
-              await db`
-                INSERT INTO tracking_upsell_identities
-                  (id,project_id,visitor_id,vendid_hash,vendid_encrypted,source_order_id,
-                   vendepay_connection_id)
-                VALUES(${ulid()},${p.id},${identityVisitorId},${hash},
-                  ${encryptSecret(vendid, env.TRACKING_ENCRYPTION_KEY!)},${receipt.id},
-                  ${receipt.connection_id})
-                ON CONFLICT(project_id,vendid_hash) DO UPDATE SET
-                  visitor_id=EXCLUDED.visitor_id,source_order_id=EXCLUDED.source_order_id,
-                  vendepay_connection_id=EXCLUDED.vendepay_connection_id,last_seen_at=now()
-              `;
-              confirmedHashes.add(hash);
-            }
+            const identityVisitorId = receipt.visitor_id ?? `vendepay:${receipt.external_id}`;
+            await db`
+              DELETE FROM tracking_upsell_identities
+              WHERE project_id=${p.id} AND source_order_id=${receipt.id} AND vendid_hash<>${hash}
+            `;
+            await db`
+              INSERT INTO tracking_upsell_identities
+                (id,project_id,visitor_id,vendid_hash,vendid_encrypted,source_order_id,
+                 vendepay_connection_id)
+              VALUES(${ulid()},${p.id},${identityVisitorId},${hash},
+                ${encryptSecret(vendid, env.TRACKING_ENCRYPTION_KEY!)},${receipt.id},
+                ${receipt.connection_id})
+              ON CONFLICT(project_id,vendid_hash) DO UPDATE SET
+                visitor_id=EXCLUDED.visitor_id,source_order_id=EXCLUDED.source_order_id,
+                vendepay_connection_id=EXCLUDED.vendepay_connection_id,last_seen_at=now()
+            `;
+          } else if (storedVendid && testedCandidate && !hadTemporaryFailure && !receipt.has_upsell) {
+            // Remove only a conclusively invalid identity. Temporary outages
+            // must never erase a previously working link.
+            await db`
+              DELETE FROM tracking_upsell_identities
+              WHERE project_id=${p.id} AND source_order_id=${receipt.id}
+            `;
           }
           const vendidConfirmed = Boolean(vendid);
           // Keep the approved buyer visible while clearly separating the
@@ -773,7 +761,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           order.order_kind !== 'front' ||
           event.status !== 'paid'
         ) continue;
-        const candidates = collectVendaIdCandidates(receipt.payload, event.transactionId);
+        const checkoutIds = new Set(collectCheckoutIds(receipt.payload));
+        const candidates = collectVendaIdCandidates(receipt.payload, event.transactionId)
+          .filter((candidate) => !checkoutIds.has(candidate));
         let vendid: string | undefined;
         for (const candidate of candidates) {
           candidatesTested += 1;
