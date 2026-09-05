@@ -170,13 +170,18 @@ function ValidatedUpsellLink({
     </div>
   );
   if (link.already_purchased) {
+    const purchasedUrl = new URL(link.url);
+    purchasedUrl.searchParams.set('force', '1');
     return (
-      <span
-        title="A VendePay já consumiu esta oferta para este comprador; o botão não pode ser carregado novamente."
-        className="rounded-md border border-violet-300/25 bg-violet-300/[0.08] px-2.5 py-1.5 text-violet-100"
+      <a
+        title="Este upsell já foi comprado. Clique para abrir a página mesmo assim."
+        href={purchasedUrl.toString()}
+        target="_blank"
+        rel="noreferrer"
+        className="rounded-md border border-violet-300/25 bg-violet-300/[0.08] px-2.5 py-1.5 text-violet-100 transition hover:border-violet-300/40 hover:bg-violet-300/[0.16]"
       >
         {link.name} · já comprado
-      </span>
+      </a>
     );
   }
   if (link.force_url) {
