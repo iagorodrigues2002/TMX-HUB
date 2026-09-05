@@ -174,13 +174,12 @@ function ValidatedUpsellLink({
     purchasedUrl.searchParams.set('force', '1');
     return (
       <a
+        aria-label={`Abrir ${link.name}, já comprado`}
         title="Este upsell já foi comprado. Clique para abrir a página mesmo assim."
         href={purchasedUrl.toString()}
-        target="_blank"
-        rel="noreferrer"
-        className="rounded-md border border-violet-300/25 bg-violet-300/[0.08] px-2.5 py-1.5 text-violet-100 transition hover:border-violet-300/40 hover:bg-violet-300/[0.16]"
+        className="cursor-pointer rounded-md border border-violet-300/25 bg-violet-300/[0.08] px-2.5 py-1.5 text-violet-100 underline decoration-violet-300/40 underline-offset-2 transition hover:border-violet-300/40 hover:bg-violet-300/[0.16]"
       >
-        {link.name} · já comprado
+        {link.name} · já comprado · abrir
       </a>
     );
   }
