@@ -71,6 +71,7 @@ const migrations = [
   '056_meta_account_control.sql',
   '057_meta_payment_pushcut.sql',
   '058_utmify_global_dashboard.sql',
+  '059_vturb_intelligence.sql',
 ];
 
 await sql`
