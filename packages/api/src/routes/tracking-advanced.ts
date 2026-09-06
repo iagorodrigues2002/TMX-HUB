@@ -481,6 +481,16 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         `,
       ]);
       reply.header('cache-control', 'no-store');
+      // Some VendePay payloads name the buyer's usable id `checkoutId`, while
+      // others expose a checkout-configuration id under that same key. Only
+      // consider it generic when the exact UUID is repeated across different
+      // approved front orders. A unique historic id must remain usable.
+      const checkoutIdUseCount = new Map<string, number>();
+      for (const receipt of approvedReceipts) {
+        for (const checkoutId of new Set(collectCheckoutIds(receipt.payload))) {
+          checkoutIdUseCount.set(checkoutId, (checkoutIdUseCount.get(checkoutId) ?? 0) + 1);
+        }
+      }
       const resultByOrderStage = new Map(
         manualResults.map((result) => [`${result.order_id}:${result.stage_id}`, result] as const),
       );
@@ -503,19 +513,18 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             }
           }
           let vendid: string | undefined;
-          let hadTemporaryFailure = false;
-          let testedCandidate = false;
           if (receiptMatchesOrder) {
             const candidates = collectVendaIdCandidates(receipt.payload, receipt.external_id);
             const checkoutIds = new Set(collectCheckoutIds(receipt.payload));
-            const storedIsCheckoutId = Boolean(storedVendid && checkoutIds.has(storedVendid));
+            const isSharedCheckoutId = (candidate: string) =>
+              checkoutIds.has(candidate) && (checkoutIdUseCount.get(candidate) ?? 0) > 1;
+            const storedIsCheckoutId = Boolean(storedVendid && isSharedCheckoutId(storedVendid));
             // Preserve known-good historic identities. Revalidation is needed
             // only when the former bug stored a checkout id, or no identity
             // has been established for this front purchase yet.
             if (storedVendid && !storedIsCheckoutId) vendid = storedVendid;
             if (!vendid && normalizedEvent?.vendid) vendid = normalizedEvent.vendid;
-            for (const candidate of vendid ? [] : candidates.filter((id) => !checkoutIds.has(id))) {
-              testedCandidate = true;
+            for (const candidate of vendid ? [] : candidates.filter((id) => !isSharedCheckoutId(id))) {
               const checks = await Promise.all(stages.map((stage) => {
                 const destination =
                   (receipt.connection_id && stage.connection_destinations?.[receipt.connection_id]) ||
@@ -529,11 +538,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                 vendid = candidate;
                 break;
               }
-              hadTemporaryFailure ||= checks.some((check) => check.state === 'temporary_failure');
             }
-            // A consumed upsell intent can no longer be validated. In that
-            // case only an explicit vendaId from the paid webhook is trusted;
-            // a checkoutId or other generic UUID never is.
           }
           if (vendid && receiptMatchesOrder && receipt.connection_id) {
             const hash = createHash('sha256').update(vendid).digest('hex');
@@ -552,13 +557,6 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
               ON CONFLICT(project_id,vendid_hash) DO UPDATE SET
                 visitor_id=EXCLUDED.visitor_id,source_order_id=EXCLUDED.source_order_id,
                 vendepay_connection_id=EXCLUDED.vendepay_connection_id,last_seen_at=now()
-            `;
-          } else if (storedVendid && testedCandidate && !hadTemporaryFailure && !receipt.has_upsell) {
-            // Remove only a conclusively invalid identity. Temporary outages
-            // must never erase a previously working link.
-            await db`
-              DELETE FROM tracking_upsell_identities
-              WHERE project_id=${p.id} AND source_order_id=${receipt.id}
             `;
           }
           const vendidConfirmed = Boolean(vendid);
@@ -761,9 +759,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           order.order_kind !== 'front' ||
           event.status !== 'paid'
         ) continue;
-        const checkoutIds = new Set(collectCheckoutIds(receipt.payload));
-        const candidates = collectVendaIdCandidates(receipt.payload, event.transactionId)
-          .filter((candidate) => !checkoutIds.has(candidate));
+        const candidates = collectVendaIdCandidates(receipt.payload, event.transactionId);
         let vendid: string | undefined;
         for (const candidate of candidates) {
           candidatesTested += 1;
