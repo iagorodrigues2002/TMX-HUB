@@ -8,6 +8,17 @@ type Sql = ReturnType<typeof postgres>;
 const VTURB_ANALYTICS_BASE = 'https://analytics.vturb.net';
 const conversionKeys = ['vtid', 'sck', 'sid', 'src', 'subid', 'xcod', ...Array.from({ length: 20 }, (_, index) => `sub${index + 1}`)];
 
+export function findVturbConversionKeyInUrl(value?: string | null) {
+  if (!value) return null;
+  try {
+    const url = new URL(value, 'https://tmx.invalid');
+    return findVturbConversionKey(Object.fromEntries(url.searchParams.entries()));
+  } catch {
+    const match = value.match(/(?:^|[?&])(vtid|sck|sid|src|subid|xcod|sub(?:[1-9]|1[0-9]|20))=(v3_[^&#\s]+)/i);
+    return match?.[2] ? decodeURIComponent(match[2]) : null;
+  }
+}
+
 export function findVturbConversionKey(source: Record<string, unknown>, preferred?: string | null) {
   const keys = preferred ? [preferred, ...conversionKeys.filter((key) => key !== preferred)] : conversionKeys;
   for (const key of keys) {
@@ -60,23 +71,34 @@ export async function runVturbDeliveries(db: Sql) {
     id: string; attempts: number; endpoint_url: string; conversion_param: string;
     external_id: string; amount_minor: number | null; currency: string | null;
     occurred_at: Date; client_ip: string | null; product: Record<string, unknown>;
-    attribution_source: Record<string, unknown>;
+    attribution_source: Record<string, unknown>; event_source: Record<string, unknown> | null;
+    checkout_href: string | null;
   }>>`
     SELECT d.id,d.attempts,i.endpoint_url,i.conversion_param,o.external_id,o.amount_minor,
-      o.currency,o.occurred_at,o.product,o.attribution_source,
+      o.currency,o.occurred_at,o.product,o.attribution_source,vt.event_source,vt.checkout_href,
       (SELECT e.client_ip FROM tracking_events e
        WHERE e.project_id=o.project_id AND e.visitor_id=o.visitor_id
        ORDER BY e.received_at DESC LIMIT 1) AS client_ip
     FROM vturb_deliveries d
     JOIN vturb_integrations i ON i.project_id=d.project_id AND i.enabled=true
     JOIN tracking_orders o ON o.id=d.order_id AND o.status='paid'
+    LEFT JOIN LATERAL (
+      SELECT e.source AS event_source,e.properties->>'href' AS checkout_href
+      FROM tracking_events e
+      WHERE e.project_id=o.project_id AND e.visitor_id=o.visitor_id
+        AND (e.source::text LIKE '%v3\_%' ESCAPE '\\' OR e.properties->>'href' LIKE '%v3\_%' ESCAPE '\\')
+      ORDER BY e.received_at DESC LIMIT 1
+    ) vt ON true
     WHERE d.state IN ('waiting','failed') AND d.next_attempt_at <= now() AND d.attempts < 8
     ORDER BY d.created_at ASC LIMIT 100
   `;
   let sent = 0;
   let failed = 0;
   for (const row of rows) {
-    const conversionKey = findVturbConversionKey(row.attribution_source ?? {}, row.conversion_param);
+    const conversionKey =
+      findVturbConversionKey(row.attribution_source ?? {}, row.conversion_param) ??
+      findVturbConversionKey(row.event_source ?? {}, row.conversion_param) ??
+      findVturbConversionKeyInUrl(row.checkout_href);
     if (!conversionKey) {
       await db`UPDATE vturb_deliveries SET state='waiting',last_error='Conversion Key v3_ ainda não encontrada',next_attempt_at=now()+interval '15 minutes' WHERE id=${row.id}`;
       continue;

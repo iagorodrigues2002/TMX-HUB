@@ -52,6 +52,11 @@ export type VturbAnalytics = {
   engagement: { average_watched_time?: number; engagement_rate?: number; grouped_timed?: Array<{ timed: number; total_users: number }> };
   clicks: Array<{ timed: number; total_users: number }>;
   conversions: Record<string, unknown>;
+  tmx_country_conversions?: Array<{
+    country: string;
+    total_conversions: number;
+    total_amount_brl: number;
+  }>;
 };
 export type TrackingOrderKind = TrackingProductKind | 'unknown';
 

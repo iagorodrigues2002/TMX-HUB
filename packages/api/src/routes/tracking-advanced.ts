@@ -284,14 +284,25 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       const from = validDate(req.query.from, today);
       const to = validDate(req.query.to, today);
       const body = { player_id: player.id, start_date: `${from} 00:00:00`, end_date: `${to} 23:59:59`, video_duration: player.duration, pitch_time: player.pitch_time, timezone: 'America/Sao_Paulo' };
-      const [overallRows, countries, engagement, clicks, conversions] = await Promise.all([
+      const [overallRows, countries, engagement, clicks, conversions, tmxCountryConversions] = await Promise.all([
         vturbAnalyticsRequest<unknown[]>(token, '/sessions/stats', body),
         vturbAnalyticsRequest<unknown[]>(token, '/sessions/stats_by_field', { ...body, field: 'country' }),
         vturbAnalyticsRequest<Record<string, unknown>>(token, '/times/user_engagement', body),
         vturbAnalyticsRequest<unknown[]>(token, '/clicks/total_by_company_timed', body),
         vturbAnalyticsRequest<Record<string, unknown>>(token, '/conversions/stats_by_day', body),
+        app.db<Array<{ country: string; total_conversions: number; total_amount_brl: number }>>`
+          SELECT attribution_source->>'country' AS country,count(*)::int AS total_conversions,
+            COALESCE(sum(amount_brl_minor),0)::float / 100 AS total_amount_brl
+          FROM tracking_orders
+          WHERE project_id=${p.id} AND status='paid' AND order_kind='front'
+            AND paid_at >= ${`${from}T03:00:00.000Z`}::timestamptz
+            AND paid_at < (${`${to}T03:00:00.000Z`}::timestamptz + interval '1 day')
+            AND NULLIF(attribution_source->>'country','') IS NOT NULL
+            AND attribution_source::text LIKE '%v3\_%' ESCAPE '\\'
+          GROUP BY attribution_source->>'country'
+        `,
       ]);
-      return { player, period: { from, to }, overall: Array.isArray(overallRows) ? overallRows[0] ?? {} : overallRows, countries, engagement, clicks, conversions };
+      return { player, period: { from, to }, overall: Array.isArray(overallRows) ? overallRows[0] ?? {} : overallRows, countries, engagement, clicks, conversions, tmx_country_conversions: tmxCountryConversions };
     },
   );
 

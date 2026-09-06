@@ -304,7 +304,19 @@ function VturbIntelligence({
     },
     onError: (error) => toast.error((error as Error).message),
   });
-  const countries = analytics.data?.countries ?? [];
+  const localConversions = analytics.data?.tmx_country_conversions ?? [];
+  const countries = (analytics.data?.countries ?? []).map((country) => {
+    const local = localConversions.find(
+      (row) => row.country.trim().toLowerCase() === country.grouped_field.trim().toLowerCase(),
+    );
+    return local
+      ? {
+          ...country,
+          total_conversions: Math.max(Number(country.total_conversions ?? 0), local.total_conversions),
+          total_amount_brl: Math.max(Number(country.total_amount_brl ?? 0), local.total_amount_brl),
+        }
+      : country;
+  });
   const sum = (field: keyof (typeof countries)[number]) => countries.reduce((total, row) => total + Number(row[field] ?? 0), 0);
   const views = sum('total_viewed_device_uniq');
   const plays = sum('total_started_device_uniq');

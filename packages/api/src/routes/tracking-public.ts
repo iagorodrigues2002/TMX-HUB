@@ -9,6 +9,7 @@ import { createTrackingToken, readTrackingToken } from '../lib/tracking-token.js
 import { convertToBrlMinor } from '../services/exchange-rate.js';
 import { buildTrackerScript } from '../services/tracker-script.js';
 import { checkUpsellCompatibility } from '../services/upsell-compatibility.js';
+import { findVturbConversionKeyInUrl } from '../services/vturb.js';
 
 const EventSchema = z.object({
   public_key: z.string().min(16).max(128),
@@ -1200,7 +1201,15 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     `;
     if (!project?.enabled) return reply.code(404).send({ accepted: false });
     const country = requestCountry(req.headers);
-    const source = country ? { ...event.source, country } : event.source;
+    const checkoutHref = typeof event.properties.href === 'string' ? event.properties.href : null;
+    const vturbKey =
+      findVturbConversionKeyInUrl(checkoutHref) ??
+      findVturbConversionKeyInUrl(event.event_url);
+    const source = {
+      ...event.source,
+      ...(vturbKey && !Object.values(event.source).includes(vturbKey) ? { vtid: vturbKey } : {}),
+      ...(country ? { country } : {}),
+    };
     const inserted = await app.db<{ id: string; received_at: Date }[]>`
       INSERT INTO tracking_events
         (id, project_id, visitor_id, session_id, journey_id, event_name, event_category,

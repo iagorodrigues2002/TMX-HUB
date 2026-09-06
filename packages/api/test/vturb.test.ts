@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findVturbConversionKey } from '../src/services/vturb.js';
+import { findVturbConversionKey, findVturbConversionKeyInUrl } from '../src/services/vturb.js';
 
 describe('VTurb conversion attribution', () => {
   it('prioritizes the parameter selected for the offer', () => {
@@ -14,5 +14,10 @@ describe('VTurb conversion attribution', () => {
 
   it('does not deliver an ordinary attribution parameter', () => {
     expect(findVturbConversionKey({ src: 'facebook', ad_id: '123' }, 'src')).toBeNull();
+  });
+
+  it('recovers the conversion key injected into a checkout link', () => {
+    expect(findVturbConversionKeyInUrl('https://checkout.example/?utm_source=meta&vtid=v3_session_player_770'))
+      .toBe('v3_session_player_770');
   });
 });
