@@ -73,7 +73,7 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
           id: string;
           event_id: string;
           outgoing_event_id: string | null;
-          event_name: 'InitiateCheckout' | 'Purchase';
+          event_name: 'PageView' | 'InitiateCheckout' | 'Purchase';
           event_at: Date;
           pixel_external_id: string;
           access_token_encrypted: string;
@@ -254,12 +254,12 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
               custom_data:
                 row.event_name === 'Purchase'
                   ? buildPurchaseCustomData(row)
-                  : {
+                  : row.event_name === 'InitiateCheckout' ? {
                       content_name: 'Checkout',
                       content_category: 'checkout',
                       content_type: 'product',
                       currency: row.currency,
-                    },
+                    } : {},
             },
           ],
           partner_agent: 'tmxhub-1.0',

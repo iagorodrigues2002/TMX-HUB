@@ -2715,7 +2715,7 @@ export const apiClient = {
       pixel_name: string;
       pixel_id: string;
       transaction_id: string;
-      event_name: 'InitiateCheckout' | 'Purchase';
+      event_name: 'PageView' | 'InitiateCheckout' | 'Purchase';
       event_url?: string;
       campaign_id?: string;
       adset_id?: string;

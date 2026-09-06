@@ -1102,7 +1102,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         const orders = await sql<Array<{ id: string; external_id: string; event_at: Date }>>`
           SELECT id, external_id, COALESCE(paid_at, occurred_at) AS event_at
           FROM tracking_orders
-          WHERE project_id = ${p.id} AND status = 'paid'
+          WHERE project_id = ${p.id} AND status = 'paid' AND order_kind = 'front'
           ORDER BY occurred_at ASC
         `;
         const pixels = await sql<Array<{ id: string }>>`
