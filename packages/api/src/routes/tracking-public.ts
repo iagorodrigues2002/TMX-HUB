@@ -7,7 +7,7 @@ import { normalizeVendepay } from '../integrations/vendepay/normalize.js';
 import { encryptSecret } from '../lib/secret-box.js';
 import { createTrackingToken, readTrackingToken } from '../lib/tracking-token.js';
 import { convertToBrlMinor } from '../services/exchange-rate.js';
-import { buildTrackerScript } from '../services/tracker-script.js';
+import { buildTrackerScript, buildVturbBridgeScriptV2 } from '../services/tracker-script.js';
 import { checkUpsellCompatibility } from '../services/upsell-compatibility.js';
 import { findVturbConversionKeyInUrl } from '../services/vturb.js';
 
@@ -487,6 +487,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       SELECT pixel_id FROM meta_pixels
       WHERE project_id = ${project.id} AND enabled = true
     `;
+    const [vturb] = await app.db<{ conversion_param: string }[]>`
+      SELECT conversion_param FROM vturb_integrations
+      WHERE project_id=${project.id} AND enabled=true
+    `;
     return (
       reply
         .header('content-type', 'application/javascript; charset=utf-8')
@@ -500,7 +504,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           buildTrackerScript(
             req.query.key,
             pixels.map((pixel) => pixel.pixel_id),
-          ),
+          ) + (vturb ? buildVturbBridgeScriptV2(req.query.key, vturb.conversion_param) : ''),
         )
     );
   });

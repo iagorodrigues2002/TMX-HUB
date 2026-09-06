@@ -7,7 +7,7 @@ import {
   safeEventSourceUrl,
   validBrowserEventId,
 } from '../src/routes/tracking-public.js';
-import { buildTrackerScript } from '../src/services/tracker-script.js';
+import { buildTrackerScript, buildVturbBridgeScriptV2 } from '../src/services/tracker-script.js';
 
 describe('reliable tracking foundation', () => {
   it('signs and verifies an opaque cross-domain tracking token', () => {
@@ -51,6 +51,14 @@ describe('reliable tracking foundation', () => {
     expect(script).toContain('tmx_source_url');
     expect(script).toContain('_fbp');
     expect(script).toContain('_fbc');
+  });
+
+  it('bridges the VTurb SmartPlayer conversion key into checkout links', () => {
+    const script = buildVturbBridgeScriptV2('public-key-123456', 'vtid');
+    expect(() => new Function(script)).not.toThrow();
+    expect(script).toContain('conversionKey');
+    expect(script).toContain('VturbAttribution');
+    expect(script).toContain('u.searchParams.set(C.conversionParam,key)');
   });
 
   it('preserves ad attribution on an A/B checkout redirect', () => {
