@@ -703,6 +703,16 @@ export function TrackingAdvancedCenter({
     },
     onError: (error) => toast.error((error as Error).message),
   });
+  const replayMetaEvents = useMutation({
+    mutationFn: () => apiClient.replayMetaEvents(offerId),
+    onSuccess: (result) => {
+      void qc.invalidateQueries({ queryKey: ['tracking-meta-deliveries', offerId] });
+      toast.success(
+        `${result.pageviews_queued} PageViews · ${result.initiate_checkouts_queued} ICs · ${result.front_purchases_queued} compras front reenfileirados para ${result.pixels_enabled} pixel(is).`,
+      );
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
   const addDomain = useMutation({
     mutationFn: () => apiClient.addTrackingDomain(offerId, domain, domainKind),
     onSuccess: () => {
@@ -2512,6 +2522,22 @@ export function TrackingAdvancedCenter({
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
+                    {canManage && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={replayMetaEvents.isPending}
+                        onClick={() => replayMetaEvents.mutate()}
+                      >
+                        <RefreshCw
+                          className={cn(
+                            'mr-2 h-3.5 w-3.5',
+                            replayMetaEvents.isPending && 'animate-spin',
+                          )}
+                        />
+                        Reenviar PageView, IC e compras front
+                      </Button>
+                    )}
                     {canManage && (
                       <Button
                         size="sm"

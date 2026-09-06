@@ -2752,6 +2752,16 @@ export const apiClient = {
     return request(`/v1/offers/${id}/tracking/meta-purchases/reconcile`, { method: 'POST' });
   },
 
+  async replayMetaEvents(id: string): Promise<{
+    pixels_enabled: number;
+    pageviews_queued: number;
+    initiate_checkouts_queued: number;
+    front_purchases_queued: number;
+    total_queued: number;
+  }> {
+    return request(`/v1/offers/${id}/tracking/meta-events/replay`, { method: 'POST' });
+  },
+
   async listMetaPixels(id: string): Promise<{
     pixels: Array<{
       id: string;
