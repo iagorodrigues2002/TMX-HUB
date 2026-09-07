@@ -227,7 +227,10 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
       // UTMify applies a strict token-level rate limit. A concurrency-only
       // setting still creates bursts, so pace the whole queue explicitly.
       concurrency: 1,
-      limiter: { max: 1, duration: 60_000 },
+      // Keep requests sequential but do not starve live sales behind a large
+      // reconciliation. If UTMify answers 429 the adaptive pause above still
+      // stops this worker for two minutes before retrying.
+      limiter: { max: 1, duration: 1_000 },
     },
   );
   let pumpRunning = false;
