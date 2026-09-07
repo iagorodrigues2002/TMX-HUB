@@ -2928,6 +2928,12 @@ export const apiClient = {
     return request(`/v1/offers/${id}/tracking/utmify-upsells/reconcile`, { method: 'POST' });
   },
 
+  async reconcileTrackingUtmifyFront(
+    id: string,
+  ): Promise<{ front_orders_scanned: number; fully_attributed: number; utmify_queued: number }> {
+    return request(`/v1/offers/${id}/tracking/utmify-front/reconcile`, { method: 'POST' });
+  },
+
   async sendTrackingUtmifyTestCheckout(id: string): Promise<{
     accepted: boolean;
     delivery_id: string;

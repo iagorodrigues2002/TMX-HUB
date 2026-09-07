@@ -118,6 +118,78 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   );
 
   app.post<{ Params: { id: string } }>(
+    '/offers/:id/tracking/utmify-front/reconcile',
+    async (req, reply) => {
+      await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
+      if (!app.db) return reply.code(503).send({ error: 'database_unavailable' });
+
+      const [project] = await app.db<{ id: string }[]>`
+        SELECT id FROM tracking_projects
+        WHERE offer_id=${req.params.id} AND enabled=true
+        LIMIT 1
+      `;
+      if (!project) return reply.code(409).send({ error: 'tracking_not_configured' });
+
+      const result = await app.db.begin(async (sql) => {
+        const repaired = await sql<{ id: string; complete: boolean }[]>`
+          WITH attributed AS (
+            SELECT o.id,
+              COALESCE(v.first_source, '{}'::jsonb) ||
+              COALESCE(v.last_source, '{}'::jsonb) ||
+              COALESCE(best.source, '{}'::jsonb) AS recovered
+            FROM tracking_orders o
+            LEFT JOIN tracking_visitors v
+              ON v.project_id=o.project_id AND v.visitor_id=o.visitor_id
+            LEFT JOIN LATERAL (
+              SELECT te.source
+              FROM tracking_events te
+              WHERE te.project_id=o.project_id AND te.visitor_id=o.visitor_id
+                AND te.received_at <= o.occurred_at + interval '1 day'
+              ORDER BY
+                ((NULLIF(te.source->>'campaign_id','') IS NOT NULL)::int +
+                 (NULLIF(te.source->>'adset_id','') IS NOT NULL)::int +
+                 (NULLIF(te.source->>'ad_id','') IS NOT NULL)::int +
+                 (NULLIF(te.source->>'utm_campaign','') IS NOT NULL)::int +
+                 (NULLIF(te.source->>'utm_content','') IS NOT NULL)::int) DESC,
+                te.received_at DESC
+              LIMIT 1
+            ) best ON true
+            WHERE o.project_id=${project.id} AND o.status='paid' AND o.order_kind='front'
+          )
+          UPDATE tracking_orders o
+          SET attribution_source=o.attribution_source || attributed.recovered, updated_at=now()
+          FROM attributed
+          WHERE o.id=attributed.id
+          RETURNING o.id,
+            NULLIF(o.attribution_source->>'campaign_id','') IS NOT NULL
+            AND NULLIF(o.attribution_source->>'adset_id','') IS NOT NULL
+            AND NULLIF(o.attribution_source->>'ad_id','') IS NOT NULL AS complete
+        `;
+        const orderIds = repaired.map(({ id }) => id);
+        const deliveries = orderIds.length ? await sql<{ id: string }[]>`
+          UPDATE tracking_delivery_outbox d
+          SET state='pending', last_error=NULL, next_attempt_at=now(), delivered_at=NULL
+          FROM tracking_utmify_destinations u
+          WHERE d.destination_id=u.id AND u.scope='offer'
+            AND d.project_id=${project.id} AND d.destination_kind='utmify'
+            AND d.order_id IN ${sql(orderIds)} AND d.event_type='order.paid'
+          RETURNING d.id
+        ` : [];
+        return { repaired, deliveries };
+      });
+
+      await Promise.allSettled(result.deliveries.map(({ id }) =>
+        app.utmifyDeliveryQueue.add('send', { deliveryId: id }, { jobId: `${id}-front-${Date.now()}` }),
+      ));
+      return reply.code(202).send({
+        front_orders_scanned: result.repaired.length,
+        fully_attributed: result.repaired.filter(({ complete }) => complete).length,
+        utmify_queued: result.deliveries.length,
+      });
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
     '/offers/:id/tracking/utmify-upsells/reconcile',
     async (req, reply) => {
       await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');

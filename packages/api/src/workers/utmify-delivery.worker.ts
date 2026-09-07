@@ -54,6 +54,10 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
                COALESCE(o.occurred_at, direct_event.received_at, d.created_at) AS occurred_at,
                o.paid_at,
                COALESCE(o.chargeback_at, o.refunded_at) AS lifecycle_at,
+               COALESCE(visitor.first_source, '{}'::jsonb) ||
+               COALESCE(visitor.last_source, '{}'::jsonb) ||
+               COALESCE(best_event.source, '{}'::jsonb) ||
+               COALESCE(direct_event.source, '{}'::jsonb) ||
                COALESCE(o.attribution_source, '{}'::jsonb) ||
                jsonb_strip_nulls(jsonb_build_object(
                  'payment_method', COALESCE(o.payment_method, 'pix'),
@@ -61,25 +65,30 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
                  'product_name', o.product->>'name',
                  'plan_id', o.product->>'planId',
                  'plan_name', o.product->>'planName'
-               )) ||
-               COALESCE(direct_event.source, '{}'::jsonb) ||
-               COALESCE((
-                 SELECT te.source FROM tracking_events te
-                 WHERE te.project_id = d.project_id
-                   AND te.visitor_id = COALESCE(o.visitor_id, direct_event.visitor_id)
-                 ORDER BY te.received_at DESC LIMIT 1
-               ), '{}'::jsonb) AS source,
-               COALESCE(direct_event.client_ip, (
-                 SELECT te.client_ip FROM tracking_events te
-                 WHERE te.project_id = d.project_id
-                   AND te.visitor_id = COALESCE(o.visitor_id, direct_event.visitor_id)
-                 ORDER BY te.received_at DESC LIMIT 1
-               )) AS client_ip
+               )) AS source,
+               COALESCE(direct_event.client_ip, best_event.client_ip) AS client_ip
         FROM tracking_delivery_outbox d
         JOIN tracking_utmify_destinations u ON u.id = d.destination_id AND u.enabled = true
         LEFT JOIN tracking_orders o ON o.id = d.order_id
         LEFT JOIN tracking_events direct_event
           ON direct_event.project_id = d.project_id AND direct_event.id = d.event_id
+        LEFT JOIN tracking_visitors visitor
+          ON visitor.project_id=d.project_id
+         AND visitor.visitor_id=COALESCE(o.visitor_id, direct_event.visitor_id)
+        LEFT JOIN LATERAL (
+          SELECT te.source, te.client_ip
+          FROM tracking_events te
+          WHERE te.project_id=d.project_id
+            AND te.visitor_id=COALESCE(o.visitor_id, direct_event.visitor_id)
+          ORDER BY
+            ((NULLIF(te.source->>'campaign_id','') IS NOT NULL)::int +
+             (NULLIF(te.source->>'adset_id','') IS NOT NULL)::int +
+             (NULLIF(te.source->>'ad_id','') IS NOT NULL)::int +
+             (NULLIF(te.source->>'utm_campaign','') IS NOT NULL)::int +
+             (NULLIF(te.source->>'utm_content','') IS NOT NULL)::int) DESC,
+            te.received_at DESC
+          LIMIT 1
+        ) best_event ON true
         WHERE d.id = ${deliveryId}
           AND d.destination_kind = 'utmify'
           AND d.state IN ('pending','failed','processing')

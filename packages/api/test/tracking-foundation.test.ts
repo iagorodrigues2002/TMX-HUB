@@ -170,4 +170,20 @@ describe('reliable tracking foundation', () => {
     expect(payload.customer.country).toBe('BR');
     expect(payload.trackingParameters.utm_content).toBe('initiate_checkout');
   });
+
+  it('preserves the landing-page UTM signature when campaign ids are also present', () => {
+    const payload = buildUtmifyOrderPayload({
+      orderId: 'pjr-eng-1', provider: 'vendepay', status: 'paid', amountMinor: 2490,
+      currency: 'BRL', createdAt: new Date('2026-09-06T10:00:00.000Z'), buyer: {},
+      source: {
+        utm_source: 'fb', utm_medium: 'paid_social', utm_campaign: 'PJR ENG CBO',
+        utm_content: 'CRIATIVO 12', utm_term: 'CONJUNTO US',
+        campaign_id: '1201', adset_id: '1202', ad_id: '1203', placement: 'Facebook_Mobile_Feed',
+      },
+    });
+    expect(payload.trackingParameters).toEqual({
+      src: null, sck: null, utm_source: 'FB', utm_medium: 'paid_social',
+      utm_campaign: 'PJR ENG CBO', utm_content: 'CRIATIVO 12', utm_term: 'CONJUNTO US',
+    });
+  });
 });

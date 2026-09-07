@@ -1035,6 +1035,17 @@ export function TrackingAdvancedCenter({
     },
     onError: (error) => toast.error((error as Error).message),
   });
+  const reconcileUtmifyFront = useMutation({
+    mutationFn: () => apiClient.reconcileTrackingUtmifyFront(offerId),
+    onSuccess: (result) => {
+      void qc.invalidateQueries({ queryKey: ['tracking-utmify-deliveries', offerId] });
+      void refreshTracking();
+      toast.success(
+        `${result.fully_attributed}/${result.front_orders_scanned} vendas front com campanha completa · ${result.utmify_queued} atualização(ões) reenfileiradas.`,
+      );
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
   const pushcutDestinations = useQuery({
     queryKey: ['tracking-pushcut-destinations', offerId],
     queryFn: () => apiClient.getTrackingPushcutDestinations(offerId),
@@ -2704,6 +2715,25 @@ export function TrackingAdvancedCenter({
                   {utmify.data?.destination?.enabled ? 'operacional' : 'aguardando token'}
                 </span>
               </div>
+              {canManage && utmify.data?.destination?.enabled && (
+                <div className="mb-5 rounded border border-emerald-400/20 bg-emerald-400/[0.04] p-4">
+                  <p className="text-sm font-medium text-emerald-100">Atribuição das vendas front</p>
+                  <p className="mt-1 text-xs leading-5 text-white/45">
+                    Recupera campanha, conjunto e anúncio da jornada original e atualiza na UTMify
+                    as compras já recebidas. Use após corrigir UTMs ou divergências de campanha.
+                  </p>
+                  <Button
+                    className="mt-3"
+                    variant="outline"
+                    disabled={reconcileUtmifyFront.isPending}
+                    onClick={() => reconcileUtmifyFront.mutate()}
+                  >
+                    {reconcileUtmifyFront.isPending
+                      ? 'Reconciliando vendas...'
+                      : 'Corrigir campanhas das vendas front'}
+                  </Button>
+                </div>
+              )}
               {canManage && (
                 <div className="grid gap-3 md:grid-cols-[1fr_auto]">
                   <Input
