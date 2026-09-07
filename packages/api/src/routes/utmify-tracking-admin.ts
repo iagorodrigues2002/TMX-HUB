@@ -166,7 +166,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             AND NULLIF(o.attribution_source->>'ad_id','') IS NOT NULL AS complete
         `;
         const orderIds = repaired.map(({ id }) => id);
-        const deliveries = orderIds.length ? await sql<{ id: string }[]>`
+        const resetDeliveries = orderIds.length ? await sql<{ id: string }[]>`
           UPDATE tracking_delivery_outbox d
           SET state='pending', last_error=NULL, next_attempt_at=now(), delivered_at=NULL
           FROM tracking_utmify_destinations u
@@ -175,11 +175,28 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             AND d.order_id IN ${sql(orderIds)} AND d.event_type='order.paid'
           RETURNING d.id
         ` : [];
+        const deliveries = resetDeliveries.length ? await sql<{ id: string }[]>`
+          SELECT d.id
+          FROM tracking_delivery_outbox d
+          JOIN tracking_orders o ON o.id=d.order_id
+          WHERE d.id IN ${sql(resetDeliveries.map(({ id }) => id))}
+          ORDER BY COALESCE(o.paid_at, o.occurred_at) DESC
+        ` : [];
         return { repaired, deliveries };
       });
 
       await Promise.allSettled(result.deliveries.map(({ id }) =>
-        app.utmifyDeliveryQueue.add('send', { deliveryId: id }, { jobId: `${id}-front-${Date.now()}` }),
+        app.utmifyDeliveryQueue.add(
+          'send',
+          { deliveryId: id },
+          {
+            jobId: `${id}-front-${Date.now()}`,
+            // Live/reconciled offer sales must not sit behind a months-long
+            // global backfill. BullMQ processes priority jobs first; the
+            // per-worker limiter still protects UTMify from bursts.
+            priority: 1,
+          },
+        ),
       ));
       return reply.code(202).send({
         front_orders_scanned: result.repaired.length,

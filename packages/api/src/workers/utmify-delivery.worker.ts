@@ -232,14 +232,19 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
             AND d.state IN ('pending','failed')
             AND d.next_attempt_at <= now()
           ORDER BY CASE
+            WHEN u.scope='offer' AND o.status='paid' THEN 0
+            WHEN u.scope='offer' AND o.status IN ('refunded','chargeback') THEN 1
             WHEN u.scope='global'
               AND d.event_id NOT LIKE 'utmify-global-backfill:%'
-              AND d.event_id NOT LIKE 'utmify-global-reconcile-%' THEN 0
-            WHEN u.scope='global' AND o.status='paid' THEN 1
-            WHEN u.scope='global' AND o.status IN ('refunded','chargeback') THEN 2
-            WHEN u.scope='global' AND o.status IN ('abandoned','refused') THEN 3
-            ELSE 4
-          END,d.created_at ASC
+              AND d.event_id NOT LIKE 'utmify-global-reconcile-%' THEN 2
+            WHEN u.scope='global' AND o.status='paid' THEN 3
+            WHEN u.scope='global' AND o.status IN ('refunded','chargeback') THEN 4
+            WHEN u.scope='global' AND o.status IN ('abandoned','refused') THEN 5
+            ELSE 6
+          END,
+          CASE WHEN u.scope='offer' AND o.status='paid'
+            THEN COALESCE(o.paid_at,o.occurred_at,d.created_at) END DESC,
+          d.created_at ASC
           FOR UPDATE OF d SKIP LOCKED
           LIMIT 1
         )
