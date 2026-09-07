@@ -108,15 +108,13 @@ export function buildUtmifyOrderPayload(input: UtmifyOrderInput) {
       // Canonicalized to what UTMify's Meta connector recognizes. `fb` from
       // Meta's {{site_source_name}} macro becomes `FB`, etc.
       utm_source: normalizeUtmSource(source.utm_source),
-      // Keep the same UTM signature captured on the landing page. UTMify
-      // correlates the purchase with the click/IC using these exact fields.
-      // Only synthesize name|id when the original UTM was not captured.
-      utm_campaign:
-        source.utm_campaign ?? withId(source.campaign_name, source.campaign_id),
-      utm_medium:
-        source.utm_medium ?? withId(source.adset_name, source.adset_id),
-      utm_content: source.utm_content ?? withId(source.ad_name, source.ad_id),
-      utm_term: source.utm_term ?? source.placement ?? null,
+      // UTMify's Meta campaigns report requires the entity id appended to
+      // each name. Landing-page values supply the names and the recovered
+      // first-party ids make the sale resolvable by UTMify.
+      utm_campaign: withId(source.utm_campaign ?? source.campaign_name, source.campaign_id),
+      utm_medium: withId(source.adset_name ?? source.utm_term, source.adset_id),
+      utm_content: withId(source.utm_content ?? source.ad_name, source.ad_id),
+      utm_term: source.placement ?? source.utm_medium ?? null,
     },
     commission: {
       totalPriceInCents: input.amountMinor,
