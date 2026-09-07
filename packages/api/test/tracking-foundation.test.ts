@@ -137,6 +137,9 @@ describe('reliable tracking foundation', () => {
       },
     });
     expect(payload.status).toBe('paid');
+    expect(payload.paymentMethod).toBe('credit_card');
+    expect(payload.createdAt).toBe('2026-07-27 10:00:00');
+    expect(payload.approvedDate).toBe('2026-07-27 10:01:00');
     expect(payload.commission.totalPriceInCents).toBe(19700);
     expect(payload.customer.country).toBe('US');
     expect(payload.trackingParameters).toMatchObject({
@@ -144,6 +147,16 @@ describe('reliable tracking foundation', () => {
       utm_campaign: 'campanha-a',
       utm_content: 'criativo-3',
     });
+  });
+
+  it('normalizes VendePay card labels to the strict UTMify enum', () => {
+    const payload = buildUtmifyOrderPayload({
+      orderId: 'order-card', provider: 'vendepay', status: 'paid', amountMinor: 100,
+      currency: 'BRL', createdAt: new Date('2026-09-07T12:34:56.000Z'), buyer: {},
+      source: { payment_method: 'card' },
+    });
+    expect(payload.paymentMethod).toBe('credit_card');
+    expect(payload.createdAt).toBe('2026-09-07 12:34:56');
   });
 
   it('marks a pending checkout test without turning it into an approved sale', () => {

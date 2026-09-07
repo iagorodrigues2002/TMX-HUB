@@ -65,6 +65,25 @@ function withId(nameLike: string | undefined, id: string | undefined): string | 
   return name ?? rawId ?? null;
 }
 
+function formatUtmifyDate(value: Date | null | undefined): string | null {
+  if (!value) return null;
+  // UTMify documents UTC timestamps as `YYYY-MM-DD HH:mm:ss`. Although its
+  // endpoint may answer SUCCESS to ISO-8601 strings, those orders can be
+  // silently discarded by the ingestion pipeline.
+  return value.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+function normalizePaymentMethod(raw: string | undefined): string {
+  const value = raw?.trim().toLowerCase().replace(/[ -]+/g, '_');
+  if (!value) return 'credit_card';
+  if (['credit_card', 'creditcard', 'card', 'cartao', 'cartão', 'cc'].includes(value))
+    return 'credit_card';
+  if (['pix', 'boleto', 'paypal', 'free_price'].includes(value)) return value;
+  // VendePay sales are card-first. UTMify rejects values outside its enum,
+  // so an unknown provider label must not poison an otherwise valid sale.
+  return 'credit_card';
+}
+
 export function buildUtmifyOrderPayload(input: UtmifyOrderInput) {
   const source = input.source ?? {};
   const countryCandidate = input.buyer.country ?? source.country ?? 'BR';
@@ -73,16 +92,16 @@ export function buildUtmifyOrderPayload(input: UtmifyOrderInput) {
     isTest: input.isTest ?? false,
     orderId: input.orderId,
     platform: `TMXHUB/${input.provider}`,
-    paymentMethod: source.payment_method ?? 'unknown',
+    paymentMethod: normalizePaymentMethod(source.payment_method),
     status: statusMap[input.status] ?? 'waiting_payment',
-    createdAt: input.createdAt.toISOString(),
+    createdAt: formatUtmifyDate(input.createdAt),
     approvedDate:
-      input.paidAt?.toISOString() ??
+      formatUtmifyDate(input.paidAt) ??
       (['paid', 'refunded', 'chargeback'].includes(input.status)
-        ? input.createdAt.toISOString()
+        ? formatUtmifyDate(input.createdAt)
         : null),
     refundedAt: ['refunded', 'chargeback'].includes(input.status)
-      ? (input.refundedAt ?? input.createdAt).toISOString()
+      ? formatUtmifyDate(input.refundedAt ?? input.createdAt)
       : null,
     customer: {
       name: input.buyer.name ?? 'Cliente',

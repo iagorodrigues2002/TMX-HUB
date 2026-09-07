@@ -162,7 +162,7 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
           signal: AbortSignal.timeout(15_000),
         });
         const responseText = await response.text();
-        const result = (() => {
+        const providerResult = (() => {
           if (!responseText) return {};
           try {
             return JSON.parse(responseText) as object;
@@ -171,9 +171,22 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
           }
         })();
         if (!response.ok) {
-          const detail = JSON.stringify(result).slice(0, 800);
+          const detail = JSON.stringify(providerResult).slice(0, 800);
           throw new Error(`UTMify HTTP ${response.status}${detail !== '{}' ? `: ${detail}` : ''}`);
         }
+        // Keep a PII-free receipt so "HTTP 200" can be audited against the
+        // exact attribution shape accepted by UTMify.
+        const result = {
+          provider: providerResult,
+          sent: {
+            orderId: payload.orderId,
+            status: payload.status,
+            paymentMethod: payload.paymentMethod,
+            createdAt: payload.createdAt,
+            approvedDate: payload.approvedDate,
+            trackingParameters: payload.trackingParameters,
+          },
+        };
         await db`
           UPDATE tracking_delivery_outbox
           SET state = 'delivered', response_status = ${response.status},
