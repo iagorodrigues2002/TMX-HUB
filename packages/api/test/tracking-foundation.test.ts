@@ -200,4 +200,17 @@ describe('reliable tracking foundation', () => {
       utm_term: 'Facebook_Mobile_Feed',
     });
   });
+
+  it('appends the Meta id when the campaign name itself contains a pipe', () => {
+    const payload = buildUtmifyOrderPayload({
+      orderId: 'pjr-eng-pipe', provider: 'vendepay', status: 'paid', amountMinor: 2490,
+      currency: 'BRL', createdAt: new Date('2026-09-07T10:00:00.000Z'), buyer: {},
+      source: {
+        utm_campaign: '[HT][CAT|CBO][1-1-5] [PJR_ENG]', campaign_id: '120249466116200101',
+      },
+    });
+    expect(payload.trackingParameters.utm_campaign).toBe(
+      '[HT][CAT|CBO][1-1-5] [PJR_ENG]|120249466116200101',
+    );
+  });
 });

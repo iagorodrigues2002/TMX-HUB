@@ -60,7 +60,10 @@ function withId(nameLike: string | undefined, id: string | undefined): string | 
   const name = nameLike?.trim();
   const rawId = id?.trim();
   if (!name && !rawId) return null;
-  if (name?.includes('|')) return name; // already in name|id format
+  // Campaign names may legitimately contain pipes (for example
+  // `[HT][CAT|CBO]`). Only treat the value as pre-composed when its final
+  // segment is a numeric Meta entity id.
+  if (name && /\|\d+$/.test(name)) return name;
   if (name && rawId) return `${name}|${rawId}`;
   return name ?? rawId ?? null;
 }
