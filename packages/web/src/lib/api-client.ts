@@ -2867,6 +2867,7 @@ export const apiClient = {
       state: 'pending' | 'processing' | 'delivered' | 'failed' | 'dead';
       attempts: number;
       response_status?: number;
+      response?: Record<string, unknown> | null;
       last_error?: string;
       created_at: string;
       delivered_at?: string;
@@ -2906,6 +2907,7 @@ export const apiClient = {
       state: 'pending' | 'processing' | 'delivered' | 'failed' | 'dead';
       attempts: number;
       response_status?: number;
+      response?: Record<string, unknown> | null;
       last_error?: string;
       created_at: string;
       delivered_at?: string;

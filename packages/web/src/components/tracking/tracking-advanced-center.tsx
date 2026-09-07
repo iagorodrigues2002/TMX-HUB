@@ -2853,6 +2853,11 @@ export function TrackingAdvancedCenter({
                             {delivery.last_error}
                           </p>
                         )}
+                        {delivery.response && (
+                          <p className="mt-1 max-w-2xl break-all font-mono text-[10px] text-white/30">
+                            Recibo: {JSON.stringify(delivery.response)}
+                          </p>
+                        )}
                       </div>
                       <div className="flex items-center gap-3">
                         <span
