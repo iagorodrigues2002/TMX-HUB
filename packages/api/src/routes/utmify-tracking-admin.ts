@@ -80,7 +80,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!app.db) return reply.code(503).send({ deliveries: [] });
       const deliveries = await app.db`
         SELECT d.id, d.event_id, d.event_type, d.state, d.attempts,
-               d.response_status, d.last_error, d.created_at, d.delivered_at,
+               d.response_status, d.response, d.last_error, d.created_at, d.delivered_at,
                COALESCE(o.external_id, 'TMX-IC-' || d.event_id) AS transaction_id,
                COALESCE(o.status, 'pending') AS order_status
         FROM tracking_delivery_outbox d
