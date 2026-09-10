@@ -80,6 +80,13 @@ export function TrackerKpiRow({ summary }: { summary?: Summary }) {
     revenueMinor && Number(revenueMinor) > 0 ? revenueMinor : s?.paid_revenue_minor,
     displayCurrency,
   );
+  const aovRevenueMinor = Number(
+    revenueMinor && Number(revenueMinor) > 0 ? revenueMinor : (s?.paid_revenue_minor ?? 0),
+  );
+  const funnelAov = formatMoney(
+    String(buyersFront ? Math.round(aovRevenueMinor / buyersFront) : 0),
+    displayCurrency,
+  );
   const connectRate = s?.ad_clicks ? percent(s.connected_clicks, s.ad_clicks) : null;
   const lossRate = s?.webhooks_received
     ? percent(s.webhooks_quarantined, s.webhooks_received)
@@ -125,7 +132,7 @@ export function TrackerKpiRow({ summary }: { summary?: Summary }) {
 
   return (
     <div className="tmx-kpi">
-      <div className="tmx-kpi-tier1">
+      <div className="tmx-kpi-tier1 tmx-kpi-tier1-three">
         <HeroReading
           eyebrow="Compradores front"
           value={integer(buyersFront)}
@@ -157,6 +164,19 @@ export function TrackerKpiRow({ summary }: { summary?: Summary }) {
             <>
               <span className="tmx-kpi-sat-tag">visitas hoje</span>
               <span className="mono-num tmx-kpi-sat-value">{integer(s?.visitors)}</span>
+            </>
+          }
+        />
+        <HeroReading
+          eyebrow="AOV geral do funil"
+          value={funnelAov}
+          valueVariant="currency"
+          satellite={
+            <>
+              <span className="tmx-kpi-sat-tag">receita total</span>
+              <span className="tmx-kpi-sat-sep" aria-hidden />
+              <span className="mono-num tmx-kpi-sat-value">{integer(buyersFront)}</span>
+              <span className="tmx-kpi-sat-tag">compradores front</span>
             </>
           }
         />

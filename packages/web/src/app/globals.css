@@ -788,6 +788,9 @@
   [data-surface="tracking"] .tmx-kpi-tier1 {
     grid-template-columns: 1fr 1fr;
   }
+  [data-surface="tracking"] .tmx-kpi-tier1.tmx-kpi-tier1-three {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 [data-surface="tracking"] .tmx-kpi-hero {
