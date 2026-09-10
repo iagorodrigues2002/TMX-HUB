@@ -22,6 +22,7 @@ type Summary = {
   checkouts: number;
   checkout_events: number;
   paid_buyers: number;
+  failed_orders: number;
   upsell_orders: number;
   upsell_2_orders?: number;
   upsell_3_orders?: number;
@@ -182,7 +183,7 @@ export function TrackerKpiRow({ summary }: { summary?: Summary }) {
         />
       </div>
 
-      <div className="tmx-kpi-tier2 tmx-kpi-tier2-five">
+      <div className="tmx-kpi-tier2 tmx-kpi-tier2-six">
         <StripReading
           label="Connect rate"
           value={connectRate ?? '—'}
@@ -212,6 +213,12 @@ export function TrackerKpiRow({ summary }: { summary?: Summary }) {
               : `${integer(buyersFront)} front · ${integer(upsells + upsell2 + upsell3)} upsells`
           }
           tone={buyersFront + upsells + upsell2 + upsell3 > 0 ? 'lush' : 'muted'}
+        />
+        <StripReading
+          label="Vendas com erro"
+          value={integer(s?.failed_orders)}
+          detail="falhas, recusadas ou canceladas"
+          tone={(s?.failed_orders ?? 0) > 0 ? 'ember' : 'muted'}
         />
         <StripReading
           label="Perda de dados"

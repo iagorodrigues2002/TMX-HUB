@@ -1620,6 +1620,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           checkout_events: number;
           orders: number;
           paid_orders: number;
+          failed_orders: number;
           paid_buyers: number;
           upsell_orders: number;
           upsell_2_orders: number;
@@ -1677,6 +1678,18 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         (SELECT count(*)::int FROM tracking_orders o
           WHERE o.project_id = p.id AND o.paid_at IS NOT NULL
             AND o.paid_at >= ${from} AND o.paid_at < ${to}) AS paid_orders,
+        (SELECT count(*)::int FROM tracking_orders o
+          WHERE o.project_id = p.id
+            AND o.status IN ('refused', 'failed', 'cancelled')
+            AND o.paid_at IS NULL
+            AND CASE
+              WHEN o.status = 'cancelled' THEN COALESCE(o.cancelled_at, o.updated_at)
+              ELSE o.occurred_at
+            END >= ${from}
+            AND CASE
+              WHEN o.status = 'cancelled' THEN COALESCE(o.cancelled_at, o.updated_at)
+              ELSE o.occurred_at
+            END < ${to}) AS failed_orders,
         -- Front vs. upsell is marked explicitly per order (tracking_orders.order_kind),
         -- set from the tracking_product_kinds mapping at webhook time — not inferred
         -- from "repeat buyer within this window", which broke across date boundaries.
@@ -1886,6 +1899,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           checkout_events: 0,
           orders: 0,
           paid_orders: 0,
+          failed_orders: 0,
           paid_buyers: 0,
           upsell_orders: 0,
           upsell_2_orders: 0,
