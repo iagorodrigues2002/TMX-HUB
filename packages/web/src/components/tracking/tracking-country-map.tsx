@@ -19,9 +19,10 @@ type CountryRow = {
   checkouts: number;
   orders: number;
   paid_orders: number;
+  front_buyers: number;
   paid_revenue_minor: string;
   paid_revenue_brl_minor: string;
-  average_ticket_brl_minor: string;
+  aov_brl_minor: string;
 };
 
 type Metric = 'page_views' | 'checkouts' | 'paid_orders' | 'conversion_rate';
@@ -200,7 +201,7 @@ export function TrackingCountryMap({ rows }: { rows: CountryRow[] }) {
                       </>
                     )}
                     {lowConversion && ' · ALERTA: conversão baixa'}
-                    {row && ` · ticket médio ${formatBrl(row.average_ticket_brl_minor)}`}
+                    {row && ` · AOV do funil ${formatBrl(row.aov_brl_minor)}`}
                   </title>
                 </path>
               );
@@ -232,7 +233,7 @@ export function TrackingCountryMap({ rows }: { rows: CountryRow[] }) {
                   {countryName(row.country)}
                 </span>
                 <span className="mt-1 block truncate font-mono text-[10px] text-amber-100/60">
-                  Ticket médio {formatBrl(row.average_ticket_brl_minor)}
+                  AOV do funil {formatBrl(row.aov_brl_minor)}
                 </span>
               </span>
               <span className="text-right font-mono text-sm text-cyan-200">
@@ -262,7 +263,7 @@ export function TrackingCountryMap({ rows }: { rows: CountryRow[] }) {
             {formatMetric(conversionRate(selectedRow), 'conversion_rate')} de conversão
           </span>
           <span className="rounded-full border border-amber-300/20 bg-amber-300/[0.07] px-2.5 py-1 font-mono text-amber-100">
-            Ticket médio {formatBrl(selectedRow.average_ticket_brl_minor)}
+            AOV do funil {formatBrl(selectedRow.aov_brl_minor)}
           </span>
           {hasLowConversion(selectedRow) && (
             <span className="flex items-center gap-1.5 rounded-full border border-rose-300/25 bg-rose-300/[0.08] px-2.5 py-1 font-medium text-rose-200">

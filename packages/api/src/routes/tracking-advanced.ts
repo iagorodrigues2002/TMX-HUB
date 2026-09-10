@@ -1403,6 +1403,22 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                         AND aa.created_at <= o.occurred_at
                     )
                   )) AS paid_orders,
+               (SELECT count(DISTINCT COALESCE(
+                  NULLIF(lower(trim(o.buyer->>'email')), ''),
+                  NULLIF(regexp_replace(o.buyer->>'phone', '\D', '', 'g'), ''),
+                  NULLIF(trim(o.visitor_id), ''),
+                  o.external_id
+                ))::int FROM tracking_orders o
+                WHERE o.project_id=t.project_id AND o.status='paid' AND o.order_kind='front'
+                  AND o.occurred_at >= ${fromInstant} AND o.occurred_at < ${toInstant}
+                  AND (
+                    o.attribution_source->>'ab_variant_id'=v.id
+                    OR EXISTS (
+                      SELECT 1 FROM tracking_ab_assignments aa
+                      WHERE aa.variant_id=v.id AND aa.visitor_id=o.visitor_id
+                        AND aa.created_at <= o.occurred_at
+                    )
+                  )) AS front_buyers,
                (SELECT COALESCE(sum(
                   COALESCE(
                     o.amount_brl_minor,

@@ -3890,9 +3890,10 @@ function AbTestCard({
           const row = metrics.data?.variants.find((item) => item.id === variant.id);
           const visitors = Number(row?.visitors ?? 0);
           const paid = Number(row?.paid_orders ?? 0);
+          const frontBuyers = Number(row?.front_buyers ?? 0);
           const conversion = visitors ? (paid / visitors) * 100 : 0;
           const revenueBrlMinor = Number(row?.revenue_brl_minor ?? 0);
-          const averageTicketBrlMinor = paid ? revenueBrlMinor / paid : 0;
+          const aovBrlMinor = frontBuyers ? revenueBrlMinor / frontBuyers : 0;
           return (
             <div
               key={variant.id}
@@ -3938,11 +3939,11 @@ function AbTestCard({
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-white/45" title="Receita atribuída dividida pelas compras pagas">
-                    Ticket médio
+                  <dt className="text-white/45" title="Receita do front e upsells dividida pelos compradores únicos de front">
+                    AOV do funil
                   </dt>
                   <dd className="mt-1 text-base font-semibold text-amber-200">
-                    {(averageTicketBrlMinor / 100).toLocaleString('pt-BR', {
+                    {(aovBrlMinor / 100).toLocaleString('pt-BR', {
                       style: 'currency',
                       currency: 'BRL',
                     })}

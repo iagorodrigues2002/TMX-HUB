@@ -2384,6 +2384,7 @@ export const apiClient = {
       checkouts: number;
       orders: number;
       paid_orders: number;
+      front_buyers: number;
       revenue_brl_minor: string;
     }>;
   }> {
@@ -2696,9 +2697,10 @@ export const apiClient = {
       checkouts: number;
       orders: number;
       paid_orders: number;
+      front_buyers: number;
       paid_revenue_minor: string;
       paid_revenue_brl_minor: string;
-      average_ticket_brl_minor: string;
+      aov_brl_minor: string;
     }>;
   }> {
     const params = trackingPeriodParams(period);
