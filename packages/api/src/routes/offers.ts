@@ -208,22 +208,31 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       req.user.sub,
       req.user.role === 'admin',
     );
+    let nextUtmifyCredentials: { login: string; password: string } | null = null;
+    if (parsed.data.utmify_login || parsed.data.utmify_password) {
+      const currentCredentials = await app.offerStore.getUtmifyCredentials(current.id);
+      const login = parsed.data.utmify_login ?? currentCredentials?.login;
+      const password = parsed.data.utmify_password ?? currentCredentials?.password;
+      if (!login || !password) {
+        throw new BadRequestError(
+          'Informe login e senha para conectar a UTMify pela primeira vez.',
+        );
+      }
+      nextUtmifyCredentials = { login, password };
+    }
     const memberIds = await validateMemberIds(app, parsed.data.member_ids, current.userId);
     const updated = await app.offerStore.update(req.params.id, current.userId, {
       ...parsed.data,
       ...(memberIds !== undefined ? { member_ids: memberIds } : {}),
     });
-    if (parsed.data.utmify_login && parsed.data.utmify_password) {
-      await app.offerStore.setUtmifyCredentials(updated.id, {
-        login: parsed.data.utmify_login,
-        password: parsed.data.utmify_password,
-      });
+    if (nextUtmifyCredentials) {
+      await app.offerStore.setUtmifyCredentials(updated.id, nextUtmifyCredentials);
     }
     const finalOffer = await app.offerStore.get(updated.id);
     if (
       finalOffer.utmifyConfigured &&
       finalOffer.dashboardId &&
-      (parsed.data.dashboard_id || parsed.data.utmify_login)
+      (parsed.data.dashboard_id || parsed.data.utmify_login || parsed.data.utmify_password)
     ) {
       void app.utmifySync.syncOffer(finalOffer, true).catch((error) => {
         app.log.warn({ error, offerId: finalOffer.id }, 'utmify reconnect sync failed');

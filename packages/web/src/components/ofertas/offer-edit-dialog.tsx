@@ -69,9 +69,8 @@ export function OfferEditDialog({ offer, open, onOpenChange }: Props) {
         dashboard_id: dashboardId.trim(),
         status,
         member_ids: memberIds,
-        ...(utmifyLogin.trim() && utmifyPassword
-          ? { utmify_login: utmifyLogin.trim(), utmify_password: utmifyPassword }
-          : {}),
+        ...(utmifyLogin.trim() ? { utmify_login: utmifyLogin.trim() } : {}),
+        ...(utmifyPassword ? { utmify_password: utmifyPassword } : {}),
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['offers'] });
@@ -147,7 +146,7 @@ export function OfferEditDialog({ offer, open, onOpenChange }: Props) {
               <p className="hud-label">Conexão UTMify</p>
               <p className="mt-1 text-[11px] text-white/45">
                 {offer.utmifyConfigured
-                  ? `Conectada como ${offer.utmifyLoginHint ?? 'usuário protegido'}. Preencha login e senha somente para trocar a conta.`
+                  ? `Conectada como ${offer.utmifyLoginHint ?? 'usuário protegido'}. Você pode alterar somente o login ou somente a senha; o outro dado protegido será preservado.`
                   : 'Informe a conta que possui acesso à dashboard.'}
               </p>
             </div>
@@ -160,21 +159,23 @@ export function OfferEditDialog({ offer, open, onOpenChange }: Props) {
               />
             </Field>
             <div className="grid gap-3 md:grid-cols-2">
-              <Field label="Novo login" htmlFor="of-login">
+              <Field label="Editar login" htmlFor="of-login">
                 <Input
                   id="of-login"
                   value={utmifyLogin}
                   onChange={(event) => setUtmifyLogin(event.target.value)}
                   autoComplete="username"
+                  placeholder={offer.utmifyLoginHint ?? 'Login da UTMify'}
                 />
               </Field>
-              <Field label="Nova senha" htmlFor="of-password">
+              <Field label="Editar senha (opcional)" htmlFor="of-password">
                 <Input
                   id="of-password"
                   type="password"
                   value={utmifyPassword}
                   onChange={(event) => setUtmifyPassword(event.target.value)}
                   autoComplete="new-password"
+                  placeholder={offer.utmifyConfigured ? 'Manter senha atual' : 'Senha da UTMify'}
                 />
               </Field>
             </div>

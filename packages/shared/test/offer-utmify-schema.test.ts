@@ -14,14 +14,14 @@ describe('Offer UTMify connection schema', () => {
     ).toBe(true);
   });
 
-  it('rejects partial credentials', () => {
+  it('requires complete credentials on creation and allows partial credential edits', () => {
     expect(
       CreateOfferRequestSchema.safeParse({ name: 'Oferta BR', dashboard_id: 'dashboard-123' })
         .success,
     ).toBe(false);
-    expect(
-      UpdateOfferRequestSchema.safeParse({ utmify_login: 'operator@example.com' }).success,
-    ).toBe(false);
+    expect(UpdateOfferRequestSchema.safeParse({ utmify_login: 'operator@example.com' }).success)
+      .toBe(true);
+    expect(UpdateOfferRequestSchema.safeParse({ utmify_password: 'new-secret' }).success).toBe(true);
   });
 
   it('keeps legacy offers without a UTMify connection valid', () => {

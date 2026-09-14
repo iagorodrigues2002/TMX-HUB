@@ -183,16 +183,7 @@ export const UpdateOfferRequestSchema = z
     utmify_password: z.string().min(1).max(500).optional(),
     member_ids: z.array(z.string().min(1).max(64)).max(100).optional(),
   })
-  .strict()
-  .superRefine((value, ctx) => {
-    if (Boolean(value.utmify_login) !== Boolean(value.utmify_password)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: [value.utmify_login ? 'utmify_password' : 'utmify_login'],
-        message: 'Informe login e senha juntos.',
-      });
-    }
-  });
+  .strict();
 
 const AdsetSnapshotSchema = z.object({
   name: z.string(),
