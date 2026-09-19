@@ -8,6 +8,8 @@ import clonesRoutes from './clones.js';
 import formsRoutes from './forms.js';
 import funnelJobsRoutes from './funnel-jobs.js';
 import healthRoutes from './health.js';
+import googleAdsAdminRoutes from './google-ads-admin.js';
+import googleAdsOAuthRoutes from './google-ads-oauth.js';
 import inspectRoutes from './inspect.js';
 import linksRoutes from './links.js';
 import mediaJobsRoutes from './media-jobs.js';
@@ -103,6 +105,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         await protectedRoutes.register(funnelJobsRoutes);
         await protectedRoutes.register(offersRoutes);
         await protectedRoutes.register(trackingAdminRoutes);
+        await protectedRoutes.register(googleAdsAdminRoutes);
+        await protectedRoutes.register(googleAdsOAuthRoutes);
         await protectedRoutes.register(trackingAdvancedRoutes);
         await protectedRoutes.register(trackingOverviewRoutes);
         await protectedRoutes.register(nichesRoutes);

@@ -1,6 +1,7 @@
 'use client';
 
 import { TrackingHelp } from '@/components/tracking/tracking-help';
+import { GoogleAdsDestinations } from '@/components/tracking/google-ads-destinations';
 import { TrackingLiveConsole } from '@/components/tracking/tracking-live-console';
 import { TrackingPanel } from '@/components/tracking/tracking-panel';
 import { Button } from '@/components/ui/button';
@@ -423,6 +424,7 @@ type Section =
   | 'gateways'
   | 'meta'
   | 'utmify'
+  | 'google'
   | 'pushcut'
   | 'fees'
   | 'help';
@@ -441,6 +443,7 @@ const sections: Array<{ id: Section; label: string; icon: LucideIcon; group: str
   { id: 'gateways', label: 'Gateways', icon: Cable, group: 'Configuração' },
   { id: 'meta', label: 'Envio ao Meta', icon: Send, group: 'Configuração' },
   { id: 'utmify', label: 'Envio à UTMify', icon: Cable, group: 'Configuração' },
+  { id: 'google', label: 'Google Ads', icon: Globe2, group: 'Configuração' },
   { id: 'pushcut', label: 'Notificações Pushcut', icon: BellRing, group: 'Configuração' },
   { id: 'fees', label: 'Taxas e líquido', icon: Percent, group: 'Configuração' },
   { id: 'help', label: 'Ajuda e testes', icon: HelpCircle, group: 'Configuração' },
@@ -473,7 +476,7 @@ const trackingAreas: Array<{
     id: 'integrations',
     label: 'Integrações',
     icon: Cable,
-    sections: ['gateways', 'utmify', 'vturb'],
+    sections: ['gateways', 'utmify', 'vturb', 'google'],
   },
   { id: 'finance', label: 'Financeiro', icon: Percent, sections: ['refunds', 'fees'] },
   { id: 'automations', label: 'Automações', icon: BellRing, sections: ['pushcut'] },
@@ -2663,6 +2666,11 @@ export function TrackingAdvancedCenter({
                   )}
                 </div>
               </div>
+            </Module>
+          )}
+          {section === 'google' && (
+            <Module title="Google Ads" description="Contas e ações de conversão independentes por oferta.">
+              <GoogleAdsDestinations key={offerId} offerId={offerId} />
             </Module>
           )}
           {section === 'utmify' && (

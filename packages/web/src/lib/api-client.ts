@@ -1200,7 +1200,32 @@ export interface UtmifyGlobalConfig {
 
 // ---- public methods ----
 
+export type GoogleAdsDraftInput = { name: string; customer_id: string; conversion_action_id: string };
+export type GoogleAdsDraft = GoogleAdsDraftInput & { id: string; mode: 'server'; state: 'draft' };
+export type GoogleAdsOAuthConnection = { id: string; name: string; connected_at: string };
+export type GoogleAdsDestinationConnection = {
+  destination_id: string;
+  connection_id: string;
+  connection_name: string;
+  connected_at: string;
+};
+
 export const apiClient = {
+  googleAdsConnectionStatus: (offerId: string) => request<{
+    oauth_configured: boolean;
+    connections: GoogleAdsDestinationConnection[];
+    oauth_connections: GoogleAdsOAuthConnection[];
+  }>(`/v1/offers/${offerId}/tracking/google-ads/connection-status`),
+  googleAdsOAuthStart: (offerId: string, id: string) => request<{ authorization_url: string; state: string }>(`/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth/start`, { method: 'POST' }),
+  googleAdsOAuthComplete: (offerId: string, id: string, input: { code: string; state: string }) => request<{ connected: boolean }>(`/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth/complete`, { method: 'POST', body: input }),
+  googleAdsDisconnect: (offerId: string, id: string) => request<void>(`/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth`, { method: 'DELETE' }),
+  googleAdsAttachConnection: (offerId: string, id: string, connectionId: string) =>
+    request<{ attached: boolean }>(`/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth/attach`, { method: 'POST', body: { connection_id: connectionId } }),
+  googleAdsDestinations: (offerId: string) => request<{ destinations: GoogleAdsDraft[]; delivery_enabled: false }>(`/v1/offers/${offerId}/tracking/google-ads/destinations`),
+  saveGoogleAdsDestination: (offerId: string, input: GoogleAdsDraftInput, id?: string) =>
+    request<{ destination: GoogleAdsDraft }>(`/v1/offers/${offerId}/tracking/google-ads/destinations${id ? `/${id}` : ''}`, { method: id ? 'PUT' : 'POST', body: input }),
+  archiveGoogleAdsDestination: (offerId: string, id: string) =>
+    request<void>(`/v1/offers/${offerId}/tracking/google-ads/destinations/${id}`, { method: 'DELETE' }),
   baseUrl: env.NEXT_PUBLIC_API_URL,
 
   async getMetaControlConnection(): Promise<MetaControlConnection | null> {
