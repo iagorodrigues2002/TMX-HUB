@@ -7,6 +7,7 @@ import {
   Home,
   HeartHandshake,
   RadioTower,
+  RotateCcw,
   WalletCards,
   Settings,
   ShieldCheck,
@@ -40,6 +41,7 @@ const NAV: NavItem[] = [
     icon: RadioTower,
     requiresTool: 'ofertas',
   },
+  { label: 'Reembolsos', mobileLabel: 'Reembolsos', href: '/reembolsos', icon: RotateCcw, requiresTool: 'ofertas' },
   {
     label: 'Controle de contas',
     mobileLabel: 'Contas',

@@ -20,6 +20,7 @@ import offersRoutes from './offers.js';
 import previewRoutes from './preview.js';
 import pushcutAdminRoutes from './pushcut-admin.js';
 import recoveryAdminRoutes from './recovery-admin.js';
+import refundsDashboardRoutes from './refunds-dashboard.js';
 import shieldJobsRoutes from './shield-jobs.js';
 import trackingAdminRoutes from './tracking-admin.js';
 import trackingAdvancedRoutes from './tracking-advanced.js';
@@ -109,6 +110,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         await protectedRoutes.register(googleAdsOAuthRoutes);
         await protectedRoutes.register(trackingAdvancedRoutes);
         await protectedRoutes.register(trackingOverviewRoutes);
+        await protectedRoutes.register(refundsDashboardRoutes);
         await protectedRoutes.register(nichesRoutes);
         await protectedRoutes.register(shieldJobsRoutes);
         await protectedRoutes.register(mediaJobsRoutes);

@@ -87,6 +87,14 @@ export interface BulkLinkUpdateResult {
 }
 
 export type TrackingPeriod = { from: string; to: string };
+export type RefundBreakdown = {
+  refunded_orders: number;
+  chargeback_orders: number;
+  refunded_brl_minor: number;
+  chargeback_brl_minor: number;
+  count: number;
+  brl_minor: number;
+};
 
 function trackingPeriodParams(period?: string | TrackingPeriod) {
   const params = new URLSearchParams();
@@ -1972,6 +1980,27 @@ export const apiClient = {
     if (to) params.set('to', to);
     const query = params.toString();
     return request(`/v1/tracking/overview${query ? `?${query}` : ''}`);
+  },
+
+  async getRefundsDashboard(from: string, to: string, offerId?: string, product?: string): Promise<{
+    from: string;
+    to: string;
+    time_zone: string;
+    offers: Array<RefundBreakdown & { offer_id: string; offer_name: string }>;
+    products: Array<RefundBreakdown & { product_name: string }>;
+    daily: Array<RefundBreakdown & { date: string }>;
+    items: Array<{
+      id: string; offer_id: string; offer_name: string; external_id: string;
+      status: 'refunded' | 'chargeback'; amount_minor: number | null; currency: string | null;
+      amount_brl_minor: string | null; brl_minor: number; product_name: string;
+      order_kind: string; lifecycle_at: string; buyer: { name?: string; email?: string };
+    }>;
+    totals: RefundBreakdown & { fee_usd_minor: number };
+  }> {
+    const params = new URLSearchParams({ from, to });
+    if (offerId) params.set('offer_id', offerId);
+    if (product) params.set('product', product);
+    return request(`/v1/tracking/refunds-dashboard?${params.toString()}`);
   },
 
   async getTrackingDiagnostics(id: string): Promise<{
