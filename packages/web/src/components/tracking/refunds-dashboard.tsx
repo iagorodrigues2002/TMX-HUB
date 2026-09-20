@@ -19,10 +19,11 @@ export function RefundsDashboard() {
   const [to, setTo] = useState(today);
   const [offerId, setOfferId] = useState('');
   const [product, setProduct] = useState('');
+  const [vendepay, setVendepay] = useState<'' | 'iago' | 'lucas'>('');
   const [hoveredDay, setHoveredDay] = useState<string | null>(null);
   const [displayCurrency] = useDisplayCurrency();
   const offers = useQuery({ queryKey:['offers'], queryFn: apiClient.listOffers, retry:false });
-  const report = useQuery({ queryKey:['refunds-dashboard',from,to,offerId,product], queryFn:()=>apiClient.getRefundsDashboard(from,to,offerId||undefined,product||undefined), retry:false });
+  const report = useQuery({ queryKey:['refunds-dashboard',from,to,offerId,product,vendepay], queryFn:()=>apiClient.getRefundsDashboard(from,to,offerId||undefined,product||undefined,vendepay||undefined), retry:false });
   const data = report.data;
   const maxDaily = Math.max(...(data?.daily.map((day)=>day.brl_minor) ?? [1]), 1);
   const products = useMemo(()=>data?.products ?? [], [data]);
@@ -40,11 +41,12 @@ export function RefundsDashboard() {
         </div>
         <span className="rounded-full border border-white/10 bg-black/15 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[.16em] text-white/55">Horário de São Paulo</span>
       </div>
-      <div className="mt-6 grid gap-3 md:grid-cols-4">
+      <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <label className="space-y-1"><span className="hud-label">De</span><Input type="date" value={from} max={to} onChange={e=>setFrom(e.target.value)} /></label>
         <label className="space-y-1"><span className="hud-label">Até</span><Input type="date" value={to} min={from} max={today()} onChange={e=>setTo(e.target.value)} /></label>
         <label className="space-y-1"><span className="hud-label">Oferta</span><select value={offerId} onChange={e=>setOfferId(e.target.value)} className="h-10 w-full rounded-lg border border-cyan-100/[.16] bg-[#071720] px-3 text-sm text-white"><option value="">Todas as ofertas</option>{offers.data?.map(offer=><option key={offer.id} value={offer.id}>{offer.name}</option>)}</select></label>
         <label className="space-y-1"><span className="hud-label">Produto</span><select value={product} onChange={e=>setProduct(e.target.value)} className="h-10 w-full rounded-lg border border-cyan-100/[.16] bg-[#071720] px-3 text-sm text-white"><option value="">Todos os produtos</option>{products.map(item=><option key={item.product_name} value={item.product_name}>{item.product_name}</option>)}</select></label>
+        <label className="space-y-1"><span className="hud-label">VendePay</span><select value={vendepay} onChange={e=>setVendepay(e.target.value as '' | 'iago' | 'lucas')} className="h-10 w-full rounded-lg border border-cyan-100/[.16] bg-[#071720] px-3 text-sm text-white"><option value="">Todas as VendePay</option><option value="iago">VendePay Iago</option><option value="lucas">VendePay Lucas</option></select></label>
       </div>
       <div className="mt-3 flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={()=>{setFrom(today());setTo(today());}}>Hoje</Button><Button size="sm" variant="outline" onClick={()=>{setFrom(ago(6));setTo(today());}}>7 dias</Button><Button size="sm" variant="outline" onClick={()=>{setFrom(ago(29));setTo(today());}}>30 dias</Button><Button size="sm" variant="outline" onClick={()=>report.refetch()}><RefreshCw className="h-3.5 w-3.5" />Atualizar</Button></div>
     </section>

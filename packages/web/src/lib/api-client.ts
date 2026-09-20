@@ -1982,7 +1982,7 @@ export const apiClient = {
     return request(`/v1/tracking/overview${query ? `?${query}` : ''}`);
   },
 
-  async getRefundsDashboard(from: string, to: string, offerId?: string, product?: string): Promise<{
+  async getRefundsDashboard(from: string, to: string, offerId?: string, product?: string, vendepay?: 'iago' | 'lucas'): Promise<{
     from: string;
     to: string;
     time_zone: string;
@@ -2001,6 +2001,7 @@ export const apiClient = {
     const params = new URLSearchParams({ from, to });
     if (offerId) params.set('offer_id', offerId);
     if (product) params.set('product', product);
+    if (vendepay) params.set('vendepay', vendepay);
     return request(`/v1/tracking/refunds-dashboard?${params.toString()}`);
   },
 

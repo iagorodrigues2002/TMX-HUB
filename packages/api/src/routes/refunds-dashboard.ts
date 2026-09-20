@@ -9,6 +9,7 @@ const QuerySchema = z.object({
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   offer_id: z.string().min(1).optional(),
   product: z.string().min(1).max(300).optional(),
+  vendepay: z.enum(['iago', 'lucas']).optional(),
 });
 
 const REFUND_CHARGEBACK_FEE_USD_MINOR = 2_700;
@@ -21,7 +22,7 @@ const unavailable = { error: 'tracking_database_unavailable' };
  */
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get<{
-    Querystring: { from?: string; to?: string; offer_id?: string; product?: string };
+    Querystring: { from?: string; to?: string; offer_id?: string; product?: string; vendepay?: 'iago' | 'lucas' };
   }>('/tracking/refunds-dashboard', async (req, reply) => {
     if (!req.user) return reply.code(401).send({ error: 'unauthorized' });
     if (!app.db) return reply.code(503).send(unavailable);
@@ -46,6 +47,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!offerIds.length) return { from: fromDate, to: toDate, offers: [], products: [], vendepays: [], daily: [], items: [], totals: emptyTotals() };
 
     const productFilter = parsed.data.product ?? null;
+    const vendepayFilter = parsed.data.vendepay ?? null;
     const rows = await app.db<Array<{
       id: string; offer_id: string; external_id: string; status: 'refunded' | 'chargeback';
       amount_minor: number | null; currency: string | null; amount_brl_minor: string | null;
@@ -64,6 +66,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         AND COALESCE(o.refunded_at,o.chargeback_at) >= ${from}
         AND COALESCE(o.refunded_at,o.chargeback_at) < ${to}
         AND (${productFilter}::text IS NULL OR COALESCE(NULLIF(o.product->>'name',''), 'Produto não identificado')=${productFilter})
+        AND (${vendepayFilter}::text IS NULL OR LOWER(COALESCE(vc.name, '')) LIKE '%' || ${vendepayFilter} || '%')
       ORDER BY COALESCE(o.refunded_at,o.chargeback_at) DESC, o.id DESC
     `;
 
