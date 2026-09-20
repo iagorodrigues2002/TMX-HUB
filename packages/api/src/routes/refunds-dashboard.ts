@@ -95,12 +95,18 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const feeConversion = await convertToBrlMinor(totals.fee_usd_minor, 'USD', app.db);
     totals.fee_brl_minor = feeConversion?.brlMinor ?? 0;
     totals.fee_exchange_rate = feeConversion?.rate ?? null;
+    const withVendepayFee = (connection_name: string, value: ReturnType<typeof emptyBreakdown>) => ({
+      connection_name,
+      ...value,
+      fee_usd_minor: value.count * REFUND_CHARGEBACK_FEE_USD_MINOR,
+      fee_brl_minor: feeConversion ? Math.round(value.count * REFUND_CHARGEBACK_FEE_USD_MINOR * feeConversion.rate) : 0,
+    });
     return {
       from: fromDate, to: toDate, time_zone: 'America/Sao_Paulo',
       offers: selectedOffers.map((offer) => ({ offer_id: offer.id, offer_name: offer.name, ...(byOffer.get(offer.id) ?? emptyBreakdown()) })),
       products: [...byProduct.entries()].map(([product_name, value]) => ({ product_name, ...value })).sort((a,b) => b.brl_minor - a.brl_minor),
-      vendepays: ['VendePay Iago', 'VendePay Lucas'].map((connection_name) => ({ connection_name, ...(byVendepay.get(connection_name) ?? emptyBreakdown()) }))
-        .concat([...byVendepay.entries()].filter(([name]) => name !== 'VendePay Iago' && name !== 'VendePay Lucas').map(([connection_name, value]) => ({ connection_name, ...value })))
+      vendepays: ['VendePay Iago', 'VendePay Lucas'].map((connection_name) => withVendepayFee(connection_name, byVendepay.get(connection_name) ?? emptyBreakdown()))
+        .concat([...byVendepay.entries()].filter(([name]) => name !== 'VendePay Iago' && name !== 'VendePay Lucas').map(([connection_name, value]) => withVendepayFee(connection_name, value)))
         .sort((a,b) => b.brl_minor - a.brl_minor),
       daily: [...byDay.entries()].map(([date, value]) => ({ date, ...value })).sort((a,b) => a.date.localeCompare(b.date)),
       items: rows.map((row) => ({ ...row, connection_name: vendepayLabel(row.connection_name), offer_name: offerName.get(row.offer_id) ?? row.offer_id, brl_minor: asBrl(row) })),

@@ -1988,7 +1988,7 @@ export const apiClient = {
     time_zone: string;
     offers: Array<RefundBreakdown & { offer_id: string; offer_name: string }>;
     products: Array<RefundBreakdown & { product_name: string }>;
-    vendepays: Array<RefundBreakdown & { connection_name: string }>;
+    vendepays: Array<RefundBreakdown & { connection_name: string; fee_usd_minor: number; fee_brl_minor: number }>;
     daily: Array<RefundBreakdown & { date: string }>;
     items: Array<{
       id: string; offer_id: string; offer_name: string; connection_name: string; external_id: string;
