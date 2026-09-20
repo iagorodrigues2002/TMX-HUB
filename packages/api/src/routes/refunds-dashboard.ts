@@ -42,19 +42,22 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     }
     const offerIds = selectedOffers.map((offer) => offer.id);
     const offerName = new Map(selectedOffers.map((offer) => [offer.id, offer.name]));
-    if (!offerIds.length) return { from: fromDate, to: toDate, offers: [], products: [], daily: [], items: [], totals: emptyTotals() };
+    if (!offerIds.length) return { from: fromDate, to: toDate, offers: [], products: [], vendepays: [], daily: [], items: [], totals: emptyTotals() };
 
     const productFilter = parsed.data.product ?? null;
     const rows = await app.db<Array<{
       id: string; offer_id: string; external_id: string; status: 'refunded' | 'chargeback';
       amount_minor: number | null; currency: string | null; amount_brl_minor: string | null;
       product_name: string; order_kind: string; lifecycle_at: string; buyer: { name?: string; email?: string };
+      connection_name: string | null;
     }>>`
       SELECT o.id, p.offer_id, o.external_id, o.status, o.amount_minor, o.currency,
              o.amount_brl_minor::text, COALESCE(NULLIF(o.product->>'name',''), 'Produto não identificado') AS product_name,
-             o.order_kind, COALESCE(o.refunded_at, o.chargeback_at) AS lifecycle_at, o.buyer
+             o.order_kind, COALESCE(o.refunded_at, o.chargeback_at) AS lifecycle_at, o.buyer,
+             vc.name AS connection_name
       FROM tracking_orders o
       JOIN tracking_projects p ON p.id=o.project_id
+      LEFT JOIN vendepay_connections vc ON vc.id=o.vendepay_connection_id
       WHERE p.offer_id = ANY(${offerIds})
         AND o.status IN ('refunded','chargeback')
         AND COALESCE(o.refunded_at,o.chargeback_at) >= ${from}
@@ -71,6 +74,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const byOffer = new Map<string, ReturnType<typeof emptyBreakdown>>();
     const byProduct = new Map<string, ReturnType<typeof emptyBreakdown>>();
     const byDay = new Map<string, ReturnType<typeof emptyBreakdown>>();
+    const byVendepay = new Map<string, ReturnType<typeof emptyBreakdown>>();
     for (const row of rows) {
       const amount = asBrl(row);
       apply(totals, row.status, amount);
@@ -78,6 +82,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       apply(offer, row.status, amount); byOffer.set(row.offer_id, offer);
       const product = byProduct.get(row.product_name) ?? emptyBreakdown();
       apply(product, row.status, amount); byProduct.set(row.product_name, product);
+      const vendepay = vendepayLabel(row.connection_name);
+      const account = byVendepay.get(vendepay) ?? emptyBreakdown();
+      apply(account, row.status, amount); byVendepay.set(vendepay, account);
       const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' })
         .format(new Date(row.lifecycle_at));
       const daily = byDay.get(day) ?? emptyBreakdown();
@@ -88,8 +95,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       from: fromDate, to: toDate, time_zone: 'America/Sao_Paulo',
       offers: selectedOffers.map((offer) => ({ offer_id: offer.id, offer_name: offer.name, ...(byOffer.get(offer.id) ?? emptyBreakdown()) })),
       products: [...byProduct.entries()].map(([product_name, value]) => ({ product_name, ...value })).sort((a,b) => b.brl_minor - a.brl_minor),
+      vendepays: ['VendePay Iago', 'VendePay Lucas'].map((connection_name) => ({ connection_name, ...(byVendepay.get(connection_name) ?? emptyBreakdown()) }))
+        .concat([...byVendepay.entries()].filter(([name]) => name !== 'VendePay Iago' && name !== 'VendePay Lucas').map(([connection_name, value]) => ({ connection_name, ...value })))
+        .sort((a,b) => b.brl_minor - a.brl_minor),
       daily: [...byDay.entries()].map(([date, value]) => ({ date, ...value })).sort((a,b) => a.date.localeCompare(b.date)),
-      items: rows.map((row) => ({ ...row, offer_name: offerName.get(row.offer_id) ?? row.offer_id, brl_minor: asBrl(row) })),
+      items: rows.map((row) => ({ ...row, connection_name: vendepayLabel(row.connection_name), offer_name: offerName.get(row.offer_id) ?? row.offer_id, brl_minor: asBrl(row) })),
       totals,
     };
   });
@@ -101,6 +111,14 @@ function apply(target: ReturnType<typeof emptyBreakdown> | ReturnType<typeof emp
   target.count += 1; target.brl_minor += amount;
   if (status === 'refunded') { target.refunded_orders += 1; target.refunded_brl_minor += amount; }
   else { target.chargeback_orders += 1; target.chargeback_brl_minor += amount; }
+}
+
+/** Uses the same connection names shown in Upsell Intelligence. */
+function vendepayLabel(connectionName: string | null) {
+  const normalized = (connectionName ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  if (normalized.includes('iago')) return 'VendePay Iago';
+  if (normalized.includes('lucas')) return 'VendePay Lucas';
+  return connectionName?.trim() || 'VendePay não identificada';
 }
 
 export default plugin;

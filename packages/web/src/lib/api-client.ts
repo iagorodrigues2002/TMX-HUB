@@ -1988,9 +1988,10 @@ export const apiClient = {
     time_zone: string;
     offers: Array<RefundBreakdown & { offer_id: string; offer_name: string }>;
     products: Array<RefundBreakdown & { product_name: string }>;
+    vendepays: Array<RefundBreakdown & { connection_name: string }>;
     daily: Array<RefundBreakdown & { date: string }>;
     items: Array<{
-      id: string; offer_id: string; offer_name: string; external_id: string;
+      id: string; offer_id: string; offer_name: string; connection_name: string; external_id: string;
       status: 'refunded' | 'chargeback'; amount_minor: number | null; currency: string | null;
       amount_brl_minor: string | null; brl_minor: number; product_name: string;
       order_kind: string; lifecycle_at: string; buyer: { name?: string; email?: string };
