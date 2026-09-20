@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { convertToBrlMinor } from '../services/exchange-rate.js';
 import { saoPauloParts } from '../services/intraday-store.js';
 import { saoPauloDayRange } from '../services/utmify-sync.js';
 
@@ -91,6 +92,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       apply(daily, row.status, amount); byDay.set(day, daily);
     }
     totals.fee_usd_minor = totals.count * REFUND_CHARGEBACK_FEE_USD_MINOR;
+    const feeConversion = await convertToBrlMinor(totals.fee_usd_minor, 'USD', app.db);
+    totals.fee_brl_minor = feeConversion?.brlMinor ?? 0;
+    totals.fee_exchange_rate = feeConversion?.rate ?? null;
     return {
       from: fromDate, to: toDate, time_zone: 'America/Sao_Paulo',
       offers: selectedOffers.map((offer) => ({ offer_id: offer.id, offer_name: offer.name, ...(byOffer.get(offer.id) ?? emptyBreakdown()) })),
@@ -106,7 +110,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 };
 
 function emptyBreakdown() { return { refunded_orders: 0, chargeback_orders: 0, refunded_brl_minor: 0, chargeback_brl_minor: 0, count: 0, brl_minor: 0 }; }
-function emptyTotals() { return { ...emptyBreakdown(), fee_usd_minor: 0 }; }
+function emptyTotals() { return { ...emptyBreakdown(), fee_usd_minor: 0, fee_brl_minor: 0, fee_exchange_rate: null as number | null }; }
 function apply(target: ReturnType<typeof emptyBreakdown> | ReturnType<typeof emptyTotals>, status: 'refunded' | 'chargeback', amount: number) {
   target.count += 1; target.brl_minor += amount;
   if (status === 'refunded') { target.refunded_orders += 1; target.refunded_brl_minor += amount; }

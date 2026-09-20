@@ -1996,7 +1996,7 @@ export const apiClient = {
       amount_brl_minor: string | null; brl_minor: number; product_name: string;
       order_kind: string; lifecycle_at: string; buyer: { name?: string; email?: string };
     }>;
-    totals: RefundBreakdown & { fee_usd_minor: number };
+    totals: RefundBreakdown & { fee_usd_minor: number; fee_brl_minor: number; fee_exchange_rate: number | null };
   }> {
     const params = new URLSearchParams({ from, to });
     if (offerId) params.set('offer_id', offerId);
