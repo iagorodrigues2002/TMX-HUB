@@ -144,9 +144,6 @@ const plugin: FastifyPluginAsync = async (app) => {
     await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
     const config = googleOAuthConfig();
     if (!app.db || !config || !env.TRACKING_ENCRYPTION_KEY) return reply.code(503).send({ error: 'google_oauth_not_configured' });
-    if (!env.GOOGLE_ADS_DEVELOPER_TOKEN) {
-      return reply.code(503).send({ error: 'google_ads_developer_token_missing', detail: 'Configure GOOGLE_ADS_DEVELOPER_TOKEN na API do Railway para listar as contas vinculadas.' });
-    }
     const destination = await getDestinationConnection(req.params.id, req.params.destinationId);
     if (!destination) return reply.code(404).send({ error: 'google_ads_destination_not_found' });
     if (!destination.refresh_token_encrypted || !destination.granted_scope) {
@@ -157,7 +154,7 @@ const plugin: FastifyPluginAsync = async (app) => {
     }
     try {
       const accessToken = await refreshGoogleAccessToken(config, decryptSecret(destination.refresh_token_encrypted, env.TRACKING_ENCRYPTION_KEY));
-      const accounts = await listGoogleAdsAccounts({ accessToken, developerToken: env.GOOGLE_ADS_DEVELOPER_TOKEN });
+      const accounts = await listGoogleAdsAccounts({ accessToken });
       return { accounts };
     } catch {
       return reply.code(502).send({ error: 'google_ads_accounts_unavailable', detail: 'Não foi possível listar as contas. Verifique o token de desenvolvedor, as permissões da conta e reconecte o Google se necessário.' });

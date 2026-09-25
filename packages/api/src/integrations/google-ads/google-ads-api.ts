@@ -27,10 +27,9 @@ export async function refreshGoogleAccessToken(config: GoogleOAuthConfig, refres
   return parsed.data.access_token;
 }
 
-function googleAdsHeaders(accessToken: string, developerToken: string, loginCustomerId?: string) {
+function googleAdsHeaders(accessToken: string, loginCustomerId?: string) {
   return {
     authorization: `Bearer ${accessToken}`,
-    'developer-token': developerToken,
     'content-type': 'application/json',
     ...(loginCustomerId ? { 'login-customer-id': loginCustomerId } : {}),
   };
@@ -38,16 +37,14 @@ function googleAdsHeaders(accessToken: string, developerToken: string, loginCust
 
 /**
  * Lists directly accessible accounts and the enabled children of accessible
- * manager accounts. A Google Ads developer token is intentionally required:
- * the Data Manager API can ingest events without it but cannot enumerate Ads
- * accounts or conversion actions.
+ * manager accounts. Google Ads now manages API access through Google Cloud,
+ * so no developer token is required for this discovery request.
  */
 export async function listGoogleAdsAccounts(input: {
   accessToken: string;
-  developerToken: string;
 }) {
   const rootsResponse = await fetch('https://googleads.googleapis.com/v22/customers:listAccessibleCustomers', {
-    headers: googleAdsHeaders(input.accessToken, input.developerToken), signal: AbortSignal.timeout(20_000),
+    headers: googleAdsHeaders(input.accessToken), signal: AbortSignal.timeout(20_000),
   });
   const roots = AccountsResponse.safeParse(await rootsResponse.json().catch(() => null));
   if (!rootsResponse.ok || !roots.success) throw new Error('google_ads_accounts_unavailable');
@@ -55,7 +52,7 @@ export async function listGoogleAdsAccounts(input: {
   const accounts = new Map<string, GoogleAdsAccount>();
   for (const rootId of rootIds) {
     const response = await fetch(`https://googleads.googleapis.com/v22/customers/${rootId}/googleAds:searchStream`, {
-      method: 'POST', headers: googleAdsHeaders(input.accessToken, input.developerToken, rootId),
+      method: 'POST', headers: googleAdsHeaders(input.accessToken, rootId),
       body: JSON.stringify({
         query: 'SELECT customer_client.id, customer_client.descriptive_name, customer_client.manager, customer_client.status FROM customer_client WHERE customer_client.status = \'ENABLED\'',
       }), signal: AbortSignal.timeout(20_000),

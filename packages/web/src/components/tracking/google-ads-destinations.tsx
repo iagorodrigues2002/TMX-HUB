@@ -100,7 +100,7 @@ export function GoogleAdsDestinations({ offerId }: { offerId: string }) {
           {accounts.isError && accounts.variables === d.id && <div role="alert" className="mt-4 rounded-lg border border-amber-300/25 bg-amber-300/5 p-3 text-sm text-amber-100">
             <p className="font-medium">Não foi possível carregar as contas vinculadas</p>
             <p className="mt-1 text-white/70">{String(accounts.error.message || 'Verifique a conexão Google.')}</p>
-            <p className="mt-2 text-xs text-white/55">O seletor exige o Developer Token da Google Ads API no Railway. Ele é usado apenas para leitura/listagem; as conversões continuam pelo Data Manager.</p>
+            <p className="mt-2 text-xs text-white/55">O seletor usa apenas a autorização OAuth desta conexão. Reconecte o Google se a permissão de listar contas ainda não tiver sido concedida.</p>
           </div>}
           {validate.data && validate.variables === d.id && <div role="status" className="mt-4 rounded-lg border border-emerald-300/20 bg-emerald-300/5 p-3 text-sm text-emerald-100">
             <p className="font-medium">Teste aprovado</p><p className="mt-1 text-white/70">{validate.data.detail} Pedido usado: {validate.data.order_id}. Avisos: {validate.data.warnings}.</p>

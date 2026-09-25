@@ -22,10 +22,10 @@ Deployment prerequisites (server-only; never NEXT_PUBLIC):
 - GOOGLE_ADS_OAUTH_REDIRECT_URI=https://theminex.com/tracking/google-callback
 - Existing TRACKING_ENCRYPTION_KEY and DATABASE_URL
 
-For account discovery (optional for conversion delivery, required for the account
-selector), add `GOOGLE_ADS_DEVELOPER_TOKEN` from Google Ads API Center. The OAuth
-connection asks for both Data Manager and Google Ads read scopes. A connection made
-before this change must be reconnected once to grant the additional Google Ads scope.
+The OAuth connection asks for both Data Manager and Google Ads read scopes. Google Ads
+now manages API access through Google Cloud, so account discovery uses OAuth and does
+not require a developer token. A connection made before this change must be reconnected
+once to grant the additional Google Ads scope.
 
 ## Account selector and safe validation
 

@@ -64,9 +64,6 @@ const EnvSchema = z.object({
   // AssemblyAI — used by /v1/shield-jobs to verify the protected output is
   // un-transcribable. Optional; if missing, verification is silently skipped.
   ASSEMBLYAI_API_KEY: z.string().optional(),
-  // Used only to discover and validate Google Ads accounts. Conversion
-  // ingestion continues through the Data Manager API and does not use this.
-  GOOGLE_ADS_DEVELOPER_TOKEN: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
