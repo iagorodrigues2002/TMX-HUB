@@ -34,7 +34,12 @@ const plugin: FastifyPluginAsync = async (app) => {
     if (!destination) return reply.code(404).send({ error: 'google_ads_destination_not_found' });
     const flow = beginGoogleOAuth(config);
     await app.db.begin(async sql => {
-      await sql`DELETE FROM tracking_google_ads_oauth_states WHERE expires_at < now() OR (destination_id=${destination.id} AND user_id=${req.user!.sub})`;
+      // Do not discard an in-flight authorization when the operator starts a
+      // second window/tab. Google may return the first authorization after the
+      // later start request; deleting it here made that valid callback fail
+      // with `google_oauth_state_expired_or_used` (HTTP 409). Every state is
+      // still bound to its user/destination and atomically consumed below.
+      await sql`DELETE FROM tracking_google_ads_oauth_states WHERE expires_at < now()`;
       await sql`INSERT INTO tracking_google_ads_oauth_states(state_hash, destination_id, user_id, verifier_encrypted, expires_at)
         VALUES (${stateHash(flow.state)}, ${destination.id}, ${req.user!.sub}, ${encryptSecret(flow.verifier, env.TRACKING_ENCRYPTION_KEY!)}, now()+interval '10 minutes')`;
     });
@@ -55,7 +60,12 @@ const plugin: FastifyPluginAsync = async (app) => {
         AND s.state_hash=${stateHash(input.data.state)} AND s.expires_at>now()
       RETURNING s.verifier_encrypted
     `;
-    if (!flow) return reply.code(409).send({ error: 'google_oauth_state_expired_or_used' });
+    if (!flow) {
+      return reply.code(409).send({
+        error: 'google_oauth_state_expired_or_used',
+        detail: 'Esta autorização expirou ou já foi utilizada. Volte ao Tracking e inicie uma nova conexão Google Ads.',
+      });
+    }
     try {
       const tokens = await exchangeGoogleCode(config, input.data.code, decryptSecret(flow.verifier_encrypted, env.TRACKING_ENCRYPTION_KEY));
       const connectionId = ulid();
