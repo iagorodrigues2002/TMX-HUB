@@ -1220,7 +1220,7 @@ export type GoogleAdsDestinationConnection = {
 export type GoogleAdsAccount = { customer_id: string; name: string; manager: boolean };
 export type GoogleAdsValidation = {
   passed: boolean; validate_only: true; request_id: string | null; warnings: number;
-  order_id: string; detail: string;
+  order_id: string | null; detail: string; synthetic?: boolean;
 };
 
 export const apiClient = {
@@ -1235,6 +1235,8 @@ export const apiClient = {
     request<{ accounts: GoogleAdsAccount[] }>(`/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth/accounts`),
   googleAdsValidate: (offerId: string, id: string) =>
     request<GoogleAdsValidation>(`/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth/test`, { method: 'POST' }),
+  googleAdsValidateSynthetic: (offerId: string, id: string) =>
+    request<GoogleAdsValidation>(`/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth/test-synthetic`, { method: 'POST' }),
   googleAdsDisconnect: (offerId: string, id: string) => request<void>(`/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth`, { method: 'DELETE' }),
   googleAdsAttachConnection: (offerId: string, id: string, connectionId: string) =>
     request<{ attached: boolean }>(`/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth/attach`, { method: 'POST', body: { connection_id: connectionId } }),

@@ -47,6 +47,9 @@ export function GoogleAdsDestinations({ offerId }: { offerId: string }) {
   const validate = useMutation({
     mutationFn: (id: string) => apiClient.googleAdsValidate(offerId, id),
   });
+  const validateSynthetic = useMutation({
+    mutationFn: (id: string) => apiClient.googleAdsValidateSynthetic(offerId, id),
+  });
   const save = useMutation({
     mutationFn: () => apiClient.saveGoogleAdsDestination(offerId, form, editing),
     onSuccess: () => {
@@ -85,7 +88,8 @@ export function GoogleAdsDestinations({ offerId }: { offerId: string }) {
             <Button disabled={!connections.data?.oauth_configured || connect.isPending || disconnect.isPending || attach.isPending} onClick={() => connect.mutate(d.id)}>{connect.isPending ? 'Abrindo Google…' : connection ? 'Conectar outra conta' : 'Conectar Google'}</Button>
             {connection && <Button disabled={disconnect.isPending || attach.isPending} onClick={() => disconnect.mutate(d.id)}>Desconectar do destino</Button>}
             {connection && <Button disabled={accounts.isPending || validate.isPending} onClick={() => accounts.mutate(d.id)}>{accounts.isPending ? 'Carregando contas…' : 'Escolher conta vinculada'}</Button>}
-            {connection && <Button disabled={accounts.isPending || validate.isPending} onClick={() => validate.mutate(d.id)}>{validate.isPending ? 'Validando com Google…' : 'Validar envio'}</Button>}
+            {connection && <Button disabled={accounts.isPending || validate.isPending || validateSynthetic.isPending} onClick={() => validateSynthetic.mutate(d.id)}>{validateSynthetic.isPending ? 'Testando configuração…' : 'Testar sem venda'}</Button>}
+            {connection && <Button disabled={accounts.isPending || validate.isPending || validateSynthetic.isPending} onClick={() => validate.mutate(d.id)}>{validate.isPending ? 'Validando com Google…' : 'Validar com venda real'}</Button>}
             <Button disabled={save.isPending || archive.isPending} onClick={() => edit(d)}>Editar</Button>
             <Button disabled={save.isPending || archive.isPending} onClick={() => setArchiveId(d.id)}>Arquivar</Button>
           </div>
@@ -118,10 +122,18 @@ export function GoogleAdsDestinations({ offerId }: { offerId: string }) {
             <p className="font-medium">Validação do envio aprovada</p><p className="mt-1 text-white/70">{validate.data.detail} Pedido usado: {validate.data.order_id}. Avisos: {validate.data.warnings}{validate.data.request_id ? ` · Protocolo Google: ${validate.data.request_id}` : ''}.</p>
             <p className="mt-2 text-xs text-white/55">Este teste usa uma venda real com identificador Google capturado, mas é executado em modo de validação: ele prova que o Google aceita a autorização, conta, ação e payload sem criar uma conversão duplicada.</p>
           </div>}
+          {validateSynthetic.data && validateSynthetic.variables === d.id && <div role="status" className="mt-4 rounded-lg border border-cyan-300/20 bg-cyan-300/5 p-3 text-sm text-cyan-100">
+            <p className="font-medium">Teste sem venda aprovado</p><p className="mt-1 text-white/70">{validateSynthetic.data.detail} Avisos: {validateSynthetic.data.warnings}{validateSynthetic.data.request_id ? ` · Protocolo Google: ${validateSynthetic.data.request_id}` : ''}.</p>
+            <p className="mt-2 text-xs text-white/55">Este teste não exige pedido, clique ou cliente real. Ele é uma validação técnica: não aparece como conversão no Google Ads e não altera métricas.</p>
+          </div>}
           {validate.isError && validate.variables === d.id && <div role="alert" className="mt-4 rounded-lg border border-rose-300/25 bg-rose-300/5 p-3 text-sm text-rose-100">
             <p className="font-medium">Teste não aprovado</p>
             <p className="mt-1 text-white/70">{String(validate.error.message || 'Não foi possível validar o tracking.')}</p>
             <p className="mt-2 text-xs text-white/55">O teste não envia uma conversão. Ele precisa de uma venda front aprovada desta oferta que tenha GCLID, GBRAID ou WBRAID capturado.</p>
+          </div>}
+          {validateSynthetic.isError && validateSynthetic.variables === d.id && <div role="alert" className="mt-4 rounded-lg border border-rose-300/25 bg-rose-300/5 p-3 text-sm text-rose-100">
+            <p className="font-medium">Teste sem venda não aprovado</p>
+            <p className="mt-1 text-white/70">{String(validateSynthetic.error.message || 'Não foi possível validar a configuração.')}</p>
           </div>}
         </article>;
         })}
