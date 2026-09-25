@@ -97,8 +97,18 @@ export function GoogleAdsDestinations({ offerId }: { offerId: string }) {
             </Button>)}</div>
             {!accounts.data.accounts.length && <p className="mt-3 text-sm text-amber-200">Nenhuma conta ativa retornou. Confirme que o usuário Google tem acesso direto ou via conta administradora.</p>}
           </div>}
+          {accounts.isError && accounts.variables === d.id && <div role="alert" className="mt-4 rounded-lg border border-amber-300/25 bg-amber-300/5 p-3 text-sm text-amber-100">
+            <p className="font-medium">Não foi possível carregar as contas vinculadas</p>
+            <p className="mt-1 text-white/70">{String(accounts.error.message || 'Verifique a conexão Google.')}</p>
+            <p className="mt-2 text-xs text-white/55">O seletor exige o Developer Token da Google Ads API no Railway. Ele é usado apenas para leitura/listagem; as conversões continuam pelo Data Manager.</p>
+          </div>}
           {validate.data && validate.variables === d.id && <div role="status" className="mt-4 rounded-lg border border-emerald-300/20 bg-emerald-300/5 p-3 text-sm text-emerald-100">
             <p className="font-medium">Teste aprovado</p><p className="mt-1 text-white/70">{validate.data.detail} Pedido usado: {validate.data.order_id}. Avisos: {validate.data.warnings}.</p>
+          </div>}
+          {validate.isError && validate.variables === d.id && <div role="alert" className="mt-4 rounded-lg border border-rose-300/25 bg-rose-300/5 p-3 text-sm text-rose-100">
+            <p className="font-medium">Teste não aprovado</p>
+            <p className="mt-1 text-white/70">{String(validate.error.message || 'Não foi possível validar o tracking.')}</p>
+            <p className="mt-2 text-xs text-white/55">O teste não envia uma conversão. Ele precisa de uma venda front aprovada desta oferta que tenha GCLID, GBRAID ou WBRAID capturado.</p>
           </div>}
         </article>;
         })}
@@ -117,6 +127,5 @@ export function GoogleAdsDestinations({ offerId }: { offerId: string }) {
     </>}
     {(save.isError || archive.isError) && <p role="alert" className="text-sm text-rose-200">Não foi possível salvar a alteração. Confira os IDs, suas permissões e se a conta/ação já está cadastrada nesta oferta. {String((save.error || archive.error)?.message || '')}</p>}
     {(connect.isError || disconnect.isError || attach.isError) && <p role="alert" className="text-sm text-rose-200">Não foi possível alterar a conexão Google. Tente novamente. {String((connect.error || disconnect.error || attach.error)?.message || '')}</p>}
-    {(accounts.isError || validate.isError) && <p role="alert" className="text-sm text-rose-200">{String((accounts.error || validate.error)?.message || 'Não foi possível concluir a verificação Google.')}</p>}
   </section>;
 }
