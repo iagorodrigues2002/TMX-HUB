@@ -2,6 +2,7 @@ import { ALL_TOOL_KEYS, type ToolKey, type User } from '@page-cloner/shared';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { BadRequestError, HttpProblem, zodToProblem } from '../lib/problem.js';
+import { hashPassword, verifyPassword } from '../lib/password.js';
 
 const ToolKeySchema = z.enum(ALL_TOOL_KEYS as [ToolKey, ...ToolKey[]]);
 
@@ -14,6 +15,13 @@ const UpdateUserSchema = z
      * array = sobrescreve com essa lista. Vazio é tratado como null.
      */
     allowed_tools: z.array(ToolKeySchema).max(20).nullable().optional(),
+  })
+  .strict();
+
+const ChangeOwnPasswordSchema = z
+  .object({
+    current_password: z.string().min(6).max(200),
+    new_password: z.string().min(8).max(200),
   })
   .strict();
 
@@ -50,6 +58,30 @@ function userToWire(u: User): UserWire {
 }
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
+  // This route sits in the protected route scope. It never exposes a public
+  // password-reset surface and requires the password currently in use.
+  app.post('/auth/change-password', async (req, reply) => {
+    if (!req.user) throw new BadRequestError('No user attached.');
+    const parsed = ChangeOwnPasswordSchema.safeParse(req.body);
+    if (!parsed.success) throw zodToProblem(parsed.error, req.url);
+
+    const current = await app.userStore.getById(req.user.sub);
+    if (!(await verifyPassword(parsed.data.current_password, current.passwordHash))) {
+      throw new HttpProblem({
+        status: 401,
+        title: 'Invalid credentials',
+        detail: 'A senha atual está incorreta.',
+        code: 'invalid_current_password',
+      });
+    }
+    if (parsed.data.current_password === parsed.data.new_password) {
+      throw new BadRequestError('A nova senha deve ser diferente da senha atual.');
+    }
+
+    await app.userStore.setPasswordHash(current.id, await hashPassword(parsed.data.new_password));
+    return reply.code(204).send();
+  });
+
   // GET /v1/admin/overview — visão operacional consolidada para admins.
   app.get('/admin/overview', async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');

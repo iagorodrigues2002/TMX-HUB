@@ -1359,6 +1359,13 @@ export const apiClient = {
     return wire.user;
   },
 
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    await request('/v1/auth/change-password', {
+      method: 'POST',
+      body: { current_password: currentPassword, new_password: newPassword },
+    });
+  },
+
   // ---- Invites (admin only) ----
   async checkInvite(token: string): Promise<{
     valid: boolean;

@@ -160,6 +160,12 @@ export class UserStore {
     return next;
   }
 
+  /** Atualiza só o segredo, preservando identidade, papel e permissões. */
+  async setPasswordHash(id: string, passwordHash: string): Promise<void> {
+    await this.getById(id);
+    await this.redis.hset(idKey(id), { passwordHash });
+  }
+
   /**
    * Apaga usuário (hash + índice por email). Caller responsável por validar
    * que não é o último admin / não é o próprio user logado.

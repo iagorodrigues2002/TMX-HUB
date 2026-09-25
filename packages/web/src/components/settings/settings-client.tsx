@@ -153,6 +153,10 @@ export function SettingsClient() {
   });
 
   const [selectedOfferId, setSelectedOfferId] = useState<string>('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
   const selectedOffer = offers.find((o) => o.id === selectedOfferId) ?? offers[0];
   const effectiveOfferId = selectedOffer?.id ?? '';
   const utmifyDashboardId = selectedOffer?.dashboardId?.trim() || UTMIFY_DASHBOARD_ID_FALLBACK;
@@ -168,6 +172,30 @@ export function SettingsClient() {
   }, [apiUrl, token, effectiveOfferId, utmifyDashboardId]);
 
   const everythingReady = !!apiUrl && !!token && !tokenExpired && !!effectiveOfferId;
+
+  const changePassword = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (newPassword.length < 8) {
+      toast.error('A nova senha precisa ter ao menos 8 caracteres.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error('A confirmação da nova senha não confere.');
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      await apiClient.changePassword(currentPassword, newPassword);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      toast.success('Senha alterada. Use a nova senha no outro navegador.');
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setChangingPassword(false);
+    }
+  };
 
   if (loading || !isAdmin) return null;
 
@@ -375,6 +403,38 @@ export function SettingsClient() {
             prazo, considere criar um <em>service token</em> sem expiração no backend.
           </p>
         </div>
+      </section>
+
+      <section className="glass-card space-y-5 p-6">
+        <div className="flex items-center gap-2">
+          <KeyRound className="h-4 w-4 text-cyan-300" />
+          <p className="hud-label">Segurança da conta</p>
+        </div>
+        <div>
+          <h2 className="text-base font-semibold text-white">Alterar senha</h2>
+          <p className="mt-1 text-[13px] text-white/55">
+            Troque a senha deste usuário para entrar em outro navegador. A sessão atual permanece ativa.
+          </p>
+        </div>
+        <form className="grid gap-4 md:grid-cols-3" onSubmit={changePassword}>
+          <label className="space-y-2 text-sm text-white/75">
+            Senha atual
+            <input required type="password" autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} className="w-full rounded-md border border-white/[0.12] bg-black/20 px-3 py-2 text-white outline-none focus:border-cyan-300/60" />
+          </label>
+          <label className="space-y-2 text-sm text-white/75">
+            Nova senha
+            <input required minLength={8} type="password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} className="w-full rounded-md border border-white/[0.12] bg-black/20 px-3 py-2 text-white outline-none focus:border-cyan-300/60" />
+          </label>
+          <label className="space-y-2 text-sm text-white/75">
+            Confirmar nova senha
+            <input required minLength={8} type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className="w-full rounded-md border border-white/[0.12] bg-black/20 px-3 py-2 text-white outline-none focus:border-cyan-300/60" />
+          </label>
+          <div className="md:col-span-3">
+            <Button type="submit" disabled={changingPassword}>
+              {changingPassword ? 'Alterando…' : 'Alterar senha'}
+            </Button>
+          </div>
+        </form>
       </section>
 
       <UsersSection />
