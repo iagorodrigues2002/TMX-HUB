@@ -22,6 +22,21 @@ Deployment prerequisites (server-only; never NEXT_PUBLIC):
 - GOOGLE_ADS_OAUTH_REDIRECT_URI=https://theminex.com/tracking/google-callback
 - Existing TRACKING_ENCRYPTION_KEY and DATABASE_URL
 
+For account discovery (optional for conversion delivery, required for the account
+selector), add `GOOGLE_ADS_DEVELOPER_TOKEN` from Google Ads API Center. The OAuth
+connection asks for both Data Manager and Google Ads read scopes. A connection made
+before this change must be reconnected once to grant the additional Google Ads scope.
+
+## Account selector and safe validation
+
+The Google Ads selector uses the official Google Ads API to list directly accessible
+accounts plus active clients of accessible manager accounts. The account list is never
+guessed from the Google identity. The **Testar tracking** action uses the most recent
+approved front purchase that already contains a captured `gclid`, `gbraid`, or
+`wbraid`, calls Data Manager `events:ingest` with `validateOnly=true`, and reports the
+result. It validates OAuth refresh, destination, conversion action and payload without
+creating a conversion or changing existing delivery.
+
 Register that exact redirect URI in a Google Cloud web OAuth client, enable Data Manager
 API, configure audience/test users or production verification as appropriate. Missing
 Google settings do not prevent API startup. Apply migrations 060 and 061 in staging

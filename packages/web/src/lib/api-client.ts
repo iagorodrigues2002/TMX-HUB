@@ -1217,6 +1217,11 @@ export type GoogleAdsDestinationConnection = {
   connection_name: string;
   connected_at: string;
 };
+export type GoogleAdsAccount = { customer_id: string; name: string; manager: boolean };
+export type GoogleAdsValidation = {
+  passed: boolean; validate_only: true; request_id: string | null; warnings: number;
+  order_id: string; detail: string;
+};
 
 export const apiClient = {
   googleAdsConnectionStatus: (offerId: string) => request<{
@@ -1226,6 +1231,10 @@ export const apiClient = {
   }>(`/v1/offers/${offerId}/tracking/google-ads/connection-status`),
   googleAdsOAuthStart: (offerId: string, id: string) => request<{ authorization_url: string; state: string }>(`/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth/start`, { method: 'POST' }),
   googleAdsOAuthComplete: (offerId: string, id: string, input: { code: string; state: string }) => request<{ connected: boolean }>(`/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth/complete`, { method: 'POST', body: input }),
+  googleAdsAccounts: (offerId: string, id: string) =>
+    request<{ accounts: GoogleAdsAccount[] }>(`/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth/accounts`),
+  googleAdsValidate: (offerId: string, id: string) =>
+    request<GoogleAdsValidation>(`/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth/test`, { method: 'POST' }),
   googleAdsDisconnect: (offerId: string, id: string) => request<void>(`/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth`, { method: 'DELETE' }),
   googleAdsAttachConnection: (offerId: string, id: string, connectionId: string) =>
     request<{ attached: boolean }>(`/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth/attach`, { method: 'POST', body: { connection_id: connectionId } }),

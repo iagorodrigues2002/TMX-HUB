@@ -16,6 +16,7 @@ export function GoogleAdsDestinations({ offerId }: { offerId: string }) {
   const [form, setForm] = useState<GoogleAdsDraftInput>(empty);
   const [editing, setEditing] = useState<string>();
   const [archiveId, setArchiveId] = useState<string>();
+  const [accountsFor, setAccountsFor] = useState<string>();
   const destinations = useQuery({ queryKey, queryFn: () => apiClient.googleAdsDestinations(offerId), retry: false });
   const connectionKey = ['google-ads-connections', offerId];
   const connections = useQuery({ queryKey: connectionKey, queryFn: () => apiClient.googleAdsConnectionStatus(offerId), retry: false });
@@ -38,6 +39,13 @@ export function GoogleAdsDestinations({ offerId }: { offerId: string }) {
       toast.success('Conexão Google existente associada a este destino.');
     },
   });
+  const accounts = useMutation({
+    mutationFn: (id: string) => apiClient.googleAdsAccounts(offerId, id),
+    onSuccess: (_data, id) => setAccountsFor(id),
+  });
+  const validate = useMutation({
+    mutationFn: (id: string) => apiClient.googleAdsValidate(offerId, id),
+  });
   const save = useMutation({
     mutationFn: () => apiClient.saveGoogleAdsDestination(offerId, form, editing),
     onSuccess: () => {
@@ -58,7 +66,7 @@ export function GoogleAdsDestinations({ offerId }: { offerId: string }) {
   return <section className="space-y-5" aria-label="Destinos Google Ads">
     <div className="rounded-xl border border-amber-400/20 bg-amber-400/5 p-4 text-sm text-amber-100">
       <p className="font-medium">Configuração inicial · envios desativados</p>
-      <p className="mt-2 text-white/60">Cadastre contas independentes para esta oferta. Conecte o Google para autorizar o acesso. A conta e a ação ainda precisarão ser validadas antes dos envios. Salvar aqui não instala tags nem envia eventos.</p>
+      <p className="mt-2 text-white/60">Cadastre contas independentes para esta oferta. Depois de conectar o Google, carregue as contas vinculadas, escolha a conta e valide com uma venda Google real já capturada. Salvar aqui não instala tags nem envia eventos.</p>
     </div>
     {connections.data && !connections.data.oauth_configured && <p className="text-sm text-white/60">Conexão Google aguardando a configuração do aplicativo OAuth no servidor. Você já pode salvar os destinos.</p>}
     {connections.isError && <div role="alert" className="text-sm text-rose-200">Não foi possível consultar a conexão Google. <Button onClick={() => void connections.refetch()}>Tentar novamente</Button></div>}
@@ -75,10 +83,23 @@ export function GoogleAdsDestinations({ offerId }: { offerId: string }) {
             {!connection && reusableConnection && <Button disabled={attach.isPending} onClick={() => attach.mutate({ id: d.id, connectionId: reusableConnection.id })}>{attach.isPending ? 'Associando…' : 'Usar conexão existente'}</Button>}
             <Button disabled={!connections.data?.oauth_configured || connect.isPending || disconnect.isPending || attach.isPending} onClick={() => connect.mutate(d.id)}>{connect.isPending ? 'Abrindo Google…' : connection ? 'Conectar outra conta' : 'Conectar Google'}</Button>
             {connection && <Button disabled={disconnect.isPending || attach.isPending} onClick={() => disconnect.mutate(d.id)}>Desconectar do destino</Button>}
+            {connection && <Button disabled={accounts.isPending || validate.isPending} onClick={() => accounts.mutate(d.id)}>{accounts.isPending ? 'Carregando contas…' : 'Escolher conta vinculada'}</Button>}
+            {connection && <Button disabled={accounts.isPending || validate.isPending} onClick={() => validate.mutate(d.id)}>{validate.isPending ? 'Validando com Google…' : 'Testar tracking'}</Button>}
             <Button disabled={save.isPending || archive.isPending} onClick={() => edit(d)}>Editar</Button>
             <Button disabled={save.isPending || archive.isPending} onClick={() => setArchiveId(d.id)}>Arquivar</Button>
           </div>
           {archiveId === d.id && <div className="mt-3 flex flex-wrap items-center gap-2"><p className="text-sm">Arquivar este rascunho?</p><Button disabled={archive.isPending} onClick={() => archive.mutate(d.id)}>Confirmar</Button><Button disabled={archive.isPending} onClick={() => setArchiveId(undefined)}>Cancelar</Button></div>}
+          {accountsFor === d.id && accounts.data && <div className="mt-4 rounded-lg border border-cyan-300/20 bg-cyan-300/5 p-3">
+            <p className="text-sm font-medium">Contas encontradas</p>
+            <p className="mt-1 text-xs text-white/60">Escolha uma conta para preencher o destino abaixo. Depois informe ou mantenha a ação de conversão correta e salve.</p>
+            <div className="mt-3 flex flex-wrap gap-2">{accounts.data.accounts.map(account => <Button key={account.customer_id} type="button" onClick={() => { setForm({ name: form.name || `Google · ${account.name}`, customer_id: account.customer_id, conversion_action_id: form.conversion_action_id }); setEditing(d.id); window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }); }}>
+              {account.name} · {account.customer_id}{account.manager ? ' · Administradora' : ''}
+            </Button>)}</div>
+            {!accounts.data.accounts.length && <p className="mt-3 text-sm text-amber-200">Nenhuma conta ativa retornou. Confirme que o usuário Google tem acesso direto ou via conta administradora.</p>}
+          </div>}
+          {validate.data && validate.variables === d.id && <div role="status" className="mt-4 rounded-lg border border-emerald-300/20 bg-emerald-300/5 p-3 text-sm text-emerald-100">
+            <p className="font-medium">Teste aprovado</p><p className="mt-1 text-white/70">{validate.data.detail} Pedido usado: {validate.data.order_id}. Avisos: {validate.data.warnings}.</p>
+          </div>}
         </article>;
         })}
         {!destinations.data.destinations.length && <p className="text-sm text-white/60">Nenhum destino Google cadastrado nesta oferta.</p>}
@@ -96,5 +117,6 @@ export function GoogleAdsDestinations({ offerId }: { offerId: string }) {
     </>}
     {(save.isError || archive.isError) && <p role="alert" className="text-sm text-rose-200">Não foi possível salvar a alteração. Confira os IDs, suas permissões e se a conta/ação já está cadastrada nesta oferta. {String((save.error || archive.error)?.message || '')}</p>}
     {(connect.isError || disconnect.isError || attach.isError) && <p role="alert" className="text-sm text-rose-200">Não foi possível alterar a conexão Google. Tente novamente. {String((connect.error || disconnect.error || attach.error)?.message || '')}</p>}
+    {(accounts.isError || validate.isError) && <p role="alert" className="text-sm text-rose-200">{String((accounts.error || validate.error)?.message || 'Não foi possível concluir a verificação Google.')}</p>}
   </section>;
 }

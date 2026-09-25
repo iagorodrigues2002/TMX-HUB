@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { beginGoogleOAuth, exchangeGoogleCode, googleOAuthConfig, GOOGLE_DATA_SCOPE, stateHash } from '../src/integrations/google-ads/oauth.js';
+import { beginGoogleOAuth, exchangeGoogleCode, googleOAuthConfig, GOOGLE_DATA_SCOPE, GOOGLE_OAUTH_SCOPES, stateHash } from '../src/integrations/google-ads/oauth.js';
 import Fastify from 'fastify';
 import routes from '../src/routes/google-ads-oauth.js';
 import { env } from '../src/env.js';
@@ -17,7 +17,7 @@ describe('Google OAuth isolation', () => {
     expect(a.verifier).not.toBe(b.verifier);
     const url = new URL(a.authorization_url);
     expect(url.origin).toBe('https://accounts.google.com');
-    expect(url.searchParams.get('scope')).toBe(GOOGLE_DATA_SCOPE);
+    expect(url.searchParams.get('scope')).toBe(GOOGLE_OAUTH_SCOPES.join(' '));
     expect(url.searchParams.get('code_challenge_method')).toBe('S256');
     expect(url.searchParams.get('access_type')).toBe('offline');
     expect(a.authorization_url).not.toContain(config.clientSecret);
@@ -38,9 +38,10 @@ describe('Google OAuth isolation', () => {
     await expect(exchangeGoogleCode(config, 'code', 'verifier')).rejects.toThrow('google_oauth_exchange_failed');
   });
   it('uses the token endpoint only and returns no access token to callers', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ access_token: 'short-lived', refresh_token: 'long-lived', token_type: 'Bearer', scope: GOOGLE_DATA_SCOPE })));
+    const scope = GOOGLE_OAUTH_SCOPES.join(' ');
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ access_token: 'short-lived', refresh_token: 'long-lived', token_type: 'Bearer', scope })));
     vi.stubGlobal('fetch', fetchMock);
-    expect(await exchangeGoogleCode(config, 'code', 'verifier')).toEqual({ refreshToken: 'long-lived', scope: GOOGLE_DATA_SCOPE });
+    expect(await exchangeGoogleCode(config, 'code', 'verifier')).toEqual({ refreshToken: 'long-lived', scope });
     expect(fetchMock.mock.calls[0]?.[0]).toBe('https://oauth2.googleapis.com/token');
   });
   it('requires offer permission before querying state or exchanging tokens', async () => {

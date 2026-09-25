@@ -2,6 +2,8 @@ import { createHash, randomBytes } from 'node:crypto';
 import { z } from 'zod';
 
 export const GOOGLE_DATA_SCOPE = 'https://www.googleapis.com/auth/datamanager';
+export const GOOGLE_ADS_SCOPE = 'https://www.googleapis.com/auth/adwords';
+export const GOOGLE_OAUTH_SCOPES = [GOOGLE_DATA_SCOPE, GOOGLE_ADS_SCOPE];
 const Config = z.object({
   clientId: z.string().min(1), clientSecret: z.string().min(1),
   redirectUri: z.string().url().refine((value) => {
@@ -24,7 +26,7 @@ export function beginGoogleOAuth(config: GoogleOAuthConfig) {
   const verifier = randomBytes(48).toString('base64url');
   const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
   url.search = new URLSearchParams({ client_id: config.clientId, redirect_uri: config.redirectUri,
-    response_type: 'code', scope: GOOGLE_DATA_SCOPE, access_type: 'offline', prompt: 'consent',
+    response_type: 'code', scope: GOOGLE_OAUTH_SCOPES.join(' '), access_type: 'offline', prompt: 'consent',
     state, code_challenge: createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256' }).toString();
   return { state, verifier, authorization_url: url.toString() };
 }
@@ -41,6 +43,8 @@ export async function exchangeGoogleCode(config: GoogleOAuthConfig, code: string
   if (!response.ok) throw new Error('google_oauth_exchange_failed');
   const parsed = Token.safeParse(await response.json());
   if (!parsed.success || !parsed.data.refresh_token || parsed.data.token_type.toLowerCase() !== 'bearer' ||
-      !parsed.data.scope?.split(' ').includes(GOOGLE_DATA_SCOPE)) throw new Error('google_oauth_missing_permission');
-  return { refreshToken: parsed.data.refresh_token, scope: parsed.data.scope };
+      !GOOGLE_OAUTH_SCOPES.every(scope => parsed.data.scope?.split(' ').includes(scope))) {
+    throw new Error('google_oauth_missing_permission');
+  }
+  return { refreshToken: parsed.data.refresh_token, scope: parsed.data.scope! };
 }
