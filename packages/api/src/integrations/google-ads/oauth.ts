@@ -3,7 +3,10 @@ import { z } from 'zod';
 
 export const GOOGLE_DATA_SCOPE = 'https://www.googleapis.com/auth/datamanager';
 export const GOOGLE_ADS_SCOPE = 'https://www.googleapis.com/auth/adwords';
-export const GOOGLE_OAUTH_SCOPES = [GOOGLE_DATA_SCOPE, GOOGLE_ADS_SCOPE];
+// Identity scopes let the TMX show exactly which Google profile was authorized.
+// This avoids a misleading "connected" state when the operator chose a browser
+// profile that does not have access to the intended Google Ads accounts.
+export const GOOGLE_OAUTH_SCOPES = [GOOGLE_DATA_SCOPE, GOOGLE_ADS_SCOPE, 'openid', 'email'];
 const Config = z.object({
   clientId: z.string().min(1), clientSecret: z.string().min(1),
   redirectUri: z.string().url().refine((value) => {
@@ -46,5 +49,13 @@ export async function exchangeGoogleCode(config: GoogleOAuthConfig, code: string
       !GOOGLE_OAUTH_SCOPES.every(scope => parsed.data.scope?.split(' ').includes(scope))) {
     throw new Error('google_oauth_missing_permission');
   }
-  return { refreshToken: parsed.data.refresh_token, scope: parsed.data.scope! };
+  return { accessToken: parsed.data.access_token, refreshToken: parsed.data.refresh_token, scope: parsed.data.scope! };
+}
+
+export async function getGoogleAuthorizedEmail(accessToken: string) {
+  const response = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
+    headers: { authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(10_000),
+  });
+  const body = await response.json().catch(() => null);
+  return response.ok && typeof body?.email === 'string' && body.email.includes('@') ? body.email : null;
 }

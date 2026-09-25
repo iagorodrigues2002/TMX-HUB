@@ -50,16 +50,32 @@ export async function listGoogleAdsAccounts(input: {
   if (!rootsResponse.ok || !roots.success) throw new Error('google_ads_accounts_unavailable');
   const rootIds = roots.data.resourceNames.map(v => v.match(/^customers\/(\d{10})$/)?.[1]).filter((v): v is string => Boolean(v));
   const accounts = new Map<string, GoogleAdsAccount>();
-  for (const rootId of rootIds) {
-    const response = await fetch(`https://googleads.googleapis.com/v22/customers/${rootId}/googleAds:searchStream`, {
-      method: 'POST', headers: googleAdsHeaders(input.accessToken, rootId),
+
+  async function searchCustomer(customerId: string, loginCustomerId?: string) {
+    const response = await fetch(`https://googleads.googleapis.com/v22/customers/${customerId}/googleAds:searchStream`, {
+      method: 'POST', headers: googleAdsHeaders(input.accessToken, loginCustomerId),
       body: JSON.stringify({
         query: 'SELECT customer_client.id, customer_client.descriptive_name, customer_client.manager, customer_client.status FROM customer_client WHERE customer_client.status = \'ENABLED\'',
       }), signal: AbortSignal.timeout(20_000),
     });
     const payload = await response.json().catch(() => null) as Array<{ results?: Array<{ customerClient?: { id?: string; descriptiveName?: string; manager?: boolean } }> }> | null;
-    if (!response.ok || !Array.isArray(payload)) continue;
-    for (const batch of payload) for (const row of batch.results ?? []) {
+    return { ok: response.ok && Array.isArray(payload), payload };
+  }
+
+  for (const rootId of rootIds) {
+    // A direct Google Ads account must be queried without login-customer-id.
+    // An MCC requires it. Supporting both paths prevents valid direct accounts
+    // from disappearing merely because they are also reachable through an MCC.
+    let result = await searchCustomer(rootId);
+    if (!result.ok) result = await searchCustomer(rootId, rootId);
+    if (!result.ok) {
+      // listAccessibleCustomers itself is authoritative for direct access.
+      // Preserve the selectable account when the optional enrichment query is
+      // unavailable (for example an MCC policy/API propagation delay).
+      accounts.set(rootId, { customer_id: rootId, name: `Conta ${rootId}`, manager: false });
+      continue;
+    }
+    for (const batch of result.payload ?? []) for (const row of batch.results ?? []) {
       const account = row.customerClient;
       if (!account?.id || !/^\d{10}$/.test(account.id)) continue;
       accounts.set(account.id, { customer_id: account.id, name: account.descriptiveName?.trim() || `Conta ${account.id}`, manager: Boolean(account.manager) });

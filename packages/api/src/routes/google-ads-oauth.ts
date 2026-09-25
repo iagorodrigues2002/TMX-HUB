@@ -3,7 +3,7 @@ import { ulid } from 'ulid';
 import { z } from 'zod';
 import { env } from '../env.js';
 import { decryptSecret, encryptSecret } from '../lib/secret-box.js';
-import { beginGoogleOAuth, exchangeGoogleCode, GOOGLE_DATA_SCOPE, googleOAuthConfig, stateHash } from '../integrations/google-ads/oauth.js';
+import { beginGoogleOAuth, exchangeGoogleCode, getGoogleAuthorizedEmail, GOOGLE_DATA_SCOPE, googleOAuthConfig, stateHash } from '../integrations/google-ads/oauth.js';
 import { hasGoogleAdsScope, listGoogleAdsAccounts, refreshGoogleAccessToken } from '../integrations/google-ads/google-ads-api.js';
 import { previewGooglePurchase } from '../integrations/google-ads/contracts.js';
 
@@ -85,12 +85,13 @@ const plugin: FastifyPluginAsync = async (app) => {
     }
     try {
       const tokens = await exchangeGoogleCode(config, input.data.code, decryptSecret(flow.verifier_encrypted, env.TRACKING_ENCRYPTION_KEY));
+      const authorizedEmail = await getGoogleAuthorizedEmail(tokens.accessToken);
       const connectionId = ulid();
       const [saved] = await app.db.begin(async sql => {
         const [connection] = await sql`
           INSERT INTO tracking_google_ads_oauth_connections
             (id, name, refresh_token_encrypted, granted_scope, connected_by)
-          VALUES (${connectionId}, ${`Google conectado em ${new Date().toLocaleDateString('pt-BR')}`},
+          VALUES (${connectionId}, ${authorizedEmail ? `Google · ${authorizedEmail}` : `Google conectado em ${new Date().toLocaleDateString('pt-BR')}`},
             ${encryptSecret(tokens.refreshToken, env.TRACKING_ENCRYPTION_KEY!)}, ${tokens.scope}, ${req.user!.sub})
           RETURNING id, name, connected_at
         `;
