@@ -436,13 +436,14 @@ export function SettingsClient() {
         <div>
           <h2 className="text-base font-semibold text-white">Alterar senha</h2>
           <p className="mt-1 text-[13px] text-white/55">
-            Troque a senha deste usuário para entrar em outro navegador. A sessão atual permanece ativa.
+            A mesma senha funciona em qualquer navegador. Use a redefinição abaixo somente para criar
+            uma nova senha se você não souber a atual. A sessão atual permanece ativa.
           </p>
         </div>
         <form className="grid gap-4 md:grid-cols-3" onSubmit={changePassword}>
           <label className="space-y-2 text-sm text-white/75">
             Senha atual
-            <input required type="password" autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} className="w-full rounded-md border border-white/[0.12] bg-black/20 px-3 py-2 text-white outline-none focus:border-cyan-300/60" />
+            <input type="password" autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} className="w-full rounded-md border border-white/[0.12] bg-black/20 px-3 py-2 text-white outline-none focus:border-cyan-300/60" />
           </label>
           <label className="space-y-2 text-sm text-white/75">
             Nova senha
@@ -456,8 +457,8 @@ export function SettingsClient() {
             <Button type="submit" disabled={changingPassword}>
               {changingPassword ? 'Alterando…' : 'Alterar senha'}
             </Button>
-            <Button type="button" variant="outline" className="ml-3" disabled={changingPassword} onClick={adminResetPassword}>
-              Redefinir sem senha atual
+            <Button type="button" formNoValidate variant="outline" className="ml-3" disabled={changingPassword} onClick={adminResetPassword}>
+              Definir nova senha sem a atual
             </Button>
             <p className="mt-3 text-xs text-amber-200/80">
               Use esta opção somente se você não reconhece a senha atual. Ela está disponível apenas para o administrador já autenticado.
