@@ -1366,6 +1366,13 @@ export const apiClient = {
     });
   },
 
+  async adminResetOwnPassword(newPassword: string): Promise<void> {
+    await request('/v1/auth/admin-reset-own-password', {
+      method: 'POST',
+      body: { new_password: newPassword },
+    });
+  },
+
   // ---- Invites (admin only) ----
   async checkInvite(token: string): Promise<{
     valid: boolean;

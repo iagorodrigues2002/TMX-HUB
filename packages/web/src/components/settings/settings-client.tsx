@@ -197,6 +197,29 @@ export function SettingsClient() {
     }
   };
 
+  const adminResetPassword = async () => {
+    if (newPassword.length < 8) {
+      toast.error('A nova senha precisa ter ao menos 8 caracteres.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error('A confirmação da nova senha não confere.');
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      await apiClient.adminResetOwnPassword(newPassword);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      toast.success('Senha redefinida. Use a nova senha no outro navegador.');
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
   if (loading || !isAdmin) return null;
 
   return (
@@ -433,6 +456,12 @@ export function SettingsClient() {
             <Button type="submit" disabled={changingPassword}>
               {changingPassword ? 'Alterando…' : 'Alterar senha'}
             </Button>
+            <Button type="button" variant="outline" className="ml-3" disabled={changingPassword} onClick={adminResetPassword}>
+              Redefinir sem senha atual
+            </Button>
+            <p className="mt-3 text-xs text-amber-200/80">
+              Use esta opção somente se você não reconhece a senha atual. Ela está disponível apenas para o administrador já autenticado.
+            </p>
           </div>
         </form>
       </section>

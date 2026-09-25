@@ -25,6 +25,10 @@ const ChangeOwnPasswordSchema = z
   })
   .strict();
 
+const AdminResetOwnPasswordSchema = z
+  .object({ new_password: z.string().min(8).max(200) })
+  .strict();
+
 class ForbiddenError extends HttpProblem {
   constructor(detail = 'Operação não permitida.') {
     super({ status: 403, title: 'Forbidden', detail, code: 'forbidden' });
@@ -79,6 +83,20 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     }
 
     await app.userStore.setPasswordHash(current.id, await hashPassword(parsed.data.new_password));
+    return reply.code(204).send();
+  });
+
+  // Recovery path for an already authenticated administrator. This is useful
+  // when an old bootstrap password is unavailable, while still requiring a
+  // valid admin JWT and never exposing a public reset endpoint.
+  app.post('/auth/admin-reset-own-password', async (req, reply) => {
+    if (!req.user) throw new BadRequestError('No user attached.');
+    if (req.user.role !== 'admin') {
+      throw new ForbiddenError('Apenas um administrador autenticado pode redefinir esta senha.');
+    }
+    const parsed = AdminResetOwnPasswordSchema.safeParse(req.body);
+    if (!parsed.success) throw zodToProblem(parsed.error, req.url);
+    await app.userStore.setPasswordHash(req.user.sub, await hashPassword(parsed.data.new_password));
     return reply.code(204).send();
   });
 
