@@ -162,6 +162,29 @@ const plugin: FastifyPluginAsync = async (app) => {
     }
   });
 
+  // Resolve an ID pasted manually in the form. The result comes from the same
+  // OAuth-authorized account inventory as the account picker; no account name
+  // is accepted from the browser as a source of truth.
+  app.get<{ Params: Params; Querystring: { customer_id?: string } }>(`${path}/accounts/lookup`, async (req, reply) => {
+    await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
+    const customerId = req.query.customer_id?.replace(/-/g, '').trim();
+    if (!customerId || !/^\d{10}$/.test(customerId)) return reply.code(422).send({ error: 'invalid_google_ads_customer_id' });
+    const config = googleOAuthConfig();
+    if (!app.db || !config || !env.TRACKING_ENCRYPTION_KEY) return reply.code(503).send({ error: 'google_oauth_not_configured' });
+    const destination = await getDestinationConnection(req.params.id, req.params.destinationId);
+    if (!destination?.refresh_token_encrypted || !destination.granted_scope || !hasGoogleAdsScope(destination.granted_scope)) {
+      return reply.code(409).send({ error: 'google_ads_not_connected', detail: 'Conecte o Google antes de buscar uma conta.' });
+    }
+    try {
+      const accessToken = await refreshGoogleAccessToken(config, decryptSecret(destination.refresh_token_encrypted, env.TRACKING_ENCRYPTION_KEY));
+      const account = (await listGoogleAdsAccounts({ accessToken })).find((item) => item.customer_id === customerId);
+      if (!account) return reply.code(404).send({ error: 'google_ads_account_not_accessible', detail: 'Esta conta não está entre as contas acessíveis pela autorização Google conectada.' });
+      return { account };
+    } catch {
+      return reply.code(502).send({ error: 'google_ads_account_lookup_failed', detail: 'Não foi possível consultar o ID da conta no Google Ads.' });
+    }
+  });
+
   /** Validates OAuth, destination and a real captured Google click without sending a conversion. */
   app.post<{ Params: Params }>(`${path}/test`, async (req, reply) => {
     await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');

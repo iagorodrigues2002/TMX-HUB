@@ -50,6 +50,14 @@ export function GoogleAdsDestinations({ offerId }: { offerId: string }) {
   const validateSynthetic = useMutation({
     mutationFn: (id: string) => apiClient.googleAdsValidateSynthetic(offerId, id),
   });
+  const lookupAccount = useMutation({
+    mutationFn: ({ id, customerId }: { id: string; customerId: string }) => apiClient.googleAdsLookupAccount(offerId, id, customerId),
+    onSuccess: ({ account }, input) => {
+      setSelectedAccount({ destinationId: input.id, customerId: account.customer_id, name: account.name });
+      setForm(current => ({ ...current, customer_id: account.customer_id, name: current.name.trim() || `Google · ${account.name}` }));
+      toast.success(`Conta Google encontrada: ${account.name}`);
+    },
+  });
   const save = useMutation({
     mutationFn: () => apiClient.saveGoogleAdsDestination(offerId, form, editing),
     onSuccess: () => {
@@ -143,7 +151,14 @@ export function GoogleAdsDestinations({ offerId }: { offerId: string }) {
         <h3 className="font-medium">{editing ? 'Editar destino' : 'Adicionar conta Google Ads'}</h3>
         <div className="grid gap-4 md:grid-cols-3">
           <label className="space-y-2 text-sm">Nome do destino<Input required maxLength={100} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Google · PJR · Conta 1" /></label>
-          <label className="space-y-2 text-sm">ID da conta Google Ads<Input required inputMode="numeric" pattern="[0-9]{10}|[0-9]{3}-[0-9]{3}-[0-9]{4}" value={form.customer_id} onChange={e => setForm({ ...form, customer_id: e.target.value })} placeholder="123-456-7890" /></label>
+          <label className="space-y-2 text-sm">ID da conta Google Ads<Input required inputMode="numeric" pattern="[0-9]{10}|[0-9]{3}-[0-9]{3}-[0-9]{4}" value={form.customer_id} onChange={e => setForm({ ...form, customer_id: e.target.value })} onBlur={() => {
+            const customerId = form.customer_id.replace(/-/g, '').trim();
+            if (editing && /^\d{10}$/.test(customerId) && selectedAccount?.customerId !== customerId) lookupAccount.mutate({ id: editing, customerId });
+          }} placeholder="123-456-7890" />
+            {lookupAccount.isPending && <span className="text-xs text-cyan-200">Consultando conta no Google…</span>}
+            {selectedAccount && form.customer_id.replace(/-/g, '') === selectedAccount.customerId && <span className="block text-xs text-emerald-200">✓ {selectedAccount.name}</span>}
+            {lookupAccount.isError && <span className="block text-xs text-rose-200">ID não encontrado na autorização Google conectada.</span>}
+          </label>
           <label className="space-y-2 text-sm">ID da ação de conversão<Input required inputMode="numeric" pattern="[0-9]{1,30}" value={form.conversion_action_id} onChange={e => setForm({ ...form, conversion_action_id: e.target.value })} placeholder="ID numérico da ação de compra" /></label>
         </div>
         <p className="text-xs text-white/50">Use o ID da ação de conversão de importação. Ele é diferente do ID de tag AW e do rótulo da tag. O envio só é confirmado quando você salvar este destino.</p>

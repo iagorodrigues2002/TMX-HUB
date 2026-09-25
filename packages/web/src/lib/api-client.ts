@@ -1233,6 +1233,8 @@ export const apiClient = {
   googleAdsOAuthComplete: (offerId: string, id: string, input: { code: string; state: string }) => request<{ connected: boolean }>(`/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth/complete`, { method: 'POST', body: input }),
   googleAdsAccounts: (offerId: string, id: string) =>
     request<{ accounts: GoogleAdsAccount[] }>(`/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth/accounts`),
+  googleAdsLookupAccount: (offerId: string, id: string, customerId: string) =>
+    request<{ account: GoogleAdsAccount }>(`/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth/accounts/lookup?customer_id=${encodeURIComponent(customerId)}`),
   googleAdsValidate: (offerId: string, id: string) =>
     request<GoogleAdsValidation>(`/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth/test`, { method: 'POST' }),
   googleAdsValidateSynthetic: (offerId: string, id: string) =>
