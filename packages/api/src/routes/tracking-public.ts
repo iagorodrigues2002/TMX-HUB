@@ -103,6 +103,8 @@ const attributionQueryKeys = new Set([
   ...Array.from({ length: 20 }, (_, index) => `sub${index + 1}`),
   'fbclid',
   'gclid',
+  'gbraid',
+  'wbraid',
   'ttclid',
   'msclkid',
   'campaign_id',

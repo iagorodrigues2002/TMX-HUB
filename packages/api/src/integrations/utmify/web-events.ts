@@ -18,6 +18,8 @@ const parameterKeys = new Set([
   'utm_term',
   'fbclid',
   'gclid',
+  'gbraid',
+  'wbraid',
   'ttclid',
   'campaign_id',
   'campaign_name',
