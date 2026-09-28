@@ -1,0 +1,18 @@
+import { createHash } from 'node:crypto';
+import { describe, expect, it } from 'vitest';
+import { buildTikTokPayload } from '../src/workers/tiktok.worker.js';
+
+describe('TikTok Events API payload', () => {
+  it('uses a stable event id, hashes PII and keeps the TikTok click id', () => {
+    const payload = buildTikTokPayload({
+      pixelCode: 'C123ABC', eventId: 'vendepay:purchase:123', eventName: 'Purchase', occurredAt: new Date('2026-09-28T12:00:00.000Z'),
+      eventUrl: 'https://theminex.com/checkout?ttclid=abc', value: 99.9, currency: 'USD', orderId: 'order-1', ttclid: 'abc',
+      email: ' Buyer@Example.com ', phone: '+1 (305) 555-0100', externalId: 'visitor-1', contentId: 'front-1', contentName: 'Front', testEventCode: 'TEST-123',
+    });
+    expect(payload.event_id).toBe('vendepay:purchase:123');
+    expect(payload.test_event_code).toBe('TEST-123');
+    expect((payload.context.ad as { callback: string }).callback).toBe('abc');
+    expect((payload.context.user as { email: string }).email).toBe(createHash('sha256').update('buyer@example.com').digest('hex'));
+    expect(payload.properties).toMatchObject({ value: 99.9, currency: 'USD', order_id: 'order-1' });
+  });
+});

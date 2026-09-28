@@ -11,6 +11,7 @@ import type {
   MediaJobData,
   MetaJobData,
   PushcutJobData,
+  TikTokJobData,
   RenderJobData,
   ShieldJobData,
   UtmifyDeliveryJobData,
@@ -24,6 +25,7 @@ import { createRenderQueue } from '../queues/render.queue.js';
 import { createShieldQueue } from '../queues/shield.queue.js';
 import { createUtmifyDeliveryQueue } from '../queues/utmify-delivery.queue.js';
 import { createUtmifyWebEventQueue } from '../queues/utmify-web-event.queue.js';
+import { createTikTokQueue } from '../queues/tiktok.queue.js';
 import { createVslQueue } from '../queues/vsl.queue.js';
 
 declare module 'fastify' {
@@ -39,6 +41,7 @@ declare module 'fastify' {
     utmifyDeliveryQueue: Queue<UtmifyDeliveryJobData>;
     utmifyWebEventQueue: Queue<UtmifyWebEventJobData>;
     pushcutQueue: Queue<PushcutJobData>;
+    tiktokQueue: Queue<TikTokJobData>;
   }
 }
 
@@ -69,6 +72,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   const utmifyDeliveryQueue = createUtmifyDeliveryQueue(env.REDIS_URL);
   const utmifyWebEventQueue = createUtmifyWebEventQueue(env.REDIS_URL);
   const pushcutQueue = createPushcutQueue(env.REDIS_URL);
+  const tiktokQueue = createTikTokQueue(env.REDIS_URL);
 
   app.decorate('redis', redis);
   app.decorate('renderQueue', renderQueue);
@@ -81,6 +85,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.decorate('utmifyDeliveryQueue', utmifyDeliveryQueue);
   app.decorate('utmifyWebEventQueue', utmifyWebEventQueue);
   app.decorate('pushcutQueue', pushcutQueue);
+  app.decorate('tiktokQueue', tiktokQueue);
 
   app.addHook('onClose', async () => {
     await renderQueue.close();
@@ -93,6 +98,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     await utmifyDeliveryQueue.close();
     await utmifyWebEventQueue.close();
     await pushcutQueue.close();
+    await tiktokQueue.close();
     await redis.quit();
   });
 };

@@ -2,6 +2,7 @@
 
 import { TrackingHelp } from '@/components/tracking/tracking-help';
 import { GoogleAdsDestinations } from '@/components/tracking/google-ads-destinations';
+import { TikTokDestinations } from '@/components/tracking/tiktok-destinations';
 import { TrackingLiveConsole } from '@/components/tracking/tracking-live-console';
 import { TrackingPanel } from '@/components/tracking/tracking-panel';
 import { Button } from '@/components/ui/button';
@@ -425,6 +426,7 @@ type Section =
   | 'meta'
   | 'utmify'
   | 'google'
+  | 'tiktok'
   | 'pushcut'
   | 'fees'
   | 'help';
@@ -444,6 +446,7 @@ const sections: Array<{ id: Section; label: string; icon: LucideIcon; group: str
   { id: 'meta', label: 'Envio ao Meta', icon: Send, group: 'Configuração' },
   { id: 'utmify', label: 'Envio à UTMify', icon: Cable, group: 'Configuração' },
   { id: 'google', label: 'Google Ads', icon: Globe2, group: 'Configuração' },
+  { id: 'tiktok', label: 'TikTok Ads', icon: RadioTower, group: 'Configuração' },
   { id: 'pushcut', label: 'Notificações Pushcut', icon: BellRing, group: 'Configuração' },
   { id: 'fees', label: 'Taxas e líquido', icon: Percent, group: 'Configuração' },
   { id: 'help', label: 'Ajuda e testes', icon: HelpCircle, group: 'Configuração' },
@@ -2671,6 +2674,11 @@ export function TrackingAdvancedCenter({
           {section === 'google' && (
             <Module title="Google Ads" description="Contas e ações de conversão independentes por oferta.">
               <GoogleAdsDestinations key={offerId} offerId={offerId} />
+            </Module>
+          )}
+          {section === 'tiktok' && (
+            <Module title="TikTok Ads" description="Pixels e Events API independentes por oferta, com teste sem venda real.">
+              <TikTokDestinations key={offerId} offerId={offerId} />
             </Module>
           )}
           {section === 'utmify' && (

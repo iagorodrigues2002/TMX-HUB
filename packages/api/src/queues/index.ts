@@ -8,6 +8,7 @@ export const META_QUEUE_NAME = 'meta-capi-queue';
 export const UTMIFY_DELIVERY_QUEUE_NAME = 'utmify-delivery-queue';
 export const UTMIFY_WEB_EVENT_QUEUE_NAME = 'utmify-web-event-queue';
 export const PUSHCUT_QUEUE_NAME = 'pushcut-delivery-queue';
+export const TIKTOK_QUEUE_NAME = 'tiktok-events-queue';
 
 export interface RenderJobData {
   jobId: string;
@@ -53,3 +54,4 @@ export interface UtmifyWebEventJobData {
 export interface PushcutJobData {
   deliveryId: string;
 }
+export interface TikTokJobData { deliveryId: string; }

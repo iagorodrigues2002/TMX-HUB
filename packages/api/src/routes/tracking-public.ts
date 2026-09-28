@@ -1511,7 +1511,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           RETURNING id, status, order_kind
         `;
         if (!order) {
-          return { inserted: true, deliveryIds: [], utmifyDeliveryIds: [], pushcutDeliveryIds: [] };
+          return { inserted: true, deliveryIds: [], utmifyDeliveryIds: [], pushcutDeliveryIds: [], tiktokDeliveryIds: [] };
         }
         // Only an explicit vendaId/vendid is authoritative at ingestion time.
         // Generic transaction and checkout UUIDs are validated against the
@@ -1607,7 +1607,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           if (rows[0] && !skipsUtmify) utmifyDeliveryIds.push(rows[0].id);
         }
         if (order.status !== 'paid') {
-          return { inserted: true, deliveryIds: [], utmifyDeliveryIds, pushcutDeliveryIds: [] };
+          return { inserted: true, deliveryIds: [], utmifyDeliveryIds, pushcutDeliveryIds: [], tiktokDeliveryIds: [] };
         }
         // Pushcut notifies on every paid order regardless of kind — front and
         // upsell both matter to "did a sale just happen", unlike Meta CAPI
@@ -1649,7 +1649,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         // in TMX, UTMify and Pushcut, but must never populate or optimize any
         // Meta pixel connected to this offer.
         if (order.order_kind !== 'front') {
-          return { inserted: true, deliveryIds: [], utmifyDeliveryIds, pushcutDeliveryIds };
+          return { inserted: true, deliveryIds: [], utmifyDeliveryIds, pushcutDeliveryIds, tiktokDeliveryIds: [] };
         }
         const [rules] = await sql<
           Array<{ attributed_only: boolean; minimum_amount_minor: number }>
@@ -1661,7 +1661,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           (rules?.attributed_only && !event.trackingSrc) ||
           (rules && (event.amountMinor ?? 0) < rules.minimum_amount_minor)
         ) {
-          return { inserted: true, deliveryIds: [], utmifyDeliveryIds, pushcutDeliveryIds };
+          return { inserted: true, deliveryIds: [], utmifyDeliveryIds, pushcutDeliveryIds, tiktokDeliveryIds: [] };
         }
         const pixels = await sql<{ id: string }[]>`
           SELECT id FROM meta_pixels
@@ -1681,7 +1681,28 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           `;
           if (deliveries[0]) deliveryIds.push(deliveries[0].id);
         }
-        return { inserted: true, deliveryIds, utmifyDeliveryIds, pushcutDeliveryIds };
+        // TikTok uses a separate durable delivery table because its Events API
+        // has different credentials, payload and retry semantics. As with
+        // Meta, only the approved front purchase feeds campaign optimization;
+        // upsells remain in TMX/UTMify financial reporting.
+        const tikTokDestinations = await sql<{ id: string }[]>`
+          SELECT id FROM tracking_tiktok_destinations
+          WHERE project_id=${connection.project_id} AND enabled=true
+        `;
+        const tiktokDeliveryIds: string[] = [];
+        for (const destination of tikTokDestinations) {
+          const deliveryId = ulid();
+          const deliveries = await sql<{ id: string }[]>`
+            INSERT INTO tracking_tiktok_deliveries
+              (id,project_id,destination_id,order_id,event_id,event_name)
+            VALUES(${deliveryId},${connection.project_id},${destination.id},${order.id},
+              ${`vendepay:${event.transactionId}:tiktok:purchase`},'Purchase')
+            ON CONFLICT(destination_id,event_id) DO NOTHING
+            RETURNING id
+          `;
+          if (deliveries[0]) tiktokDeliveryIds.push(deliveries[0].id);
+        }
+        return { inserted: true, deliveryIds, utmifyDeliveryIds, pushcutDeliveryIds, tiktokDeliveryIds };
       });
       await Promise.allSettled(
         outcome.deliveryIds.map((deliveryId) => app.metaQueue.add('send', { deliveryId })),
@@ -1696,6 +1717,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           app.pushcutQueue.add('send', { deliveryId }),
         ),
       );
+      await Promise.allSettled(
+        (outcome.tiktokDeliveryIds ?? []).map((deliveryId) =>
+          app.tiktokQueue.add('send', { deliveryId }),
+        ),
+      );
       const rewardsOffer = funnelName?.trim().toUpperCase();
       if (outcome.inserted && (rewardsOffer === 'PJR_ENG' || rewardsOffer === 'PJR_ESP') && normalized.kind === 'processable' && normalized.event.status === 'paid' && normalized.event.buyer.email) {
         provisionYoutubeRewardsAccount({ offer: rewardsOffer, email: normalized.event.buyer.email, name: normalized.event.buyer.name, transactionId: normalized.event.transactionId }).catch((error) => req.log.error({ error, transactionId: normalized.event.transactionId }, 'youtube rewards account provisioning failed'));
@@ -1706,6 +1732,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         meta_deliveries: outcome.deliveryIds.length,
         utmify_deliveries: outcome.utmifyDeliveryIds.length,
         pushcut_deliveries: outcome.pushcutDeliveryIds.length,
+        tiktok_deliveries: outcome.tiktokDeliveryIds?.length ?? 0,
         ...(!outcome.inserted ? { duplicate: true } : {}),
       });
     },

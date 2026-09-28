@@ -24,6 +24,7 @@ import { createRenderWorker } from './workers/render.worker.js';
 import { createShieldWorker } from './workers/shield.worker.js';
 import { createUtmifyDeliveryWorker } from './workers/utmify-delivery.worker.js';
 import { createUtmifyWebEventWorker } from './workers/utmify-web-event.worker.js';
+import { createTikTokWorker } from './workers/tiktok.worker.js';
 import { createVslWorker } from './workers/vsl.worker.js';
 
 // TODO(auth): Authentication is intentionally skipped for the MVP.
@@ -61,6 +62,7 @@ async function main() {
   // Recovery also performs network-bound FX repair and must never delay the
   // worker responsible for paid/refunded/chargeback delivery.
   const utmifyDeliveryWorker = createUtmifyDeliveryWorker();
+  const tikTokWorker = createTikTokWorker();
   await app.utmifyDeliveryQueue.resume();
   // PostgreSQL is the durable outbox. Redis may contain thousands of duplicate
   // recovery jobs from an interrupted replay, so rebuild the transient queue
@@ -229,6 +231,16 @@ async function main() {
         ),
       ),
     );
+    const pendingTikTok = await app.db<{ id: string }[]>`
+      SELECT id FROM tracking_tiktok_deliveries
+      WHERE state IN ('pending','failed','processing','test') AND next_attempt_at<=now()
+      ORDER BY created_at ASC LIMIT 1000
+    `;
+    await Promise.allSettled(
+      pendingTikTok.map(({ id }) =>
+        app.tiktokQueue.add('send', { deliveryId: id }, { jobId: `${id}-recovery-${Math.floor(Date.now() / 30_000)}` }),
+      ),
+    );
   };
   // Never block HTTP startup on a historical replay. A large backlog can take
   // several minutes to enqueue (and FX repair performs network calls); awaiting
@@ -359,6 +371,8 @@ async function main() {
       { ...missingEnv },
       'pushcut delivery worker did not start — sale notifications will not be sent',
     );
+  if (!tikTokWorker)
+    app.log.error({ ...missingEnv }, 'tiktok worker did not start — Events API deliveries will not be sent');
   // Disabled intentionally: this legacy dashboard importer authenticates with
   // the operator's UTMify login/password once per configured offer. Besides
   // being unnecessary for server-side order/event delivery (which uses the
@@ -387,6 +401,7 @@ async function main() {
       await utmifyDeliveryWorker?.close();
       await utmifyWebEventWorker?.close();
       await pushcutDeliveryWorker?.close();
+      await tikTokWorker?.close();
       app.log.info('shutdown complete');
       process.exit(0);
     } catch (err) {

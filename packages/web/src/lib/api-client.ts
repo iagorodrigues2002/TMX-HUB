@@ -1222,8 +1222,18 @@ export type GoogleAdsValidation = {
   passed: boolean; validate_only: true; request_id: string | null; warnings: number;
   order_id: string | null; detail: string; synthetic?: boolean;
 };
+export type TikTokDestinationInput = { name: string; pixel_code: string; access_token: string; enabled: boolean };
+export type TikTokDestination = Omit<TikTokDestinationInput, 'access_token'> & {
+  id: string; created_at: string; updated_at: string; deliveries_7d: number; delivered_7d: number; last_delivered_at: string | null;
+};
+export type TikTokDelivery = { id: string; state: 'pending'|'processing'|'delivered'|'failed'|'dead'|'test'; attempts: number; response_status: number | null; last_error: string | null; delivered_at: string | null; test_event_code: string | null; destination_name: string; pixel_code: string };
 
 export const apiClient = {
+  tiktokDestinations: (offerId: string) => request<{ destinations: TikTokDestination[] }>(`/v1/offers/${offerId}/tracking/tiktok/destinations`),
+  saveTikTokDestination: (offerId: string, input: TikTokDestinationInput, id?: string) => request<{ destination: TikTokDestination }>(`/v1/offers/${offerId}/tracking/tiktok/destinations${id ? `/${id}` : ''}`, { method: id ? 'PUT' : 'POST', body: input }),
+  deleteTikTokDestination: (offerId: string, id: string) => request<void>(`/v1/offers/${offerId}/tracking/tiktok/destinations/${id}`, { method: 'DELETE' }),
+  testTikTokDestination: (offerId: string, id: string, testEventCode: string) => request<{ delivery_id: string; status: string; detail: string }>(`/v1/offers/${offerId}/tracking/tiktok/destinations/${id}/test`, { method: 'POST', body: { test_event_code: testEventCode } }),
+  tiktokDelivery: (offerId: string, id: string) => request<{ delivery: TikTokDelivery }>(`/v1/offers/${offerId}/tracking/tiktok/deliveries/${id}`),
   googleAdsConnectionStatus: (offerId: string) => request<{
     oauth_configured: boolean;
     connections: GoogleAdsDestinationConnection[];

@@ -74,6 +74,7 @@ const migrations = [
   '059_vturb_intelligence.sql',
   '060_google_ads_drafts.sql',
   '061_google_ads_oauth.sql',
+  '062_tiktok_events_api.sql',
 ];
 
 await sql`
