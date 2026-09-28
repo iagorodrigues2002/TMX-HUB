@@ -108,6 +108,23 @@ async function provisionYoutubeRewardsAccount(input: {
   if (!response.ok)
     throw new Error(`YouTube Rewards provisioning failed with HTTP ${response.status}`);
 }
+
+/**
+ * Offers can have an internal traffic/channel suffix while sharing the same
+ * members area. Keep that mapping explicit so a new channel cannot silently
+ * stop provisioning access.
+ */
+function resolveYoutubeRewardsOffer(offerName: string | null): 'PJR_ENG' | 'PJR_ESP' | null {
+  switch (offerName?.trim().toUpperCase()) {
+    case 'PJR_ENG':
+    case 'PJR_ENG_TTK':
+      return 'PJR_ENG';
+    case 'PJR_ESP':
+      return 'PJR_ESP';
+    default:
+      return null;
+  }
+}
 const transparentGif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==', 'base64');
 const attributionQueryKeys = new Set([
   'utm_source',
@@ -1819,10 +1836,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           app.tiktokQueue.add('send', { deliveryId }),
         ),
       );
-      const rewardsOffer = funnelName?.trim().toUpperCase();
+      const rewardsOffer = resolveYoutubeRewardsOffer(funnelName);
       if (
         outcome.inserted &&
-        (rewardsOffer === 'PJR_ENG' || rewardsOffer === 'PJR_ESP') &&
+        rewardsOffer &&
         normalized.kind === 'processable' &&
         normalized.event.status === 'paid' &&
         normalized.event.buyer.email
