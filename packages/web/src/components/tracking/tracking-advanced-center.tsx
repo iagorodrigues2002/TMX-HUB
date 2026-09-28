@@ -7,11 +7,7 @@ import { TrackingLiveConsole } from '@/components/tracking/tracking-live-console
 import { TrackingPanel } from '@/components/tracking/tracking-panel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  apiClient,
-  type TrackingProductKind,
-  type UpsellStageKey,
-} from '@/lib/api-client';
+import { apiClient, type TrackingProductKind, type UpsellStageKey } from '@/lib/api-client';
 import { formatMoney } from '@/lib/currency-preference';
 import { cn } from '@/lib/utils';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -200,17 +196,39 @@ function ValidatedUpsellLink({
   }
   if (validation.isLoading) {
     return (
-      <span className="rounded-md border border-white/10 px-2.5 py-1.5 text-white/40">{link.name} · verificando</span>
+      <span className="rounded-md border border-white/10 px-2.5 py-1.5 text-white/40">
+        {link.name} · verificando
+      </span>
     );
   }
   if (!validation.data?.compatible) {
     const accountMissing = validation.data?.reason === 'account_not_configured';
     return withManualResult(
-      <a title={accountMissing ? 'Cadastre a URL desta etapa para a conta VendePay do comprador' : 'Abrir para testar novamente na VendePay'} href={link.url} target="_blank" rel="noreferrer" className="rounded-md border border-rose-300/20 bg-rose-300/[0.06] px-2.5 py-1.5 text-rose-200/70 transition hover:bg-rose-300/[0.12]">{link.name} · {accountMissing ? 'conta sem URL' : 'indisponível'}</a>,
+      <a
+        title={
+          accountMissing
+            ? 'Cadastre a URL desta etapa para a conta VendePay do comprador'
+            : 'Abrir para testar novamente na VendePay'
+        }
+        href={link.url}
+        target="_blank"
+        rel="noreferrer"
+        className="rounded-md border border-rose-300/20 bg-rose-300/[0.06] px-2.5 py-1.5 text-rose-200/70 transition hover:bg-rose-300/[0.12]"
+      >
+        {link.name} · {accountMissing ? 'conta sem URL' : 'indisponível'}
+      </a>,
     );
   }
   return withManualResult(
-    <a title="Elegibilidade confirmada; o TMX validará novamente ao abrir" href={link.url} target="_blank" rel="noreferrer" className="rounded-md border border-emerald-300/25 bg-emerald-300/[0.08] px-2.5 py-1.5 text-emerald-100 transition hover:bg-emerald-300/[0.16]">{link.name} · elegível</a>,
+    <a
+      title="Elegibilidade confirmada; o TMX validará novamente ao abrir"
+      href={link.url}
+      target="_blank"
+      rel="noreferrer"
+      className="rounded-md border border-emerald-300/25 bg-emerald-300/[0.08] px-2.5 py-1.5 text-emerald-100 transition hover:bg-emerald-300/[0.16]"
+    >
+      {link.name} · elegível
+    </a>,
   );
 }
 
@@ -290,13 +308,14 @@ function VturbIntelligence({
     retry: 1,
   });
   const save = useMutation({
-    mutationFn: () => apiClient.saveVturbIntegration(offerId, {
-      enabled: true,
-      analytics_api_token: token.trim() || undefined,
-      endpoint_url: endpoint.trim(),
-      player_id: playerId || null,
-      conversion_param: conversionParam,
-    }),
+    mutationFn: () =>
+      apiClient.saveVturbIntegration(offerId, {
+        enabled: true,
+        analytics_api_token: token.trim() || undefined,
+        endpoint_url: endpoint.trim(),
+        player_id: playerId || null,
+        conversion_param: conversionParam,
+      }),
     onSuccess: (result) => {
       setToken('');
       if (!playerId && result.players[0]) setPlayerId(result.players[0].id);
@@ -314,12 +333,16 @@ function VturbIntelligence({
     return local
       ? {
           ...country,
-          total_conversions: Math.max(Number(country.total_conversions ?? 0), local.total_conversions),
+          total_conversions: Math.max(
+            Number(country.total_conversions ?? 0),
+            local.total_conversions,
+          ),
           total_amount_brl: Math.max(Number(country.total_amount_brl ?? 0), local.total_amount_brl),
         }
       : country;
   });
-  const sum = (field: keyof (typeof countries)[number]) => countries.reduce((total, row) => total + Number(row[field] ?? 0), 0);
+  const sum = (field: keyof (typeof countries)[number]) =>
+    countries.reduce((total, row) => total + Number(row[field] ?? 0), 0);
   const views = sum('total_viewed_device_uniq');
   const plays = sum('total_started_device_uniq');
   const pitchAudience = sum('total_over_pitch');
@@ -335,38 +358,112 @@ function VturbIntelligence({
         <div className="absolute inset-0 opacity-25 [background-image:linear-gradient(rgba(34,211,238,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,.08)_1px,transparent_1px)] [background-size:24px_24px]" />
         <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <div className="flex items-center gap-2 text-cyan-200"><Activity size={17} /><span className="text-[10px] font-semibold uppercase tracking-[.28em]">VTurb Intelligence</span></div>
-            <h3 className="mt-2 text-xl font-semibold text-white">A VSL conectada à receita da oferta</h3>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-white/48">Descubra onde o público abandona, quantos chegam ao pitch e quais países transformam atenção em venda.</p>
+            <div className="flex items-center gap-2 text-cyan-200">
+              <Activity size={17} />
+              <span className="text-[10px] font-semibold uppercase tracking-[.28em]">
+                VTurb Intelligence
+              </span>
+            </div>
+            <h3 className="mt-2 text-xl font-semibold text-white">
+              A VSL conectada à receita da oferta
+            </h3>
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-white/48">
+              Descubra onde o público abandona, quantos chegam ao pitch e quais países transformam
+              atenção em venda.
+            </p>
           </div>
-          <div className={cn('rounded-full border px-3 py-1.5 text-xs', config?.last_error ? 'border-rose-300/30 bg-rose-300/10 text-rose-200' : config?.analytics_token_configured ? 'border-emerald-300/30 bg-emerald-300/10 text-emerald-200' : 'border-amber-300/30 bg-amber-300/10 text-amber-200')}>
-            {config?.last_error ? 'Integração com alerta' : config?.analytics_token_configured ? 'API conectada' : 'Configuração necessária'}
+          <div
+            className={cn(
+              'rounded-full border px-3 py-1.5 text-xs',
+              config?.last_error
+                ? 'border-rose-300/30 bg-rose-300/10 text-rose-200'
+                : config?.analytics_token_configured
+                  ? 'border-emerald-300/30 bg-emerald-300/10 text-emerald-200'
+                  : 'border-amber-300/30 bg-amber-300/10 text-amber-200',
+            )}
+          >
+            {config?.last_error
+              ? 'Integração com alerta'
+              : config?.analytics_token_configured
+                ? 'API conectada'
+                : 'Configuração necessária'}
           </div>
         </div>
       </div>
 
       {canManage && (
         <div className="grid gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4 lg:grid-cols-2">
-          <label className="text-[10px] uppercase tracking-wider text-white/40">Chave da API Analytics
-            <Input className="mt-2" type="password" value={token} onChange={(event) => setToken(event.target.value)} placeholder={config?.analytics_token_configured ? '•••••••• salva — preencha apenas para trocar' : 'Cole a chave da VTurb'} />
+          <label className="text-[10px] uppercase tracking-wider text-white/40">
+            Chave da API Analytics
+            <Input
+              className="mt-2"
+              type="password"
+              value={token}
+              onChange={(event) => setToken(event.target.value)}
+              placeholder={
+                config?.analytics_token_configured
+                  ? '•••••••• salva — preencha apenas para trocar'
+                  : 'Cole a chave da VTurb'
+              }
+            />
           </label>
-          <label className="text-[10px] uppercase tracking-wider text-white/40">VSL desta oferta
-            <select className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#071820] px-3 text-sm text-white outline-none focus:border-cyan-300/50" value={playerId} onChange={(event) => setPlayerId(event.target.value)}>
+          <label className="text-[10px] uppercase tracking-wider text-white/40">
+            VSL desta oferta
+            <select
+              className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#071820] px-3 text-sm text-white outline-none focus:border-cyan-300/50"
+              value={playerId}
+              onChange={(event) => setPlayerId(event.target.value)}
+            >
               <option value="">Selecione a VSL</option>
-              {players.data?.players.map((player) => <option key={player.id} value={player.id}>{player.name} · pitch {formatDuration(player.pitch_time)}</option>)}
+              {players.data?.players.map((player) => (
+                <option key={player.id} value={player.id}>
+                  {player.name} · pitch {formatDuration(player.pitch_time)}
+                </option>
+              ))}
             </select>
           </label>
-          <label className="text-[10px] uppercase tracking-wider text-white/40">Webhook de conversão gerado pela VTurb
-            <Input className="mt-2" value={endpoint} onChange={(event) => setEndpoint(event.target.value)} placeholder="https://tracker.vturb.com/conversions/make?t=..." />
+          <label className="text-[10px] uppercase tracking-wider text-white/40">
+            Webhook de conversão gerado pela VTurb
+            <Input
+              className="mt-2"
+              value={endpoint}
+              onChange={(event) => setEndpoint(event.target.value)}
+              placeholder="https://tracker.vturb.com/conversions/make?t=..."
+            />
           </label>
-          <label className="text-[10px] uppercase tracking-wider text-white/40">Parâmetro da Conversion Key
-            <select className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#071820] px-3 text-sm text-white outline-none focus:border-cyan-300/50" value={conversionParam} onChange={(event) => setConversionParam(event.target.value)}>
-              {['vtid','sck','sid','src','subid','xcod',...Array.from({ length: 20 }, (_, index) => `sub${index + 1}`)].map((value) => <option key={value} value={value}>{value}</option>)}
+          <label className="text-[10px] uppercase tracking-wider text-white/40">
+            Parâmetro da Conversion Key
+            <select
+              className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#071820] px-3 text-sm text-white outline-none focus:border-cyan-300/50"
+              value={conversionParam}
+              onChange={(event) => setConversionParam(event.target.value)}
+            >
+              {[
+                'vtid',
+                'sck',
+                'sid',
+                'src',
+                'subid',
+                'xcod',
+                ...Array.from({ length: 20 }, (_, index) => `sub${index + 1}`),
+              ].map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
             </select>
           </label>
           <div className="lg:col-span-2 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-cyan-300/10 bg-cyan-300/[0.035] p-3 text-xs text-white/45">
-            <span>O mesmo parâmetro deve ser selecionado no rastreamento da VTurb. O TMX preserva a chave <code className="text-cyan-200">v3_…</code> até o webhook da VendePay.</span>
-            <Button onClick={() => save.mutate()} disabled={save.isPending || (!token.trim() && !config?.analytics_token_configured)}>{save.isPending ? 'Validando…' : 'Validar e salvar'}</Button>
+            <span>
+              O mesmo parâmetro deve ser selecionado no rastreamento da VTurb. O TMX preserva a
+              chave <code className="text-cyan-200">v3_…</code> até o webhook da VendePay.
+            </span>
+            <Button
+              onClick={() => save.mutate()}
+              disabled={save.isPending || (!token.trim() && !config?.analytics_token_configured)}
+            >
+              {save.isPending ? 'Validando…' : 'Validar e salvar'}
+            </Button>
           </div>
         </div>
       )}
@@ -376,37 +473,167 @@ function VturbIntelligence({
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
             <Metric label="Visualizações" value={views.toLocaleString('pt-BR')} />
             <Metric label="Plays" value={plays.toLocaleString('pt-BR')} />
-            <Metric label="Tempo do pitch" value={formatDuration(analytics.data?.player.pitch_time)} />
+            <Metric
+              label="Tempo do pitch"
+              value={formatDuration(analytics.data?.player.pitch_time)}
+            />
             <Metric label="Retenção no pitch" value={`${pitchRate.toFixed(1)}%`} />
             <Metric label="Cliques" value={clicks.toLocaleString('pt-BR')} />
             <Metric label="Conversões VTurb" value={conversions.toLocaleString('pt-BR')} />
           </div>
           <div className="grid gap-4 xl:grid-cols-[1.35fr_.65fr]">
             <div className="rounded-2xl border border-white/[0.08] bg-[#06151b]/80 p-4">
-              <div className="flex items-center justify-between"><div><p className="text-sm font-medium text-white/85">Curva de retenção</p><p className="text-xs text-white/35">O marcador mostra o momento do pitch.</p></div><span className="rounded-full bg-cyan-300/10 px-3 py-1 text-xs text-cyan-200">média {Number(analytics.data?.engagement?.engagement_rate ?? 0).toFixed(1)}%</span></div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-white/85">Curva de retenção</p>
+                  <p className="text-xs text-white/35">O marcador mostra o momento do pitch.</p>
+                </div>
+                <span className="rounded-full bg-cyan-300/10 px-3 py-1 text-xs text-cyan-200">
+                  média {Number(analytics.data?.engagement?.engagement_rate ?? 0).toFixed(1)}%
+                </span>
+              </div>
               <div className="relative mt-6 flex h-44 items-end gap-px overflow-hidden rounded-xl border border-white/[0.06] bg-black/15 p-3">
-                {curve.filter((_, index) => index % Math.max(1, Math.floor(curve.length / 90)) === 0).map((point) => <div key={point.timed} title={`${formatDuration(point.timed)} · ${point.total_users}`} className="min-w-[2px] flex-1 rounded-t bg-gradient-to-t from-cyan-500/35 to-emerald-300/90" style={{ height: `${Math.max(2, (point.total_users / maxCurve) * 100)}%` }} />)}
-                {analytics.data?.player.duration ? <div className="absolute bottom-3 top-3 w-px bg-amber-300 shadow-[0_0_12px_rgba(252,211,77,.7)]" style={{ left: `${Math.min(100, (analytics.data.player.pitch_time / analytics.data.player.duration) * 100)}%` }}><span className="absolute -top-5 -translate-x-1/2 whitespace-nowrap text-[9px] uppercase tracking-wider text-amber-200">pitch</span></div> : null}
+                {curve
+                  .filter((_, index) => index % Math.max(1, Math.floor(curve.length / 90)) === 0)
+                  .map((point) => (
+                    <div
+                      key={point.timed}
+                      title={`${formatDuration(point.timed)} · ${point.total_users}`}
+                      className="min-w-[2px] flex-1 rounded-t bg-gradient-to-t from-cyan-500/35 to-emerald-300/90"
+                      style={{ height: `${Math.max(2, (point.total_users / maxCurve) * 100)}%` }}
+                    />
+                  ))}
+                {analytics.data?.player.duration ? (
+                  <div
+                    className="absolute bottom-3 top-3 w-px bg-amber-300 shadow-[0_0_12px_rgba(252,211,77,.7)]"
+                    style={{
+                      left: `${Math.min(100, (analytics.data.player.pitch_time / analytics.data.player.duration) * 100)}%`,
+                    }}
+                  >
+                    <span className="absolute -top-5 -translate-x-1/2 whitespace-nowrap text-[9px] uppercase tracking-wider text-amber-200">
+                      pitch
+                    </span>
+                  </div>
+                ) : null}
               </div>
             </div>
             <div className="rounded-2xl border border-white/[0.08] bg-[#06151b]/80 p-4">
               <p className="text-sm font-medium text-white/85">Diagnóstico rápido</p>
               <div className="mt-4 space-y-3 text-xs text-white/50">
-                <div className="flex gap-3"><PlayCircle className="text-cyan-300" size={17}/><span>Play rate: <strong className="text-white/85">{views ? ((plays / views) * 100).toFixed(1) : '0.0'}%</strong></span></div>
-                <div className="flex gap-3"><Clock3 className="text-amber-300" size={17}/><span>Tempo médio: <strong className="text-white/85">{formatDuration(analytics.data?.engagement?.average_watched_time)}</strong></span></div>
-                <div className="flex gap-3"><MousePointerClick className="text-emerald-300" size={17}/><span>CTR por play: <strong className="text-white/85">{plays ? ((clicks / plays) * 100).toFixed(1) : '0.0'}%</strong></span></div>
-                {pitchRate < 20 && plays > 20 ? <div className="flex gap-3 rounded-lg border border-rose-300/20 bg-rose-300/[0.06] p-3 text-rose-100/80"><AlertTriangle size={17}/><span>Poucos espectadores chegam ao pitch. Avalie antecipar a oferta ou fortalecer a abertura.</span></div> : null}
+                <div className="flex gap-3">
+                  <PlayCircle className="text-cyan-300" size={17} />
+                  <span>
+                    Play rate:{' '}
+                    <strong className="text-white/85">
+                      {views ? ((plays / views) * 100).toFixed(1) : '0.0'}%
+                    </strong>
+                  </span>
+                </div>
+                <div className="flex gap-3">
+                  <Clock3 className="text-amber-300" size={17} />
+                  <span>
+                    Tempo médio:{' '}
+                    <strong className="text-white/85">
+                      {formatDuration(analytics.data?.engagement?.average_watched_time)}
+                    </strong>
+                  </span>
+                </div>
+                <div className="flex gap-3">
+                  <MousePointerClick className="text-emerald-300" size={17} />
+                  <span>
+                    CTR por play:{' '}
+                    <strong className="text-white/85">
+                      {plays ? ((clicks / plays) * 100).toFixed(1) : '0.0'}%
+                    </strong>
+                  </span>
+                </div>
+                {pitchRate < 20 && plays > 20 ? (
+                  <div className="flex gap-3 rounded-lg border border-rose-300/20 bg-rose-300/[0.06] p-3 text-rose-100/80">
+                    <AlertTriangle size={17} />
+                    <span>
+                      Poucos espectadores chegam ao pitch. Avalie antecipar a oferta ou fortalecer a
+                      abertura.
+                    </span>
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
           <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#06151b]/80">
-            <div className="flex items-center gap-2 border-b border-white/[0.07] p-4"><Eye size={16} className="text-cyan-300"/><div><p className="text-sm font-medium text-white/85">Performance por país</p><p className="text-xs text-white/35">Retenção, intenção e receita lado a lado.</p></div></div>
-            <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-xs"><thead className="text-[9px] uppercase tracking-wider text-white/30"><tr>{['País','Views','Play rate','Retenção pitch','Engajamento','Cliques','Conversões','Receita'].map((label) => <th key={label} className="px-4 py-3 font-medium">{label}</th>)}</tr></thead><tbody>{countries.map((country) => <tr key={country.grouped_field} className="border-t border-white/[0.05] text-white/65"><td className="px-4 py-3 font-medium text-white/85">{country.grouped_field}</td><td className="px-4 py-3">{country.total_viewed_device_uniq}</td><td className="px-4 py-3">{Number(country.play_rate).toFixed(1)}%</td><td className={cn('px-4 py-3', Number(country.over_pitch_rate) < 20 && 'text-rose-300')}>{Number(country.over_pitch_rate).toFixed(1)}%</td><td className="px-4 py-3">{Number(country.engagement_rate).toFixed(1)}%</td><td className="px-4 py-3">{country.total_clicked_device_uniq}</td><td className="px-4 py-3 text-emerald-200">{country.total_conversions}</td><td className="px-4 py-3">{country.total_amount_brl ? formatMoney(country.total_amount_brl * 100, 'BRL') : country.total_amount_usd ? formatMoney(country.total_amount_usd * 100, 'USD') : '—'}</td></tr>)}</tbody></table></div>
+            <div className="flex items-center gap-2 border-b border-white/[0.07] p-4">
+              <Eye size={16} className="text-cyan-300" />
+              <div>
+                <p className="text-sm font-medium text-white/85">Performance por país</p>
+                <p className="text-xs text-white/35">Retenção, intenção e receita lado a lado.</p>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] text-left text-xs">
+                <thead className="text-[9px] uppercase tracking-wider text-white/30">
+                  <tr>
+                    {[
+                      'País',
+                      'Views',
+                      'Play rate',
+                      'Retenção pitch',
+                      'Engajamento',
+                      'Cliques',
+                      'Conversões',
+                      'Receita',
+                    ].map((label) => (
+                      <th key={label} className="px-4 py-3 font-medium">
+                        {label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {countries.map((country) => (
+                    <tr
+                      key={country.grouped_field}
+                      className="border-t border-white/[0.05] text-white/65"
+                    >
+                      <td className="px-4 py-3 font-medium text-white/85">
+                        {country.grouped_field}
+                      </td>
+                      <td className="px-4 py-3">{country.total_viewed_device_uniq}</td>
+                      <td className="px-4 py-3">{Number(country.play_rate).toFixed(1)}%</td>
+                      <td
+                        className={cn(
+                          'px-4 py-3',
+                          Number(country.over_pitch_rate) < 20 && 'text-rose-300',
+                        )}
+                      >
+                        {Number(country.over_pitch_rate).toFixed(1)}%
+                      </td>
+                      <td className="px-4 py-3">{Number(country.engagement_rate).toFixed(1)}%</td>
+                      <td className="px-4 py-3">{country.total_clicked_device_uniq}</td>
+                      <td className="px-4 py-3 text-emerald-200">{country.total_conversions}</td>
+                      <td className="px-4 py-3">
+                        {country.total_amount_brl
+                          ? formatMoney(country.total_amount_brl * 100, 'BRL')
+                          : country.total_amount_usd
+                            ? formatMoney(country.total_amount_usd * 100, 'USD')
+                            : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </>
       )}
-      {analytics.isLoading && <div className="rounded-xl border border-cyan-300/10 p-6 text-center text-sm text-cyan-100/55">Sincronizando inteligência da VSL…</div>}
-      {analytics.isError && <div className="rounded-xl border border-rose-300/20 bg-rose-300/[0.05] p-4 text-sm text-rose-200">{(analytics.error as Error).message}</div>}
+      {analytics.isLoading && (
+        <div className="rounded-xl border border-cyan-300/10 p-6 text-center text-sm text-cyan-100/55">
+          Sincronizando inteligência da VSL…
+        </div>
+      )}
+      {analytics.isError && (
+        <div className="rounded-xl border border-rose-300/20 bg-rose-300/[0.05] p-4 text-sm text-rose-200">
+          {(analytics.error as Error).message}
+        </div>
+      )}
     </div>
   );
 }
@@ -479,7 +706,7 @@ const trackingAreas: Array<{
     id: 'integrations',
     label: 'Integrações',
     icon: Cable,
-    sections: ['gateways', 'utmify', 'vturb', 'google'],
+    sections: ['gateways', 'utmify', 'vturb', 'google', 'tiktok'],
   },
   { id: 'finance', label: 'Financeiro', icon: Percent, sections: ['refunds', 'fees'] },
   { id: 'automations', label: 'Automações', icon: BellRing, sections: ['pushcut'] },
@@ -507,9 +734,15 @@ export function TrackingAdvancedCenter({
   const [destinationB, setDestinationB] = useState('');
   const [entryLinkName, setEntryLinkName] = useState('');
   const [entryDestination, setEntryDestination] = useState('');
+  const [entryTrafficSource, setEntryTrafficSource] = useState<
+    'meta' | 'google' | 'tiktok' | 'native' | 'organic' | 'email' | 'other'
+  >('meta');
   const [editingEntryLinkId, setEditingEntryLinkId] = useState('');
   const [editingEntryLinkName, setEditingEntryLinkName] = useState('');
   const [editingEntryDestination, setEditingEntryDestination] = useState('');
+  const [editingEntryTrafficSource, setEditingEntryTrafficSource] = useState<
+    'meta' | 'google' | 'tiktok' | 'native' | 'organic' | 'email' | 'other' | 'unknown'
+  >('unknown');
   const [convertingEntryLinkId, setConvertingEntryLinkId] = useState('');
   const [entryAbName, setEntryAbName] = useState('');
   const [entryAbDestinationA, setEntryAbDestinationA] = useState('');
@@ -527,9 +760,9 @@ export function TrackingAdvancedCenter({
     Record<string, string>
   >({});
   const [editingUpsellStageId, setEditingUpsellStageId] = useState('');
-  const [upsellBuyerFilter, setUpsellBuyerFilter] = useState<
-    'all' | 'front_only' | 'with_upsell'
-  >('front_only');
+  const [upsellBuyerFilter, setUpsellBuyerFilter] = useState<'all' | 'front_only' | 'with_upsell'>(
+    'front_only',
+  );
   const [upsellTestFilter, setUpsellTestFilter] = useState<
     'all' | 'worked' | 'failed' | 'unclassified'
   >('all');
@@ -589,8 +822,7 @@ export function TrackingAdvancedCenter({
   });
   const upsellIntelligence = useQuery({
     queryKey: ['tracking-upsells', offerId, trackingFrom, trackingTo],
-    queryFn: () =>
-      apiClient.getTrackingUpsells(offerId, { from: trackingFrom, to: trackingTo }),
+    queryFn: () => apiClient.getTrackingUpsells(offerId, { from: trackingFrom, to: trackingTo }),
     retry: false,
   });
   const upsellIdentities = useQuery({
@@ -617,10 +849,13 @@ export function TrackingAdvancedCenter({
     (upsellIntelligence.data?.stages ?? []).map((stage) => stage.stage_key),
   );
   useEffect(() => {
-    if (editingUpsellStageId || !upsellIntelligence.data || !configuredUpsellStages.has(upsellStageKey)) return;
-    const next = UPSELL_STAGE_OPTIONS.find(
-      (stage) => !configuredUpsellStages.has(stage),
-    );
+    if (
+      editingUpsellStageId ||
+      !upsellIntelligence.data ||
+      !configuredUpsellStages.has(upsellStageKey)
+    )
+      return;
+    const next = UPSELL_STAGE_OPTIONS.find((stage) => !configuredUpsellStages.has(stage));
     if (!next) return;
     setUpsellStageKey(next);
     setUpsellStageName(upsellStageLabel(next));
@@ -814,6 +1049,7 @@ export function TrackingAdvancedCenter({
       await apiClient.createTrackingEntryLink(offerId, {
         name: entryLinkName,
         destination_url: entryDestination,
+        traffic_source: entryTrafficSource,
       });
       return setup;
     },
@@ -821,6 +1057,7 @@ export function TrackingAdvancedCenter({
       if (setup?.vendepay_webhook_url) setVendepayWebhook(setup.vendepay_webhook_url);
       setEntryLinkName('');
       setEntryDestination('');
+      setEntryTrafficSource('meta');
       void qc.invalidateQueries({ queryKey: ['tracking-config', offerId] });
       void refresh();
       toast.success(
@@ -844,6 +1081,7 @@ export function TrackingAdvancedCenter({
       apiClient.updateTrackingEntryLink(offerId, editingEntryLinkId, {
         name: editingEntryLinkName,
         destination_url: editingEntryDestination,
+        traffic_source: editingEntryTrafficSource,
       }),
     onSuccess: () => {
       setEditingEntryLinkId('');
@@ -1469,7 +1707,9 @@ export function TrackingAdvancedCenter({
                 </div>
               </section>
             )}
-          {(['tracker', 'funnel', 'attribution', 'refunds', 'ab'] as Section[]).includes(section) && (
+          {(['tracker', 'funnel', 'attribution', 'refunds', 'ab'] as Section[]).includes(
+            section,
+          ) && (
             <div className="mb-3 flex flex-wrap items-end justify-between gap-3 rounded-lg border border-white/[0.08] bg-black/15 p-3">
               <div>
                 <p className="hud-label">
@@ -1586,9 +1826,9 @@ export function TrackingAdvancedCenter({
               <div className="mb-4 rounded-xl border border-emerald-300/20 bg-emerald-300/[0.05] p-4 text-sm leading-6 text-emerald-50/75">
                 <p className="font-semibold text-emerald-200">Modo somente script</p>
                 <p>
-                  Mantenha os links atuais do funil na Vendepay. Cadastre abaixo a URL que ela já abre e
-                  instale o script gerado nessa página. O TMX captura a visita, o vendid disponível e cruza
-                  tudo com os webhooks automaticamente.
+                  Mantenha os links atuais do funil na Vendepay. Cadastre abaixo a URL que ela já
+                  abre e instale o script gerado nessa página. O TMX captura a visita, o vendid
+                  disponível e cruza tudo com os webhooks automaticamente.
                 </p>
               </div>
               <div className="rounded-xl border border-cyan-300/20 bg-cyan-300/[0.045] p-4">
@@ -1627,8 +1867,9 @@ export function TrackingAdvancedCenter({
                   <div className="mt-4 rounded-lg border border-white/[0.08] bg-black/20 p-3">
                     <p className="text-xs font-semibold text-white/75">Links por conta VendePay</p>
                     <p className="mt-1 text-[11px] leading-5 text-white/40">
-                      O TMX identifica a conta da compra aprovada pelo vendaId e abre automaticamente o
-                      destino configurado para essa conta. Contas sem URL não serão consideradas elegíveis.
+                      O TMX identifica a conta da compra aprovada pelo vendaId e abre
+                      automaticamente o destino configurado para essa conta. Contas sem URL não
+                      serão consideradas elegíveis.
                     </p>
                     <div className="mt-3 grid gap-3 lg:grid-cols-2">
                       {vendepayConnections.map((connection) => (
@@ -1708,7 +1949,11 @@ export function TrackingAdvancedCenter({
                           <p className="hud-label text-emerald-200">{stage.stage_key}</p>
                           <h3 className="mt-1 font-semibold text-white/90">{stage.name}</h3>
                         </div>
-                        <span className={stage.enabled ? 'text-xs text-emerald-300' : 'text-xs text-white/35'}>
+                        <span
+                          className={
+                            stage.enabled ? 'text-xs text-emerald-300' : 'text-xs text-white/35'
+                          }
+                        >
                           {stage.enabled ? 'ativo' : 'pausado'}
                         </span>
                       </div>
@@ -1766,11 +2011,17 @@ export function TrackingAdvancedCenter({
                         {vendepayConnections
                           .filter((connection) => stage.connection_destinations?.[connection.id])
                           .map((connection) => (
-                            <div key={connection.id} className="flex min-w-0 items-center gap-2 text-[11px]">
+                            <div
+                              key={connection.id}
+                              className="flex min-w-0 items-center gap-2 text-[11px]"
+                            >
                               <span className="shrink-0 rounded-full border border-emerald-300/20 bg-emerald-300/[0.06] px-2 py-0.5 text-emerald-100/75">
                                 {connection.name}
                               </span>
-                              <span className="truncate text-cyan-100/55" title={stage.connection_destinations[connection.id]}>
+                              <span
+                                className="truncate text-cyan-100/55"
+                                title={stage.connection_destinations[connection.id]}
+                              >
                                 {stage.connection_destinations[connection.id]}
                               </span>
                             </div>
@@ -1781,7 +2032,9 @@ export function TrackingAdvancedCenter({
                           </p>
                         )}
                       </div>
-                      <p className="mt-4 text-[11px] text-white/40">Link TMX opcional — não é necessário trocar na Vendepay</p>
+                      <p className="mt-4 text-[11px] text-white/40">
+                        Link TMX opcional — não é necessário trocar na Vendepay
+                      </p>
                       <code className="mt-1 block overflow-x-auto whitespace-nowrap rounded bg-black/25 p-2 text-[11px] text-cyan-100">
                         {stage.secure_url}
                       </code>
@@ -1828,9 +2081,10 @@ export function TrackingAdvancedCenter({
                   {'<a data-tmx-upsell-decline href="...">Não, obrigado</a>'}
                 </code>
                 <p className="mt-2">
-                  O script detecta botões automaticamente, captura scroll, saída, erros e o vendid quando
-                  ele estiver exposto na URL, página ou armazenamento do navegador. O Connect Rate é
-                  calculado pela página carregada dividida pelos compradores da etapa anterior.
+                  O script detecta botões automaticamente, captura scroll, saída, erros e o vendid
+                  quando ele estiver exposto na URL, página ou armazenamento do navegador. O Connect
+                  Rate é calculado pela página carregada dividida pelos compradores da etapa
+                  anterior.
                 </p>
               </div>
               <div className="mt-5 overflow-hidden rounded-xl border border-white/[0.08]">
@@ -1845,7 +2099,9 @@ export function TrackingAdvancedCenter({
                           disabled={reconcileUpsellIdentities.isPending}
                           onClick={() => reconcileUpsellIdentities.mutate()}
                         >
-                          {reconcileUpsellIdentities.isPending ? 'Reconciliando…' : 'Recuperar vendaId dos webhooks'}
+                          {reconcileUpsellIdentities.isPending
+                            ? 'Reconciliando…'
+                            : 'Recuperar vendaId dos webhooks'}
                         </Button>
                         <Button
                           size="sm"
@@ -1853,25 +2109,29 @@ export function TrackingAdvancedCenter({
                           disabled={recoverFailedUpsellLinks.isPending}
                           onClick={() => recoverFailedUpsellLinks.mutate()}
                         >
-                          {recoverFailedUpsellLinks.isPending ? 'Verificando…' : 'Verificar API dos reprovados'}
+                          {recoverFailedUpsellLinks.isPending
+                            ? 'Verificando…'
+                            : 'Verificar API dos reprovados'}
                         </Button>
                       </div>
                     )}
                   </div>
                   <p className="mt-1 text-xs text-white/40">
-                    Todas as compras de front aprovadas. O TMX libera os links somente após confirmar
-                    o vendaId no funil correspondente da VendePay.
+                    Todas as compras de front aprovadas. O TMX libera os links somente após
+                    confirmar o vendaId no funil correspondente da VendePay.
                   </p>
                   <p className="mt-1 text-xs text-white/35">
-                    A verificação consulta novamente a intent da VendePay, mas nunca altera o histórico
-                    manual de funcionou ou não funcionou.
+                    A verificação consulta novamente a intent da VendePay, mas nunca altera o
+                    histórico manual de funcionou ou não funcionou.
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {([
-                      ['all', 'Todos'],
-                      ['front_only', 'Somente front'],
-                      ['with_upsell', 'Comprou upsell'],
-                    ] as const).map(([value, label]) => (
+                    {(
+                      [
+                        ['all', 'Todos'],
+                        ['front_only', 'Somente front'],
+                        ['with_upsell', 'Comprou upsell'],
+                      ] as const
+                    ).map(([value, label]) => (
                       <Button
                         key={value}
                         type="button"
@@ -1887,12 +2147,14 @@ export function TrackingAdvancedCenter({
                     <span className="mr-1 text-[10px] uppercase tracking-[0.16em] text-white/30">
                       Resultado do teste
                     </span>
-                    {([
-                      ['all', 'Todos'],
-                      ['worked', 'Funcionou'],
-                      ['failed', 'Não funcionou'],
-                      ['unclassified', 'Não classificados'],
-                    ] as const).map(([value, label]) => (
+                    {(
+                      [
+                        ['all', 'Todos'],
+                        ['worked', 'Funcionou'],
+                        ['failed', 'Não funcionou'],
+                        ['unclassified', 'Não classificados'],
+                      ] as const
+                    ).map(([value, label]) => (
                       <Button
                         key={value}
                         type="button"
@@ -1917,15 +2179,20 @@ export function TrackingAdvancedCenter({
                     </thead>
                     <tbody>
                       {filteredUpsellIdentities.map((identity) => (
-                        <tr key={identity.id} className="border-b border-white/[0.05] last:border-0">
+                        <tr
+                          key={identity.id}
+                          className="border-b border-white/[0.05] last:border-0"
+                        >
                           <td className="px-4 py-3">
                             <code className="select-all text-cyan-100">{identity.vendid}</code>
-                            <span className={cn(
-                              'mt-1 block w-fit rounded-full border px-2 py-0.5 text-[9px]',
-                              identity.vendid_confirmed
-                                ? 'border-emerald-300/20 bg-emerald-300/[0.07] text-emerald-200'
-                                : 'border-amber-300/20 bg-amber-300/[0.07] text-amber-200',
-                            )}>
+                            <span
+                              className={cn(
+                                'mt-1 block w-fit rounded-full border px-2 py-0.5 text-[9px]',
+                                identity.vendid_confirmed
+                                  ? 'border-emerald-300/20 bg-emerald-300/[0.07] text-emerald-200'
+                                  : 'border-amber-300/20 bg-amber-300/[0.07] text-amber-200',
+                              )}
+                            >
                               {identity.vendid_confirmed
                                 ? 'vendaId confirmado'
                                 : 'compra aprovada · vendaId aguardando validação'}
@@ -1942,16 +2209,18 @@ export function TrackingAdvancedCenter({
                             </span>
                           </td>
                           <td className="px-4 py-3">
-                            {identity.links.length ? <div className="flex flex-wrap gap-2">
-                              {identity.links.map((link) => (
-                                <ValidatedUpsellLink
-                                  key={link.stage_id}
-                                  offerId={offerId}
-                                  orderId={identity.id}
-                                  link={link}
-                                />
-                              ))}
-                            </div> : (
+                            {identity.links.length ? (
+                              <div className="flex flex-wrap gap-2">
+                                {identity.links.map((link) => (
+                                  <ValidatedUpsellLink
+                                    key={link.stage_id}
+                                    offerId={offerId}
+                                    orderId={identity.id}
+                                    link={link}
+                                  />
+                                ))}
+                              </div>
+                            ) : (
                               <span className="text-amber-100/55">
                                 Aguardando validação na VendePay
                               </span>
@@ -2326,7 +2595,8 @@ export function TrackingAdvancedCenter({
                         disabled={
                           !selectedVendepayConnection ||
                           selectedVendepayConnectionName.trim().length < 2 ||
-                          selectedVendepayConnectionName.trim() === selectedVendepayConnection.name ||
+                          selectedVendepayConnectionName.trim() ===
+                            selectedVendepayConnection.name ||
                           renameVendepayConnection.isPending
                         }
                         onClick={() => renameVendepayConnection.mutate()}
@@ -2672,12 +2942,18 @@ export function TrackingAdvancedCenter({
             </Module>
           )}
           {section === 'google' && (
-            <Module title="Google Ads" description="Contas e ações de conversão independentes por oferta.">
+            <Module
+              title="Google Ads"
+              description="Contas e ações de conversão independentes por oferta."
+            >
               <GoogleAdsDestinations key={offerId} offerId={offerId} />
             </Module>
           )}
           {section === 'tiktok' && (
-            <Module title="TikTok Ads" description="Pixels e Events API independentes por oferta, com teste sem venda real.">
+            <Module
+              title="TikTok Ads"
+              description="Pixels e Events API independentes por oferta, com teste sem venda real."
+            >
               <TikTokDestinations key={offerId} offerId={offerId} />
             </Module>
           )}
@@ -2733,7 +3009,9 @@ export function TrackingAdvancedCenter({
               </div>
               {canManage && utmify.data?.destination?.enabled && (
                 <div className="mb-5 rounded border border-emerald-400/20 bg-emerald-400/[0.04] p-4">
-                  <p className="text-sm font-medium text-emerald-100">Atribuição das vendas front</p>
+                  <p className="text-sm font-medium text-emerald-100">
+                    Atribuição das vendas front
+                  </p>
                   <p className="mt-1 text-xs leading-5 text-white/45">
                     Recupera campanha, conjunto e anúncio da jornada original e atualiza na UTMify
                     as compras já recebidas. Use após corrigir UTMs ou divergências de campanha.
@@ -3418,6 +3696,24 @@ export function TrackingAdvancedCenter({
                       onChange={(event) => setEntryDestination(event.target.value)}
                       placeholder="URL final da landing page"
                     />
+                    <label className="text-xs text-white/60">
+                      Fonte de tráfego deste link
+                      <select
+                        value={entryTrafficSource}
+                        onChange={(event) =>
+                          setEntryTrafficSource(event.target.value as typeof entryTrafficSource)
+                        }
+                        className="mt-2 h-10 w-full rounded-md border border-white/[0.1] bg-[#06131d] px-3 text-sm text-white"
+                      >
+                        <option value="meta">Meta / Facebook</option>
+                        <option value="google">Google Ads</option>
+                        <option value="tiktok">TikTok Ads</option>
+                        <option value="native">Native Ads</option>
+                        <option value="organic">Orgânico</option>
+                        <option value="email">E-mail</option>
+                        <option value="other">Outra fonte</option>
+                      </select>
+                    </label>
                     <Button
                       className="md:col-span-2"
                       disabled={
@@ -3443,6 +3739,12 @@ export function TrackingAdvancedCenter({
                           <p className="mt-1 truncate text-xs text-white/40">
                             Destino: {link.destination_url}
                           </p>
+                          <p className="mt-1 text-xs text-cyan-200/70">
+                            Fonte:{' '}
+                            {link.traffic_source === 'unknown'
+                              ? 'não classificada'
+                              : link.traffic_source}
+                          </p>
                         </div>
                         <span className="text-xs text-emerald-300">
                           {link.ab_test_id ? 'Teste A/B ativo' : 'Destino único'}
@@ -3460,6 +3762,27 @@ export function TrackingAdvancedCenter({
                             onChange={(event) => setEditingEntryDestination(event.target.value)}
                             placeholder="Novo destino"
                           />
+                          <label className="text-xs text-white/60">
+                            Fonte de tráfego
+                            <select
+                              value={editingEntryTrafficSource}
+                              onChange={(event) =>
+                                setEditingEntryTrafficSource(
+                                  event.target.value as typeof editingEntryTrafficSource,
+                                )
+                              }
+                              className="mt-2 h-10 w-full rounded-md border border-white/[0.1] bg-[#06131d] px-3 text-sm text-white"
+                            >
+                              <option value="meta">Meta / Facebook</option>
+                              <option value="google">Google Ads</option>
+                              <option value="tiktok">TikTok Ads</option>
+                              <option value="native">Native Ads</option>
+                              <option value="organic">Orgânico</option>
+                              <option value="email">E-mail</option>
+                              <option value="other">Outra fonte</option>
+                              <option value="unknown">Não classificada</option>
+                            </select>
+                          </label>
                           <div className="flex gap-2 md:col-span-2">
                             <Button
                               size="sm"
@@ -3590,6 +3913,7 @@ export function TrackingAdvancedCenter({
                               setEditingEntryLinkId(link.id);
                               setEditingEntryLinkName(link.name);
                               setEditingEntryDestination(link.destination_url);
+                              setEditingEntryTrafficSource(link.traffic_source);
                             }}
                           >
                             Editar destino
@@ -3868,9 +4192,9 @@ function AbTestCard({
                   aria-label={`Nome da variante ${index + 1}`}
                   value={editLabels[index] ?? ''}
                   onChange={(event) =>
-                    setEditLabels((current) => current.map((value, item) =>
-                      item === index ? event.target.value : value,
-                    ))
+                    setEditLabels((current) =>
+                      current.map((value, item) => (item === index ? event.target.value : value)),
+                    )
                   }
                   placeholder={`Variante ${index + 1}`}
                 />
@@ -3878,9 +4202,9 @@ function AbTestCard({
                   aria-label={`URL da variante ${index + 1}`}
                   value={editDestinations[index] ?? ''}
                   onChange={(event) =>
-                    setEditDestinations((current) => current.map((value, item) =>
-                      item === index ? event.target.value : value,
-                    ))
+                    setEditDestinations((current) =>
+                      current.map((value, item) => (item === index ? event.target.value : value)),
+                    )
                   }
                   placeholder="https://..."
                 />
@@ -3897,7 +4221,9 @@ function AbTestCard({
             }
             onClick={() => saveConfiguration.mutate()}
           >
-            {saveConfiguration.isPending ? 'Salvando alterações…' : 'Salvar alterações do teste A/B'}
+            {saveConfiguration.isPending
+              ? 'Salvando alterações…'
+              : 'Salvar alterações do teste A/B'}
           </Button>
         </div>
       )}
@@ -3955,7 +4281,10 @@ function AbTestCard({
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-white/45" title="Receita do front e upsells dividida pelos compradores únicos de front">
+                  <dt
+                    className="text-white/45"
+                    title="Receita do front e upsells dividida pelos compradores únicos de front"
+                  >
                     AOV do funil
                   </dt>
                   <dd className="mt-1 text-base font-semibold text-amber-200">

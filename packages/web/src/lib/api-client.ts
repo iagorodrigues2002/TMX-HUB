@@ -49,7 +49,11 @@ export type VturbAnalytics = {
   period: { from: string; to: string };
   overall: Record<string, number>;
   countries: VturbCountryMetric[];
-  engagement: { average_watched_time?: number; engagement_rate?: number; grouped_timed?: Array<{ timed: number; total_users: number }> };
+  engagement: {
+    average_watched_time?: number;
+    engagement_rate?: number;
+    grouped_timed?: Array<{ timed: number; total_users: number }>;
+  };
   clicks: Array<{ timed: number; total_users: number }>;
   conversions: Record<string, unknown>;
   tmx_country_conversions?: Array<{
@@ -1208,7 +1212,11 @@ export interface UtmifyGlobalConfig {
 
 // ---- public methods ----
 
-export type GoogleAdsDraftInput = { name: string; customer_id: string; conversion_action_id: string };
+export type GoogleAdsDraftInput = {
+  name: string;
+  customer_id: string;
+  conversion_action_id: string;
+};
 export type GoogleAdsDraft = GoogleAdsDraftInput & { id: string; mode: 'server'; state: 'draft' };
 export type GoogleAdsOAuthConnection = { id: string; name: string; connected_at: string };
 export type GoogleAdsDestinationConnection = {
@@ -1219,44 +1227,115 @@ export type GoogleAdsDestinationConnection = {
 };
 export type GoogleAdsAccount = { customer_id: string; name: string; manager: boolean };
 export type GoogleAdsValidation = {
-  passed: boolean; validate_only: true; request_id: string | null; warnings: number;
-  order_id: string | null; detail: string; synthetic?: boolean;
+  passed: boolean;
+  validate_only: true;
+  request_id: string | null;
+  warnings: number;
+  order_id: string | null;
+  detail: string;
+  synthetic?: boolean;
 };
-export type TikTokDestinationInput = { name: string; pixel_code: string; access_token: string; enabled: boolean };
+export type TikTokDestinationInput = {
+  name: string;
+  pixel_code: string;
+  access_token: string;
+  enabled: boolean;
+};
 export type TikTokDestination = Omit<TikTokDestinationInput, 'access_token'> & {
-  id: string; created_at: string; updated_at: string; deliveries_7d: number; delivered_7d: number; last_delivered_at: string | null;
+  id: string;
+  created_at: string;
+  updated_at: string;
+  deliveries_7d: number;
+  delivered_7d: number;
+  last_delivered_at: string | null;
 };
-export type TikTokDelivery = { id: string; state: 'pending'|'processing'|'delivered'|'failed'|'dead'|'test'; attempts: number; response_status: number | null; last_error: string | null; delivered_at: string | null; test_event_code: string | null; destination_name: string; pixel_code: string };
+export type TikTokDelivery = {
+  id: string;
+  state: 'pending' | 'processing' | 'delivered' | 'failed' | 'dead' | 'test';
+  attempts: number;
+  response_status: number | null;
+  last_error: string | null;
+  delivered_at: string | null;
+  test_event_code: string | null;
+  destination_name: string;
+  pixel_code: string;
+};
 
 export const apiClient = {
-  tiktokDestinations: (offerId: string) => request<{ destinations: TikTokDestination[] }>(`/v1/offers/${offerId}/tracking/tiktok/destinations`),
-  saveTikTokDestination: (offerId: string, input: TikTokDestinationInput, id?: string) => request<{ destination: TikTokDestination }>(`/v1/offers/${offerId}/tracking/tiktok/destinations${id ? `/${id}` : ''}`, { method: id ? 'PUT' : 'POST', body: input }),
-  deleteTikTokDestination: (offerId: string, id: string) => request<void>(`/v1/offers/${offerId}/tracking/tiktok/destinations/${id}`, { method: 'DELETE' }),
-  testTikTokDestination: (offerId: string, id: string, testEventCode: string) => request<{ delivery_id: string; status: string; detail: string }>(`/v1/offers/${offerId}/tracking/tiktok/destinations/${id}/test`, { method: 'POST', body: { test_event_code: testEventCode } }),
-  tiktokDelivery: (offerId: string, id: string) => request<{ delivery: TikTokDelivery }>(`/v1/offers/${offerId}/tracking/tiktok/deliveries/${id}`),
-  googleAdsConnectionStatus: (offerId: string) => request<{
-    oauth_configured: boolean;
-    connections: GoogleAdsDestinationConnection[];
-    oauth_connections: GoogleAdsOAuthConnection[];
-  }>(`/v1/offers/${offerId}/tracking/google-ads/connection-status`),
-  googleAdsOAuthStart: (offerId: string, id: string) => request<{ authorization_url: string; state: string }>(`/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth/start`, { method: 'POST' }),
-  googleAdsOAuthComplete: (offerId: string, id: string, input: { code: string; state: string }) => request<{ connected: boolean }>(`/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth/complete`, { method: 'POST', body: input }),
+  tiktokDestinations: (offerId: string) =>
+    request<{ destinations: TikTokDestination[] }>(
+      `/v1/offers/${offerId}/tracking/tiktok/destinations`,
+    ),
+  saveTikTokDestination: (offerId: string, input: TikTokDestinationInput, id?: string) =>
+    request<{ destination: TikTokDestination }>(
+      `/v1/offers/${offerId}/tracking/tiktok/destinations${id ? `/${id}` : ''}`,
+      { method: id ? 'PUT' : 'POST', body: input },
+    ),
+  deleteTikTokDestination: (offerId: string, id: string) =>
+    request<void>(`/v1/offers/${offerId}/tracking/tiktok/destinations/${id}`, { method: 'DELETE' }),
+  testTikTokDestination: (offerId: string, id: string, testEventCode: string) =>
+    request<{ delivery_id: string; status: string; detail: string }>(
+      `/v1/offers/${offerId}/tracking/tiktok/destinations/${id}/test`,
+      { method: 'POST', body: { test_event_code: testEventCode } },
+    ),
+  tiktokDelivery: (offerId: string, id: string) =>
+    request<{ delivery: TikTokDelivery }>(`/v1/offers/${offerId}/tracking/tiktok/deliveries/${id}`),
+  googleAdsConnectionStatus: (offerId: string) =>
+    request<{
+      oauth_configured: boolean;
+      connections: GoogleAdsDestinationConnection[];
+      oauth_connections: GoogleAdsOAuthConnection[];
+    }>(`/v1/offers/${offerId}/tracking/google-ads/connection-status`),
+  googleAdsOAuthStart: (offerId: string, id: string) =>
+    request<{ authorization_url: string; state: string }>(
+      `/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth/start`,
+      { method: 'POST' },
+    ),
+  googleAdsOAuthComplete: (offerId: string, id: string, input: { code: string; state: string }) =>
+    request<{ connected: boolean }>(
+      `/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth/complete`,
+      { method: 'POST', body: input },
+    ),
   googleAdsAccounts: (offerId: string, id: string) =>
-    request<{ accounts: GoogleAdsAccount[] }>(`/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth/accounts`),
+    request<{ accounts: GoogleAdsAccount[] }>(
+      `/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth/accounts`,
+    ),
   googleAdsLookupAccount: (offerId: string, id: string, customerId: string) =>
-    request<{ account: GoogleAdsAccount }>(`/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth/accounts/lookup?customer_id=${encodeURIComponent(customerId)}`),
+    request<{ account: GoogleAdsAccount }>(
+      `/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth/accounts/lookup?customer_id=${encodeURIComponent(customerId)}`,
+    ),
   googleAdsValidate: (offerId: string, id: string) =>
-    request<GoogleAdsValidation>(`/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth/test`, { method: 'POST' }),
+    request<GoogleAdsValidation>(
+      `/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth/test`,
+      { method: 'POST' },
+    ),
   googleAdsValidateSynthetic: (offerId: string, id: string) =>
-    request<GoogleAdsValidation>(`/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth/test-synthetic`, { method: 'POST' }),
-  googleAdsDisconnect: (offerId: string, id: string) => request<void>(`/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth`, { method: 'DELETE' }),
+    request<GoogleAdsValidation>(
+      `/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth/test-synthetic`,
+      { method: 'POST' },
+    ),
+  googleAdsDisconnect: (offerId: string, id: string) =>
+    request<void>(`/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth`, {
+      method: 'DELETE',
+    }),
   googleAdsAttachConnection: (offerId: string, id: string, connectionId: string) =>
-    request<{ attached: boolean }>(`/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth/attach`, { method: 'POST', body: { connection_id: connectionId } }),
-  googleAdsDestinations: (offerId: string) => request<{ destinations: GoogleAdsDraft[]; delivery_enabled: false }>(`/v1/offers/${offerId}/tracking/google-ads/destinations`),
+    request<{ attached: boolean }>(
+      `/v1/offers/${offerId}/tracking/google-ads/destinations/${id}/oauth/attach`,
+      { method: 'POST', body: { connection_id: connectionId } },
+    ),
+  googleAdsDestinations: (offerId: string) =>
+    request<{ destinations: GoogleAdsDraft[]; delivery_enabled: false }>(
+      `/v1/offers/${offerId}/tracking/google-ads/destinations`,
+    ),
   saveGoogleAdsDestination: (offerId: string, input: GoogleAdsDraftInput, id?: string) =>
-    request<{ destination: GoogleAdsDraft }>(`/v1/offers/${offerId}/tracking/google-ads/destinations${id ? `/${id}` : ''}`, { method: id ? 'PUT' : 'POST', body: input }),
+    request<{ destination: GoogleAdsDraft }>(
+      `/v1/offers/${offerId}/tracking/google-ads/destinations${id ? `/${id}` : ''}`,
+      { method: id ? 'PUT' : 'POST', body: input },
+    ),
   archiveGoogleAdsDestination: (offerId: string, id: string) =>
-    request<void>(`/v1/offers/${offerId}/tracking/google-ads/destinations/${id}`, { method: 'DELETE' }),
+    request<void>(`/v1/offers/${offerId}/tracking/google-ads/destinations/${id}`, {
+      method: 'DELETE',
+    }),
   baseUrl: env.NEXT_PUBLIC_API_URL,
 
   async getMetaControlConnection(): Promise<MetaControlConnection | null> {
@@ -1283,7 +1362,10 @@ export const apiClient = {
   },
 
   async syncMetaControl(connectionId: string): Promise<{ accounts: number; campaigns: number }> {
-    return request('/v1/meta-control/sync', { method: 'POST', body: { connection_id: connectionId } });
+    return request('/v1/meta-control/sync', {
+      method: 'POST',
+      body: { connection_id: connectionId },
+    });
   },
 
   async getMetaControlDashboard(connectionId: string): Promise<MetaControlDashboard> {
@@ -1298,12 +1380,15 @@ export const apiClient = {
     return response.config;
   },
 
-  async saveMetaPaymentPushcut(connectionId: string, input: {
-    secret?: string;
-    notification_name: string;
-    devices: string[];
-    enabled: boolean;
-  }): Promise<MetaPaymentPushcutConfig> {
+  async saveMetaPaymentPushcut(
+    connectionId: string,
+    input: {
+      secret?: string;
+      notification_name: string;
+      devices: string[];
+      enabled: boolean;
+    },
+  ): Promise<MetaPaymentPushcutConfig> {
     const response = await request<{ config: MetaPaymentPushcutConfig }>(
       `/v1/meta-control/connections/${connectionId}/pushcut`,
       { method: 'PATCH', body: input },
@@ -1333,7 +1418,13 @@ export const apiClient = {
     return request('/v1/utmify-global/test', { method: 'POST' });
   },
 
-  async replayUtmifyGlobal(): Promise<{ orders_found: number; inserted: number; recovered: number; queued: number; queue_failed: number }> {
+  async replayUtmifyGlobal(): Promise<{
+    orders_found: number;
+    inserted: number;
+    recovered: number;
+    queued: number;
+    queue_failed: number;
+  }> {
     return request('/v1/utmify-global/replay', { method: 'POST' });
   },
 
@@ -2019,21 +2110,43 @@ export const apiClient = {
     return request(`/v1/tracking/overview${query ? `?${query}` : ''}`);
   },
 
-  async getRefundsDashboard(from: string, to: string, offerId?: string, product?: string, vendepay?: 'iago' | 'lucas'): Promise<{
+  async getRefundsDashboard(
+    from: string,
+    to: string,
+    offerId?: string,
+    product?: string,
+    vendepay?: 'iago' | 'lucas',
+  ): Promise<{
     from: string;
     to: string;
     time_zone: string;
     offers: Array<RefundBreakdown & { offer_id: string; offer_name: string }>;
     products: Array<RefundBreakdown & { product_name: string }>;
-    vendepays: Array<RefundBreakdown & { connection_name: string; fee_usd_minor: number; fee_brl_minor: number }>;
+    vendepays: Array<
+      RefundBreakdown & { connection_name: string; fee_usd_minor: number; fee_brl_minor: number }
+    >;
     daily: Array<RefundBreakdown & { date: string }>;
     items: Array<{
-      id: string; offer_id: string; offer_name: string; connection_name: string; external_id: string;
-      status: 'refunded' | 'chargeback'; amount_minor: number | null; currency: string | null;
-      amount_brl_minor: string | null; brl_minor: number; product_name: string;
-      order_kind: string; lifecycle_at: string; buyer: { name?: string; email?: string };
+      id: string;
+      offer_id: string;
+      offer_name: string;
+      connection_name: string;
+      external_id: string;
+      status: 'refunded' | 'chargeback';
+      amount_minor: number | null;
+      currency: string | null;
+      amount_brl_minor: string | null;
+      brl_minor: number;
+      product_name: string;
+      order_kind: string;
+      lifecycle_at: string;
+      buyer: { name?: string; email?: string };
     }>;
-    totals: RefundBreakdown & { fee_usd_minor: number; fee_brl_minor: number; fee_exchange_rate: number | null };
+    totals: RefundBreakdown & {
+      fee_usd_minor: number;
+      fee_brl_minor: number;
+      fee_exchange_rate: number | null;
+    };
   }> {
     const params = new URLSearchParams({ from, to });
     if (offerId) params.set('offer_id', offerId);
@@ -2335,6 +2448,15 @@ export const apiClient = {
       name: string;
       slug: string;
       destination_url: string;
+      traffic_source:
+        | 'meta'
+        | 'google'
+        | 'tiktok'
+        | 'native'
+        | 'organic'
+        | 'email'
+        | 'other'
+        | 'unknown';
       ab_test_id?: string;
       tracking_url: string;
       enabled: boolean;
@@ -2355,21 +2477,30 @@ export const apiClient = {
     return request(`/v1/offers/${id}/tracking/advanced`);
   },
 
-  async saveVturbIntegration(id: string, body: {
-    enabled: boolean;
-    analytics_api_token?: string;
-    endpoint_url?: string;
-    player_id?: string | null;
-    conversion_param: string;
-  }): Promise<{ ok: boolean; players: VturbPlayer[] }> {
+  async saveVturbIntegration(
+    id: string,
+    body: {
+      enabled: boolean;
+      analytics_api_token?: string;
+      endpoint_url?: string;
+      player_id?: string | null;
+      conversion_param: string;
+    },
+  ): Promise<{ ok: boolean; players: VturbPlayer[] }> {
     return request(`/v1/offers/${id}/tracking/vturb`, { method: 'PATCH', body });
   },
 
-  async getVturbPlayers(id: string): Promise<{ players: VturbPlayer[]; selected_player_id: string | null }> {
+  async getVturbPlayers(
+    id: string,
+  ): Promise<{ players: VturbPlayer[]; selected_player_id: string | null }> {
     return request(`/v1/offers/${id}/tracking/vturb/players`);
   },
 
-  async getVturbAnalytics(id: string, period: { from: string; to: string }, playerId?: string): Promise<VturbAnalytics> {
+  async getVturbAnalytics(
+    id: string,
+    period: { from: string; to: string },
+    playerId?: string,
+  ): Promise<VturbAnalytics> {
     const params = new URLSearchParams({ from: period.from, to: period.to });
     if (playerId) params.set('player_id', playerId);
     return request(`/v1/offers/${id}/tracking/vturb/analytics?${params.toString()}`);
@@ -2425,7 +2556,11 @@ export const apiClient = {
 
   async createTrackingEntryLink(
     id: string,
-    body: { name: string; destination_url: string },
+    body: {
+      name: string;
+      destination_url: string;
+      traffic_source: 'meta' | 'google' | 'tiktok' | 'native' | 'organic' | 'email' | 'other';
+    },
   ): Promise<void> {
     await request(`/v1/offers/${id}/tracking/entry-links`, { method: 'POST', body });
   },
@@ -2433,7 +2568,19 @@ export const apiClient = {
   async updateTrackingEntryLink(
     id: string,
     linkId: string,
-    body: { name?: string; destination_url: string },
+    body: {
+      name?: string;
+      destination_url: string;
+      traffic_source?:
+        | 'meta'
+        | 'google'
+        | 'tiktok'
+        | 'native'
+        | 'organic'
+        | 'email'
+        | 'other'
+        | 'unknown';
+    },
   ): Promise<void> {
     await request(`/v1/offers/${id}/tracking/entry-links/${linkId}`, {
       method: 'PATCH',
@@ -2889,7 +3036,12 @@ export const apiClient = {
   async updateMetaPixel(
     id: string,
     pixelId: string,
-    input: { name: string; pixel_id: string; access_token?: string; test_event_code?: string | null },
+    input: {
+      name: string;
+      pixel_id: string;
+      access_token?: string;
+      test_event_code?: string | null;
+    },
   ): Promise<void> {
     await request(`/v1/offers/${id}/tracking/meta-pixels/${pixelId}`, {
       method: 'PATCH',
@@ -3508,8 +3660,7 @@ export const apiClient = {
     }
     const blob = await res.blob();
     const disposition = res.headers.get('content-disposition') || '';
-    const filename =
-      disposition.match(/filename="([^"]+)"/)?.[1] ?? `video-studio-${id}.mp4`;
+    const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? `video-studio-${id}.mp4`;
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;

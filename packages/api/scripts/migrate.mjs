@@ -75,6 +75,7 @@ const migrations = [
   '060_google_ads_drafts.sql',
   '061_google_ads_oauth.sql',
   '062_tiktok_events_api.sql',
+  '063_entry_link_traffic_source.sql',
 ];
 
 await sql`

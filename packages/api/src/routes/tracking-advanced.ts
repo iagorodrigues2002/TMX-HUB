@@ -69,20 +69,30 @@ const AbControlSchema = z.discriminatedUnion('action', [
     action: z.literal('update_config'),
     name: z.string().trim().min(2).max(120),
     traffic_a: z.number().int().min(1).max(99),
-    variants: z.array(z.object({
-      id: z.string().min(8).max(40),
-      label: z.string().trim().min(1).max(80),
-      destination_url: z.string().url().max(4096),
-    })).length(2),
+    variants: z
+      .array(
+        z.object({
+          id: z.string().min(8).max(40),
+          label: z.string().trim().min(1).max(80),
+          destination_url: z.string().url().max(4096),
+        }),
+      )
+      .length(2),
   }),
 ]);
 const EntryLinkSchema = z.object({
   name: z.string().trim().min(2).max(120),
   destination_url: z.string().url().max(4096),
+  traffic_source: z
+    .enum(['meta', 'google', 'tiktok', 'native', 'organic', 'email', 'other'])
+    .default('other'),
 });
 const EntryLinkUpdateSchema = z.object({
   name: z.string().trim().min(2).max(120).optional(),
   destination_url: z.string().url().max(4096),
+  traffic_source: z
+    .enum(['meta', 'google', 'tiktok', 'native', 'organic', 'email', 'other', 'unknown'])
+    .optional(),
 });
 const EntryLinkAbSchema = z.object({
   name: z.string().trim().min(2).max(120),
@@ -101,7 +111,11 @@ const VturbConfigSchema = z.object({
   analytics_api_token: z.string().trim().min(20).max(512).optional(),
   endpoint_url: z.string().url().max(2048).optional().or(z.literal('')),
   player_id: z.string().trim().max(128).optional().nullable(),
-  conversion_param: z.string().trim().regex(/^[a-zA-Z0-9_]{1,32}$/).default('vtid'),
+  conversion_param: z
+    .string()
+    .trim()
+    .regex(/^[a-zA-Z0-9_]{1,32}$/)
+    .default('vtid'),
 });
 const ProductKindSchema = z.object({
   product_id: z.string().trim().min(1).max(256),
@@ -171,7 +185,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         WHERE t.project_id=${p.id}
         GROUP BY t.id ORDER BY t.created_at DESC`,
         app.db`
-        SELECT id, name, slug, destination_url, ab_test_id, enabled, created_at, updated_at
+        SELECT id, name, slug, destination_url, traffic_source, ab_test_id, enabled, created_at, updated_at
         FROM tracking_entry_links
         WHERE project_id=${p.id}
         ORDER BY created_at DESC`,
@@ -222,7 +236,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (value.endpoint_url) {
         const endpoint = new URL(value.endpoint_url);
         if (endpoint.protocol !== 'https:' || endpoint.hostname !== 'tracker.vturb.com')
-          return reply.code(422).send({ error: 'vturb_endpoint_invalid', detail: 'Use o webhook HTTPS gerado em tracker.vturb.com.' });
+          return reply
+            .code(422)
+            .send({
+              error: 'vturb_endpoint_invalid',
+              detail: 'Use o webhook HTTPS gerado em tracker.vturb.com.',
+            });
       }
       const [existing] = await app.db<Array<{ analytics_token_encrypted: string | null }>>`
         SELECT analytics_token_encrypted FROM vturb_integrations WHERE project_id=${p.id}
@@ -234,9 +253,17 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         : existing!.analytics_token_encrypted;
       let players: Array<{ id: string; name: string; pitch_time: number; duration: number }> = [];
       try {
-        players = await vturbAnalyticsRequest(value.analytics_api_token ?? decryptSecret(encryptedToken!, env.TRACKING_ENCRYPTION_KEY), '/players/list?timezone=America%2FSao_Paulo');
+        players = await vturbAnalyticsRequest(
+          value.analytics_api_token ?? decryptSecret(encryptedToken!, env.TRACKING_ENCRYPTION_KEY),
+          '/players/list?timezone=America%2FSao_Paulo',
+        );
       } catch (error) {
-        return reply.code(422).send({ error: 'vturb_validation_failed', detail: error instanceof Error ? error.message : String(error) });
+        return reply
+          .code(422)
+          .send({
+            error: 'vturb_validation_failed',
+            detail: error instanceof Error ? error.message : String(error),
+          });
       }
       if (value.player_id && !players.some((player) => player.id === value.player_id))
         return reply.code(422).send({ error: 'vturb_player_not_found' });
@@ -254,39 +281,64 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get<{ Params: { id: string } }>('/offers/:id/tracking/vturb/players', async (req, reply) => {
     const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin');
     if (!app.db) return reply.code(503).send(databaseUnavailable);
-    if (!p || !env.TRACKING_ENCRYPTION_KEY) return reply.code(404).send({ error: 'vturb_not_configured' });
-    const [integration] = await app.db<Array<{ analytics_token_encrypted: string | null; player_id: string | null }>>`
+    if (!p || !env.TRACKING_ENCRYPTION_KEY)
+      return reply.code(404).send({ error: 'vturb_not_configured' });
+    const [integration] = await app.db<
+      Array<{ analytics_token_encrypted: string | null; player_id: string | null }>
+    >`
       SELECT analytics_token_encrypted,player_id FROM vturb_integrations WHERE project_id=${p.id}
     `;
     if (!integration?.analytics_token_encrypted) return { players: [], selected_player_id: null };
     const token = decryptSecret(integration.analytics_token_encrypted, env.TRACKING_ENCRYPTION_KEY);
-    const players = await vturbAnalyticsRequest(token, '/players/list?timezone=America%2FSao_Paulo');
+    const players = await vturbAnalyticsRequest(
+      token,
+      '/players/list?timezone=America%2FSao_Paulo',
+    );
     return { players, selected_player_id: integration.player_id };
   });
 
-  app.get<{ Params: { id: string }; Querystring: { from?: string; to?: string; player_id?: string } }>(
-    '/offers/:id/tracking/vturb/analytics',
-    async (req, reply) => {
-      const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin');
-      if (!app.db) return reply.code(503).send(databaseUnavailable);
-      if (!p || !env.TRACKING_ENCRYPTION_KEY) return reply.code(404).send({ error: 'vturb_not_configured' });
-      const [integration] = await app.db<Array<{ analytics_token_encrypted: string | null; player_id: string | null }>>`
+  app.get<{
+    Params: { id: string };
+    Querystring: { from?: string; to?: string; player_id?: string };
+  }>('/offers/:id/tracking/vturb/analytics', async (req, reply) => {
+    const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin');
+    if (!app.db) return reply.code(503).send(databaseUnavailable);
+    if (!p || !env.TRACKING_ENCRYPTION_KEY)
+      return reply.code(404).send({ error: 'vturb_not_configured' });
+    const [integration] = await app.db<
+      Array<{ analytics_token_encrypted: string | null; player_id: string | null }>
+    >`
         SELECT analytics_token_encrypted,player_id FROM vturb_integrations WHERE project_id=${p.id}
       `;
-      if (!integration?.analytics_token_encrypted) return reply.code(422).send({ error: 'vturb_api_token_required' });
-      const token = decryptSecret(integration.analytics_token_encrypted, env.TRACKING_ENCRYPTION_KEY);
-      const players = await vturbAnalyticsRequest<Array<{ id: string; name: string; pitch_time: number; duration: number }>>(token, '/players/list?timezone=America%2FSao_Paulo');
-      const playerId = req.query.player_id || integration.player_id;
-      const player = players.find((item) => item.id === playerId);
-      if (!player) return reply.code(422).send({ error: 'vturb_player_required' });
-      const validDate = (value: string | undefined, fallback: string) => /^\d{4}-\d{2}-\d{2}$/.test(value ?? '') ? value! : fallback;
-      const today = saoPauloParts(new Date()).date;
-      const from = validDate(req.query.from, today);
-      const to = validDate(req.query.to, today);
-      const body = { player_id: player.id, start_date: `${from} 00:00:00`, end_date: `${to} 23:59:59`, video_duration: player.duration, pitch_time: player.pitch_time, timezone: 'America/Sao_Paulo' };
-      const [overallRows, countries, engagement, clicks, conversions, tmxCountryConversions] = await Promise.all([
+    if (!integration?.analytics_token_encrypted)
+      return reply.code(422).send({ error: 'vturb_api_token_required' });
+    const token = decryptSecret(integration.analytics_token_encrypted, env.TRACKING_ENCRYPTION_KEY);
+    const players = await vturbAnalyticsRequest<
+      Array<{ id: string; name: string; pitch_time: number; duration: number }>
+    >(token, '/players/list?timezone=America%2FSao_Paulo');
+    const playerId = req.query.player_id || integration.player_id;
+    const player = players.find((item) => item.id === playerId);
+    if (!player) return reply.code(422).send({ error: 'vturb_player_required' });
+    const validDate = (value: string | undefined, fallback: string) =>
+      /^\d{4}-\d{2}-\d{2}$/.test(value ?? '') ? value! : fallback;
+    const today = saoPauloParts(new Date()).date;
+    const from = validDate(req.query.from, today);
+    const to = validDate(req.query.to, today);
+    const body = {
+      player_id: player.id,
+      start_date: `${from} 00:00:00`,
+      end_date: `${to} 23:59:59`,
+      video_duration: player.duration,
+      pitch_time: player.pitch_time,
+      timezone: 'America/Sao_Paulo',
+    };
+    const [overallRows, countries, engagement, clicks, conversions, tmxCountryConversions] =
+      await Promise.all([
         vturbAnalyticsRequest<unknown[]>(token, '/sessions/stats', body),
-        vturbAnalyticsRequest<unknown[]>(token, '/sessions/stats_by_field', { ...body, field: 'country' }),
+        vturbAnalyticsRequest<unknown[]>(token, '/sessions/stats_by_field', {
+          ...body,
+          field: 'country',
+        }),
         vturbAnalyticsRequest<Record<string, unknown>>(token, '/times/user_engagement', body),
         vturbAnalyticsRequest<unknown[]>(token, '/clicks/total_by_company_timed', body),
         vturbAnalyticsRequest<Record<string, unknown>>(token, '/conversions/stats_by_day', body),
@@ -302,9 +354,17 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           GROUP BY attribution_source->>'country'
         `,
       ]);
-      return { player, period: { from, to }, overall: Array.isArray(overallRows) ? overallRows[0] ?? {} : overallRows, countries, engagement, clicks, conversions, tmx_country_conversions: tmxCountryConversions };
-    },
-  );
+    return {
+      player,
+      period: { from, to },
+      overall: Array.isArray(overallRows) ? (overallRows[0] ?? {}) : overallRows,
+      countries,
+      engagement,
+      clicks,
+      conversions,
+      tmx_country_conversions: tmxCountryConversions,
+    };
+  });
 
   app.get<{ Params: { id: string }; Querystring: { from?: string; to?: string } }>(
     '/offers/:id/tracking/upsells',
@@ -399,18 +459,20 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         return reply.code(503).send({ error: 'tracking_encryption_unavailable' });
       }
       const [approvedReceipts, stages, manualResults] = await Promise.all([
-        app.db<Array<{
-          id: string;
-          payload: unknown;
-          visitor_id: string | null;
-          external_id: string;
-          paid_at: Date;
-          connection_id: string | null;
-          connection_name: string;
-          confirmed_vendid_encrypted: string | null;
-          has_upsell: boolean;
-          purchased_stage_keys: string[];
-        }>>`
+        app.db<
+          Array<{
+            id: string;
+            payload: unknown;
+            visitor_id: string | null;
+            external_id: string;
+            paid_at: Date;
+            connection_id: string | null;
+            connection_name: string;
+            confirmed_vendid_encrypted: string | null;
+            has_upsell: boolean;
+            purchased_stage_keys: string[];
+          }>
+        >`
           SELECT o.id,receipt.payload,o.visitor_id,o.external_id,o.paid_at,
                  o.vendepay_connection_id AS connection_id,
                  COALESCE(vc.name,'Vendepay') AS connection_name,
@@ -472,20 +534,29 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           WHERE o.project_id=${p.id} AND o.order_kind='front' AND o.paid_at IS NOT NULL
           ORDER BY o.paid_at DESC,o.updated_at DESC
         `,
-        app.db<Array<{
-          id: string;
-          stage_key: string;
-          name: string;
-          slug: string;
-          destination_url: string;
-          connection_destinations: Record<string, string> | null;
-        }>>`
+        app.db<
+          Array<{
+            id: string;
+            stage_key: string;
+            name: string;
+            slug: string;
+            destination_url: string;
+            connection_destinations: Record<string, string> | null;
+          }>
+        >`
           SELECT id,stage_key,name,slug,destination_url,connection_destinations
           FROM tracking_upsell_stages
           WHERE project_id=${p.id} AND enabled=true
           ORDER BY substring(stage_key from '[0-9]+')::int
         `,
-        app.db<Array<{ order_id: string; stage_id: string; result: 'worked' | 'failed'; checked_at: Date }>>`
+        app.db<
+          Array<{
+            order_id: string;
+            stage_id: string;
+            result: 'worked' | 'failed';
+            checked_at: Date;
+          }>
+        >`
           SELECT order_id,stage_id,result,checked_at
           FROM tracking_upsell_manual_test_results
           WHERE project_id=${p.id}
@@ -506,7 +577,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         manualResults.map((result) => [`${result.order_id}:${result.stage_id}`, result] as const),
       );
       const seen = new Set<string>();
-      const resolvedItems = await Promise.all(approvedReceipts.map(async (receipt) => {
+      const resolvedItems = await Promise.all(
+        approvedReceipts.map(async (receipt) => {
           const normalized = normalizeVendepay(receipt.payload);
           const normalizedEvent = normalized.kind === 'processable' ? normalized.event : null;
           const receiptMatchesOrder =
@@ -535,16 +607,21 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             // has been established for this front purchase yet.
             if (storedVendid && !storedIsCheckoutId) vendid = storedVendid;
             if (!vendid && normalizedEvent?.vendid) vendid = normalizedEvent.vendid;
-            for (const candidate of vendid ? [] : candidates.filter((id) => !isSharedCheckoutId(id))) {
-              const checks = await Promise.all(stages.map((stage) => {
-                const destination =
-                  (receipt.connection_id && stage.connection_destinations?.[receipt.connection_id]) ||
-                  stage.destination_url;
-                return checkUpsellCompatibilityDetailed(destination, candidate, false, {
-                  retryDelaysMs: [0],
-                  timeoutMs: 5_000,
-                });
-              }));
+            for (const candidate of vendid
+              ? []
+              : candidates.filter((id) => !isSharedCheckoutId(id))) {
+              const checks = await Promise.all(
+                stages.map((stage) => {
+                  const destination =
+                    (receipt.connection_id &&
+                      stage.connection_destinations?.[receipt.connection_id]) ||
+                    stage.destination_url;
+                  return checkUpsellCompatibilityDetailed(destination, candidate, false, {
+                    retryDelaysMs: [0],
+                    timeoutMs: 5_000,
+                  });
+                }),
+              );
               if (checks.some((check) => check.compatible)) {
                 vendid = candidate;
                 break;
@@ -576,7 +653,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           const displayId = vendid ?? receipt.external_id;
           if (seen.has(displayId)) return [];
           seen.add(displayId);
-            return [{
+          return [
+            {
               id: receipt.id,
               visitor_id: receipt.visitor_id ?? '',
               vendid: displayId,
@@ -586,23 +664,27 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
               has_upsell: receipt.has_upsell,
               first_seen_at: receipt.paid_at,
               last_seen_at: receipt.paid_at,
-              links: vendidConfirmed ? stages.map((stage) => {
-                const validatedLink = new URL(upsellUrl(stage.slug));
-                validatedLink.searchParams.set('vendaId', displayId);
-                const manualResult = resultByOrderStage.get(`${receipt.id}:${stage.id}`);
-                return {
-                  stage_id: stage.id,
-                  stage_key: stage.stage_key,
-                  name: stage.name,
-                  already_purchased: receipt.purchased_stage_keys.includes(stage.stage_key),
-                  url: validatedLink.toString(),
-                  force_url: null,
-                  manual_result: manualResult?.result ?? null,
-                  manual_checked_at: manualResult?.checked_at ?? null,
-                };
-              }) : [],
-            }];
-        }));
+              links: vendidConfirmed
+                ? stages.map((stage) => {
+                    const validatedLink = new URL(upsellUrl(stage.slug));
+                    validatedLink.searchParams.set('vendaId', displayId);
+                    const manualResult = resultByOrderStage.get(`${receipt.id}:${stage.id}`);
+                    return {
+                      stage_id: stage.id,
+                      stage_key: stage.stage_key,
+                      name: stage.name,
+                      already_purchased: receipt.purchased_stage_keys.includes(stage.stage_key),
+                      url: validatedLink.toString(),
+                      force_url: null,
+                      manual_result: manualResult?.result ?? null,
+                      manual_checked_at: manualResult?.checked_at ?? null,
+                    };
+                  })
+                : [],
+            },
+          ];
+        }),
+      );
       const items = resolvedItems.flat();
       items.sort(
         (left, right) =>
@@ -651,14 +733,16 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!env.TRACKING_ENCRYPTION_KEY) {
         return reply.code(503).send({ error: 'tracking_encryption_unavailable' });
       }
-      const failed = await app.db<Array<{
-        order_id: string;
-        stage_id: string;
-        vendid_encrypted: string;
-        connection_id: string | null;
-        destination_url: string;
-        connection_destinations: Record<string, string> | null;
-      }>>`
+      const failed = await app.db<
+        Array<{
+          order_id: string;
+          stage_id: string;
+          vendid_encrypted: string;
+          connection_id: string | null;
+          destination_url: string;
+          connection_destinations: Record<string, string> | null;
+        }>
+      >`
         SELECT mr.order_id,mr.stage_id,i.vendid_encrypted,
                COALESCE(i.vendepay_connection_id,o.vendepay_connection_id) AS connection_id,
                s.destination_url,s.connection_destinations
@@ -729,10 +813,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!env.TRACKING_ENCRYPTION_KEY) {
         return reply.code(503).send({ error: 'tracking_encryption_unavailable' });
       }
-      const receipts = await app.db<Array<{
-        payload: unknown;
-        connection_id: string;
-      }>>`
+      const receipts = await app.db<
+        Array<{
+          payload: unknown;
+          connection_id: string;
+        }>
+      >`
         SELECT r.payload,r.connection_id
         FROM webhook_receipts r
         JOIN vendepay_connections c ON c.id=r.connection_id
@@ -740,10 +826,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         ORDER BY r.received_at DESC
         LIMIT 1000
       `;
-      const stages = await app.db<Array<{
-        destination_url: string;
-        connection_destinations: Record<string, string> | null;
-      }>>`
+      const stages = await app.db<
+        Array<{
+          destination_url: string;
+          connection_destinations: Record<string, string> | null;
+        }>
+      >`
         SELECT destination_url,connection_destinations FROM tracking_upsell_stages
         WHERE project_id=${p.id} AND enabled=true
       `;
@@ -754,22 +842,20 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         const normalized = normalizeVendepay(receipt.payload);
         if (normalized.kind !== 'processable') continue;
         const event = normalized.event;
-        const [order] = await app.db<Array<{
-          id: string;
-          visitor_id: string | null;
-          order_kind: string;
-          buyer: Record<string, string>;
-          paid_at: Date | null;
-        }>>`
+        const [order] = await app.db<
+          Array<{
+            id: string;
+            visitor_id: string | null;
+            order_kind: string;
+            buyer: Record<string, string>;
+            paid_at: Date | null;
+          }>
+        >`
           SELECT id,visitor_id,order_kind,buyer,paid_at FROM tracking_orders
           WHERE project_id=${p.id} AND external_id=${event.transactionId}
           LIMIT 1
         `;
-        if (
-          !order?.paid_at ||
-          order.order_kind !== 'front' ||
-          event.status !== 'paid'
-        ) continue;
+        if (!order?.paid_at || order.order_kind !== 'front' || event.status !== 'paid') continue;
         const candidates = collectVendaIdCandidates(receipt.payload, event.transactionId);
         let vendid: string | undefined;
         for (const candidate of candidates) {
@@ -916,9 +1002,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const slug = ulid().toLowerCase();
     const [row] = await app.db`
         INSERT INTO tracking_entry_links
-          (id, project_id, name, slug, destination_url)
-        VALUES (${ulid()}, ${p.id}, ${body.name}, ${slug}, ${body.destination_url})
-        RETURNING id, name, slug, destination_url, enabled, created_at, updated_at
+          (id, project_id, name, slug, destination_url, traffic_source)
+        VALUES (${ulid()}, ${p.id}, ${body.name}, ${slug}, ${body.destination_url}, ${body.traffic_source ?? 'other'})
+        RETURNING id, name, slug, destination_url, traffic_source, enabled, created_at, updated_at
       `;
     return reply.code(201).send({ ...row, tracking_url: entryUrl(slug) });
   });
@@ -934,9 +1020,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         UPDATE tracking_entry_links
         SET name = COALESCE(${body.name ?? null}, name),
             destination_url = ${body.destination_url},
+            traffic_source = COALESCE(${body.traffic_source ?? null}, traffic_source),
             updated_at = now()
         WHERE id = ${req.params.linkId} AND project_id = ${p.id}
-        RETURNING id, name, slug, destination_url, ab_test_id, enabled, created_at, updated_at
+        RETURNING id, name, slug, destination_url, traffic_source, ab_test_id, enabled, created_at, updated_at
       `;
       if (!row) return reply.code(404).send({ error: 'entry_link_not_found' });
       return reply.send({ ...row, tracking_url: entryUrl(String(row.slug)) });
@@ -1351,18 +1438,16 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get<{
     Params: { id: string; testId: string };
     Querystring: { from?: string; to?: string };
-  }>(
-    '/offers/:id/tracking/ab-tests/:testId/metrics',
-    async (req, reply) => {
-      const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin');
-      if (!app.db) return reply.code(503).send(databaseUnavailable);
-      if (!p) return reply.code(404).send({ error: 'tracking_not_configured' });
-      const today = saoPauloParts(new Date()).date;
-      const fromDate = /^\d{4}-\d{2}-\d{2}$/.test(req.query.from ?? '') ? req.query.from! : today;
-      const toDate = /^\d{4}-\d{2}-\d{2}$/.test(req.query.to ?? '') ? req.query.to! : fromDate;
-      const fromInstant = new Date(saoPauloDayRange(fromDate).from);
-      const toInstant = new Date(saoPauloDayRange(toDate).to);
-      const rows = await app.db`
+  }>('/offers/:id/tracking/ab-tests/:testId/metrics', async (req, reply) => {
+    const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin');
+    if (!app.db) return reply.code(503).send(databaseUnavailable);
+    if (!p) return reply.code(404).send({ error: 'tracking_not_configured' });
+    const today = saoPauloParts(new Date()).date;
+    const fromDate = /^\d{4}-\d{2}-\d{2}$/.test(req.query.from ?? '') ? req.query.from! : today;
+    const toDate = /^\d{4}-\d{2}-\d{2}$/.test(req.query.to ?? '') ? req.query.to! : fromDate;
+    const fromInstant = new Date(saoPauloDayRange(fromDate).from);
+    const toInstant = new Date(saoPauloDayRange(toDate).to);
+    const rows = await app.db`
         SELECT v.id, v.label, v.position, v.destination_url,
                count(DISTINCT a.visitor_id) FILTER (
                  WHERE a.created_at >= ${fromInstant} AND a.created_at < ${toInstant}
@@ -1443,9 +1528,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         GROUP BY v.id, v.label, v.position, v.destination_url, t.project_id
         ORDER BY v.position
       `;
-      return { variants: rows };
-    },
-  );
+    return { variants: rows };
+  });
 
   app.patch<{ Params: { id: string; testId: string } }>(
     '/offers/:id/tracking/ab-tests/:testId',
