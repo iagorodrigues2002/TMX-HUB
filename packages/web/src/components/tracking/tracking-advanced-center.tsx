@@ -701,12 +701,11 @@ const trackingAreas: Array<{
     sections: ['tracker', 'funnel', 'upsells', 'attribution'],
   },
   { id: 'capture', label: 'Captura e links', icon: Layers3, sections: ['code', 'domains', 'ab'] },
-  { id: 'meta', label: 'Meta', icon: Facebook, sections: ['pixels', 'meta'] },
   {
     id: 'integrations',
     label: 'Integrações',
     icon: Cable,
-    sections: ['gateways', 'utmify', 'vturb', 'google', 'tiktok'],
+    sections: ['gateways', 'pixels', 'meta', 'utmify', 'vturb', 'google', 'tiktok'],
   },
   { id: 'finance', label: 'Financeiro', icon: Percent, sections: ['refunds', 'fees'] },
   { id: 'automations', label: 'Automações', icon: BellRing, sections: ['pushcut'] },
