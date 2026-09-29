@@ -10,6 +10,7 @@ describe('TikTok Events API payload', () => {
       email: ' Buyer@Example.com ', phone: '+1 (305) 555-0100', externalId: 'visitor-1', contentId: 'front-1', contentName: 'Front', testEventCode: 'TEST-123',
     });
     expect(payload.event_id).toBe('vendepay:purchase:123');
+    expect(payload.event_source).toBe('PIXEL_EVENTS');
     expect(payload.test_event_code).toBe('TEST-123');
     expect((payload.context.ad as { callback: string }).callback).toBe('abc');
     expect((payload.context.user as { email: string }).email).toBe(createHash('sha256').update('buyer@example.com').digest('hex'));

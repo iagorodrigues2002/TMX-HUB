@@ -30,7 +30,10 @@ export function buildTikTokPayload(input: TikTokEventInput) {
     event: input.eventName,
     event_id: input.eventId,
     timestamp: input.occurredAt.toISOString(),
-    event_source: 'web',
+    // TikTok Events API accepts PIXEL_EVENTS for website/server events. `web`
+    // is not a valid value and causes Test Events (and live deliveries) to be
+    // rejected before TikTok can process the payload.
+    event_source: 'PIXEL_EVENTS',
     ...(input.testEventCode ? { test_event_code: input.testEventCode } : {}),
     context,
     properties: {
