@@ -12,7 +12,7 @@ describe('TikTok Events API payload', () => {
     });
     expect(payload.event_id).toBe('vendepay:purchase:123');
     expect(payload.event_source).toBe('PIXEL_EVENTS');
-    expect(payload.timestamp).toBe(new Date('2026-09-28T12:00:00.000Z').getTime());
+    expect(payload.timestamp).toBe('2026-09-28T12:00:00.000Z');
     expect(payload.test_event_code).toBe('TEST-123');
     expect((payload.context.ad as { callback: string }).callback).toBe('abc');
     expect((payload.context.page as { referrer: string }).referrer).toBe('https://www.tiktok.com/');

@@ -32,8 +32,10 @@ export function buildTikTokPayload(input: TikTokEventInput) {
     pixel_code: input.pixelCode,
     event: input.eventName,
     event_id: input.eventId,
-    // Events API expects the original event time in Unix milliseconds.
-    timestamp: input.occurredAt.getTime(),
+    // TikTok's Pixel Events endpoint validates this field as an RFC 3339
+    // timestamp string (not a Unix number). Keep it in UTC so the same
+    // payload works for test and live deliveries.
+    timestamp: input.occurredAt.toISOString(),
     // TikTok Events API accepts PIXEL_EVENTS for website/server events. `web`
     // is not a valid value and causes Test Events (and live deliveries) to be
     // rejected before TikTok can process the payload.
