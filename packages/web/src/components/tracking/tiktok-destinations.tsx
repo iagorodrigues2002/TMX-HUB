@@ -66,9 +66,10 @@ export function TikTokDestinations({ offerId }: { offerId: string }) {
       <div className="rounded-xl border border-fuchsia-300/20 bg-fuchsia-300/5 p-4 text-sm text-fuchsia-50">
         <p className="font-medium">Pixel + Events API · entrega resiliente</p>
         <p className="mt-1 text-white/60">
-          O TMX envia apenas compras front aprovadas a cada pixel ativo desta oferta. O clique{' '}
-          <code>ttclid</code>, quando presente, segue com a venda sem redirect. Upsells permanecem
-          no financeiro e não inflam a otimização de CPA.
+          O TMX instala o Pixel no navegador para PageView e InitiateCheckout, e envia somente
+          compras front aprovadas pela Events API. O clique <code>ttclid</code>, quando presente,
+          segue com a venda sem redirect. Upsells permanecem no financeiro e não inflam a
+          otimização de CPA.
         </p>
       </div>
       {destinations.isPending ? (

@@ -20,6 +20,7 @@ export type TikTokEventInput = {
   eventName: 'Purchase';
   occurredAt: Date;
   eventUrl: string;
+  referrer?: string;
   value: number;
   currency: string;
   orderId: string;

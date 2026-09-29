@@ -20,7 +20,10 @@ export function buildTikTokPayload(input: TikTokEventInput) {
   if (input.phone) user.phone = sha256(input.phone.replace(/\D/g, ''));
   if (input.externalId) user.external_id = sha256(input.externalId);
   if (input.ttp) user.ttp = input.ttp;
-  const context: Record<string, unknown> = { page: { url: input.eventUrl }, user };
+  const context: Record<string, unknown> = {
+    page: { url: input.eventUrl, ...(input.referrer ? { referrer: input.referrer } : {}) },
+    user,
+  };
   if (input.ttclid) context.ad = { callback: input.ttclid };
   if (input.ip) context.ip = input.ip;
   if (input.userAgent) context.user_agent = input.userAgent;
@@ -29,7 +32,8 @@ export function buildTikTokPayload(input: TikTokEventInput) {
     pixel_code: input.pixelCode,
     event: input.eventName,
     event_id: input.eventId,
-    timestamp: input.occurredAt.toISOString(),
+    // Events API expects the original event time in Unix milliseconds.
+    timestamp: input.occurredAt.getTime(),
     // TikTok Events API accepts PIXEL_EVENTS for website/server events. `web`
     // is not a valid value and causes Test Events (and live deliveries) to be
     // rejected before TikTok can process the payload.
@@ -52,12 +56,13 @@ export function createTikTokWorker(): Worker<TikTokJobData> | null {
       pixel_code: string; access_token_encrypted: string; order_id: string | null; external_id: string | null;
       amount_minor: number | null; currency: string | null; amount_brl_minor: number | null; product: { id?: string; name?: string; planId?: string; planName?: string } | null;
       buyer: { email?: string; phone?: string }; paid_at: Date | null; created_at: Date; visitor_id: string | null;
-      event_url: string | null; source: { ttclid?: string; _ttp?: string; ttp?: string }; client_ip: string | null; user_agent: string | null;
+      event_url: string | null; referrer: string | null; source: { ttclid?: string; _ttp?: string; ttp?: string }; client_ip: string | null; user_agent: string | null;
     }>>`
       SELECT d.id,d.event_id,d.event_name,d.test_event_code,d.attempts,
              dest.pixel_code,dest.access_token_encrypted,d.order_id,
              o.external_id,o.amount_minor,o.currency,o.amount_brl_minor,o.product,COALESCE(o.buyer,'{}'::jsonb) buyer,o.paid_at,o.visitor_id,
              COALESCE(event.event_url, latest.event_url) event_url,
+             COALESCE(event.referrer, latest.referrer) referrer,
              COALESCE(visitor.last_source,'{}'::jsonb) || COALESCE(latest.source,'{}'::jsonb) || COALESCE(event.source,'{}'::jsonb) source,
              COALESCE(event.client_ip,latest.client_ip) client_ip,COALESCE(event.user_agent,latest.user_agent) user_agent,
              d.created_at
@@ -66,7 +71,7 @@ export function createTikTokWorker(): Worker<TikTokJobData> | null {
       LEFT JOIN tracking_orders o ON o.id=d.order_id
       LEFT JOIN tracking_events event ON event.project_id=d.project_id AND event.id=d.event_id
       LEFT JOIN tracking_visitors visitor ON visitor.project_id=d.project_id AND visitor.visitor_id=COALESCE(o.visitor_id,event.visitor_id)
-      LEFT JOIN LATERAL (SELECT event_url,source,client_ip,user_agent FROM tracking_events te WHERE te.project_id=d.project_id AND te.visitor_id=COALESCE(o.visitor_id,event.visitor_id) ORDER BY te.received_at DESC LIMIT 1) latest ON true
+      LEFT JOIN LATERAL (SELECT event_url,referrer,source,client_ip,user_agent FROM tracking_events te WHERE te.project_id=d.project_id AND te.visitor_id=COALESCE(o.visitor_id,event.visitor_id) ORDER BY te.received_at DESC LIMIT 1) latest ON true
       WHERE d.id=${deliveryId} AND d.state IN ('pending','failed','processing','test')
     `;
     if (!row) return;
@@ -75,7 +80,7 @@ export function createTikTokWorker(): Worker<TikTokJobData> | null {
     if (!row.test_event_code && (!row.order_id || !minor || !currency || !row.paid_at)) throw new Error('TikTok: compra aprovada sem valor, moeda ou data.');
     const payload = buildTikTokPayload({
       pixelCode: row.pixel_code, eventId: row.event_id, eventName: 'Purchase', occurredAt: row.paid_at ?? row.created_at,
-      eventUrl: safeUrl(row.event_url), value: Number(((minor ?? 1) / 100).toFixed(2)), currency: currency ?? 'BRL', orderId: row.external_id ?? `TMX-TEST-${row.id}`,
+      eventUrl: safeUrl(row.event_url), referrer: row.referrer ?? undefined, value: Number(((minor ?? 1) / 100).toFixed(2)), currency: currency ?? 'BRL', orderId: row.external_id ?? `TMX-TEST-${row.id}`,
       ttclid: row.source.ttclid, ttp: row.source._ttp ?? row.source.ttp, email: row.buyer.email, phone: row.buyer.phone,
       externalId: row.visitor_id ?? row.order_id ?? row.id, ip: row.client_ip ?? undefined, userAgent: row.user_agent ?? undefined,
       contentId: row.product?.planId ?? row.product?.id, contentName: row.product?.planName ?? row.product?.name, testEventCode: row.test_event_code ?? undefined,
