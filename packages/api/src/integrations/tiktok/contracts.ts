@@ -12,6 +12,8 @@ export const TikTokDestinationSchema = z.object({
 export const TikTokTestSchema = z.object({
   test_event_code: z.string().trim().min(1).max(256),
   event_url: z.string().url().max(2048).optional(),
+  email: z.string().trim().email().max(320).optional(),
+  phone: z.string().trim().min(6).max(48).optional(),
 }).strict();
 
 export type TikTokEventInput = {

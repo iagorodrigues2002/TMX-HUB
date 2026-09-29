@@ -8,13 +8,15 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 
 const empty: TikTokDestinationInput = { name: '', pixel_code: '', access_token: '', enabled: true };
+type TikTokTestContext = { code: string; eventUrl: string; email: string; phone: string };
+const emptyTest: TikTokTestContext = { code: '', eventUrl: '', email: '', phone: '' };
 
 export function TikTokDestinations({ offerId }: { offerId: string }) {
   const qc = useQueryClient();
   const key = ['tiktok-destinations', offerId];
   const [form, setForm] = useState<TikTokDestinationInput>(empty);
   const [editing, setEditing] = useState<TikTokDestination | null>(null);
-  const [testCode, setTestCode] = useState<Record<string, string>>({});
+  const [testContext, setTestContext] = useState<Record<string, TikTokTestContext>>({});
   const [testDelivery, setTestDelivery] = useState<string | null>(null);
   const destinations = useQuery({
     queryKey: key,
@@ -50,8 +52,13 @@ export function TikTokDestinations({ offerId }: { offerId: string }) {
     onSuccess: () => void qc.invalidateQueries({ queryKey: key }),
   });
   const test = useMutation({
-    mutationFn: ({ id, code }: { id: string; code: string }) =>
-      apiClient.testTikTokDestination(offerId, id, code),
+    mutationFn: ({ id, context }: { id: string; context: TikTokTestContext }) =>
+      apiClient.testTikTokDestination(offerId, id, {
+        test_event_code: context.code,
+        ...(context.eventUrl.trim() ? { event_url: context.eventUrl.trim() } : {}),
+        ...(context.email.trim() ? { email: context.email.trim() } : {}),
+        ...(context.phone.trim() ? { phone: context.phone.trim() } : {}),
+      }),
     onSuccess: (result) => {
       setTestDelivery(result.delivery_id);
       toast.message('Teste enviado. Aguardando confirmação da Events API…');
@@ -82,6 +89,14 @@ export function TikTokDestinations({ offerId }: { offerId: string }) {
         <div className="space-y-3">
           {destinations.data.destinations.map((d) => (
             <article key={d.id} className="rounded-xl border border-white/10 p-4">
+              {(() => {
+                const context = testContext[d.id] ?? emptyTest;
+                const setContext = (patch: Partial<TikTokTestContext>) =>
+                  setTestContext((current) => ({
+                    ...current,
+                    [d.id]: { ...(current[d.id] ?? emptyTest), ...patch },
+                  }));
+                return <>
               <div className="flex flex-wrap justify-between gap-3">
                 <div>
                   <h3 className="font-medium">{d.name}</h3>
@@ -107,20 +122,37 @@ export function TikTokDestinations({ offerId }: { offerId: string }) {
                 <label className="text-xs text-white/65">
                   Código de teste do TikTok Events Manager
                   <Input
-                    value={testCode[d.id] ?? ''}
-                    onChange={(e) => setTestCode((s) => ({ ...s, [d.id]: e.target.value }))}
+                    value={context.code}
+                    onChange={(e) => setContext({ code: e.target.value })}
                     placeholder="Cole o Test Event Code"
                     className="mt-2"
                   />
                 </label>
+                <div className="mt-3 grid gap-3 md:grid-cols-3">
+                  <label className="text-xs text-white/65">
+                    URL real da página (recomendado)
+                    <Input value={context.eventUrl} onChange={(e) => setContext({ eventUrl: e.target.value })} placeholder="https://sua-pagina.com/vsl" className="mt-2" />
+                  </label>
+                  <label className="text-xs text-white/65">
+                    Email de teste (opcional)
+                    <Input type="email" value={context.email} onChange={(e) => setContext({ email: e.target.value })} placeholder="seu@email.com" className="mt-2" />
+                  </label>
+                  <label className="text-xs text-white/65">
+                    Telefone de teste (opcional)
+                    <Input value={context.phone} onChange={(e) => setContext({ phone: e.target.value })} placeholder="+55 11 99999-9999" className="mt-2" />
+                  </label>
+                </div>
+                <p className="mt-2 text-[11px] leading-4 text-white/45">Email e telefone são enviados apenas como SHA-256 para validar o matching; use dados seus e somente se quiser conferir esses campos no Events Manager.</p>
                 <Button
                   className="mt-2"
-                  disabled={!testCode[d.id]?.trim() || test.isPending}
-                  onClick={() => test.mutate({ id: d.id, code: testCode[d.id]! })}
+                  disabled={!context.code.trim() || test.isPending}
+                  onClick={() => test.mutate({ id: d.id, context })}
                 >
                   {test.isPending ? 'Enviando…' : 'Testar sem venda real'}
                 </Button>
               </div>
+                </>;
+              })()}
             </article>
           ))}
           {!destinations.data.destinations.length && (

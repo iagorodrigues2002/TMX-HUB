@@ -62,8 +62,9 @@ const plugin: FastifyPluginAsync = async (app) => {
     const [destination] = await app.db`SELECT d.id,p.id project_id FROM tracking_tiktok_destinations d JOIN tracking_projects p ON p.id=d.project_id WHERE p.offer_id=${req.params.id} AND d.id=${req.params.destinationId} AND d.enabled=true`;
     if (!destination) return reply.code(404).send({ error: 'tiktok_destination_not_found_or_disabled' });
     const id = ulid();
-    await app.db`INSERT INTO tracking_tiktok_deliveries(id,project_id,destination_id,event_id,event_name,test_event_code,state)
-      VALUES(${id},${destination.project_id},${destination.id},${`tmx-tiktok-test:${id}`},'Purchase',${parsed.data.test_event_code},'test')`;
+    await app.db`INSERT INTO tracking_tiktok_deliveries(id,project_id,destination_id,event_id,event_name,test_event_code,test_context,state)
+      VALUES(${id},${destination.project_id},${destination.id},${`tmx-tiktok-test:${id}`},'Purchase',${parsed.data.test_event_code},
+        ${app.db.json({ event_url: parsed.data.event_url ?? null, email: parsed.data.email ?? null, phone: parsed.data.phone ?? null })},'test')`;
     await app.tiktokQueue.add('test', { deliveryId: id }, { jobId: `tiktok-test-${id}` });
     return reply.code(202).send({ delivery_id: id, status: 'queued', detail: 'Teste enviado pela mesma Events API usada nas vendas. Aguarde a confirmação.' });
   });

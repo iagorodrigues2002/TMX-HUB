@@ -1273,10 +1273,14 @@ export const apiClient = {
     ),
   deleteTikTokDestination: (offerId: string, id: string) =>
     request<void>(`/v1/offers/${offerId}/tracking/tiktok/destinations/${id}`, { method: 'DELETE' }),
-  testTikTokDestination: (offerId: string, id: string, testEventCode: string) =>
+  testTikTokDestination: (
+    offerId: string,
+    id: string,
+    input: { test_event_code: string; event_url?: string; email?: string; phone?: string },
+  ) =>
     request<{ delivery_id: string; status: string; detail: string }>(
       `/v1/offers/${offerId}/tracking/tiktok/destinations/${id}/test`,
-      { method: 'POST', body: { test_event_code: testEventCode } },
+      { method: 'POST', body: input },
     ),
   tiktokDelivery: (offerId: string, id: string) =>
     request<{ delivery: TikTokDelivery }>(`/v1/offers/${offerId}/tracking/tiktok/deliveries/${id}`),
