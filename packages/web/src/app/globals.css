@@ -992,23 +992,3 @@
   background: color-mix(in oklch, var(--signal-500) 22%, transparent);
   color: var(--signal-100);
 }
-
-/* ----------------------------------------------------------------------
- * Global privacy mode
- * The data layer is deliberately blurred and made inert rather than merely
- * dimmed: a screen share cannot expose totals, customers, reports or logs.
- * Navigation remains visually recognizable, while the shield supplies the
- * single clear way to restore access.
- * --------------------------------------------------------------------- */
-[data-tmx-private='on'] > aside,
-[data-tmx-private='on'] > main,
-[data-tmx-private='on'] > div:not(.tmx-privacy-shield) {
-  filter: blur(11px) saturate(0.3);
-  opacity: 0.18;
-  pointer-events: none;
-  user-select: none;
-}
-
-.tmx-privacy-shield {
-  background: radial-gradient(circle at center, rgba(5, 22, 29, 0.36), rgba(3, 12, 18, 0.78));
-}

@@ -23,15 +23,15 @@ export function UserMenu() {
         variant="ghost"
         size="sm"
         onClick={togglePrivacy}
-        aria-label={isPrivate ? 'Mostrar dados sensíveis' : 'Ocultar dados sensíveis'}
-        title={isPrivate ? 'Mostrar dados' : 'Ocultar dados'}
+        aria-label={isPrivate ? 'Mostrar valores financeiros' : 'Ocultar valores financeiros'}
+        title={isPrivate ? 'Mostrar valores financeiros' : 'Ocultar valores financeiros'}
         className={isPrivate ? 'border border-cyan-300/25 bg-cyan-300/[0.09] text-cyan-100' : undefined}
       >
         {isPrivate ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
       </Button>
       <div className="hidden text-right md:block">
         <p className="text-[12px] font-semibold text-white/85 leading-none">
-          {isPrivate ? 'Dados ocultos' : user.name}
+          {user.name}
         </p>
         <p className="mt-0.5 text-[10px] uppercase tracking-[0.16em] text-white/40">
           {user.role}
@@ -41,7 +41,7 @@ export function UserMenu() {
         aria-hidden
         className="grid h-8 w-8 place-items-center rounded-full border border-cyan-300/30 bg-cyan-300/[0.08] text-[11px] font-bold text-cyan-200"
       >
-        {isPrivate ? '••' : initials || '·'}
+        {initials || '·'}
       </span>
       <Button
         type="button"
