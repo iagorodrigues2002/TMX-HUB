@@ -34,7 +34,6 @@ export function TrackingOverviewDashboard() {
     retry: false,
   });
 
-  const totals = overview.data?.totals;
   const pick = (brlMinor: string | undefined, usdMinor: string | undefined) =>
     formatMoney(displayCurrency === 'USD' ? usdMinor : brlMinor, displayCurrency);
 
@@ -47,9 +46,9 @@ export function TrackingOverviewDashboard() {
               <LayoutDashboard className="h-4.5 w-4.5 text-cyan-300" />
             </div>
             <div>
-              <p className="hud-label">Visão geral · todas as ofertas</p>
+              <p className="hud-label">Visão geral · separada por conta</p>
               <p className="mt-1 text-sm text-white/50">
-                Bruto, reembolsos, chargebacks, taxas e líquido agrupados por oferta.
+                Cada conta tem seus próprios totais. Dados financeiros nunca são misturados.
               </p>
             </div>
           </div>
@@ -85,12 +84,26 @@ export function TrackingOverviewDashboard() {
         <div className="flex items-center gap-2 p-8 text-sm text-white/45">
           <Loader2 className="h-4 w-4 animate-spin" /> Carregando visão geral…
         </div>
-      ) : !overview.data?.offers.length ? (
+      ) : !overview.data?.accounts.length ? (
         <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-8 text-center text-sm text-white/40">
           Nenhum pedido pago neste período em nenhuma oferta.
         </div>
       ) : (
-        <>
+        overview.data.accounts.map((account) => {
+          const totals = account.totals;
+          return (
+          <section key={account.owner_id} className="space-y-4 rounded-xl border border-cyan-300/[0.16] bg-cyan-300/[0.025] p-3 sm:p-4">
+            <header className="flex flex-wrap items-center justify-between gap-2 border-b border-cyan-300/[0.12] px-1 pb-3">
+              <div>
+                <p className="hud-label">Conta</p>
+                <h2 className="mt-1 text-base font-semibold text-white">
+                  {account.owner_name}
+                </h2>
+              </div>
+              <p className="rounded-full border border-cyan-300/20 bg-cyan-300/[0.06] px-3 py-1 text-[11px] text-cyan-100/75">
+                {integer(account.offers.length)} {account.offers.length === 1 ? 'oferta' : 'ofertas'}
+              </p>
+            </header>
           <div data-surface="tracking" className="tmx-kpi rounded-lg">
             <div className="tmx-kpi-tier2 tmx-kpi-tier2-six">
               <div className="tmx-kpi-strip-cell">
@@ -214,7 +227,7 @@ export function TrackingOverviewDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {overview.data.offers.map((offer) => (
+                {account.offers.map((offer) => (
                   <tr
                     key={offer.offer_id}
                     className="border-b border-white/[0.05] text-white/75 last:border-0"
@@ -266,7 +279,9 @@ export function TrackingOverviewDashboard() {
               </tbody>
             </table>
           </div>
-        </>
+          </section>
+          );
+        })
       )}
     </div>
   );

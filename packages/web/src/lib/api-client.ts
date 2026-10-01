@@ -64,6 +64,46 @@ export type VturbAnalytics = {
 };
 export type TrackingOrderKind = TrackingProductKind | 'unknown';
 
+export interface TrackingOverviewTotals {
+  paid_orders: number;
+  gross_revenue_brl_minor: string;
+  gross_revenue_usd_minor: string;
+  failed_orders: number;
+  failed_revenue_brl_minor: string;
+  failed_revenue_usd_minor: string;
+  refunded_orders: number;
+  refunded_revenue_brl_minor: string;
+  refunded_revenue_usd_minor: string;
+  chargeback_orders: number;
+  chargeback_revenue_brl_minor: string;
+  chargeback_revenue_usd_minor: string;
+  fees_brl_minor: string;
+  fees_usd_minor: string;
+  refund_chargeback_fee_count: number;
+  refund_chargeback_fee_brl_minor: string;
+  refund_chargeback_fee_usd_minor: string;
+  reserve_brl_minor: string;
+  reserve_usd_minor: string;
+  net_revenue_brl_minor: string;
+  net_revenue_usd_minor: string;
+  net_available_brl_minor: string;
+  net_available_usd_minor: string;
+}
+
+export interface TrackingOverviewOffer extends TrackingOverviewTotals {
+  offer_id: string;
+  offer_name: string;
+  owner_id: string;
+}
+
+export interface TrackingOverviewAccount {
+  owner_id: string;
+  owner_name: string;
+  is_current_user: boolean;
+  offers: TrackingOverviewOffer[];
+  totals: TrackingOverviewTotals;
+}
+
 // The API uses snake_case in the wire format per OpenAPI; shared types use
 // camelCase. The client converts at the boundary so the rest of the app
 // stays in TS-idiomatic shape.
@@ -2058,58 +2098,10 @@ export const apiClient = {
     from: string;
     to: string;
     time_zone: string;
-    offers: Array<{
-      offer_id: string;
-      offer_name: string;
-      paid_orders: number;
-      gross_revenue_brl_minor: string;
-      gross_revenue_usd_minor: string;
-      failed_orders: number;
-      failed_revenue_brl_minor: string;
-      failed_revenue_usd_minor: string;
-      refunded_orders: number;
-      refunded_revenue_brl_minor: string;
-      refunded_revenue_usd_minor: string;
-      chargeback_orders: number;
-      chargeback_revenue_brl_minor: string;
-      chargeback_revenue_usd_minor: string;
-      fees_brl_minor: string;
-      fees_usd_minor: string;
-      refund_chargeback_fee_count: number;
-      refund_chargeback_fee_brl_minor: string;
-      refund_chargeback_fee_usd_minor: string;
-      reserve_brl_minor: string;
-      reserve_usd_minor: string;
-      net_revenue_brl_minor: string;
-      net_revenue_usd_minor: string;
-      net_available_brl_minor: string;
-      net_available_usd_minor: string;
-    }>;
-    totals: {
-      paid_orders: number;
-      gross_revenue_brl_minor: string;
-      gross_revenue_usd_minor: string;
-      failed_orders: number;
-      failed_revenue_brl_minor: string;
-      failed_revenue_usd_minor: string;
-      refunded_orders: number;
-      refunded_revenue_brl_minor: string;
-      refunded_revenue_usd_minor: string;
-      chargeback_orders: number;
-      chargeback_revenue_brl_minor: string;
-      chargeback_revenue_usd_minor: string;
-      fees_brl_minor: string;
-      fees_usd_minor: string;
-      refund_chargeback_fee_count: number;
-      refund_chargeback_fee_brl_minor: string;
-      refund_chargeback_fee_usd_minor: string;
-      reserve_brl_minor: string;
-      reserve_usd_minor: string;
-      net_revenue_brl_minor: string;
-      net_revenue_usd_minor: string;
-      net_available_brl_minor: string;
-      net_available_usd_minor: string;
-    } | null;
+    offers: TrackingOverviewOffer[];
+    accounts: TrackingOverviewAccount[];
+    /** Always null: cross-account financial aggregation is prohibited. */
+    totals: null;
   }> {
     const params = new URLSearchParams();
     if (from) params.set('from', from);

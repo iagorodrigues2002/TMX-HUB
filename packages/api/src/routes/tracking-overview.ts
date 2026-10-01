@@ -33,11 +33,10 @@ const databaseUnavailable = {
   detail: 'A infraestrutura de tracking está temporariamente indisponível.',
 };
 
-// Aggregate dashboard across every offer the caller can access — grouping
-// gross revenue, refunds/chargebacks, gateway fees and net revenue into a
-// single "visão geral" so nobody has to click through offers one by one.
-// Accepts either a single `date` (back-compat) or a `from`/`to` range, both
-// inclusive, so multiple days can be summed together.
+// Each offer belongs to exactly one TMX account. A viewer may access offers
+// shared by another account, but financial totals must never be combined
+// across owners. This endpoint therefore returns one independent dashboard
+// block per offer owner (including shared offers).
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get<{ Querystring: { date?: string; from?: string; to?: string } }>(
     '/tracking/overview',
@@ -63,11 +62,17 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           to: toDate,
           time_zone: 'America/Sao_Paulo',
           offers: [],
+          accounts: [],
           totals: null,
         });
       }
       const offerIds = offers.map((offer) => offer.id);
-      const offerNames = new Map(offers.map((offer) => [offer.id, offer.name] as const));
+      const offerMeta = new Map(
+        offers.map((offer) => [
+          offer.id,
+          { name: offer.name, ownerId: offer.userId },
+        ] as const),
+      );
 
       const rows = await app.db<
         Array<{
@@ -223,7 +228,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           const netAvailableBrlMinor = netTotalBrlMinor - reserveBrlMinor;
           return {
             offer_id: row.offer_id,
-            offer_name: offerNames.get(row.offer_id) ?? row.offer_id,
+            offer_name: offerMeta.get(row.offer_id)?.name ?? row.offer_id,
+            owner_id: offerMeta.get(row.offer_id)?.ownerId ?? '',
             paid_orders: row.paid_orders,
             gross_revenue_brl_minor: String(grossBrlMinor),
             gross_revenue_usd_minor: String(toUsdMinor(grossBrlMinor)),
@@ -253,7 +259,23 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
       perOffer.sort((a, b) => Number(b.net_revenue_brl_minor) - Number(a.net_revenue_brl_minor));
 
-      const totals = perOffer.reduce(
+      const emptyTotals = () => ({
+        paid_orders: 0,
+        gross_revenue_brl_minor: 0,
+        failed_orders: 0,
+        failed_revenue_brl_minor: 0,
+        refunded_orders: 0,
+        refunded_revenue_brl_minor: 0,
+        chargeback_orders: 0,
+        chargeback_revenue_brl_minor: 0,
+        fees_brl_minor: 0,
+        refund_chargeback_fee_count: 0,
+        refund_chargeback_fee_brl_minor: 0,
+        reserve_brl_minor: 0,
+        net_revenue_brl_minor: 0,
+        net_available_brl_minor: 0,
+      });
+      const aggregate = (accountOffers: typeof perOffer) => accountOffers.reduce(
         (acc, offer) => ({
           paid_orders: acc.paid_orders + offer.paid_orders,
           gross_revenue_brl_minor:
@@ -277,56 +299,69 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           net_available_brl_minor:
             acc.net_available_brl_minor + Number(offer.net_available_brl_minor),
         }),
-        {
-          paid_orders: 0,
-          gross_revenue_brl_minor: 0,
-          failed_orders: 0,
-          failed_revenue_brl_minor: 0,
-          refunded_orders: 0,
-          refunded_revenue_brl_minor: 0,
-          chargeback_orders: 0,
-          chargeback_revenue_brl_minor: 0,
-          fees_brl_minor: 0,
-          refund_chargeback_fee_count: 0,
-          refund_chargeback_fee_brl_minor: 0,
-          reserve_brl_minor: 0,
-          net_revenue_brl_minor: 0,
-          net_available_brl_minor: 0,
-        },
+        emptyTotals(),
       );
+
+      const ownerIds = [...new Set(perOffer.map((offer) => offer.owner_id))];
+      const ownerUsers = await Promise.all(
+        ownerIds.map(async (id) => [id, await app.userStore.maybeGetById(id)] as const),
+      );
+      const ownerNames = new Map(
+        ownerUsers.map(([id, user]) => [id, user?.name || 'Conta indisponível'] as const),
+      );
+      const byOwner = new Map<string, typeof perOffer>();
+      for (const offer of perOffer) {
+        const group = byOwner.get(offer.owner_id) ?? [];
+        group.push(offer);
+        byOwner.set(offer.owner_id, group);
+      }
+      const totalsWire = (totals: ReturnType<typeof emptyTotals>) => ({
+        paid_orders: totals.paid_orders,
+        gross_revenue_brl_minor: String(totals.gross_revenue_brl_minor),
+        gross_revenue_usd_minor: String(toUsdMinor(totals.gross_revenue_brl_minor)),
+        failed_orders: totals.failed_orders,
+        failed_revenue_brl_minor: String(totals.failed_revenue_brl_minor),
+        failed_revenue_usd_minor: String(toUsdMinor(totals.failed_revenue_brl_minor)),
+        refunded_orders: totals.refunded_orders,
+        refunded_revenue_brl_minor: String(totals.refunded_revenue_brl_minor),
+        refunded_revenue_usd_minor: String(toUsdMinor(totals.refunded_revenue_brl_minor)),
+        chargeback_orders: totals.chargeback_orders,
+        chargeback_revenue_brl_minor: String(totals.chargeback_revenue_brl_minor),
+        chargeback_revenue_usd_minor: String(toUsdMinor(totals.chargeback_revenue_brl_minor)),
+        fees_brl_minor: String(totals.fees_brl_minor),
+        fees_usd_minor: String(toUsdMinor(totals.fees_brl_minor)),
+        refund_chargeback_fee_count: totals.refund_chargeback_fee_count,
+        refund_chargeback_fee_brl_minor: String(totals.refund_chargeback_fee_brl_minor),
+        refund_chargeback_fee_usd_minor: String(
+          totals.refund_chargeback_fee_count * REFUND_CHARGEBACK_FEE_USD_MINOR,
+        ),
+        reserve_brl_minor: String(totals.reserve_brl_minor),
+        reserve_usd_minor: String(toUsdMinor(totals.reserve_brl_minor)),
+        net_revenue_brl_minor: String(totals.net_revenue_brl_minor),
+        net_revenue_usd_minor: String(toUsdMinor(totals.net_revenue_brl_minor)),
+        net_available_brl_minor: String(totals.net_available_brl_minor),
+        net_available_usd_minor: String(toUsdMinor(totals.net_available_brl_minor)),
+      });
+      const accounts = [...byOwner.entries()]
+        .map(([ownerId, accountOffers]) => ({
+          owner_id: ownerId,
+          owner_name:
+            ownerId === req.user!.sub ? 'Minha conta' : (ownerNames.get(ownerId) ?? 'Conta compartilhada'),
+          is_current_user: ownerId === req.user!.sub,
+          offers: accountOffers,
+          totals: totalsWire(aggregate(accountOffers)),
+        }))
+        .sort((a, b) => Number(b.totals.net_revenue_brl_minor) - Number(a.totals.net_revenue_brl_minor));
 
       return reply.send({
         from: fromDate,
         to: toDate,
         time_zone: 'America/Sao_Paulo',
         offers: perOffer,
-        totals: {
-          paid_orders: totals.paid_orders,
-          gross_revenue_brl_minor: String(totals.gross_revenue_brl_minor),
-          gross_revenue_usd_minor: String(toUsdMinor(totals.gross_revenue_brl_minor)),
-          failed_orders: totals.failed_orders,
-          failed_revenue_brl_minor: String(totals.failed_revenue_brl_minor),
-          failed_revenue_usd_minor: String(toUsdMinor(totals.failed_revenue_brl_minor)),
-          refunded_orders: totals.refunded_orders,
-          refunded_revenue_brl_minor: String(totals.refunded_revenue_brl_minor),
-          refunded_revenue_usd_minor: String(toUsdMinor(totals.refunded_revenue_brl_minor)),
-          chargeback_orders: totals.chargeback_orders,
-          chargeback_revenue_brl_minor: String(totals.chargeback_revenue_brl_minor),
-          chargeback_revenue_usd_minor: String(toUsdMinor(totals.chargeback_revenue_brl_minor)),
-          fees_brl_minor: String(totals.fees_brl_minor),
-          fees_usd_minor: String(toUsdMinor(totals.fees_brl_minor)),
-          refund_chargeback_fee_count: totals.refund_chargeback_fee_count,
-          refund_chargeback_fee_brl_minor: String(totals.refund_chargeback_fee_brl_minor),
-          refund_chargeback_fee_usd_minor: String(
-            totals.refund_chargeback_fee_count * REFUND_CHARGEBACK_FEE_USD_MINOR,
-          ),
-          reserve_brl_minor: String(totals.reserve_brl_minor),
-          reserve_usd_minor: String(toUsdMinor(totals.reserve_brl_minor)),
-          net_revenue_brl_minor: String(totals.net_revenue_brl_minor),
-          net_revenue_usd_minor: String(toUsdMinor(totals.net_revenue_brl_minor)),
-          net_available_brl_minor: String(totals.net_available_brl_minor),
-          net_available_usd_minor: String(toUsdMinor(totals.net_available_brl_minor)),
-        },
+        // Kept null for backwards compatibility. Clients must use accounts;
+        // a cross-account grand total would defeat data separation.
+        accounts,
+        totals: null,
       });
     },
   );
