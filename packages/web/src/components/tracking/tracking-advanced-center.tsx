@@ -757,6 +757,9 @@ export function TrackingAdvancedCenter({
   const [paysightSecret, setPaysightSecret] = useState('');
   const [paysightProduct, setPaysightProduct] = useState('');
   const [paysightWebhook, setPaysightWebhook] = useState('');
+  const [gatewayPlatform, setGatewayPlatform] = useState<'vendepay' | 'paysight'>('vendepay');
+  const [gatewayName, setGatewayName] = useState('');
+  const [gatewayCreatedWebhook, setGatewayCreatedWebhook] = useState('');
   const [upsellStageKey, setUpsellStageKey] = useState<UpsellStageKey>('upsell_1');
   const [upsellStageName, setUpsellStageName] = useState('Upsell 1');
   const [upsellDestination, setUpsellDestination] = useState('');
@@ -1451,6 +1454,20 @@ export function TrackingAdvancedCenter({
       setPaysightWebhook(result.webhook_url); setPaysightApiKey(''); setPaysightSecret('');
       void qc.invalidateQueries({ queryKey: ['tracking-advanced', offerId] });
       toast.success('Paysight conectada. Copie a URL do webhook agora.');
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
+  const createGateway = useMutation({
+    mutationFn: async () => {
+      if (gatewayPlatform === 'vendepay') return apiClient.createVendepayConnection(offerId, gatewayName.trim());
+      return apiClient.createGatewayConnection(offerId, { provider: 'paysight', name: gatewayName.trim(), environment: 'production' });
+    },
+    onSuccess: (result) => {
+      setGatewayCreatedWebhook('vendepay_webhook_url' in result ? result.vendepay_webhook_url : result.webhook_url);
+      setGatewayName('');
+      void qc.invalidateQueries({ queryKey: ['tracking-config', offerId] });
+      void qc.invalidateQueries({ queryKey: ['tracking-advanced', offerId] });
+      toast.success('Conexão criada. Copie o webhook agora.');
     },
     onError: (error) => toast.error((error as Error).message),
   });
@@ -2556,15 +2573,18 @@ export function TrackingAdvancedCenter({
                   </div>
                 ))}
                 {canManage && config.data?.configured && (
-                  <div className="mt-4 grid gap-2 border-t border-violet-300/15 pt-4 md:grid-cols-2">
-                    <Input value={paysightName} onChange={(event) => setPaysightName(event.target.value)} placeholder="Nome da conexão Paysight" />
-                    <Input value={paysightProduct} onChange={(event) => setPaysightProduct(event.target.value)} placeholder="Product ID Paysight (opcional)" />
-                    <Input value={paysightApiKey} onChange={(event) => setPaysightApiKey(event.target.value)} type="password" placeholder="API key Paysight" />
-                    <Input value={paysightSecret} onChange={(event) => setPaysightSecret(event.target.value)} type="password" placeholder="Segredo do webhook (opcional)" />
-                    <Button className="md:col-span-2" disabled={!paysightName.trim() || savePaysightGateway.isPending} onClick={() => savePaysightGateway.mutate()}>
-                      {savePaysightGateway.isPending ? 'Conectando…' : 'Salvar conexão Paysight'}
-                    </Button>
-                    {paysightWebhook && <div className="md:col-span-2 rounded border border-amber-300/20 bg-amber-300/[0.04] p-3 text-xs text-amber-100">Copie agora a URL do webhook: <code className="ml-1 break-all text-cyan-100">{paysightWebhook}</code></div>}
+                  <div className="mt-4 border-t border-violet-300/15 pt-4">
+                    <p className="hud-label text-violet-200">Nova conexão</p>
+                    <p className="mt-1 text-xs text-white/45">1. Escolha a plataforma · 2. Dê um nome interno · 3. Salve e receba o webhook exclusivo.</p>
+                    <div className="mt-3 grid gap-2 md:grid-cols-[220px_minmax(0,1fr)_auto]">
+                      <select aria-label="Plataforma de pagamento" value={gatewayPlatform} onChange={(event) => setGatewayPlatform(event.target.value as 'vendepay' | 'paysight')} className="h-10 rounded-md border border-white/[0.1] bg-[#071720] px-3 text-sm text-white">
+                        <option value="vendepay">VendePay</option>
+                        <option value="paysight">Paysight</option>
+                      </select>
+                      <Input value={gatewayName} onChange={(event) => setGatewayName(event.target.value)} placeholder={gatewayPlatform === 'vendepay' ? 'Ex.: VendePay · Conta do Yola' : 'Ex.: Paysight · Conta do Yola'} />
+                      <Button disabled={gatewayName.trim().length < 2 || createGateway.isPending} onClick={() => createGateway.mutate()}>{createGateway.isPending ? 'Criando…' : 'Criar e gerar webhook'}</Button>
+                    </div>
+                    {gatewayCreatedWebhook && <div className="mt-3 rounded border border-amber-300/25 bg-amber-300/[0.05] p-3 text-xs"><p className="font-medium text-amber-100">Webhook pronto para cadastrar na {gatewayPlatform === 'vendepay' ? 'VendePay' : 'Paysight'}</p><code className="mt-2 block break-all text-cyan-100">{gatewayCreatedWebhook}</code></div>}
                   </div>
                 )}
               </div>
