@@ -58,6 +58,12 @@ const minor = (value: unknown): number | undefined => {
   return Number.isFinite(n) ? Math.round(n * 100) : undefined;
 };
 
+const minorAlready = (value: unknown): number | undefined => {
+  if (typeof value !== 'string' && typeof value !== 'number') return undefined;
+  const n = Number(String(value).replace(',', '.'));
+  return Number.isFinite(n) ? Math.round(n) : undefined;
+};
+
 const date = (value: unknown) => {
   const candidate = typeof value === 'number' && value < 10_000_000_000 ? value * 1000 : value;
   const parsed = new Date(candidate as string | number | Date);
@@ -73,6 +79,8 @@ export function normalizePaysight(payload: unknown): Result {
   const transaction = object(root.transaction);
   const payment = object(root.payment);
   const customer = object(root.customer);
+  const product = object(root.product);
+  const attributionData = object(root.attribution);
   const metadata = object(root.metadata);
   const sourceData = object(data.data);
   const transactionId = text(
@@ -81,30 +89,44 @@ export function normalizePaysight(payload: unknown): Result {
     data.transaction_id, data.transactionId, data.payment_id, data.paymentId,
     transaction.id, payment.id,
   );
-  const providerEventId = text(root.transactionId, root.orderId, root.event_id, root.eventId, root.id, data.event_id, data.id);
+  const providerEventId = text(root.transaction_id, root.transactionId, root.order_id, root.orderId, root.event_id, root.eventId, root.id, data.event_id, data.id);
   const applicationId = Number(root.applicationId ?? data.applicationId);
   const rawStatus = text(root.status, root.event, root.type, data.status, transaction.status, payment.status);
   const declaredStatus: PaysightStatus =
     applicationId === 200 ? 'refunded' : applicationId === 201 || applicationId === 202 ? 'chargeback' :
     root.chargedBack === true ? 'chargeback' : root.refunded === true ? 'refunded' :
     root.success === true ? 'paid' : status(rawStatus);
-  const dedupeKey = providerEventId ?? transactionId ?? createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+  // A transaction can legitimately arrive more than once with a new lifecycle
+  // state (approved, refunded, chargeback). Dedupe the same notification, not
+  // the whole transaction, otherwise a later reversal would be discarded.
+  const eventFingerprint = text(root.event, root.status, root.type, data.event_id, data.id, root.approved_at, root.completed, root.created_at) ?? 'event';
+  const dedupeKey = transactionId
+    ? `${transactionId}:${declaredStatus}:${eventFingerprint}`
+    : createHash('sha256').update(JSON.stringify(payload)).digest('hex');
   if (!transactionId) {
     return { kind: 'quarantined', reason: 'missing_transaction_id', diagnostics: ['O webhook não contém transaction_id/payment_id estável.'], dedupeKey };
   }
-  const custom = { ...metadata, ...sourceData, ...object(data.metadata) };
+  const custom = { ...metadata, ...sourceData, ...object(data.metadata), ...attributionData };
   const source: Record<string, string> = {};
-  for (const key of ['src', 'sessionId', 'partnerSession', 'paysightSession', 'clickId', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'gclid', 'wbraid', 'gbraid', 'fbclid', 'ttclid']) {
+  for (const key of ['src', 'sck', 'sessionId', 'partnerSession', 'paysightSession', 'clickId', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'gclid', 'wbraid', 'gbraid', 'fbclid', 'ttclid', 'campaign_name', 'campaign_id', 'adset_name', 'adset_id', 'ad_name', 'ad_id', 'placement']) {
     const value = text(custom[key], root[key], data[key]);
     if (value) source[key] = value;
   }
+  const partnerSession = text(root.partnerSession, root.partner_session, root.sessionId, root.session_id, source.partnerSession, source.sessionId);
+  const paysightSession = text(root.paysightSession, root.paysight_session, source.paysightSession);
+  const customerIp = text(customer.ip, root.customer_ip, root.ip, data.customer_ip);
+  const funnel = text(root.funnel, data.funnel);
+  if (partnerSession) source.partnerSession = partnerSession;
+  if (paysightSession) source.paysightSession = paysightSession;
+  if (customerIp) source.client_ip = customerIp;
+  if (funnel) source.funnel = funnel;
   return {
     kind: 'processable', dedupeKey,
     event: {
       transactionId, providerEventId, status: declaredStatus, rawStatus,
       trackingSrc: source.src ?? source.partnerSession ?? source.sessionId,
-      amountMinor: minor(root.amount ?? data.amount ?? transaction.amount ?? payment.amount),
-      currency: text(root.currency, data.currency, transaction.currency, payment.currency)?.toUpperCase(),
+      amountMinor: minorAlready(product.price_cents) ?? minor(root.amount ?? data.amount ?? transaction.amount ?? payment.amount ?? product.price),
+      currency: text(product.currency, root.currency, data.currency, transaction.currency, payment.currency)?.toUpperCase(),
       buyer: {
         name: text(customer.name, root.firstName && root.lastName ? `${root.firstName} ${root.lastName}` : root.firstName, data.customer_name, root.customer_name),
         email: text(customer.email, root.email, data.customer_email, root.customer_email),
@@ -114,11 +136,11 @@ export function normalizePaysight(payload: unknown): Result {
       },
       paymentMethod: text(root.payment_method, data.payment_method, transaction.payment_method, payment.method),
       product: {
-        id: text(root.productId, root.product_id, data.product_id, transaction.product_id),
-        name: text(root.product, root.product_name, data.product_name, transaction.product_name),
+        id: text(product.id, root.productId, root.product_id, data.product_id, transaction.product_id),
+        name: text(product.name, root.product_name, data.product_name, transaction.product_name),
         planId: text(root.plan_id, data.plan_id), planName: text(root.plan_name, data.plan_name),
       },
-      source, occurredAt: date(root.completed ?? root.sent ?? root.occurred_at ?? root.created_at ?? data.occurred_at ?? data.created_at ?? root.timestamp),
+      source, occurredAt: date(root.approved_at ?? root.completed ?? root.sent ?? root.occurred_at ?? root.created_at ?? data.occurred_at ?? data.created_at ?? root.timestamp),
     },
   };
 }

@@ -96,6 +96,7 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
             fbclid?: string;
             _fbclid_ts?: string;
             country?: string;
+            client_ip?: string;
           };
           client_ip: string | null;
           user_agent: string | null;
@@ -236,7 +237,7 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
             : new Date(row.event_at).getTime();
           userData.fbc = `fb.1.${timestamp}.${row.source.fbclid}`;
         }
-        if (row.client_ip) userData.client_ip_address = row.client_ip;
+        if (row.client_ip ?? row.source?.client_ip) userData.client_ip_address = row.client_ip ?? row.source.client_ip!;
         if (row.user_agent) userData.client_user_agent = row.user_agent;
         const country = row.buyer.country || row.source?.country;
         if (country && /^[a-z]{2}$/i.test(country)) {

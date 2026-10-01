@@ -66,7 +66,7 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
                  'plan_id', o.product->>'planId',
                  'plan_name', o.product->>'planName'
                )) AS source,
-               COALESCE(direct_event.client_ip, best_event.client_ip) AS client_ip
+               COALESCE(direct_event.client_ip, best_event.client_ip, o.attribution_source->>'client_ip') AS client_ip
         FROM tracking_delivery_outbox d
         JOIN tracking_utmify_destinations u ON u.id = d.destination_id AND u.enabled = true
         LEFT JOIN tracking_orders o ON o.id = d.order_id

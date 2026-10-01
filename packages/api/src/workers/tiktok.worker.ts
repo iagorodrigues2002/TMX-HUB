@@ -58,7 +58,7 @@ export function createTikTokWorker(): Worker<TikTokJobData> | null {
       pixel_code: string; access_token_encrypted: string; order_id: string | null; external_id: string | null;
       amount_minor: number | null; currency: string | null; amount_brl_minor: number | null; product: { id?: string; name?: string; planId?: string; planName?: string } | null;
       buyer: { email?: string; phone?: string }; paid_at: Date | null; created_at: Date; visitor_id: string | null;
-      event_url: string | null; referrer: string | null; source: { ttclid?: string; _ttp?: string; ttp?: string }; client_ip: string | null; user_agent: string | null;
+      event_url: string | null; referrer: string | null; source: { ttclid?: string; _ttp?: string; ttp?: string; client_ip?: string }; client_ip: string | null; user_agent: string | null;
     }>>`
       SELECT d.id,d.event_id,d.event_name,d.test_event_code,d.test_context,d.attempts,
              dest.pixel_code,dest.access_token_encrypted,d.order_id,
@@ -84,7 +84,7 @@ export function createTikTokWorker(): Worker<TikTokJobData> | null {
       pixelCode: row.pixel_code, eventId: row.event_id, eventName: 'Purchase', occurredAt: row.paid_at ?? row.created_at,
       eventUrl: safeUrl(row.test_context.event_url ?? row.event_url), referrer: row.referrer ?? undefined, value: Number(((minor ?? 1) / 100).toFixed(2)), currency: currency ?? 'BRL', orderId: row.external_id ?? `TMX-TEST-${row.id}`,
       ttclid: row.source.ttclid, ttp: row.source._ttp ?? row.source.ttp, email: row.buyer.email ?? row.test_context.email ?? undefined, phone: row.buyer.phone ?? row.test_context.phone ?? undefined,
-      externalId: row.visitor_id ?? row.order_id ?? row.id, ip: row.client_ip ?? undefined, userAgent: row.user_agent ?? undefined,
+      externalId: row.visitor_id ?? row.order_id ?? row.id, ip: row.client_ip ?? row.source.client_ip ?? undefined, userAgent: row.user_agent ?? undefined,
       contentId: row.product?.planId ?? row.product?.id, contentName: row.product?.planName ?? row.product?.name, testEventCode: row.test_event_code ?? undefined,
     });
     try {
