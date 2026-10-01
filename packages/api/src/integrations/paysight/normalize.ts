@@ -76,43 +76,49 @@ export function normalizePaysight(payload: unknown): Result {
   const metadata = object(root.metadata);
   const sourceData = object(data.data);
   const transactionId = text(
+    root.transactionId,
     root.transaction_id, root.transactionId, root.payment_id, root.paymentId,
     data.transaction_id, data.transactionId, data.payment_id, data.paymentId,
     transaction.id, payment.id,
   );
-  const providerEventId = text(root.event_id, root.eventId, root.id, data.event_id, data.id);
+  const providerEventId = text(root.transactionId, root.orderId, root.event_id, root.eventId, root.id, data.event_id, data.id);
+  const applicationId = Number(root.applicationId ?? data.applicationId);
   const rawStatus = text(root.status, root.event, root.type, data.status, transaction.status, payment.status);
+  const declaredStatus: PaysightStatus =
+    applicationId === 200 ? 'refunded' : applicationId === 201 || applicationId === 202 ? 'chargeback' :
+    root.chargedBack === true ? 'chargeback' : root.refunded === true ? 'refunded' :
+    root.success === true ? 'paid' : status(rawStatus);
   const dedupeKey = providerEventId ?? transactionId ?? createHash('sha256').update(JSON.stringify(payload)).digest('hex');
   if (!transactionId) {
     return { kind: 'quarantined', reason: 'missing_transaction_id', diagnostics: ['O webhook não contém transaction_id/payment_id estável.'], dedupeKey };
   }
   const custom = { ...metadata, ...sourceData, ...object(data.metadata) };
   const source: Record<string, string> = {};
-  for (const key of ['src', 'sessionId', 'partnerSession', 'clickId', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'gclid', 'wbraid', 'gbraid', 'fbclid', 'ttclid']) {
+  for (const key of ['src', 'sessionId', 'partnerSession', 'paysightSession', 'clickId', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'gclid', 'wbraid', 'gbraid', 'fbclid', 'ttclid']) {
     const value = text(custom[key], root[key], data[key]);
     if (value) source[key] = value;
   }
   return {
     kind: 'processable', dedupeKey,
     event: {
-      transactionId, providerEventId, status: status(rawStatus), rawStatus,
+      transactionId, providerEventId, status: declaredStatus, rawStatus,
       trackingSrc: source.src ?? source.partnerSession ?? source.sessionId,
       amountMinor: minor(root.amount ?? data.amount ?? transaction.amount ?? payment.amount),
       currency: text(root.currency, data.currency, transaction.currency, payment.currency)?.toUpperCase(),
       buyer: {
-        name: text(customer.name, data.customer_name, root.customer_name),
-        email: text(customer.email, data.customer_email, root.customer_email),
+        name: text(customer.name, root.firstName && root.lastName ? `${root.firstName} ${root.lastName}` : root.firstName, data.customer_name, root.customer_name),
+        email: text(customer.email, root.email, data.customer_email, root.customer_email),
         phone: text(customer.phone, data.customer_phone, root.customer_phone),
         country: text(customer.country, data.country, root.country),
         postalCode: text(customer.postal_code, customer.postalCode, data.postal_code),
       },
       paymentMethod: text(root.payment_method, data.payment_method, transaction.payment_method, payment.method),
       product: {
-        id: text(root.product_id, data.product_id, transaction.product_id),
-        name: text(root.product_name, data.product_name, transaction.product_name),
+        id: text(root.productId, root.product_id, data.product_id, transaction.product_id),
+        name: text(root.product, root.product_name, data.product_name, transaction.product_name),
         planId: text(root.plan_id, data.plan_id), planName: text(root.plan_name, data.plan_name),
       },
-      source, occurredAt: date(root.occurred_at ?? root.created_at ?? data.occurred_at ?? data.created_at ?? root.timestamp),
+      source, occurredAt: date(root.completed ?? root.sent ?? root.occurred_at ?? root.created_at ?? data.occurred_at ?? data.created_at ?? root.timestamp),
     },
   };
 }

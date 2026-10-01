@@ -1893,13 +1893,25 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         LIMIT 1
       `;
       if (!connection) return reply.code(404).send({ accepted: false });
-      const normalized = normalizePaysight(req.body);
+      if (Array.isArray(req.body) && req.body.length > 1) {
+        // Paysight batches transactions. Re-enter the same idempotent handler
+        // per element so each transaction gets its own durable receipt/order.
+        const results = await Promise.all(
+          req.body.map((payload) => app.inject({ method: 'POST', url: req.raw.url, payload })),
+        );
+        return reply.code(202).send({ accepted: true, received: results.length });
+      }
+      // Paysight delivers a batch (array) even when it contains one event.
+      // The durable receipt is per transaction, never per HTTP batch.
+      const incoming = Array.isArray(req.body) ? req.body : [req.body];
+      const payload = incoming[0];
+      const normalized = normalizePaysight(payload);
       const receiptId = ulid();
       if (normalized.kind === 'quarantined') {
         await app.db`
           INSERT INTO tracking_gateway_webhook_receipts
             (id,gateway_connection_id,dedupe_key,payload,state,diagnostics)
-          VALUES(${receiptId},${connection.id},${normalized.dedupeKey},${app.db.json(req.body as never)},'quarantined',${app.db.json(normalized.diagnostics)})
+          VALUES(${receiptId},${connection.id},${normalized.dedupeKey},${app.db.json(payload as never)},'quarantined',${app.db.json(normalized.diagnostics)})
           ON CONFLICT(gateway_connection_id,dedupe_key) DO NOTHING
         `;
         return reply.code(202).send({ accepted: true, state: 'quarantined' });
@@ -1909,7 +1921,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         const receipt = await sql`
           INSERT INTO tracking_gateway_webhook_receipts
             (id,gateway_connection_id,dedupe_key,payload,state)
-          VALUES(${receiptId},${connection.id},${normalized.dedupeKey},${sql.json(req.body as never)},'received')
+          VALUES(${receiptId},${connection.id},${normalized.dedupeKey},${sql.json(payload as never)},'received')
           ON CONFLICT(gateway_connection_id,dedupe_key) DO NOTHING RETURNING id
         `;
         if (!receipt[0]) return { duplicate: true, meta: [] as string[], utmify: [] as string[], tiktok: [] as string[] };
