@@ -2518,8 +2518,25 @@ export function TrackingAdvancedCenter({
           {section === 'gateways' && (
             <Module
               title="Gateways"
-              description="A Vendepay usa o parâmetro src. Conexões podem ser pausadas e o token secreto pode ser rotacionado."
+              description="VendePay mantém seu fluxo próprio. Outros gateways entram pela camada universal do TMX, sem substituir a conexão existente."
             >
+              <div className="mb-5 rounded-lg border border-violet-300/20 bg-violet-300/[0.04] p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="hud-label text-violet-200">Gateways universais</p>
+                    <p className="mt-1 text-xs leading-5 text-white/50">
+                      Use esta camada para Paysight e próximos processadores. A VendePay abaixo continua independente e não é alterada.
+                    </p>
+                  </div>
+                  {canManage && <Button size="sm" variant="outline" onClick={() => setSection('pixels')}>Configurar Paysight</Button>}
+                </div>
+                {(advanced.data?.gateways ?? []).filter((gateway) => gateway.provider !== 'vendepay').map((gateway) => (
+                  <div key={gateway.id ?? gateway.provider} className="mt-3 flex items-center justify-between rounded border border-white/[0.08] bg-black/15 px-3 py-2 text-xs">
+                    <span className="text-white/75">{gateway.name ?? gateway.provider}</span>
+                    <span className={gateway.enabled ? 'text-emerald-200' : 'text-white/40'}>{gateway.last_webhook_at ? 'webhook ativo' : gateway.enabled ? 'aguardando webhook' : 'pausado'}</span>
+                  </div>
+                ))}
+              </div>
               <div className="space-y-2">
                 {vendepayConnections.map((connection) => (
                   <button

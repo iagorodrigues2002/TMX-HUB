@@ -168,7 +168,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         app.db`SELECT id, hostname, kind, dns_target, dns_records, dns_verified_at, enabled, status,
                     last_error, last_checked_at, created_at
              FROM tracking_domains WHERE project_id=${p.id} ORDER BY created_at DESC`,
-        app.db`SELECT id, provider, propagation_param, enabled, created_at
+        app.db`SELECT id, provider, name, propagation_param, enabled, settings, last_webhook_at, created_at
              FROM tracking_gateway_connections WHERE project_id=${p.id} ORDER BY provider`,
         app.db`SELECT id, name, propagation_param, enabled, created_at
              FROM vendepay_connections WHERE project_id=${p.id} ORDER BY created_at ASC`,

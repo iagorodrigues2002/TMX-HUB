@@ -2480,6 +2480,8 @@ export const apiClient = {
       provider: string;
       propagation_param: string;
       enabled: boolean;
+      settings?: { product_id?: string | null; environment?: 'sandbox' | 'production' };
+      last_webhook_at?: string | null;
       managed?: boolean;
     }>;
     meta_rules: { attributed_only: boolean; minimum_amount_minor: string | number };
