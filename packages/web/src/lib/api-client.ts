@@ -666,6 +666,8 @@ export type OfferStatus = 'testando' | 'validando' | 'escala' | 'pausado' | 'mor
 export interface OfferView {
   id: string;
   memberIds: string[];
+  /** True only for the offer owner or an administrator. */
+  canManage: boolean;
   name: string;
   companyName?: string;
   dashboardId?: string;
@@ -1017,6 +1019,7 @@ interface OfferAiConfigWire {
 interface OfferWire {
   id: string;
   member_ids?: string[];
+  can_manage?: boolean;
   name: string;
   company_name?: string;
   dashboard_id?: string;
@@ -1068,6 +1071,7 @@ function fromOfferWire(w: OfferWire): OfferView {
   return {
     id: w.id,
     memberIds: w.member_ids ?? [],
+    canManage: Boolean(w.can_manage),
     name: w.name,
     companyName: w.company_name,
     dashboardId: w.dashboard_id,

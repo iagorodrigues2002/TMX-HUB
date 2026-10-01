@@ -234,19 +234,17 @@ export function OfferList() {
               {offers.length} ofertas cadastradas
             </h2>
           </div>
-          {user?.role === 'admin' && (
-            <Button
-              size="sm"
-              onClick={() => setShowCreate((value) => !value)}
-              variant={showCreate ? 'outline' : 'default'}
-            >
-              <Plus className="h-3.5 w-3.5" />
-              {showCreate ? 'Cancelar' : 'Nova oferta'}
-            </Button>
-          )}
+          <Button
+            size="sm"
+            onClick={() => setShowCreate((value) => !value)}
+            variant={showCreate ? 'outline' : 'default'}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            {showCreate ? 'Cancelar' : 'Nova oferta'}
+          </Button>
         </div>
 
-        {showCreate && user?.role === 'admin' && (
+        {showCreate && (
           <form
             onSubmit={(event) => {
               event.preventDefault();
@@ -332,7 +330,7 @@ export function OfferList() {
               <div key={offer.id} className="space-y-2">
                 <OfferCard
                   offer={offer}
-                  {...(user?.role === 'admin'
+                  {...(offer.canManage
                     ? {
                         onEdit: () => setEditing(offer),
                         onDelete: () => deleteMut.mutate(offer.id),
@@ -341,7 +339,7 @@ export function OfferList() {
                 />
                 <div className="flex items-center justify-between px-1 text-[11px] text-white/45">
                   <span>{syncLabel(offer)}</span>
-                  {user?.role === 'admin' && (
+                  {offer.canManage && (
                     <Button
                       variant="ghost"
                       size="sm"

@@ -68,7 +68,7 @@ export function OfferEditDialog({ offer, open, onOpenChange }: Props) {
         description: description.trim(),
         dashboard_id: dashboardId.trim(),
         status,
-        member_ids: memberIds,
+        ...(user?.role === 'admin' ? { member_ids: memberIds } : {}),
         ...(utmifyLogin.trim() ? { utmify_login: utmifyLogin.trim() } : {}),
         ...(utmifyPassword ? { utmify_password: utmifyPassword } : {}),
       }),

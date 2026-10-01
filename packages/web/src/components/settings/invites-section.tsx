@@ -54,7 +54,7 @@ const CUSTOM_TOOL_OPTIONS: { key: ToolKey; label: string }[] = [
   { key: 'upsell-analyzer', label: 'Upsell Analyzer' },
   { key: 'webhook-tester', label: 'Webhook Tester' },
   { key: 'vsl', label: 'VSL Downloader' },
-  { key: 'ofertas', label: 'Ofertas' },
+  { key: 'ofertas', label: 'Ofertas e tracking' },
   { key: 'ofertas-ia', label: 'IA de Ofertas' },
   { key: 'logs', label: 'Logs' },
 ];

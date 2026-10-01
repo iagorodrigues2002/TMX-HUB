@@ -15,8 +15,12 @@ import {
   generateCampaignAnalysis,
 } from '../services/campaign-ai.js';
 import { computeMetrics } from '../services/snapshot-store.js';
+import { canManageOffer } from '../services/offer-store.js';
 
-function offerToWire(o: Offer, includeAccess = false): Record<string, unknown> {
+function offerToWire(
+  o: Offer,
+  options: { includeAccess?: boolean; canManage?: boolean } = {},
+): Record<string, unknown> {
   return {
     id: o.id,
     name: o.name,
@@ -32,7 +36,10 @@ function offerToWire(o: Offer, includeAccess = false): Record<string, unknown> {
     status: o.status,
     created_at: o.createdAt,
     updated_at: o.updatedAt,
-    ...(includeAccess ? { member_ids: o.memberIds ?? [] } : {}),
+    ...(options.includeAccess ? { member_ids: o.memberIds ?? [] } : {}),
+    // This is deliberately computed server-side. The web app uses it only to
+    // expose management controls; every write still re-checks assertManager.
+    can_manage: Boolean(options.canManage),
   };
 }
 
@@ -158,23 +165,37 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!req.user) throw new BadRequestError('No user attached.');
     const offers = await app.offerStore.listAccessible(req.user.sub, req.user.role === 'admin');
     const includeAccess = req.user.role === 'admin';
-    return reply.send({ offers: offers.map((offer) => offerToWire(offer, includeAccess)) });
+    return reply.send({
+      offers: offers.map((offer) =>
+        offerToWire(offer, {
+          includeAccess,
+          canManage: canManageOffer(offer, req.user!.sub, req.user!.role === 'admin'),
+        }),
+      ),
+    });
   });
 
-  // POST /v1/offers — create a new offer
+  // POST /v1/offers — a user may create and manage only their own offer.
+  // Access to this route itself is gated by the `ofertas` tool in routes/index.
   app.post('/offers', async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');
-    if (req.user.role !== 'admin') {
+    const parsed = CreateOfferRequestSchema.safeParse(req.body);
+    if (!parsed.success) throw zodToProblem(parsed.error, req.url);
+    // Only an administrator may share an offer with other accounts. This
+    // prevents a standard member from altering another user's tool scope via
+    // the member_ids side effect in validateMemberIds.
+    if (req.user.role !== 'admin' && parsed.data.member_ids !== undefined) {
       throw new HttpProblem({
         status: 403,
         title: 'Forbidden',
-        detail: 'Apenas administradores podem criar ofertas.',
+        detail: 'Somente administradores podem compartilhar uma oferta com outros membros.',
         code: 'forbidden',
       });
     }
-    const parsed = CreateOfferRequestSchema.safeParse(req.body);
-    if (!parsed.success) throw zodToProblem(parsed.error, req.url);
-    const memberIds = await validateMemberIds(app, parsed.data.member_ids, req.user.sub);
+    const memberIds =
+      req.user.role === 'admin'
+        ? await validateMemberIds(app, parsed.data.member_ids, req.user.sub)
+        : undefined;
     const offer = await app.offerStore.create({
       userId: req.user.sub,
       name: parsed.data.name,
@@ -193,9 +214,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       void app.utmifySync.syncOffer(connected, true).catch((error) => {
         app.log.warn({ error, offerId: offer.id }, 'initial utmify sync failed');
       });
-      return reply.code(201).send(offerToWire(connected, true));
+      return reply.code(201).send(offerToWire(connected, { includeAccess: true, canManage: true }));
     }
-    return reply.code(201).send(offerToWire(offer, true));
+    return reply.code(201).send(offerToWire(offer, { includeAccess: true, canManage: true }));
   });
 
   // PATCH /v1/offers/:id — update name/status/links/etc
@@ -220,7 +241,18 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       }
       nextUtmifyCredentials = { login, password };
     }
-    const memberIds = await validateMemberIds(app, parsed.data.member_ids, current.userId);
+    if (req.user.role !== 'admin' && parsed.data.member_ids !== undefined) {
+      throw new HttpProblem({
+        status: 403,
+        title: 'Forbidden',
+        detail: 'Somente administradores podem alterar o acesso de outros membros.',
+        code: 'forbidden',
+      });
+    }
+    const memberIds =
+      req.user.role === 'admin'
+        ? await validateMemberIds(app, parsed.data.member_ids, current.userId)
+        : undefined;
     const updated = await app.offerStore.update(req.params.id, current.userId, {
       ...parsed.data,
       ...(memberIds !== undefined ? { member_ids: memberIds } : {}),
@@ -238,7 +270,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         app.log.warn({ error, offerId: finalOffer.id }, 'utmify reconnect sync failed');
       });
     }
-    return reply.send(offerToWire(finalOffer, true));
+    return reply.send(offerToWire(finalOffer, { includeAccess: true, canManage: true }));
   });
 
   // DELETE /v1/offers/:id
@@ -302,7 +334,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       const snapshots = await app.snapshotStore.listRange(offer.id, range.from, range.to);
       const totals = app.snapshotStore.aggregate(snapshots);
       return reply.send({
-        offer: offerToWire(offer, req.user.role === 'admin'),
+        offer: offerToWire(offer, {
+          includeAccess: req.user.role === 'admin',
+          canManage: canManageOffer(offer, req.user.sub, req.user.role === 'admin'),
+        }),
         from: range.from,
         to: range.to,
         snapshots: snapshots.map(snapshotToWire),
@@ -621,7 +656,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         offers.map(async (offer) => {
           const snaps = await app.snapshotStore.listRange(offer.id, range.from, range.to);
           return {
-            offer: offerToWire(offer, req.user!.role === 'admin'),
+            offer: offerToWire(offer, {
+              includeAccess: req.user!.role === 'admin',
+              canManage: canManageOffer(offer, req.user!.sub, req.user!.role === 'admin'),
+            }),
             totals: app.snapshotStore.aggregate(snaps),
             snapshots_count: snaps.length,
             currency: offer.currency ?? 'BRL',
