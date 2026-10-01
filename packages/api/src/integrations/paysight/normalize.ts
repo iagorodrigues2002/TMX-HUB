@@ -18,7 +18,7 @@ export type PaysightEvent = {
   trackingSrc?: string;
   amountMinor?: number;
   currency?: string;
-  buyer: { name?: string; email?: string; phone?: string; country?: string; postalCode?: string };
+  buyer: { name?: string; firstName?: string; lastName?: string; email?: string; phone?: string; country?: string; postalCode?: string };
   paymentMethod?: string;
   product: { id?: string; name?: string; planId?: string; planName?: string };
   source: Record<string, string>;
@@ -116,6 +116,10 @@ export function normalizePaysight(payload: unknown): Result {
   const paysightSession = text(root.paysightSession, root.paysight_session, source.paysightSession);
   const customerIp = text(customer.ip, root.customer_ip, root.ip, data.customer_ip);
   const funnel = text(root.funnel, data.funnel);
+  const customerName = text(customer.name, root.firstName && root.lastName ? `${root.firstName} ${root.lastName}` : root.firstName, data.customer_name, root.customer_name);
+  const explicitFirstName = text(customer.first_name, customer.firstName, root.first_name, root.firstName);
+  const explicitLastName = text(customer.last_name, customer.lastName, root.last_name, root.lastName);
+  const nameParts = customerName?.trim().split(/\s+/) ?? [];
   if (partnerSession) source.partnerSession = partnerSession;
   if (paysightSession) source.paysightSession = paysightSession;
   if (customerIp) source.client_ip = customerIp;
@@ -128,7 +132,9 @@ export function normalizePaysight(payload: unknown): Result {
       amountMinor: minorAlready(product.price_cents) ?? minor(root.amount ?? data.amount ?? transaction.amount ?? payment.amount ?? product.price),
       currency: text(product.currency, root.currency, data.currency, transaction.currency, payment.currency)?.toUpperCase(),
       buyer: {
-        name: text(customer.name, root.firstName && root.lastName ? `${root.firstName} ${root.lastName}` : root.firstName, data.customer_name, root.customer_name),
+        name: customerName,
+        firstName: explicitFirstName ?? nameParts[0],
+        lastName: explicitLastName ?? (nameParts.length > 1 ? nameParts.slice(1).join(' ') : undefined),
         email: text(customer.email, root.email, data.customer_email, root.customer_email),
         phone: text(customer.phone, data.customer_phone, root.customer_phone),
         country: text(customer.country, data.country, root.country),

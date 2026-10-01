@@ -83,7 +83,7 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
           amount_brl_minor: number | null;
           order_kind: string | null;
           product: { id?: string; name?: string; planId?: string; planName?: string } | null;
-          buyer: { email?: string; phone?: string; country?: string; postalCode?: string };
+          buyer: { email?: string; phone?: string; firstName?: string; lastName?: string; country?: string; postalCode?: string };
           identity_email: string | null;
           identity_phone: string | null;
           identity_postal_code: string | null;
@@ -226,6 +226,8 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
           .replace(/[\s-]+/g, '');
         if (email) userData.em = [hash(email)];
         if (phone) userData.ph = [hash(phone)];
+        if (row.buyer.firstName) userData.fn = [hash(row.buyer.firstName)];
+        if (row.buyer.lastName) userData.ln = [hash(row.buyer.lastName)];
         if (postalCode) userData.zp = [hash(postalCode)];
         if (row.visitor_id) userData.external_id = [hash(row.visitor_id)];
         if (row.source?._fbp) userData.fbp = row.source._fbp;
