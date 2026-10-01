@@ -274,13 +274,13 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
                 </Button>
               )}
             </div>
-            <div className="rounded-md border border-violet-300/20 bg-violet-300/[0.035] p-4">
+            {false && <div className="rounded-md border border-violet-300/20 bg-violet-300/[0.035] p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="hud-label text-violet-200">Gateways de pagamento · arquitetura aberta</p>
                   <p className="mt-1 text-xs text-white/45">VendePay continua independente. Conecte Paysight por oferta e o TMX normaliza pagamentos, reembolsos e chargebacks no mesmo histórico.</p>
                 </div>
-                {config.data.gateways?.filter((gateway) => gateway.provider === 'paysight').map((gateway) => (
+                {config.data?.gateways?.filter((gateway) => gateway.provider === 'paysight').map((gateway) => (
                   <span key={gateway.id} className="rounded-full border border-emerald-300/25 px-2 py-1 text-xs text-emerald-200">
                     Paysight ativo · {gateway.last_webhook_at ? 'webhook recebido' : 'aguardando webhook'}
                   </span>
@@ -299,11 +299,11 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
                   <Input value={paysightApiKey} onChange={(event) => setPaysightApiKey(event.target.value)} type="password" placeholder="API key Paysight (opcional para webhook)" />
                   <Input value={paysightSecret} onChange={(event) => setPaysightSecret(event.target.value)} type="password" placeholder="Segredo de assinatura do webhook (opcional)" />
                   <Button className="md:col-span-2" onClick={() => savePaysight.mutate()} disabled={!paysightName.trim() || savePaysight.isPending}>
-                    {savePaysight.isPending ? 'Conectando…' : config.data.gateways?.some((gateway) => gateway.provider === 'paysight') ? 'Atualizar conexão Paysight' : 'Conectar Paysight'}
+                    {savePaysight.isPending ? 'Conectando…' : config.data?.gateways?.some((gateway) => gateway.provider === 'paysight') ? 'Atualizar conexão Paysight' : 'Conectar Paysight'}
                   </Button>
                 </div>
               )}
-            </div>
+            </div>}
             <div className="rounded-md border border-white/[0.08] bg-black/10 p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>

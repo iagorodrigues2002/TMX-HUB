@@ -752,6 +752,11 @@ export function TrackingAdvancedCenter({
   const [selectedVendepayConnectionId, setSelectedVendepayConnectionId] = useState('');
   const [selectedVendepayConnectionName, setSelectedVendepayConnectionName] = useState('');
   const [vendepaySigningSecret, setVendepaySigningSecret] = useState('');
+  const [paysightName, setPaysightName] = useState('Paysight · Produção');
+  const [paysightApiKey, setPaysightApiKey] = useState('');
+  const [paysightSecret, setPaysightSecret] = useState('');
+  const [paysightProduct, setPaysightProduct] = useState('');
+  const [paysightWebhook, setPaysightWebhook] = useState('');
   const [upsellStageKey, setUpsellStageKey] = useState<UpsellStageKey>('upsell_1');
   const [upsellStageName, setUpsellStageName] = useState('Upsell 1');
   const [upsellDestination, setUpsellDestination] = useState('');
@@ -1431,6 +1436,21 @@ export function TrackingAdvancedCenter({
       void qc.invalidateQueries({ queryKey: ['tracking-config', offerId] });
       void refresh();
       toast.success('Conta Vendepay adicionada. Copie o webhook agora.');
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
+  const savePaysightGateway = useMutation({
+    mutationFn: () => apiClient.createGatewayConnection(offerId, {
+      provider: 'paysight', name: paysightName.trim(),
+      ...(paysightApiKey.trim() ? { api_key: paysightApiKey.trim() } : {}),
+      ...(paysightSecret.trim() ? { signing_secret: paysightSecret.trim() } : {}),
+      ...(paysightProduct.trim() ? { product_id: paysightProduct.trim() } : {}),
+      environment: 'production',
+    }),
+    onSuccess: (result) => {
+      setPaysightWebhook(result.webhook_url); setPaysightApiKey(''); setPaysightSecret('');
+      void qc.invalidateQueries({ queryKey: ['tracking-advanced', offerId] });
+      toast.success('Paysight conectada. Copie a URL do webhook agora.');
     },
     onError: (error) => toast.error((error as Error).message),
   });
@@ -2528,7 +2548,6 @@ export function TrackingAdvancedCenter({
                       Use esta camada para Paysight e próximos processadores. A VendePay abaixo continua independente e não é alterada.
                     </p>
                   </div>
-                  {canManage && <Button size="sm" variant="outline" onClick={() => setSection('pixels')}>Configurar Paysight</Button>}
                 </div>
                 {(advanced.data?.gateways ?? []).filter((gateway) => gateway.provider !== 'vendepay').map((gateway) => (
                   <div key={gateway.id ?? gateway.provider} className="mt-3 flex items-center justify-between rounded border border-white/[0.08] bg-black/15 px-3 py-2 text-xs">
@@ -2536,6 +2555,18 @@ export function TrackingAdvancedCenter({
                     <span className={gateway.enabled ? 'text-emerald-200' : 'text-white/40'}>{gateway.last_webhook_at ? 'webhook ativo' : gateway.enabled ? 'aguardando webhook' : 'pausado'}</span>
                   </div>
                 ))}
+                {canManage && config.data?.configured && (
+                  <div className="mt-4 grid gap-2 border-t border-violet-300/15 pt-4 md:grid-cols-2">
+                    <Input value={paysightName} onChange={(event) => setPaysightName(event.target.value)} placeholder="Nome da conexão Paysight" />
+                    <Input value={paysightProduct} onChange={(event) => setPaysightProduct(event.target.value)} placeholder="Product ID Paysight (opcional)" />
+                    <Input value={paysightApiKey} onChange={(event) => setPaysightApiKey(event.target.value)} type="password" placeholder="API key Paysight" />
+                    <Input value={paysightSecret} onChange={(event) => setPaysightSecret(event.target.value)} type="password" placeholder="Segredo do webhook (opcional)" />
+                    <Button className="md:col-span-2" disabled={!paysightName.trim() || savePaysightGateway.isPending} onClick={() => savePaysightGateway.mutate()}>
+                      {savePaysightGateway.isPending ? 'Conectando…' : 'Salvar conexão Paysight'}
+                    </Button>
+                    {paysightWebhook && <div className="md:col-span-2 rounded border border-amber-300/20 bg-amber-300/[0.04] p-3 text-xs text-amber-100">Copie agora a URL do webhook: <code className="ml-1 break-all text-cyan-100">{paysightWebhook}</code></div>}
+                  </div>
+                )}
               </div>
               <div className="space-y-2">
                 {vendepayConnections.map((connection) => (
