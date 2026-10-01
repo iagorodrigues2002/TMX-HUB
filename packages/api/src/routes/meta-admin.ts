@@ -28,19 +28,35 @@ const TestEventSchema = z.object({
 const TestEventCodeSchema = z.object({
   test_event_code: z.string().trim().min(1).max(128),
 });
+const PixelProductsSchema = z.object({ product_ids: z.array(z.string().trim().min(1).max(256)).max(100) });
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get<{ Params: { id: string } }>('/offers/:id/tracking/meta-pixels', async (req, reply) => {
     await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
     if (!app.db) return reply.code(503).send({ pixels: [] });
     const pixels = await app.db`
-      SELECT mp.id, mp.name, mp.pixel_id, mp.test_event_code, mp.enabled, mp.created_at
+      SELECT mp.id, mp.name, mp.pixel_id, mp.test_event_code, mp.enabled, mp.created_at,
+             COALESCE((SELECT json_agg(mpp.product_id ORDER BY mpp.product_id) FROM meta_pixel_products mpp WHERE mpp.pixel_id=mp.id),'[]'::json) AS product_ids
       FROM meta_pixels mp
       JOIN tracking_projects tp ON tp.id = mp.project_id
       WHERE tp.offer_id = ${req.params.id}
       ORDER BY mp.created_at DESC
     `;
     return reply.send({ pixels });
+  });
+
+  app.put<{ Params: { id: string; pixelId: string } }>('/offers/:id/tracking/meta-pixels/:pixelId/products', async (req, reply) => {
+    await app.offerStore.assertTrackingManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
+    if (!app.db) return reply.code(503).send({ error: 'tracking_database_unavailable' });
+    const parsed = PixelProductsSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid_products' });
+    const [pixel] = await app.db<{ id: string }[]>`SELECT mp.id FROM meta_pixels mp JOIN tracking_projects p ON p.id=mp.project_id WHERE mp.id=${req.params.pixelId} AND p.offer_id=${req.params.id}`;
+    if (!pixel) return reply.code(404).send({ error: 'pixel_not_found' });
+    await app.db.begin(async (sql) => {
+      await sql`DELETE FROM meta_pixel_products WHERE pixel_id=${pixel.id}`;
+      for (const productId of [...new Set(parsed.data.product_ids)]) await sql`INSERT INTO meta_pixel_products(pixel_id,product_id) VALUES(${pixel.id},${productId})`;
+    });
+    return { product_ids: [...new Set(parsed.data.product_ids)] };
   });
 
   app.post<{ Params: { id: string } }>('/offers/:id/tracking/meta-pixels', async (req, reply) => {

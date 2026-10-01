@@ -20,6 +20,7 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
   const [testEventCode, setTestEventCode] = useState('');
   const [editingPixelId, setEditingPixelId] = useState<string | null>(null);
   const [pixelTestCodes, setPixelTestCodes] = useState<Record<string, string>>({});
+  const [pixelProducts, setPixelProducts] = useState<Record<string, string[]>>({});
   const [paysightName, setPaysightName] = useState('Paysight · Produção');
   const [paysightApiKey, setPaysightApiKey] = useState('');
   const [paysightSecret, setPaysightSecret] = useState('');
@@ -42,6 +43,16 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
     queryFn: () => apiClient.listMetaPixels(offerId),
     enabled: Boolean(config.data?.configured),
     retry: false,
+  });
+  const productKinds = useQuery({
+    queryKey: ['tracking-product-kinds', offerId],
+    queryFn: () => apiClient.getTrackingProductKinds(offerId),
+    enabled: Boolean(config.data?.configured), retry: false,
+  });
+  const savePixelProducts = useMutation({
+    mutationFn: ({ pixelId, productIds }: { pixelId: string; productIds: string[] }) => apiClient.setMetaPixelProducts(offerId, pixelId, productIds),
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['tracking-meta-pixels', offerId] }); toast.success('Produtos autorizados para o pixel foram salvos.'); },
+    onError: (error) => toast.error((error as Error).message),
   });
   const setup = useMutation({
     mutationFn: () => apiClient.setupTracking(offerId),
@@ -347,6 +358,17 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
                   </div>
                   {canManage && (
                     <div className="mt-3 space-y-2">
+                      <div className="rounded border border-white/[0.07] bg-black/10 p-3">
+                        <p className="text-xs font-medium text-white/75">Produtos que enviam Purchase para este pixel</p>
+                        <p className="mt-1 text-[11px] text-white/40">Sem seleção: todo produto classificado como front. Com seleção: somente os marcados.</p>
+                        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
+                          {(productKinds.data?.mapped ?? []).filter((product) => product.kind === 'front').map((product) => {
+                            const chosen = pixelProducts[pixel.id] ?? pixel.product_ids ?? [];
+                            return <label key={product.product_id} className="flex items-center gap-1.5 text-xs text-white/65"><input type="checkbox" checked={chosen.includes(product.product_id)} onChange={() => setPixelProducts((current) => ({ ...current, [pixel.id]: chosen.includes(product.product_id) ? chosen.filter((id) => id !== product.product_id) : [...chosen, product.product_id] }))} />{product.label ?? product.product_id}</label>;
+                          })}
+                        </div>
+                        <Button size="sm" variant="outline" className="mt-3" disabled={savePixelProducts.isPending} onClick={() => savePixelProducts.mutate({ pixelId: pixel.id, productIds: pixelProducts[pixel.id] ?? pixel.product_ids ?? [] })}>{savePixelProducts.isPending ? 'Salvando…' : 'Salvar produtos'}</Button>
+                      </div>
                       <div className="flex flex-col gap-2 sm:flex-row">
                         <Input
                           className="h-9 flex-1"

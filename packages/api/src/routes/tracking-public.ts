@@ -1780,6 +1780,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         const pixels = await sql<{ id: string }[]>`
           SELECT id FROM meta_pixels
           WHERE project_id = ${connection.project_id} AND enabled = true
+            AND (NOT EXISTS (SELECT 1 FROM meta_pixel_products mpp WHERE mpp.pixel_id=meta_pixels.id)
+              OR ${event.product.id ?? null}::text IN (SELECT mpp.product_id FROM meta_pixel_products mpp WHERE mpp.pixel_id=meta_pixels.id))
         `;
         const deliveryIds: string[] = [];
         for (const pixel of pixels) {
@@ -1955,7 +1957,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         }
         if (order!.status !== 'paid' || order!.order_kind !== 'front') return { duplicate:false, meta:[] as string[],utmify,tiktok:[] as string[] };
         const meta: string[] = [];
-        for (const pixel of await sql<Array<{ id:string }>>`SELECT id FROM meta_pixels WHERE project_id=${connection.project_id} AND enabled=true`) {
+        for (const pixel of await sql<Array<{ id:string }>>`SELECT id FROM meta_pixels WHERE project_id=${connection.project_id} AND enabled=true AND (NOT EXISTS (SELECT 1 FROM meta_pixel_products mpp WHERE mpp.pixel_id=meta_pixels.id) OR ${event.product.id ?? null}::text IN (SELECT mpp.product_id FROM meta_pixel_products mpp WHERE mpp.pixel_id=meta_pixels.id))`) {
           const [row] = await sql<Array<{ id:string }>>`INSERT INTO meta_deliveries(id,project_id,pixel_id,order_id,event_id) VALUES(${ulid()},${connection.project_id},${pixel.id},${order!.id},${`paysight:${event.transactionId}:purchase`}) ON CONFLICT(pixel_id,event_id) DO NOTHING RETURNING id`;
           if (row) meta.push(row.id);
         }

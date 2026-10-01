@@ -78,6 +78,7 @@ const migrations = [
   '063_entry_link_traffic_source.sql',
   '064_tiktok_test_context.sql',
   '065_payment_gateway_connections.sql',
+  '066_meta_pixel_product_rules.sql',
 ];
 
 await sql`

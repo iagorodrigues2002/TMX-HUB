@@ -3022,6 +3022,7 @@ export const apiClient = {
       delivered_at?: string;
       pixel_name: string;
       pixel_id: string;
+      product_ids?: string[];
       transaction_id: string;
       event_name: 'PageView' | 'InitiateCheckout' | 'Purchase';
       event_url?: string;
@@ -3034,6 +3035,10 @@ export const apiClient = {
     }>;
   }> {
     return request(`/v1/offers/${id}/tracking/meta-deliveries`);
+  },
+
+  async setMetaPixelProducts(id: string, pixelId: string, productIds: string[]): Promise<{ product_ids: string[] }> {
+    return request(`/v1/offers/${id}/tracking/meta-pixels/${pixelId}/products`, { method: 'PUT', body: { product_ids: productIds } });
   },
 
   async reconcileInitiateCheckouts(
@@ -3077,6 +3082,7 @@ export const apiClient = {
       pixel_id: string;
       test_event_code?: string;
       enabled: boolean;
+      product_ids?: string[];
     }>;
   }> {
     return request(`/v1/offers/${id}/tracking/meta-pixels`);
