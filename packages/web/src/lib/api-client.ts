@@ -777,6 +777,15 @@ export interface DashboardOfferEntry {
   snapshotsCount: number;
 }
 
+export interface DashboardAccountSummary {
+  ownerId: string;
+  ownerName: string;
+  isCurrentUser: boolean;
+  totals: MetricsView;
+  currencyTotals: Array<{ currency: string; totals: MetricsView }>;
+  offers: DashboardOfferEntry[];
+}
+
 export interface TrackingFeeSettings {
   vendepay_fee_pct: number;
   extra_fee_minor: number;
@@ -939,9 +948,11 @@ export interface RecoveryView {
 export interface DashboardSummary {
   from: string;
   to: string;
-  totals: MetricsView;
+  /** Null by design: a cross-account grand total is never produced. */
+  totals: MetricsView | null;
   currencyTotals: Array<{ currency: string; totals: MetricsView }>;
   offers: DashboardOfferEntry[];
+  accounts: DashboardAccountSummary[];
 }
 
 export interface IntradayWindowView {
@@ -1098,12 +1109,24 @@ interface OfferSnapshotsWire {
 interface DashboardSummaryWire {
   from: string;
   to: string;
-  totals: MetricsView;
+  totals: MetricsView | null;
   currency_totals?: Array<{ currency: string; totals: MetricsView }>;
   offers: Array<{
     offer: OfferWire;
     totals: MetricsView;
     snapshots_count: number;
+  }>;
+  accounts?: Array<{
+    owner_id: string;
+    owner_name: string;
+    is_current_user: boolean;
+    totals: MetricsView;
+    currency_totals?: Array<{ currency: string; totals: MetricsView }>;
+    offers: Array<{
+      offer: OfferWire;
+      totals: MetricsView;
+      snapshots_count: number;
+    }>;
   }>;
 }
 
@@ -1155,11 +1178,23 @@ function fromDashboardSummaryWire(w: DashboardSummaryWire): DashboardSummary {
     from: w.from,
     to: w.to,
     totals: w.totals,
-    currencyTotals: w.currency_totals ?? [{ currency: 'BRL', totals: w.totals }],
+    currencyTotals: w.currency_totals ?? [],
     offers: (w.offers ?? []).map((e) => ({
       offer: fromOfferWire(e.offer),
       totals: e.totals,
       snapshotsCount: e.snapshots_count,
+    })),
+    accounts: (w.accounts ?? []).map((account) => ({
+      ownerId: account.owner_id,
+      ownerName: account.owner_name,
+      isCurrentUser: account.is_current_user,
+      totals: account.totals,
+      currencyTotals: account.currency_totals ?? [],
+      offers: account.offers.map((entry) => ({
+        offer: fromOfferWire(entry.offer),
+        totals: entry.totals,
+        snapshotsCount: entry.snapshots_count,
+      })),
     })),
   };
 }

@@ -85,7 +85,7 @@ export default function HubLandingPage() {
         </h1>
         <p className="mt-3 max-w-xl text-[14px] leading-6 text-white/55">
           {hasOffers
-            ? 'Visão geral cruzando todas as suas dashboards. Use os filtros pra mudar o período.'
+            ? 'Visão geral separada por conta. Use os filtros pra mudar o período.'
             : 'Seu espaço de trabalho mostra somente as ferramentas liberadas pelo administrador.'}
         </p>
       </header>
@@ -148,19 +148,32 @@ export default function HubLandingPage() {
             </div>
           </section>
 
-          {/* Cross-offer KPIs */}
+          {/* Account-isolated KPIs */}
           <section className="mt-6">
             {summaryLoading || !summary ? (
               <div className="glass-card flex items-center justify-center p-12">
                 <Loader2 className="h-5 w-5 animate-spin text-cyan-300" />
               </div>
             ) : (
-              <div className="space-y-4">
-                {summary.currencyTotals.map(({ currency, totals }) => (
-                  <div key={currency}>
-                    <p className="hud-label mb-2">Resumo em {currency}</p>
-                    <KpiGrid metrics={totals} currency={currency} />
-                  </div>
+              <div className="space-y-6">
+                {summary.accounts.map((account) => (
+                  <section key={account.ownerId} className="space-y-3 rounded-xl border border-cyan-300/[0.14] bg-cyan-300/[0.025] p-3 sm:p-4">
+                    <div className="flex items-center justify-between gap-3 border-b border-cyan-300/[0.1] pb-3">
+                      <div>
+                        <p className="hud-label">Resumo da conta</p>
+                        <h2 className="mt-1 text-base font-semibold text-white">{account.ownerName}</h2>
+                      </div>
+                      <span className="rounded-full border border-cyan-300/20 bg-cyan-300/[0.06] px-3 py-1 text-[11px] text-cyan-100/70">
+                        {account.offers.length} {account.offers.length === 1 ? 'oferta' : 'ofertas'}
+                      </span>
+                    </div>
+                    {account.currencyTotals.map(({ currency, totals }) => (
+                      <div key={currency}>
+                        <p className="hud-label mb-2">Resumo em {currency}</p>
+                        <KpiGrid metrics={totals} currency={currency} />
+                      </div>
+                    ))}
+                  </section>
                 ))}
               </div>
             )}
@@ -170,7 +183,7 @@ export default function HubLandingPage() {
           <section className="mt-8">
             <div className="mb-3 flex items-baseline justify-between">
               <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">
-                Suas ofertas
+                Ofertas por conta
               </h2>
               <Link
                 href="/ofertas"
@@ -180,7 +193,7 @@ export default function HubLandingPage() {
               </Link>
             </div>
 
-            {summary && summary.offers.length === 0 ? (
+            {summary && summary.accounts.length === 0 ? (
               <div className="glass-card flex flex-col items-center gap-3 p-8 text-center">
                 <p className="text-[13px] text-white/55">
                   Você ainda não tem nenhuma oferta cadastrada. Crie a primeira para começar a
@@ -194,8 +207,15 @@ export default function HubLandingPage() {
                 </Button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {(summary?.offers ?? []).map((entry) => (
+              <div className="space-y-6">
+                {(summary?.accounts ?? []).map((account) => (
+                  <section key={account.ownerId} className="space-y-3">
+                    <div className="flex items-center gap-2 px-1">
+                      <span className="hud-label">Conta</span>
+                      <span className="text-[12px] font-medium text-cyan-100/80">{account.ownerName}</span>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                {account.offers.map((entry) => (
                   <Link
                     key={entry.offer.id}
                     href={`/ofertas/${entry.offer.id}`}
@@ -237,6 +257,9 @@ export default function HubLandingPage() {
                       {entry.snapshotsCount} snapshot(s) no período
                     </p>
                   </Link>
+                ))}
+                    </div>
+                  </section>
                 ))}
               </div>
             )}

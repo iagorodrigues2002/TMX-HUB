@@ -154,31 +154,46 @@ export function OfferList() {
         ) : (
           <>
             <div className="space-y-3">
-              {summary.currencyTotals.map(({ currency, totals }) => (
+              {summary.accounts.map((account) => (
+                <section key={account.ownerId} className="space-y-3 rounded-xl border border-cyan-300/[0.14] bg-cyan-300/[0.025] p-3">
+                  <div className="flex items-center justify-between border-b border-cyan-300/[0.1] pb-2">
+                    <div>
+                      <p className="hud-label">Resumo da conta</p>
+                      <h2 className="mt-1 text-[15px] font-semibold text-white">{account.ownerName}</h2>
+                    </div>
+                    <span className="text-[11px] text-cyan-100/65">{account.offers.length} ofertas</span>
+                  </div>
+                  {account.currencyTotals.map(({ currency, totals }) => (
                 <div key={currency} className="grid gap-3 md:grid-cols-3">
                   <Kpi
-                    label={`Investimento geral · ${currency}`}
+                    label={`Investimento · ${currency}`}
                     value={formatCurrency(totals.spend, currency)}
                     icon={<Wallet className="h-4 w-4" />}
                     tone="spend"
                   />
                   <Kpi
-                    label={`Faturamento geral · ${currency}`}
+                    label={`Faturamento · ${currency}`}
                     value={formatCurrency(totals.revenue, currency)}
                     icon={<Receipt className="h-4 w-4" />}
                     tone="positive"
                   />
                   <Kpi
-                    label={`ROAS geral · ${currency}`}
+                    label={`ROAS · ${currency}`}
                     value={formatRoas(totals.roas)}
                     icon={<TrendingUp className="h-4 w-4" />}
                     tone={totals.roas !== null && totals.roas >= 1 ? 'positive' : 'warn'}
                   />
                 </div>
+                  ))}
+                </section>
               ))}
             </div>
+            <div className="space-y-6">
+              {summary.accounts.map((account) => (
+                <section key={account.ownerId} className="space-y-3">
+                  <p className="px-1 text-[12px] font-medium text-cyan-100/75">Ofertas · {account.ownerName}</p>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {summary.offers.map((entry) => (
+              {account.offers.map((entry) => (
                 <Link
                   key={entry.offer.id}
                   href={`/ofertas/${entry.offer.id}`}
@@ -220,6 +235,9 @@ export function OfferList() {
                     Clique para abrir os ads e seus dados
                   </p>
                 </Link>
+              ))}
+            </div>
+                </section>
               ))}
             </div>
           </>
