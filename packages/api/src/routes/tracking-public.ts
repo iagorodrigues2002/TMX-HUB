@@ -4,6 +4,7 @@ import { ulid } from 'ulid';
 import { z } from 'zod';
 import { env } from '../env.js';
 import { normalizeVendepay } from '../integrations/vendepay/normalize.js';
+import { normalizePaysight } from '../integrations/paysight/normalize.js';
 import { encryptSecret } from '../lib/secret-box.js';
 import { createTrackingToken, readTrackingToken } from '../lib/tracking-token.js';
 import { convertToBrlMinor } from '../services/exchange-rate.js';
@@ -1870,6 +1871,105 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         tiktok_deliveries: outcome.tiktokDeliveryIds?.length ?? 0,
         ...(!outcome.inserted ? { duplicate: true } : {}),
       });
+    },
+  );
+
+  // Generic payment gateway receiver. VendePay intentionally keeps its mature
+  // route above; new processors (starting with Paysight) use this isolated
+  // connection model so enabling them cannot alter VendePay ingestion.
+  app.post<{ Querystring: { token?: string } }>(
+    '/webhooks/paysight',
+    { bodyLimit: 256 * 1024, logLevel: 'silent' },
+    async (req, reply) => {
+      if (!app.db || !req.query.token) return reply.code(404).send({ accepted: false });
+      const candidate = createHash('sha256').update(req.query.token).digest('hex');
+      const [connection] = await app.db<Array<{ id: string; project_id: string; offer_id: string }>>`
+        SELECT g.id,g.project_id,p.offer_id
+        FROM tracking_gateway_connections g
+        JOIN tracking_projects p ON p.id=g.project_id
+        WHERE g.provider='paysight' AND g.enabled=true AND g.webhook_token_hash=${candidate}
+        LIMIT 1
+      `;
+      if (!connection) return reply.code(404).send({ accepted: false });
+      const normalized = normalizePaysight(req.body);
+      const receiptId = ulid();
+      if (normalized.kind === 'quarantined') {
+        await app.db`
+          INSERT INTO tracking_gateway_webhook_receipts
+            (id,gateway_connection_id,dedupe_key,payload,state,diagnostics)
+          VALUES(${receiptId},${connection.id},${normalized.dedupeKey},${app.db.json(req.body as never)},'quarantined',${app.db.json(normalized.diagnostics)})
+          ON CONFLICT(gateway_connection_id,dedupe_key) DO NOTHING
+        `;
+        return reply.code(202).send({ accepted: true, state: 'quarantined' });
+      }
+      const event = normalized.event;
+      const outcome = await app.db.begin(async (sql) => {
+        const receipt = await sql`
+          INSERT INTO tracking_gateway_webhook_receipts
+            (id,gateway_connection_id,dedupe_key,payload,state)
+          VALUES(${receiptId},${connection.id},${normalized.dedupeKey},${sql.json(req.body as never)},'received')
+          ON CONFLICT(gateway_connection_id,dedupe_key) DO NOTHING RETURNING id
+        `;
+        if (!receipt[0]) return { duplicate: true, meta: [] as string[], utmify: [] as string[], tiktok: [] as string[] };
+        const [visitor] = event.trackingSrc
+          ? await sql<Array<{ visitor_id: string }>>`
+              SELECT visitor_id FROM tracking_visitors
+              WHERE project_id=${connection.project_id} AND (visitor_id=${event.trackingSrc} OR tracking_token=${event.trackingSrc})
+              ORDER BY last_seen_at DESC LIMIT 1
+            `
+          : [];
+        const [productKind] = event.product.id
+          ? await sql<Array<{ kind: string }>>`SELECT kind FROM tracking_product_kinds WHERE project_id=${connection.project_id} AND product_id=${event.product.id} LIMIT 1`
+          : [];
+        const [visitorSource] = visitor
+          ? await sql<Array<{ first_source: Record<string,string>; last_source: Record<string,string> }>>`
+              SELECT first_source,last_source FROM tracking_visitors WHERE project_id=${connection.project_id} AND visitor_id=${visitor.visitor_id} LIMIT 1
+            `
+          : [];
+        const attribution = { ...(visitorSource?.first_source ?? {}), ...(visitorSource?.last_source ?? {}), ...event.source };
+        const [order] = await sql<Array<{ id: string; status: string; order_kind: string }>>`
+          INSERT INTO tracking_orders
+            (id,project_id,provider,external_id,status,amount_minor,currency,visitor_id,buyer,raw_status,occurred_at,paid_at,payment_method,product,attribution_source,order_kind,refunded_at,chargeback_at,gateway_connection_id)
+          VALUES(${ulid()},${connection.project_id},'paysight',${event.transactionId},${event.status},${event.amountMinor ?? null},${event.currency ?? null},${visitor?.visitor_id ?? null},${sql.json(event.buyer)},${event.rawStatus ?? null},${event.occurredAt},${event.status === 'paid' ? event.occurredAt : null},${event.paymentMethod ?? null},${sql.json(event.product)},${sql.json(attribution)},${productKind?.kind ?? 'unknown'},${event.status === 'refunded' ? event.occurredAt : null},${event.status === 'chargeback' ? event.occurredAt : null},${connection.id})
+          ON CONFLICT(project_id,provider,external_id) DO UPDATE SET
+            status=CASE WHEN tracking_orders.status IN ('refunded','chargeback') THEN tracking_orders.status WHEN tracking_orders.status='paid' AND EXCLUDED.status IN ('pending','refused','unknown') THEN tracking_orders.status ELSE EXCLUDED.status END,
+            amount_minor=COALESCE(EXCLUDED.amount_minor,tracking_orders.amount_minor), currency=COALESCE(EXCLUDED.currency,tracking_orders.currency),
+            visitor_id=COALESCE(EXCLUDED.visitor_id,tracking_orders.visitor_id), buyer=tracking_orders.buyer || EXCLUDED.buyer,
+            raw_status=COALESCE(EXCLUDED.raw_status,tracking_orders.raw_status), payment_method=COALESCE(EXCLUDED.payment_method,tracking_orders.payment_method),
+            product=tracking_orders.product || EXCLUDED.product, attribution_source=tracking_orders.attribution_source || EXCLUDED.attribution_source,
+            paid_at=CASE WHEN EXCLUDED.status='paid' THEN COALESCE(tracking_orders.paid_at,EXCLUDED.paid_at) ELSE tracking_orders.paid_at END,
+            refunded_at=CASE WHEN EXCLUDED.status='refunded' THEN COALESCE(tracking_orders.refunded_at,EXCLUDED.refunded_at) ELSE tracking_orders.refunded_at END,
+            chargeback_at=CASE WHEN EXCLUDED.status='chargeback' THEN COALESCE(tracking_orders.chargeback_at,EXCLUDED.chargeback_at) ELSE tracking_orders.chargeback_at END,
+            gateway_connection_id=EXCLUDED.gateway_connection_id,updated_at=now()
+          RETURNING id,status,order_kind
+        `;
+        await sql`UPDATE tracking_gateway_webhook_receipts SET state='processed',order_id=${order!.id},processed_at=now() WHERE id=${receiptId}`;
+        await sql`UPDATE tracking_gateway_connections SET last_webhook_at=now(),updated_at=now() WHERE id=${connection.id}`;
+        const utmify: string[] = [];
+        for (const destination of await sql<Array<{ id: string }>>`SELECT id FROM tracking_utmify_destinations WHERE enabled=true AND (project_id=${connection.project_id} OR scope='global')`) {
+          const [row] = await sql<Array<{ id:string }>>`
+            INSERT INTO tracking_delivery_outbox(id,project_id,destination_kind,destination_id,order_id,event_id,event_type,state)
+            VALUES(${ulid()},${connection.project_id},'utmify',${destination.id},${order!.id},${`paysight:${event.transactionId}:${event.status}`},${`order.${event.status}`},${event.status === 'cancelled' || event.status === 'abandoned' ? 'skipped' : 'pending'})
+            ON CONFLICT(destination_kind,destination_id,event_id) DO NOTHING RETURNING id`;
+          if (row) utmify.push(row.id);
+        }
+        if (order!.status !== 'paid' || order!.order_kind !== 'front') return { duplicate:false, meta:[] as string[],utmify,tiktok:[] as string[] };
+        const meta: string[] = [];
+        for (const pixel of await sql<Array<{ id:string }>>`SELECT id FROM meta_pixels WHERE project_id=${connection.project_id} AND enabled=true`) {
+          const [row] = await sql<Array<{ id:string }>>`INSERT INTO meta_deliveries(id,project_id,pixel_id,order_id,event_id) VALUES(${ulid()},${connection.project_id},${pixel.id},${order!.id},${`paysight:${event.transactionId}:purchase`}) ON CONFLICT(pixel_id,event_id) DO NOTHING RETURNING id`;
+          if (row) meta.push(row.id);
+        }
+        const tiktok: string[] = [];
+        for (const destination of await sql<Array<{ id:string }>>`SELECT id FROM tracking_tiktok_destinations WHERE project_id=${connection.project_id} AND enabled=true`) {
+          const [row] = await sql<Array<{ id:string }>>`INSERT INTO tracking_tiktok_deliveries(id,project_id,destination_id,order_id,event_id,event_name) VALUES(${ulid()},${connection.project_id},${destination.id},${order!.id},${`paysight:${event.transactionId}:tiktok:purchase`},'Purchase') ON CONFLICT(destination_id,event_id) DO NOTHING RETURNING id`;
+          if (row) tiktok.push(row.id);
+        }
+        return { duplicate:false,meta,utmify,tiktok };
+      });
+      await Promise.allSettled(outcome.meta.map((id) => app.metaQueue.add('send',{ deliveryId:id })));
+      await Promise.allSettled(outcome.utmify.map((id) => app.utmifyDeliveryQueue.add('send',{ deliveryId:id })));
+      await Promise.allSettled(outcome.tiktok.map((id) => app.tiktokQueue.add('send',{ deliveryId:id })));
+      return reply.code(202).send({ accepted:true, duplicate:outcome.duplicate });
     },
   );
 

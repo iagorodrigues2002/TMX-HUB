@@ -77,6 +77,7 @@ const migrations = [
   '062_tiktok_events_api.sql',
   '063_entry_link_traffic_source.sql',
   '064_tiktok_test_context.sql',
+  '065_payment_gateway_connections.sql',
 ];
 
 await sql`

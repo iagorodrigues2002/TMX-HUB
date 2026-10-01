@@ -40,6 +40,15 @@ const VendepayConnectionUpdateSchema = z.object({
   name: z.string().trim().min(2).max(120).optional(),
   enabled: z.boolean().optional(),
 });
+const GatewayConnectionSchema = z.object({
+  provider: z.literal('paysight'),
+  name: z.string().trim().min(2).max(120),
+  api_key: z.string().trim().min(8).max(4096).optional(),
+  signing_secret: z.string().trim().min(8).max(4096).optional(),
+  product_id: z.string().trim().min(1).max(256).optional(),
+  environment: z.enum(['sandbox', 'production']).default('production'),
+});
+const GatewayConnectionUpdateSchema = GatewayConnectionSchema.partial().omit({ provider: true });
 const UtmifyPixelSchema = z.object({
   pixel_id: z
     .string()
@@ -93,6 +102,8 @@ const FeeSettingsSchema = z.object({
 
 const webhookUrl = (token: string) =>
   `${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/webhooks/vendepay?token=${token}`;
+const gatewayWebhookUrl = (provider: string, token: string) =>
+  `${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/webhooks/${provider}?token=${token}`;
 
 const installCode = (publicKey: string) =>
   `<script async src="${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/track/t.js?key=${publicKey}"></script>`;
@@ -928,6 +939,17 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       ORDER BY created_at ASC
     `;
     const primaryConnection = connections[0];
+    const gateways = await app.db<Array<{
+      id: string; provider: string; name: string; enabled: boolean; settings: Record<string, unknown>;
+      api_key_configured: boolean; signing_secret_configured: boolean; last_validated_at: Date | null;
+      last_webhook_at: Date | null; created_at: Date;
+    }>>`
+      SELECT id,provider,name,enabled,settings,
+             (api_key_encrypted IS NOT NULL) AS api_key_configured,
+             (signing_secret_encrypted IS NOT NULL) AS signing_secret_configured,
+             last_validated_at,last_webhook_at,created_at
+      FROM tracking_gateway_connections WHERE project_id=${project.id} ORDER BY created_at ASC
+    `;
     return {
       configured: true,
       project: {
@@ -949,7 +971,58 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         ),
         connections,
       },
+      gateways,
     };
+  });
+
+  app.post<{ Params: { id: string } }>('/offers/:id/tracking/gateway-connections', async (req, reply) => {
+    await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
+    if (!app.db || !env.TRACKING_ENCRYPTION_KEY) return reply.code(503).send({ error: 'tracking_encryption_unavailable' });
+    const parsed = GatewayConnectionSchema.safeParse(req.body);
+    if (!parsed.success) throw zodToProblem(parsed.error);
+    const [project] = await app.db<{ id: string }[]>`SELECT id FROM tracking_projects WHERE offer_id=${req.params.id} LIMIT 1`;
+    if (!project) throw new NotFoundError('Ative o tracking antes de adicionar um gateway.');
+    const token = randomBytes(32).toString('base64url');
+    const settings = { product_id: parsed.data.product_id ?? null, environment: parsed.data.environment };
+    const [connection] = await app.db<Array<Record<string, unknown>>>`
+      INSERT INTO tracking_gateway_connections
+        (id,project_id,provider,name,webhook_token_hash,api_key_encrypted,signing_secret_encrypted,settings)
+      VALUES (${ulid()},${project.id},'paysight',${parsed.data.name},${tokenHash(token)},
+        ${parsed.data.api_key ? encryptSecret(parsed.data.api_key, env.TRACKING_ENCRYPTION_KEY) : null},
+        ${parsed.data.signing_secret ? encryptSecret(parsed.data.signing_secret, env.TRACKING_ENCRYPTION_KEY) : null},
+        ${app.db.json(settings)})
+      ON CONFLICT(project_id,provider) DO UPDATE SET
+        name=EXCLUDED.name, webhook_token_hash=EXCLUDED.webhook_token_hash,
+        api_key_encrypted=COALESCE(EXCLUDED.api_key_encrypted,tracking_gateway_connections.api_key_encrypted),
+        signing_secret_encrypted=COALESCE(EXCLUDED.signing_secret_encrypted,tracking_gateway_connections.signing_secret_encrypted),
+        settings=EXCLUDED.settings, updated_at=now()
+      RETURNING id,provider,name,enabled,settings,created_at
+    `;
+    return reply.code(201).send({ connection, webhook_url: gatewayWebhookUrl('paysight', token), warning: 'Copie agora a URL do webhook. Ela não será exibida novamente.' });
+  });
+
+  app.patch<{ Params: { id: string; connectionId: string } }>('/offers/:id/tracking/gateway-connections/:connectionId', async (req, reply) => {
+    await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
+    if (!app.db || !env.TRACKING_ENCRYPTION_KEY) return reply.code(503).send({ error: 'tracking_encryption_unavailable' });
+    const parsed = GatewayConnectionUpdateSchema.safeParse(req.body);
+    if (!parsed.success) throw zodToProblem(parsed.error);
+    const [connection] = await app.db`
+      UPDATE tracking_gateway_connections g SET
+        name=COALESCE(${parsed.data.name ?? null},g.name),
+        api_key_encrypted=COALESCE(${parsed.data.api_key ? encryptSecret(parsed.data.api_key, env.TRACKING_ENCRYPTION_KEY) : null},g.api_key_encrypted),
+        signing_secret_encrypted=COALESCE(${parsed.data.signing_secret ? encryptSecret(parsed.data.signing_secret, env.TRACKING_ENCRYPTION_KEY) : null},g.signing_secret_encrypted),
+        settings=g.settings || ${app.db.json({
+          ...(parsed.data.product_id !== undefined ? { product_id: parsed.data.product_id } : {}),
+          ...(parsed.data.environment !== undefined ? { environment: parsed.data.environment } : {}),
+        })}, updated_at=now()
+      FROM tracking_projects p WHERE g.project_id=p.id AND p.offer_id=${req.params.id}
+        AND g.id=${req.params.connectionId} AND g.provider='paysight'
+      RETURNING g.id,g.provider,g.name,g.enabled,g.settings,
+        (g.api_key_encrypted IS NOT NULL) AS api_key_configured,
+        (g.signing_secret_encrypted IS NOT NULL) AS signing_secret_configured
+    `;
+    if (!connection) throw new NotFoundError('Conexão Paysight não encontrada.');
+    return { connection };
   });
 
   app.post<{ Params: { id: string } }>(

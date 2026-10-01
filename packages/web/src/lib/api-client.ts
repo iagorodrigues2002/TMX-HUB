@@ -1891,8 +1891,27 @@ export const apiClient = {
         created_at: string;
       }>;
     };
+    gateways?: Array<{
+      id: string;
+      provider: string;
+      name: string;
+      enabled: boolean;
+      settings: { product_id?: string | null; environment?: 'sandbox' | 'production' };
+      api_key_configured: boolean;
+      signing_secret_configured: boolean;
+      last_validated_at: string | null;
+      last_webhook_at: string | null;
+      created_at: string;
+    }>;
   }> {
     return request(`/v1/offers/${id}/tracking`);
+  },
+
+  async createGatewayConnection(
+    id: string,
+    body: { provider: 'paysight'; name: string; api_key?: string; signing_secret?: string; product_id?: string; environment?: 'sandbox' | 'production' },
+  ): Promise<{ connection: { id: string; provider: string; name: string }; webhook_url: string; warning: string }> {
+    return request(`/v1/offers/${id}/tracking/gateway-connections`, { method: 'POST', body });
   },
 
   async setupTracking(id: string): Promise<{
