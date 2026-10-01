@@ -32,7 +32,6 @@ function offerLabel(offer: OfferView) {
 
 export function TrackingWorkspace() {
   const { user } = useAuth();
-  const canManage = user?.role === 'admin';
   const [tab, setTab] = useState<WorkspaceTab>('monitor');
   const [selectedOfferId, setSelectedOfferId] = useState('');
   const [displayCurrency, setDisplayCurrency] = useDisplayCurrency();
@@ -48,6 +47,7 @@ export function TrackingWorkspace() {
   }, [offers.data, selectedOfferId]);
 
   const selectedOffer = offers.data?.find((offer) => offer.id === selectedOfferId);
+  const canManage = Boolean(selectedOffer?.canConfigureTracking);
 
   return (
     <div data-surface="tracking" className="signal-reveal space-y-6">

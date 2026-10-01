@@ -90,6 +90,13 @@ export function canManageOffer(offer: Offer, userId: string, isAdmin = false): b
   return isAdmin || offer.userId === userId;
 }
 
+// A member can configure tracking only inside an offer explicitly shared with
+// them. This is intentionally narrower than canManageOffer: it does not let a
+// guest rename, share, delete, or view any other offer.
+export function canConfigureTrackingOffer(offer: Offer, userId: string, isAdmin = false): boolean {
+  return canAccessOffer(offer, userId, isAdmin);
+}
+
 export class OfferStore {
   private readonly encryptionKey: Buffer;
 
@@ -454,6 +461,14 @@ export class OfferStore {
   async assertManager(id: string, userId: string, isAdmin = false): Promise<Offer> {
     const offer = await this.get(id);
     if (!canManageOffer(offer, userId, isAdmin)) {
+      throw new NotFoundError(`Oferta não encontrada: ${id}`);
+    }
+    return offer;
+  }
+
+  async assertTrackingManager(id: string, userId: string, isAdmin = false): Promise<Offer> {
+    const offer = await this.get(id);
+    if (!canConfigureTrackingOffer(offer, userId, isAdmin)) {
       throw new NotFoundError(`Oferta não encontrada: ${id}`);
     }
     return offer;

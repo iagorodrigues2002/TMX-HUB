@@ -708,6 +708,8 @@ export interface OfferView {
   memberIds: string[];
   /** True only for the offer owner or an administrator. */
   canManage: boolean;
+  /** Tracking configuration is allowed for the offer owner, admin, or an explicitly invited member. */
+  canConfigureTracking: boolean;
   name: string;
   companyName?: string;
   dashboardId?: string;
@@ -1071,6 +1073,7 @@ interface OfferWire {
   id: string;
   member_ids?: string[];
   can_manage?: boolean;
+  can_configure_tracking?: boolean;
   name: string;
   company_name?: string;
   dashboard_id?: string;
@@ -1135,6 +1138,7 @@ function fromOfferWire(w: OfferWire): OfferView {
     id: w.id,
     memberIds: w.member_ids ?? [],
     canManage: Boolean(w.can_manage),
+    canConfigureTracking: Boolean(w.can_configure_tracking),
     name: w.name,
     companyName: w.company_name,
     dashboardId: w.dashboard_id,

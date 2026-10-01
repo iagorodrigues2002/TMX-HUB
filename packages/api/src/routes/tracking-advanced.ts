@@ -150,7 +150,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   const upsellUrl = (slug: string) =>
     `${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/u/${slug}`;
   async function project(offerId: string, userId: string, admin: boolean, manage = false) {
-    if (manage) await app.offerStore.assertManager(offerId, userId, admin);
+    if (manage) await app.offerStore.assertTrackingManager(offerId, userId, admin);
     else await app.offerStore.assertAccess(offerId, userId, admin);
     if (!app.db) return null;
     const rows = await app.db<Array<{ id: string; public_key: string }>>`

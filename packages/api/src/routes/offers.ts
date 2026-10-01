@@ -15,11 +15,11 @@ import {
   generateCampaignAnalysis,
 } from '../services/campaign-ai.js';
 import { computeMetrics } from '../services/snapshot-store.js';
-import { canManageOffer } from '../services/offer-store.js';
+import { canConfigureTrackingOffer, canManageOffer } from '../services/offer-store.js';
 
 function offerToWire(
   o: Offer,
-  options: { includeAccess?: boolean; canManage?: boolean } = {},
+  options: { includeAccess?: boolean; canManage?: boolean; userId?: string; isAdmin?: boolean } = {},
 ): Record<string, unknown> {
   return {
     id: o.id,
@@ -40,6 +40,7 @@ function offerToWire(
     // This is deliberately computed server-side. The web app uses it only to
     // expose management controls; every write still re-checks assertManager.
     can_manage: Boolean(options.canManage),
+    can_configure_tracking: canConfigureTrackingOffer(o, options.userId ?? o.userId, options.isAdmin ?? false),
   };
 }
 
@@ -170,6 +171,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         offerToWire(offer, {
           includeAccess,
           canManage: canManageOffer(offer, req.user!.sub, req.user!.role === 'admin'),
+          userId: req.user!.sub,
+          isAdmin: req.user!.role === 'admin',
         }),
       ),
     });

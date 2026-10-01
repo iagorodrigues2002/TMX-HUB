@@ -408,7 +408,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   });
 
   app.put<{ Params: { id: string } }>('/offers/:id/tracking/utmify-pixel', async (req, reply) => {
-    await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
+    await app.offerStore.assertTrackingManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
     if (!app.db) return reply.code(503).send(databaseUnavailable);
     const parsed = UtmifyPixelSchema.safeParse(req.body);
     if (!parsed.success) throw zodToProblem(parsed.error);
@@ -834,7 +834,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   });
 
   app.post<{ Params: { id: string } }>('/offers/:id/tracking/setup', async (req, reply) => {
-    await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
+    await app.offerStore.assertTrackingManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
     if (!app.db) return reply.code(503).send(databaseUnavailable);
 
     const existing = await app.db<
@@ -976,7 +976,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   });
 
   app.post<{ Params: { id: string } }>('/offers/:id/tracking/gateway-connections', async (req, reply) => {
-    await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
+    await app.offerStore.assertTrackingManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
     if (!app.db || !env.TRACKING_ENCRYPTION_KEY) return reply.code(503).send({ error: 'tracking_encryption_unavailable' });
     const parsed = GatewayConnectionSchema.safeParse(req.body);
     if (!parsed.success) throw zodToProblem(parsed.error);
@@ -1002,7 +1002,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   });
 
   app.patch<{ Params: { id: string; connectionId: string } }>('/offers/:id/tracking/gateway-connections/:connectionId', async (req, reply) => {
-    await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
+    await app.offerStore.assertTrackingManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
     if (!app.db || !env.TRACKING_ENCRYPTION_KEY) return reply.code(503).send({ error: 'tracking_encryption_unavailable' });
     const parsed = GatewayConnectionUpdateSchema.safeParse(req.body);
     if (!parsed.success) throw zodToProblem(parsed.error);
