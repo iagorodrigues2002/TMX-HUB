@@ -108,7 +108,7 @@ export function normalizePaysight(payload: unknown): Result {
   }
   const custom = { ...metadata, ...sourceData, ...object(data.metadata), ...attributionData };
   const source: Record<string, string> = {};
-  for (const key of ['src', 'sck', 'sessionId', 'partnerSession', 'paysightSession', 'clickId', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'gclid', 'wbraid', 'gbraid', 'fbclid', 'ttclid', 'campaign_name', 'campaign_id', 'adset_name', 'adset_id', 'ad_name', 'ad_id', 'placement']) {
+  for (const key of ['src', 'sck', 'sessionId', 'partnerSession', 'paysightSession', 'clickId', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'gclid', 'wbraid', 'gbraid', 'fbclid', 'fbc', 'fbp', '_fbc', '_fbp', 'ttclid', '_ttp', 'ttp', 'campaign_name', 'campaign_id', 'adset_name', 'adset_id', 'ad_name', 'ad_id', 'placement']) {
     const value = text(custom[key], root[key], data[key]);
     if (value) source[key] = value;
   }
@@ -122,6 +122,13 @@ export function normalizePaysight(payload: unknown): Result {
   const nameParts = customerName?.trim().split(/\s+/) ?? [];
   if (partnerSession) source.partnerSession = partnerSession;
   if (paysightSession) source.paysightSession = paysightSession;
+  // Paysight exposes the Meta cookies without their browser-style underscore.
+  // Store TMX's canonical keys so the CAPI worker sends the original values
+  // rather than attempting to reconstruct an fbc from fbclid.
+  const fbc = text(source.fbc, source._fbc);
+  const fbp = text(source.fbp, source._fbp);
+  if (fbc) source._fbc = fbc;
+  if (fbp) source._fbp = fbp;
   if (customerIp) source.client_ip = customerIp;
   if (funnel) source.funnel = funnel;
   return {
