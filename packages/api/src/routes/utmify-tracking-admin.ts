@@ -9,6 +9,7 @@ const DestinationSchema = z.object({
   api_token: z.string().trim().min(16).max(4096),
   endpoint_url: z.string().url().default('https://api.utmify.com.br/api-credentials/orders'),
 });
+const DestinationEnabledSchema = z.object({ enabled: z.boolean() });
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get<{ Params: { id: string } }>(
@@ -56,6 +57,25 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         RETURNING id, name, endpoint_url, enabled, created_at, updated_at
       `;
       return reply.code(201).send({ destination });
+    },
+  );
+
+  app.patch<{ Params: { id: string } }>(
+    '/offers/:id/tracking/utmify-destination',
+    async (req, reply) => {
+      await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
+      if (!app.db) return reply.code(503).send({ error: 'database_unavailable' });
+      const parsed = DestinationEnabledSchema.safeParse(req.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'invalid_utmify_destination_status' });
+      const [destination] = await app.db`
+        UPDATE tracking_utmify_destinations u
+        SET enabled=${parsed.data.enabled}, updated_at=now()
+        FROM tracking_projects p
+        WHERE u.project_id=p.id AND p.offer_id=${req.params.id} AND u.scope='offer'
+        RETURNING u.id,u.name,u.endpoint_url,u.enabled,u.updated_at
+      `;
+      if (!destination) return reply.code(404).send({ error: 'utmify_destination_not_found' });
+      return { destination };
     },
   );
 

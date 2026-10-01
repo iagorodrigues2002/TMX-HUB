@@ -1198,6 +1198,14 @@ export function TrackingAdvancedCenter({
     },
     onError: (error) => toast.error((error as Error).message),
   });
+  const toggleUtmify = useMutation({
+    mutationFn: (enabled: boolean) => apiClient.setTrackingUtmifyDestinationEnabled(offerId, enabled),
+    onSuccess: (result) => {
+      void qc.invalidateQueries({ queryKey: ['tracking-utmify-destination', offerId] });
+      toast.success(result.destination.enabled ? 'Envio de vendas à UTMify ativado.' : 'Envio de vendas à UTMify pausado.');
+    },
+    onError: (error) => toast.error((error as Error).message),
+  });
   const saveUtmifyPixel = useMutation({
     mutationFn: async () => {
       const setup = config.data?.configured ? null : await apiClient.setupTracking(offerId);
@@ -3062,17 +3070,35 @@ export function TrackingAdvancedCenter({
                   <p className="text-sm text-white/75">Destino de vendas</p>
                   <p className="mt-1 text-xs text-white/40">
                     {utmify.data?.configured
-                      ? `Ativo · ${utmify.data.destination?.endpoint_url}`
+                      ? `${utmify.data.destination?.enabled ? 'Ativo' : 'Pausado'} · ${utmify.data.destination?.endpoint_url}`
                       : 'Ainda não configurado'}
                   </p>
                 </div>
-                <span
-                  className={
-                    utmify.data?.destination?.enabled ? 'text-emerald-300' : 'text-amber-300'
-                  }
-                >
-                  {utmify.data?.destination?.enabled ? 'operacional' : 'aguardando token'}
-                </span>
+                {utmify.data?.configured && canManage ? (
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={Boolean(utmify.data.destination?.enabled)}
+                    aria-label="Ativar envio de vendas para a UTMify"
+                    disabled={toggleUtmify.isPending}
+                    onClick={() => toggleUtmify.mutate(!utmify.data?.destination?.enabled)}
+                    className={cn(
+                      'flex items-center gap-2 rounded-full border px-2 py-1 text-xs transition disabled:cursor-wait disabled:opacity-60',
+                      utmify.data.destination?.enabled
+                        ? 'border-emerald-300/35 bg-emerald-300/[0.1] text-emerald-200'
+                        : 'border-amber-300/30 bg-amber-300/[0.08] text-amber-100',
+                    )}
+                  >
+                    <span className={cn('h-4 w-7 rounded-full p-0.5 transition-colors', utmify.data.destination?.enabled ? 'bg-emerald-400/80' : 'bg-white/20')}>
+                      <span className={cn('block h-3 w-3 rounded-full bg-white shadow transition-transform', utmify.data.destination?.enabled ? 'translate-x-3' : 'translate-x-0')} />
+                    </span>
+                    {utmify.data.destination?.enabled ? 'Envio ativo' : 'Envio pausado'}
+                  </button>
+                ) : (
+                  <span className={utmify.data?.destination?.enabled ? 'text-emerald-300' : 'text-amber-300'}>
+                    {utmify.data?.destination?.enabled ? 'operacional' : 'envio pausado'}
+                  </span>
+                )}
               </div>
               {canManage && utmify.data?.destination?.enabled && (
                 <div className="mb-5 rounded border border-emerald-400/20 bg-emerald-400/[0.04] p-4">

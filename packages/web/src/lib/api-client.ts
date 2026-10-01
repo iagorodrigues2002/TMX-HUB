@@ -3213,6 +3213,16 @@ export const apiClient = {
     });
   },
 
+  async setTrackingUtmifyDestinationEnabled(
+    id: string,
+    enabled: boolean,
+  ): Promise<{ destination: { id: string; enabled: boolean } }> {
+    return request(`/v1/offers/${id}/tracking/utmify-destination`, {
+      method: 'PATCH',
+      body: { enabled },
+    });
+  },
+
   async listTrackingUtmifyDeliveries(id: string): Promise<{
     deliveries: Array<{
       id: string;
