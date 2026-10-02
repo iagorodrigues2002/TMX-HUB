@@ -16,7 +16,7 @@ export interface PushcutOrderInput {
   amountBrlMinor: number | null;
   currency: string;
   country?: string;
-  /** Gateway/account that originated the order, e.g. "Vendepay Iago". */
+  /** Gateway/account that originated the order, e.g. "VendePay Mainex". */
   platformName?: string;
   /** Offer/funnel name (e.g. "SLM_ESP"). Resolved from Redis (OfferStore)
    * at webhook-ingestion time, since the delivery worker only has a

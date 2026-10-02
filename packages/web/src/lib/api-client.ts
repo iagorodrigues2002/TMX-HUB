@@ -2173,7 +2173,7 @@ export const apiClient = {
     to: string,
     offerId?: string,
     product?: string,
-    vendepay?: 'iago' | 'lucas',
+    vendepay?: 'mainex' | 'cobrak',
   ): Promise<{
     from: string;
     to: string;

@@ -14,13 +14,13 @@ describe('Pushcut sale notification', () => {
         amountBrlMinor: 9990,
         currency: 'BRL',
         funnelName: 'PJR_ENG',
-        platformName: 'Vendepay Iago',
+        platformName: 'VendePay Mainex',
       },
       [],
     );
 
     expect(payload.title).toBe(title);
-    expect(payload.text).toBe('Vendepay Iago · Cliente · Oferta · R$ 99,90');
+    expect(payload.text).toBe('VendePay Mainex · Cliente · Oferta · R$ 99,90');
   });
 
   it('keeps a safe fallback for historical orders without an account name', () => {

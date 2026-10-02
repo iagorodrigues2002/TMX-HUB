@@ -2660,7 +2660,7 @@ export function TrackingAdvancedCenter({
                     <div className="mt-2 flex flex-col gap-2 sm:flex-row">
                       <Input
                         aria-label="Nome da conta Vendepay selecionada"
-                        placeholder="Ex.: Vendepay Iago"
+                        placeholder="Ex.: VendePay Mainex"
                         value={selectedVendepayConnectionName}
                         disabled={!selectedVendepayConnection}
                         onChange={(event) => setSelectedVendepayConnectionName(event.target.value)}

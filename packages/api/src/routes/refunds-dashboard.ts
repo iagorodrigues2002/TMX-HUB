@@ -9,7 +9,7 @@ const QuerySchema = z.object({
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   offer_id: z.string().min(1).optional(),
   product: z.string().min(1).max(300).optional(),
-  vendepay: z.enum(['iago', 'lucas']).optional(),
+  vendepay: z.enum(['mainex', 'cobrak']).optional(),
 });
 
 const REFUND_CHARGEBACK_FEE_USD_MINOR = 2_700;
@@ -22,7 +22,7 @@ const unavailable = { error: 'tracking_database_unavailable' };
  */
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get<{
-    Querystring: { from?: string; to?: string; offer_id?: string; product?: string; vendepay?: 'iago' | 'lucas' };
+    Querystring: { from?: string; to?: string; offer_id?: string; product?: string; vendepay?: 'mainex' | 'cobrak' };
   }>('/tracking/refunds-dashboard', async (req, reply) => {
     if (!req.user) return reply.code(401).send({ error: 'unauthorized' });
     if (!app.db) return reply.code(503).send(unavailable);
@@ -66,7 +66,14 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         AND COALESCE(o.refunded_at,o.chargeback_at) >= ${from}
         AND COALESCE(o.refunded_at,o.chargeback_at) < ${to}
         AND (${productFilter}::text IS NULL OR COALESCE(NULLIF(o.product->>'name',''), 'Produto não identificado')=${productFilter})
-        AND (${vendepayFilter}::text IS NULL OR LOWER(COALESCE(vc.name, '')) LIKE '%' || ${vendepayFilter} || '%')
+        AND (
+          ${vendepayFilter}::text IS NULL
+          OR LOWER(COALESCE(vc.name, '')) LIKE '%' || ${vendepayFilter} || '%'
+          -- Accept the former labels while a rolling deployment is applying
+          -- the display-name migration.
+          OR (${vendepayFilter}='mainex' AND LOWER(COALESCE(vc.name, '')) LIKE '%iago%')
+          OR (${vendepayFilter}='cobrak' AND LOWER(COALESCE(vc.name, '')) LIKE '%lucas%')
+        )
       ORDER BY COALESCE(o.refunded_at,o.chargeback_at) DESC, o.id DESC
     `;
 
@@ -108,8 +115,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       from: fromDate, to: toDate, time_zone: 'America/Sao_Paulo',
       offers: selectedOffers.map((offer) => ({ offer_id: offer.id, offer_name: offer.name, ...(byOffer.get(offer.id) ?? emptyBreakdown()) })),
       products: [...byProduct.entries()].map(([product_name, value]) => ({ product_name, ...value })).sort((a,b) => b.brl_minor - a.brl_minor),
-      vendepays: ['VendePay Iago', 'VendePay Lucas'].map((connection_name) => withVendepayFee(connection_name, byVendepay.get(connection_name) ?? emptyBreakdown()))
-        .concat([...byVendepay.entries()].filter(([name]) => name !== 'VendePay Iago' && name !== 'VendePay Lucas').map(([connection_name, value]) => withVendepayFee(connection_name, value)))
+      vendepays: ['VendePay Mainex', 'VendePay Cobrak'].map((connection_name) => withVendepayFee(connection_name, byVendepay.get(connection_name) ?? emptyBreakdown()))
+        .concat([...byVendepay.entries()].filter(([name]) => name !== 'VendePay Mainex' && name !== 'VendePay Cobrak').map(([connection_name, value]) => withVendepayFee(connection_name, value)))
         .sort((a,b) => b.brl_minor - a.brl_minor),
       daily: [...byDay.entries()].map(([date, value]) => ({ date, ...value })).sort((a,b) => a.date.localeCompare(b.date)),
       items: rows.map((row) => ({ ...row, connection_name: vendepayLabel(row.connection_name), offer_name: offerName.get(row.offer_id) ?? row.offer_id, brl_minor: asBrl(row) })),
@@ -129,8 +136,10 @@ function apply(target: ReturnType<typeof emptyBreakdown> | ReturnType<typeof emp
 /** Uses the same connection names shown in Upsell Intelligence. */
 function vendepayLabel(connectionName: string | null) {
   const normalized = (connectionName ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  if (normalized.includes('iago')) return 'VendePay Iago';
-  if (normalized.includes('lucas')) return 'VendePay Lucas';
+  // Keep the legacy aliases during the database migration so old rows and
+  // freshly named connections always resolve to the same public label.
+  if (normalized.includes('iago') || normalized.includes('mainex')) return 'VendePay Mainex';
+  if (normalized.includes('lucas') || normalized.includes('cobrak')) return 'VendePay Cobrak';
   return connectionName?.trim() || 'VendePay não identificada';
 }
 
