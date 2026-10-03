@@ -42,12 +42,26 @@ export async function exchangeGoogleCode(config: GoogleOAuthConfig, code: string
       redirect_uri: config.redirectUri, grant_type: 'authorization_code', code, code_verifier: verifier }),
     signal: AbortSignal.timeout(15_000),
   });
-  // Never surface upstream bodies: they may contain codes or tokens.
-  if (!response.ok) throw new Error('google_oauth_exchange_failed');
+  // Never surface upstream bodies: they may contain authorization codes or
+  // token details. The status is enough to give the operator an actionable,
+  // safe diagnosis.
+  if (!response.ok) {
+    const code = response.status === 401
+      ? 'google_oauth_invalid_client'
+      : response.status === 400
+        ? 'google_oauth_invalid_grant'
+        : 'google_oauth_exchange_failed';
+    throw Object.assign(new Error(code), { code });
+  }
   const parsed = Token.safeParse(await response.json());
-  if (!parsed.success || !parsed.data.refresh_token || parsed.data.token_type.toLowerCase() !== 'bearer' ||
-      !GOOGLE_OAUTH_SCOPES.every(scope => parsed.data.scope?.split(' ').includes(scope))) {
-    throw new Error('google_oauth_missing_permission');
+  if (!parsed.success || parsed.data.token_type.toLowerCase() !== 'bearer') {
+    throw Object.assign(new Error('google_oauth_invalid_token_response'), { code: 'google_oauth_invalid_token_response' });
+  }
+  if (!parsed.data.refresh_token) {
+    throw Object.assign(new Error('google_oauth_missing_refresh_token'), { code: 'google_oauth_missing_refresh_token' });
+  }
+  if (!GOOGLE_OAUTH_SCOPES.every(scope => parsed.data.scope?.split(' ').includes(scope))) {
+    throw Object.assign(new Error('google_oauth_missing_permission'), { code: 'google_oauth_missing_permission' });
   }
   return { accessToken: parsed.data.access_token, refreshToken: parsed.data.refresh_token, scope: parsed.data.scope! };
 }

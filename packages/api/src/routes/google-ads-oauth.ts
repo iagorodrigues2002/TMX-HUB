@@ -104,8 +104,21 @@ const plugin: FastifyPluginAsync = async (app) => {
         return [connection];
       });
       return { connected: true, connection: saved, account_validated: false, delivery_enabled: false };
-    } catch {
-      return reply.code(502).send({ error: 'google_oauth_connection_failed', detail: 'Não foi possível concluir a autorização. Inicie novamente a conexão com o Google.' });
+    } catch (error) {
+      const code = error instanceof Error && 'code' in error && typeof error.code === 'string'
+        ? error.code
+        : 'google_oauth_connection_failed';
+      req.log.error({ err: error, offerId: req.params.id, destinationId: req.params.destinationId, code }, 'Google OAuth completion failed');
+      const detail = code === 'google_oauth_invalid_client'
+        ? 'A credencial OAuth do servidor foi recusada pelo Google. Revise o Client Secret configurado no Railway.'
+        : code === 'google_oauth_invalid_grant'
+          ? 'O código de autorização expirou ou já foi usado. Volte ao TMX e conecte o Google novamente.'
+          : code === 'google_oauth_missing_refresh_token'
+            ? 'O Google não forneceu autorização permanente. Reconecte e aceite todas as permissões solicitadas.'
+            : code === 'google_oauth_missing_permission'
+              ? 'Falta uma permissão Google Ads/Data Manager. Reconecte e aceite todas as permissões solicitadas.'
+              : 'Não foi possível concluir a autorização. Inicie novamente a conexão com o Google.';
+      return reply.code(502).send({ error: code, detail });
     }
   });
   app.delete<{ Params: Params }>(path, async (req, reply) => {
