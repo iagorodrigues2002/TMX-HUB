@@ -1152,6 +1152,12 @@ export function TrackingAdvancedCenter({
     enabled: Boolean(config.data?.configured),
     retry: false,
   });
+  const tiktokDestinations = useQuery({
+    queryKey: ['tiktok-destinations', offerId],
+    queryFn: () => apiClient.tiktokDestinations(offerId),
+    enabled: Boolean(config.data?.configured),
+    retry: false,
+  });
   const utmifyWebEvents = useQuery({
     queryKey: ['tracking-utmify-web-events', offerId, trackingFrom, trackingTo],
     queryFn: () => apiClient.listTrackingUtmifyWebEvents(offerId, trackingPeriod),
@@ -1584,6 +1590,12 @@ export function TrackingAdvancedCenter({
 
   const activeArea =
     trackingAreas.find((area) => area.sections.includes(section)) ?? trackingAreas[0]!;
+  const hasActiveMetaDestination = Boolean(metaPixels.data?.pixels?.some((pixel) => pixel.enabled));
+  const hasActiveTikTokDestination = Boolean(
+    tiktokDestinations.data?.destinations?.some((destination) => destination.enabled),
+  );
+  const hasConfiguredUtmifyDestination = Boolean(utmify.data?.configured);
+  const hasConversionDestination = hasActiveMetaDestination || hasActiveTikTokDestination;
   const setupSteps = [
     {
       label: 'Ativar oferta',
@@ -1605,9 +1617,15 @@ export function TrackingAdvancedCenter({
     },
     {
       label: 'Conectar destinos',
-      detail: 'Meta e UTMify',
-      ready: Boolean(metaPixels.data?.pixels?.length && utmify.data?.configured),
-      target: metaPixels.data?.pixels?.length ? ('utmify' as Section) : ('pixels' as Section),
+      detail: 'Meta, TikTok ou UTMify',
+      // A TikTok Events API is an independent conversion destination. A Meta
+      // pixel is optional for offers that buy traffic exclusively on TikTok.
+      ready: hasConversionDestination && hasConfiguredUtmifyDestination,
+      target: !hasConfiguredUtmifyDestination
+        ? ('utmify' as Section)
+        : hasActiveTikTokDestination && !hasActiveMetaDestination
+          ? ('tiktok' as Section)
+          : ('pixels' as Section),
     },
     {
       label: 'Validar jornada',
