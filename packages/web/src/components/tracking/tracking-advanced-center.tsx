@@ -1595,7 +1595,15 @@ export function TrackingAdvancedCenter({
     tiktokDestinations.data?.destinations?.some((destination) => destination.enabled),
   );
   const hasConfiguredUtmifyDestination = Boolean(utmify.data?.configured);
-  const hasConversionDestination = hasActiveMetaDestination || hasActiveTikTokDestination;
+  // Every connected platform is a valid destination on its own. UTMify is an
+  // optional parallel delivery, not a prerequisite for Meta or TikTok.
+  const hasConversionDestination =
+    hasActiveMetaDestination || hasActiveTikTokDestination || hasConfiguredUtmifyDestination;
+  const hasTikTokDelivery = Boolean(
+    tiktokDestinations.data?.destinations?.some(
+      (destination) => Number(destination.delivered_7d ?? 0) > 0,
+    ),
+  );
   const setupSteps = [
     {
       label: 'Ativar oferta',
@@ -1618,19 +1626,19 @@ export function TrackingAdvancedCenter({
     {
       label: 'Conectar destinos',
       detail: 'Meta, TikTok ou UTMify',
-      // A TikTok Events API is an independent conversion destination. A Meta
-      // pixel is optional for offers that buy traffic exclusively on TikTok.
-      ready: hasConversionDestination && hasConfiguredUtmifyDestination,
-      target: !hasConfiguredUtmifyDestination
-        ? ('utmify' as Section)
-        : hasActiveTikTokDestination && !hasActiveMetaDestination
+      ready: hasConversionDestination,
+      target: hasActiveTikTokDestination && !hasActiveMetaDestination
           ? ('tiktok' as Section)
-          : ('pixels' as Section),
+          : hasActiveMetaDestination
+            ? ('pixels' as Section)
+            : ('utmify' as Section),
     },
     {
       label: 'Validar jornada',
       detail: 'PageView, IC e Purchase',
-      ready: Boolean(metaDeliveries.data?.deliveries?.some((item) => item.state === 'delivered')),
+      ready:
+        Boolean(metaDeliveries.data?.deliveries?.some((item) => item.state === 'delivered')) ||
+        hasTikTokDelivery,
       target: 'help' as Section,
     },
   ];
