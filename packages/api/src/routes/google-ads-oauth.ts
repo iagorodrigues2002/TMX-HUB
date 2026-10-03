@@ -118,7 +118,12 @@ const plugin: FastifyPluginAsync = async (app) => {
             : code === 'google_oauth_missing_permission'
               ? 'Falta uma permissão Google Ads/Data Manager. Reconecte e aceite todas as permissões solicitadas.'
               : 'Não foi possível concluir a autorização. Inicie novamente a conexão com o Google.';
-      return reply.code(502).send({ error: code, detail });
+      // A rejected OAuth exchange is a configuration/authorization problem,
+      // not an unavailable TMX origin. Returning 502 here makes reverse
+      // proxies (including Cloudflare) replace this safe, actionable message
+      // with their generic "origin invalid" error page. Keep it in the 4xx
+      // family so the browser can show the actual fix to the operator.
+      return reply.code(422).send({ error: code, detail });
     }
   });
   app.delete<{ Params: Params }>(path, async (req, reply) => {
