@@ -60,7 +60,13 @@ export async function exchangeGoogleCode(config: GoogleOAuthConfig, code: string
   if (!parsed.data.refresh_token) {
     throw Object.assign(new Error('google_oauth_missing_refresh_token'), { code: 'google_oauth_missing_refresh_token' });
   }
-  if (!GOOGLE_OAUTH_SCOPES.every(scope => parsed.data.scope?.split(' ').includes(scope))) {
+  // Google may omit the OpenID identity scopes from the token response even
+  // when the consent screen granted them. They are only used to display the
+  // connected profile, whereas Data Manager and Google Ads are the scopes
+  // that actually authorize this integration. Requiring all four here made a
+  // valid consent look like a missing Google Ads permission.
+  const grantedScopes = new Set(parsed.data.scope?.split(' ').filter(Boolean));
+  if (![GOOGLE_DATA_SCOPE, GOOGLE_ADS_SCOPE].every(scope => grantedScopes.has(scope))) {
     throw Object.assign(new Error('google_oauth_missing_permission'), { code: 'google_oauth_missing_permission' });
   }
   return { accessToken: parsed.data.access_token, refreshToken: parsed.data.refresh_token, scope: parsed.data.scope! };
