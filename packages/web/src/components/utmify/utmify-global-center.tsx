@@ -78,7 +78,7 @@ export function UtmifyGlobalCenter() {
           const checked = selectedOfferIds.includes(offer.id);
           return <label key={offer.id} className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition ${checked ? 'border-cyan-300/35 bg-cyan-300/[0.07]' : 'border-white/[0.08] bg-black/10 hover:border-white/20'}`}>
             <input type="checkbox" checked={checked} onChange={() => { setOfferRoutesDirty(true); setSelectedOfferIds((current) => checked ? current.filter((id) => id !== offer.id) : [...current, offer.id]); }} className="h-4 w-4 accent-cyan-300" />
-            <span className="min-w-0"><span className="block truncate text-sm font-medium text-white">{offer.name}</span><span className="block truncate font-mono text-[10px] text-white/35">{offer.id}</span></span>
+            <span className="min-w-0"><span className="block truncate text-sm font-medium text-white">{offer.company_name || 'Empresa não cadastrada'}</span><span className="block truncate text-[11px] text-white/50">{offer.name}</span><span className="block truncate font-mono text-[10px] text-white/30">{offer.id}</span></span>
           </label>;
         })}
       </div>}

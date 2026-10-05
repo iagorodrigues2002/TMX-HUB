@@ -1291,7 +1291,7 @@ export interface UtmifyGlobalConfig {
     web_events_7d: number;
     web_events_delivered_7d: number;
   };
-  offers: Array<{ id: string; name: string; enabled: boolean }>;
+  offers: Array<{ id: string; name: string; company_name: string | null; enabled: boolean }>;
 }
 
 // ---- public methods ----

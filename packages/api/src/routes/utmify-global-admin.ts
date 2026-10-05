@@ -25,7 +25,7 @@ function assertAdmin(req: { user?: { role: string } }) {
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   async function offerRoutes() {
-    if (!app.db) return [] as Array<{ id: string; name: string; enabled: boolean }>;
+    if (!app.db) return [] as Array<{ id: string; name: string; company_name: string | null; enabled: boolean }>;
     const projects = await app.db<{ id: string; offer_id: string; enabled: boolean | null }[]>`
       SELECT p.id,p.offer_id,r.enabled
       FROM tracking_projects p
@@ -34,10 +34,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       ORDER BY p.created_at ASC
     `;
     const offers = await app.offerStore.listAll();
-    const names = new Map(offers.map((offer) => [offer.id, offer.name]));
+    const offerDetails = new Map(offers.map((offer) => [offer.id, { name: offer.name, companyName: offer.companyName ?? null }]));
     return projects.map((project) => ({
       id: project.offer_id,
-      name: names.get(project.offer_id) ?? project.offer_id,
+      name: offerDetails.get(project.offer_id)?.name ?? 'Oferta sem cadastro',
+      company_name: offerDetails.get(project.offer_id)?.companyName ?? null,
       // No explicit rule retains the legacy routing behavior: included.
       enabled: project.enabled ?? true,
     }));
