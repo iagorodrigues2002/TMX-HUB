@@ -11,6 +11,9 @@ const GlobalSchema = z.object({
   pixel_id: z.string().trim().regex(/^[a-f0-9]{24}$/i).nullish(),
   enabled: z.boolean().default(true),
 });
+const GlobalOfferRoutesSchema = z.object({
+  offer_ids: z.array(z.string().trim().min(1).max(128)).max(500),
+});
 
 function assertAdmin(req: { user?: { role: string } }) {
   if (req.user?.role !== 'admin') {
@@ -21,15 +24,35 @@ function assertAdmin(req: { user?: { role: string } }) {
 }
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
+  async function offerRoutes() {
+    if (!app.db) return [] as Array<{ id: string; name: string; enabled: boolean }>;
+    const projects = await app.db<{ id: string; offer_id: string; enabled: boolean | null }[]>`
+      SELECT p.id,p.offer_id,r.enabled
+      FROM tracking_projects p
+      LEFT JOIN tracking_utmify_global_offer_routes r ON r.project_id=p.id
+      WHERE p.enabled=true
+      ORDER BY p.created_at ASC
+    `;
+    const offers = await app.offerStore.listAll();
+    const names = new Map(offers.map((offer) => [offer.id, offer.name]));
+    return projects.map((project) => ({
+      id: project.offer_id,
+      name: names.get(project.offer_id) ?? project.offer_id,
+      // No explicit rule retains the legacy routing behavior: included.
+      enabled: project.enabled ?? true,
+    }));
+  }
+
   app.get('/utmify-global', async (req, reply) => {
     assertAdmin(req);
-    if (!app.db) return reply.code(503).send({ configured: false });
+    if (!app.db) return reply.code(503).send({ configured: false, destination: null, stats: null, offers: [] });
     const [destination] = await app.db`
       SELECT id,name,endpoint_url,external_pixel_id AS pixel_id,enabled,
              (api_token_encrypted IS NOT NULL) AS token_configured,created_at,updated_at
       FROM tracking_utmify_destinations WHERE scope='global' LIMIT 1
     `;
-    if (!destination) return reply.send({ configured: false, destination: null, stats: null });
+    const routes = await offerRoutes();
+    if (!destination) return reply.send({ configured: false, destination: null, stats: null, offers: routes });
     const [stats] = await app.db`
       SELECT
         count(*) FILTER (WHERE d.created_at>=now()-interval '7 days')::int AS orders_7d,
@@ -42,7 +65,33 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       FROM tracking_delivery_outbox d
       WHERE d.destination_kind='utmify' AND d.destination_id=${destination.id}
     `;
-    return reply.send({ configured: true, destination, stats });
+    return reply.send({ configured: true, destination, stats, offers: routes });
+  });
+
+  app.put('/utmify-global/offers', async (req, reply) => {
+    assertAdmin(req);
+    if (!app.db) return reply.code(503).send({ error: 'database_unavailable' });
+    const parsed = GlobalOfferRoutesSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid_utmify_global_offer_routes' });
+    const projects = await app.db<{ id: string; offer_id: string }[]>`
+      SELECT id,offer_id FROM tracking_projects WHERE enabled=true
+    `;
+    const eligible = new Set(projects.map((project) => project.offer_id));
+    if (parsed.data.offer_ids.some((offerId) => !eligible.has(offerId))) {
+      return reply.code(400).send({ error: 'invalid_utmify_global_offer' });
+    }
+    const selected = new Set(parsed.data.offer_ids);
+    await app.db.begin(async (sql) => {
+      for (const project of projects) {
+        await sql`
+          INSERT INTO tracking_utmify_global_offer_routes(project_id,enabled,updated_at)
+          VALUES(${project.id},${selected.has(project.offer_id)},now())
+          ON CONFLICT (project_id) DO UPDATE
+          SET enabled=EXCLUDED.enabled,updated_at=EXCLUDED.updated_at
+        `;
+      }
+    });
+    return reply.send({ offers: await offerRoutes() });
   });
 
   app.put('/utmify-global', async (req, reply) => {
@@ -95,7 +144,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     // pause must never leave financial reconciliation silently stranded.
     await app.utmifyDeliveryQueue.resume();
     const [project] = await app.db<{ id: string }[]>`
-      SELECT id FROM tracking_projects WHERE enabled=true ORDER BY created_at ASC LIMIT 1
+      SELECT p.id FROM tracking_projects p
+      LEFT JOIN tracking_utmify_global_offer_routes r ON r.project_id=p.id
+      WHERE p.enabled=true AND COALESCE(r.enabled,true)=true
+      ORDER BY p.created_at ASC LIMIT 1
     `;
     if (!project) return reply.code(409).send({ error: 'tracking_project_missing' });
     const suffix = ulid();
@@ -144,7 +196,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         CASE WHEN o.status='cancelled' THEN 'skipped' ELSE 'pending' END,
         CASE WHEN o.status='cancelled' THEN 'Cancelamento não é aceito pela UTMify.' ELSE NULL END
       FROM tracking_orders o
-      WHERE o.provider <> 'tmx-test'
+      LEFT JOIN tracking_utmify_global_offer_routes r ON r.project_id=o.project_id
+      WHERE o.provider <> 'tmx-test' AND COALESCE(r.enabled,true)=true
       ON CONFLICT (destination_kind,destination_id,event_id) DO NOTHING
       RETURNING id
     `;

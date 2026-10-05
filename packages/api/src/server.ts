@@ -199,9 +199,16 @@ async function main() {
       pending.map(({ id }) => app.metaQueue.add('send', { deliveryId: id })),
     );
     const pendingUtmifyWebEvents = await app.db<{ id: string }[]>`
-      SELECT id FROM tracking_utmify_web_events
-      WHERE state IN ('pending', 'failed', 'processing')
+      SELECT ue.id FROM tracking_utmify_web_events ue
+      WHERE ue.state IN ('pending', 'failed', 'processing')
         AND next_attempt_at <= now()
+        AND NOT EXISTS (
+          SELECT 1
+          FROM tracking_utmify_destinations d
+          JOIN tracking_utmify_global_offer_routes r ON r.project_id=ue.project_id
+          WHERE d.scope='global' AND d.external_pixel_id=ue.external_pixel_id
+            AND r.enabled=false
+        )
       ORDER BY created_at ASC
       LIMIT 1000
     `;

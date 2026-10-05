@@ -11,10 +11,16 @@ export function UtmifyGlobalCenter() {
   const qc = useQueryClient();
   const config = useQuery({ queryKey: ['utmify-global'], queryFn: () => apiClient.getUtmifyGlobal(), refetchInterval: 15_000 });
   const [form, setForm] = useState({ name: 'UTMify Geral', api_token: '', endpoint_url: 'https://api.utmify.com.br/api-credentials/orders', pixel_id: '', enabled: true });
+  const [selectedOfferIds, setSelectedOfferIds] = useState<string[]>([]);
+  const [offerRoutesDirty, setOfferRoutesDirty] = useState(false);
   useEffect(() => {
     if (!config.data?.destination) return;
     setForm({ name: config.data.destination.name, api_token: '', endpoint_url: config.data.destination.endpoint_url, pixel_id: config.data.destination.pixel_id ?? '', enabled: config.data.destination.enabled });
   }, [config.data?.destination]);
+  useEffect(() => {
+    if (!config.data || offerRoutesDirty) return;
+    setSelectedOfferIds(config.data.offers.filter((offer) => offer.enabled).map((offer) => offer.id));
+  }, [config.data, offerRoutesDirty]);
   const save = useMutation({
     mutationFn: () => apiClient.saveUtmifyGlobal({ name: form.name.trim(), ...(form.api_token.trim() ? { api_token: form.api_token.trim() } : {}), endpoint_url: form.endpoint_url.trim(), ...(form.pixel_id.trim() ? { pixel_id: form.pixel_id.trim() } : { pixel_id: null }), enabled: form.enabled }),
     onSuccess: () => { toast.success('UTMify Geral configurada. As ofertas continuarão enviando também para seus destinos individuais.'); setForm((current) => ({ ...current, api_token: '' })); void qc.invalidateQueries({ queryKey: ['utmify-global'] }); },
@@ -29,6 +35,15 @@ export function UtmifyGlobalCenter() {
     mutationFn: () => apiClient.replayUtmifyGlobal(),
     onSuccess: (result) => { toast.success(`${result.queued} pedido(s) histórico(s) enfileirado(s); ${result.recovered} pendência(s) recuperada(s).`); void qc.invalidateQueries({ queryKey: ['utmify-global'] }); },
     onError: (error) => toast.error(error instanceof Error ? error.message : 'Não foi possível reenviar o histórico.'),
+  });
+  const saveOfferRoutes = useMutation({
+    mutationFn: () => apiClient.saveUtmifyGlobalOffers(selectedOfferIds),
+    onSuccess: () => {
+      toast.success('Ofertas da UTMify Geral atualizadas. Novos eventos só serão enviados pelas selecionadas.');
+      setOfferRoutesDirty(false);
+      void qc.invalidateQueries({ queryKey: ['utmify-global'] });
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'Não foi possível atualizar as ofertas.'),
   });
   const stats = config.data?.stats;
   const deliveryRate = stats?.orders_7d ? Math.round((stats.orders_delivered_7d / stats.orders_7d) * 100) : 100;
@@ -53,6 +68,23 @@ export function UtmifyGlobalCenter() {
       <div className="mt-4 flex flex-wrap justify-end gap-2"><Button variant="outline" onClick={() => replay.mutate()} disabled={!config.data?.configured || replay.isPending} className="gap-2 border-white/10"><History className="h-4 w-4" /> Reenviar histórico</Button><Button variant="outline" onClick={() => test.mutate()} disabled={!config.data?.configured || test.isPending} className="gap-2 border-white/10"><Send className="h-4 w-4" /> Enviar pedido teste</Button><Button onClick={() => save.mutate()} disabled={save.isPending || !form.name.trim() || (Boolean(form.pixel_id.trim()) && !/^[a-f0-9]{24}$/i.test(form.pixel_id.trim())) || (!form.api_token.trim() && !config.data?.destination?.token_configured)} className="bg-cyan-300 text-slate-950 hover:bg-cyan-200">{save.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Salvar UTMify Geral</Button></div>
     </section>
 
-    <section className="rounded-2xl border border-emerald-300/15 bg-emerald-300/[0.035] p-5 text-sm leading-6 text-white/55"><p className="flex items-center gap-2 font-medium text-emerald-200"><ShieldCheck className="h-4 w-4" /> Roteamento em paralelo</p><p className="mt-2">Oferta → UTMify individual da oferta <span className="text-white/25">+</span> UTMify Geral. Cada entrega possui sua própria chave de deduplicação, fila, tentativas e recibo; uma falha na geral não bloqueia a individual e vice-versa.</p></section>
+    <section className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-5 sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div><h2 className="font-semibold text-white">Ofertas enviadas à dashboard geral</h2><p className="mt-1 max-w-2xl text-xs leading-5 text-white/45">Escolha quais ofertas podem enviar pedidos e eventos de checkout para esta UTMify Geral. As integrações individuais de cada oferta continuam independentes.</p></div>
+        <p className="rounded-full border border-cyan-300/20 bg-cyan-300/[0.07] px-3 py-1 font-mono text-xs text-cyan-100">{selectedOfferIds.length} de {config.data?.offers.length ?? 0} selecionadas</p>
+      </div>
+      {!config.data?.offers.length ? <p className="mt-5 text-sm text-white/40">Nenhuma oferta com tracking ativo foi encontrada.</p> : <div className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        {config.data.offers.map((offer) => {
+          const checked = selectedOfferIds.includes(offer.id);
+          return <label key={offer.id} className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition ${checked ? 'border-cyan-300/35 bg-cyan-300/[0.07]' : 'border-white/[0.08] bg-black/10 hover:border-white/20'}`}>
+            <input type="checkbox" checked={checked} onChange={() => { setOfferRoutesDirty(true); setSelectedOfferIds((current) => checked ? current.filter((id) => id !== offer.id) : [...current, offer.id]); }} className="h-4 w-4 accent-cyan-300" />
+            <span className="min-w-0"><span className="block truncate text-sm font-medium text-white">{offer.name}</span><span className="block truncate font-mono text-[10px] text-white/35">{offer.id}</span></span>
+          </label>;
+        })}
+      </div>}
+      <div className="mt-4 flex justify-end"><Button onClick={() => saveOfferRoutes.mutate()} disabled={saveOfferRoutes.isPending} className="bg-cyan-300 text-slate-950 hover:bg-cyan-200">{saveOfferRoutes.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Salvar ofertas selecionadas</Button></div>
+    </section>
+
+    <section className="rounded-2xl border border-emerald-300/15 bg-emerald-300/[0.035] p-5 text-sm leading-6 text-white/55"><p className="flex items-center gap-2 font-medium text-emerald-200"><ShieldCheck className="h-4 w-4" /> Roteamento em paralelo e com filtro</p><p className="mt-2">Oferta selecionada → UTMify individual da oferta <span className="text-white/25">+</span> UTMify Geral. Ofertas desmarcadas continuam no TMX e em seus destinos individuais, mas deixam de enviar dados novos à dashboard geral.</p></section>
   </div>;
 }

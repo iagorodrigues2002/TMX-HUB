@@ -40,6 +40,13 @@ export function createUtmifyWebEventWorker(): Worker<UtmifyWebEventJobData> | nu
         WHERE ue.id = ${job.data.deliveryId}
           AND ue.state <> 'delivered'
           AND ue.external_pixel_id IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM tracking_utmify_destinations d
+            JOIN tracking_utmify_global_offer_routes r ON r.project_id=ue.project_id
+            WHERE d.scope='global' AND d.external_pixel_id=ue.external_pixel_id
+              AND r.enabled=false
+          )
       `;
       if (!row) return;
       try {

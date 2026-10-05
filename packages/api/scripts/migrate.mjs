@@ -80,6 +80,7 @@ const migrations = [
   '065_payment_gateway_connections.sql',
   '066_meta_pixel_product_rules.sql',
   '067_rename_vendepay_accounts.sql',
+  '068_utmify_global_offer_routing.sql',
 ];
 
 await sql`

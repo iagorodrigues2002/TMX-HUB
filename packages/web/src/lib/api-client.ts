@@ -1291,6 +1291,7 @@ export interface UtmifyGlobalConfig {
     web_events_7d: number;
     web_events_delivered_7d: number;
   };
+  offers: Array<{ id: string; name: string; enabled: boolean }>;
 }
 
 // ---- public methods ----
@@ -1513,6 +1514,10 @@ export const apiClient = {
     queue_failed: number;
   }> {
     return request('/v1/utmify-global/replay', { method: 'POST' });
+  },
+
+  async saveUtmifyGlobalOffers(offerIds: string[]): Promise<{ offers: UtmifyGlobalConfig['offers'] }> {
+    return request('/v1/utmify-global/offers', { method: 'PUT', body: { offer_ids: offerIds } });
   },
 
   async assignMetaAccountOffer(accountId: string, offerId: string | null): Promise<void> {

@@ -277,9 +277,13 @@ async function enqueueInitiateCheckout(
       if (rows[0]) meta.push(rows[0]);
     }
     const globalPixels = await sql<{ external_pixel_id: string }[]>`
-      SELECT external_pixel_id
-      FROM tracking_utmify_destinations
-      WHERE scope='global' AND enabled=true AND external_pixel_id IS NOT NULL
+      SELECT d.external_pixel_id
+      FROM tracking_utmify_destinations d
+      WHERE d.scope='global' AND d.enabled=true AND d.external_pixel_id IS NOT NULL
+        AND COALESCE((
+          SELECT r.enabled FROM tracking_utmify_global_offer_routes r
+          WHERE r.project_id=${input.projectId}
+        ),true)=true
     `;
     const utmify: Array<{ id: string }> = [];
     const utmifyPixelIds = [
@@ -1679,7 +1683,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         const utmify = await sql<{ id: string }[]>`
           SELECT id FROM tracking_utmify_destinations
           WHERE enabled = true
-            AND (project_id = ${connection.project_id} OR scope='global')
+            AND (project_id = ${connection.project_id} OR (
+              scope='global' AND COALESCE((
+                SELECT r.enabled FROM tracking_utmify_global_offer_routes r
+                WHERE r.project_id=${connection.project_id}
+              ),true)=true
+            ))
         `;
         const utmifyDeliveryIds: string[] = [];
         for (const destination of utmify) {
@@ -1960,7 +1969,15 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         await sql`UPDATE tracking_gateway_webhook_receipts SET state='processed',order_id=${order!.id},processed_at=now() WHERE id=${receiptId}`;
         await sql`UPDATE tracking_gateway_connections SET last_webhook_at=now(),updated_at=now() WHERE id=${connection.id}`;
         const utmify: string[] = [];
-        for (const destination of await sql<Array<{ id: string }>>`SELECT id FROM tracking_utmify_destinations WHERE enabled=true AND (project_id=${connection.project_id} OR scope='global')`) {
+        for (const destination of await sql<Array<{ id: string }>>`
+          SELECT id FROM tracking_utmify_destinations
+          WHERE enabled=true AND (project_id=${connection.project_id} OR (
+            scope='global' AND COALESCE((
+              SELECT r.enabled FROM tracking_utmify_global_offer_routes r
+              WHERE r.project_id=${connection.project_id}
+            ),true)=true
+          ))
+        `) {
           const [row] = await sql<Array<{ id:string }>>`
             INSERT INTO tracking_delivery_outbox(id,project_id,destination_kind,destination_id,order_id,event_id,event_type,state)
             VALUES(${ulid()},${connection.project_id},'utmify',${destination.id},${order!.id},${`paysight:${event.transactionId}:${event.status}`},${`order.${event.status}`},${event.status === 'cancelled' || event.status === 'abandoned' ? 'skipped' : 'pending'})

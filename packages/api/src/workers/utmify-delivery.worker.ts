@@ -16,6 +16,17 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
   let rateLimitedUntil = 0;
   const processDelivery = async (deliveryId: string) => {
       if (Date.now() < rateLimitedUntil) return;
+      // A route can be disabled after an event is queued. Stop that pending
+      // global delivery here too, so changing the selector takes effect
+      // immediately and does not depend on queue timing.
+      await db`
+        UPDATE tracking_delivery_outbox d
+        SET state='skipped',last_error='Oferta removida da UTMify Geral antes do envio.'
+        FROM tracking_utmify_destinations u,tracking_utmify_global_offer_routes r
+        WHERE d.id=${deliveryId} AND d.destination_id=u.id AND r.project_id=d.project_id
+          AND u.scope='global' AND r.enabled=false
+          AND d.state IN ('pending','failed','processing')
+      `;
       const [row] = await db<
         Array<{
           id: string;
