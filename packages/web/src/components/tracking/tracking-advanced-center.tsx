@@ -803,7 +803,7 @@ export function TrackingAdvancedCenter({
     { label: '30 dias', from: saoPauloDateOffset(29), to: saoPauloDateOffset(0) },
   ];
   const trackingPeriod = { from: trackingFrom, to: trackingTo };
-  const upsellIdentityPageKey = `${offerId}:${trackingFrom}:${trackingTo}`;
+  const upsellIdentityPageKey = offerId;
   const qc = useQueryClient();
   const refreshTracking = async () => {
     setIsRefreshingTracking(true);
@@ -839,11 +839,10 @@ export function TrackingAdvancedCenter({
     refetchOnWindowFocus: false,
   });
   const upsellIdentities = useQuery({
-    queryKey: ['tracking-upsell-identities', offerId, trackingFrom, trackingTo, upsellIdentityOffset],
+    queryKey: ['tracking-upsell-identities', offerId, 'all', upsellIdentityOffset],
     queryFn: () =>
       apiClient.getTrackingUpsellIdentities(offerId, {
-        from: trackingFrom,
-        to: trackingTo,
+        all: true,
         limit: UPSELL_IDENTITIES_PAGE_SIZE,
         offset: upsellIdentityOffset,
       }),
@@ -2201,7 +2200,7 @@ export function TrackingAdvancedCenter({
                     )}
                   </div>
                   <p className="mt-1 text-xs text-white/40">
-                    Compras de front aprovadas no período selecionado. O TMX libera os links
+                    Histórico completo de compras de front aprovadas. O TMX libera os links
                     somente após confirmar o vendaId no funil correspondente da VendePay.
                   </p>
                   <p className="mt-1 text-xs text-white/35">

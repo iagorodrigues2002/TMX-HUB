@@ -450,7 +450,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   app.get<{
     Params: { id: string };
-    Querystring: { from?: string; to?: string; limit?: string; offset?: string };
+    Querystring: { from?: string; to?: string; all?: string; limit?: string; offset?: string };
   }>(
     '/offers/:id/tracking/upsell-identities',
     async (req, reply) => {
@@ -465,6 +465,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       const toDate = /^\d{4}-\d{2}-\d{2}$/.test(req.query.to ?? '') ? req.query.to! : fromDate;
       const fromInstant = new Date(saoPauloDayRange(fromDate).from);
       const toInstant = new Date(saoPauloDayRange(toDate).to);
+      const allHistory = req.query.all === 'true';
       const requestedLimit = Number(req.query.limit ?? 50);
       const requestedOffset = Number(req.query.offset ?? 0);
       const limit = Number.isFinite(requestedLimit)
@@ -535,7 +536,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             LIMIT 1
           ) identity ON true
           WHERE o.project_id=${p.id} AND o.order_kind='front' AND o.paid_at IS NOT NULL
-            AND o.paid_at >= ${fromInstant} AND o.paid_at < ${toInstant}
+            AND (${allHistory} OR (o.paid_at >= ${fromInstant} AND o.paid_at < ${toInstant}))
           ORDER BY o.paid_at DESC,o.updated_at DESC
           LIMIT ${limit} OFFSET ${offset}
         `,
@@ -570,7 +571,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           SELECT count(*)::int AS total
           FROM tracking_orders
           WHERE project_id=${p.id} AND order_kind='front' AND paid_at IS NOT NULL
-            AND paid_at >= ${fromInstant} AND paid_at < ${toInstant}
+            AND (${allHistory} OR (paid_at >= ${fromInstant} AND paid_at < ${toInstant}))
         `,
       ]);
       reply.header('cache-control', 'no-store');

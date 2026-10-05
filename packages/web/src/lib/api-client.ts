@@ -2764,7 +2764,7 @@ export const apiClient = {
 
   async getTrackingUpsellIdentities(
     id: string,
-    period: { from: string; to: string; limit?: number; offset?: number },
+    period: { from?: string; to?: string; all?: boolean; limit?: number; offset?: number },
   ): Promise<{
     total: number;
     limit: number;
@@ -2792,11 +2792,12 @@ export const apiClient = {
     }>;
   }> {
     const pagination = new URLSearchParams({
-      from: period.from,
-      to: period.to,
       limit: String(period.limit ?? 50),
       offset: String(period.offset ?? 0),
     });
+    if (period.from) pagination.set('from', period.from);
+    if (period.to) pagination.set('to', period.to);
+    if (period.all) pagination.set('all', 'true');
     return request(
       `/v1/offers/${id}/tracking/upsell-identities?${pagination.toString()}`,
     );
