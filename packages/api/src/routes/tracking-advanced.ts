@@ -448,21 +448,33 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     },
   );
 
-  app.get<{ Params: { id: string }; Querystring: { from?: string; to?: string } }>(
+  app.get<{
+    Params: { id: string };
+    Querystring: { from?: string; to?: string; limit?: string; offset?: string };
+  }>(
     '/offers/:id/tracking/upsell-identities',
     async (req, reply) => {
       const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin');
       if (!app.db) return reply.code(503).send(databaseUnavailable);
-      const db = app.db;
-      if (!p) return { items: [] };
+      if (!p) return { items: [], total: 0, limit: 50, offset: 0 };
       if (!env.TRACKING_ENCRYPTION_KEY) {
         return reply.code(503).send({ error: 'tracking_encryption_unavailable' });
       }
-      const [approvedReceipts, stages, manualResults] = await Promise.all([
+      const today = saoPauloParts(new Date()).date;
+      const fromDate = /^\d{4}-\d{2}-\d{2}$/.test(req.query.from ?? '') ? req.query.from! : today;
+      const toDate = /^\d{4}-\d{2}-\d{2}$/.test(req.query.to ?? '') ? req.query.to! : fromDate;
+      const fromInstant = new Date(saoPauloDayRange(fromDate).from);
+      const toInstant = new Date(saoPauloDayRange(toDate).to);
+      const requestedLimit = Number(req.query.limit ?? 50);
+      const requestedOffset = Number(req.query.offset ?? 0);
+      const limit = Number.isFinite(requestedLimit)
+        ? Math.min(100, Math.max(10, Math.floor(requestedLimit)))
+        : 50;
+      const offset = Number.isFinite(requestedOffset) ? Math.max(0, Math.floor(requestedOffset)) : 0;
+      const [approvedReceipts, stages, manualResults, totals] = await Promise.all([
         app.db<
           Array<{
             id: string;
-            payload: unknown;
             visitor_id: string | null;
             external_id: string;
             paid_at: Date;
@@ -473,7 +485,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             purchased_stage_keys: string[];
           }>
         >`
-          SELECT o.id,receipt.payload,o.visitor_id,o.external_id,o.paid_at,
+          SELECT o.id,o.visitor_id,o.external_id,o.paid_at,
                  o.vendepay_connection_id AS connection_id,
                  COALESCE(vc.name,'Vendepay') AS connection_name,
                  identity.vendid_encrypted AS confirmed_vendid_encrypted,
@@ -522,17 +534,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             ORDER BY i.last_seen_at DESC
             LIMIT 1
           ) identity ON true
-          LEFT JOIN LATERAL (
-            SELECT wr.payload
-            FROM webhook_receipts wr
-            WHERE wr.order_id=o.id
-            ORDER BY
-              (wr.payload::text ~* '"(vendid|vendaId|venda_id)"[[:space:]]*:') DESC,
-              wr.received_at DESC
-            LIMIT 1
-          ) receipt ON true
           WHERE o.project_id=${p.id} AND o.order_kind='front' AND o.paid_at IS NOT NULL
+            AND o.paid_at >= ${fromInstant} AND o.paid_at < ${toInstant}
           ORDER BY o.paid_at DESC,o.updated_at DESC
+          LIMIT ${limit} OFFSET ${offset}
         `,
         app.db<
           Array<{
@@ -561,136 +566,58 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           FROM tracking_upsell_manual_test_results
           WHERE project_id=${p.id}
         `,
+        app.db<Array<{ total: number }>>`
+          SELECT count(*)::int AS total
+          FROM tracking_orders
+          WHERE project_id=${p.id} AND order_kind='front' AND paid_at IS NOT NULL
+            AND paid_at >= ${fromInstant} AND paid_at < ${toInstant}
+        `,
       ]);
       reply.header('cache-control', 'no-store');
-      // Some VendePay payloads name the buyer's usable id `checkoutId`, while
-      // others expose a checkout-configuration id under that same key. Only
-      // consider it generic when the exact UUID is repeated across different
-      // approved front orders. A unique historic id must remain usable.
-      const checkoutIdUseCount = new Map<string, number>();
-      for (const receipt of approvedReceipts) {
-        for (const checkoutId of new Set(collectCheckoutIds(receipt.payload))) {
-          checkoutIdUseCount.set(checkoutId, (checkoutIdUseCount.get(checkoutId) ?? 0) + 1);
-        }
-      }
       const resultByOrderStage = new Map(
         manualResults.map((result) => [`${result.order_id}:${result.stage_id}`, result] as const),
       );
-      const seen = new Set<string>();
-      const resolvedItems = await Promise.all(
-        approvedReceipts.map(async (receipt) => {
-          const normalized = normalizeVendepay(receipt.payload);
-          const normalizedEvent = normalized.kind === 'processable' ? normalized.event : null;
-          const receiptMatchesOrder =
-            normalizedEvent?.status === 'paid' &&
-            normalizedEvent.transactionId === receipt.external_id;
-          let storedVendid: string | undefined;
-          if (receipt.confirmed_vendid_encrypted) {
-            try {
-              storedVendid = decryptSecret(
-                receipt.confirmed_vendid_encrypted,
-                env.TRACKING_ENCRYPTION_KEY!,
-              );
-            } catch {
-              storedVendid = undefined;
-            }
+      const items = approvedReceipts.map((receipt) => {
+        let vendid: string | undefined;
+        if (receipt.confirmed_vendid_encrypted) {
+          try {
+            vendid = decryptSecret(receipt.confirmed_vendid_encrypted, env.TRACKING_ENCRYPTION_KEY!);
+          } catch {
+            vendid = undefined;
           }
-          let vendid: string | undefined;
-          if (receiptMatchesOrder) {
-            const candidates = collectVendaIdCandidates(receipt.payload, receipt.external_id);
-            const checkoutIds = new Set(collectCheckoutIds(receipt.payload));
-            const isSharedCheckoutId = (candidate: string) =>
-              checkoutIds.has(candidate) && (checkoutIdUseCount.get(candidate) ?? 0) > 1;
-            const storedIsCheckoutId = Boolean(storedVendid && isSharedCheckoutId(storedVendid));
-            // Preserve known-good historic identities. Revalidation is needed
-            // only when the former bug stored a checkout id, or no identity
-            // has been established for this front purchase yet.
-            if (storedVendid && !storedIsCheckoutId) vendid = storedVendid;
-            if (!vendid && normalizedEvent?.vendid) vendid = normalizedEvent.vendid;
-            for (const candidate of vendid
-              ? []
-              : candidates.filter((id) => !isSharedCheckoutId(id))) {
-              const checks = await Promise.all(
-                stages.map((stage) => {
-                  const destination =
-                    (receipt.connection_id &&
-                      stage.connection_destinations?.[receipt.connection_id]) ||
-                    stage.destination_url;
-                  return checkUpsellCompatibilityDetailed(destination, candidate, false, {
-                    retryDelaysMs: [0],
-                    timeoutMs: 5_000,
-                  });
-                }),
-              );
-              if (checks.some((check) => check.compatible)) {
-                vendid = candidate;
-                break;
-              }
-            }
-          }
-          if (vendid && receiptMatchesOrder && receipt.connection_id) {
-            const hash = createHash('sha256').update(vendid).digest('hex');
-            const identityVisitorId = receipt.visitor_id ?? `vendepay:${receipt.external_id}`;
-            await db`
-              DELETE FROM tracking_upsell_identities
-              WHERE project_id=${p.id} AND source_order_id=${receipt.id} AND vendid_hash<>${hash}
-            `;
-            await db`
-              INSERT INTO tracking_upsell_identities
-                (id,project_id,visitor_id,vendid_hash,vendid_encrypted,source_order_id,
-                 vendepay_connection_id)
-              VALUES(${ulid()},${p.id},${identityVisitorId},${hash},
-                ${encryptSecret(vendid, env.TRACKING_ENCRYPTION_KEY!)},${receipt.id},
-                ${receipt.connection_id})
-              ON CONFLICT(project_id,vendid_hash) DO UPDATE SET
-                visitor_id=EXCLUDED.visitor_id,source_order_id=EXCLUDED.source_order_id,
-                vendepay_connection_id=EXCLUDED.vendepay_connection_id,last_seen_at=now()
-            `;
-          }
-          const vendidConfirmed = Boolean(vendid);
-          // Keep the approved buyer visible while clearly separating the
-          // purchase identifier from a vendaId confirmed by Vendepay.
-          const displayId = vendid ?? receipt.external_id;
-          if (seen.has(displayId)) return [];
-          seen.add(displayId);
-          return [
-            {
-              id: receipt.id,
-              visitor_id: receipt.visitor_id ?? '',
-              vendid: displayId,
-              vendid_confirmed: vendidConfirmed,
-              approved_at: receipt.paid_at,
-              connection_name: receipt.connection_name,
-              has_upsell: receipt.has_upsell,
-              first_seen_at: receipt.paid_at,
-              last_seen_at: receipt.paid_at,
-              links: vendidConfirmed
-                ? stages.map((stage) => {
-                    const validatedLink = new URL(upsellUrl(stage.slug));
-                    validatedLink.searchParams.set('vendaId', displayId);
-                    const manualResult = resultByOrderStage.get(`${receipt.id}:${stage.id}`);
-                    return {
-                      stage_id: stage.id,
-                      stage_key: stage.stage_key,
-                      name: stage.name,
-                      already_purchased: receipt.purchased_stage_keys.includes(stage.stage_key),
-                      url: validatedLink.toString(),
-                      force_url: null,
-                      manual_result: manualResult?.result ?? null,
-                      manual_checked_at: manualResult?.checked_at ?? null,
-                    };
-                  })
-                : [],
-            },
-          ];
-        }),
-      );
-      const items = resolvedItems.flat();
-      items.sort(
-        (left, right) =>
-          new Date(right.approved_at).getTime() - new Date(left.approved_at).getTime(),
-      );
-      return { items };
+        }
+        const vendidConfirmed = Boolean(vendid);
+        const displayId = vendid ?? receipt.external_id;
+        return {
+          id: receipt.id,
+          visitor_id: receipt.visitor_id ?? '',
+          vendid: displayId,
+          vendid_confirmed: vendidConfirmed,
+          approved_at: receipt.paid_at,
+          connection_name: receipt.connection_name,
+          has_upsell: receipt.has_upsell,
+          first_seen_at: receipt.paid_at,
+          last_seen_at: receipt.paid_at,
+          links: vendidConfirmed
+            ? stages.map((stage) => {
+                const validatedLink = new URL(upsellUrl(stage.slug));
+                validatedLink.searchParams.set('vendaId', displayId);
+                const manualResult = resultByOrderStage.get(`${receipt.id}:${stage.id}`);
+                return {
+                  stage_id: stage.id,
+                  stage_key: stage.stage_key,
+                  name: stage.name,
+                  already_purchased: receipt.purchased_stage_keys.includes(stage.stage_key),
+                  url: validatedLink.toString(),
+                  force_url: null,
+                  manual_result: manualResult?.result ?? null,
+                  manual_checked_at: manualResult?.checked_at ?? null,
+                };
+              })
+            : [],
+        };
+        });
+      return { items, total: totals[0]?.total ?? 0, limit, offset };
     },
   );
 

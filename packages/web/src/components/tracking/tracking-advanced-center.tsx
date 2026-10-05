@@ -88,6 +88,7 @@ const UPSELL_STAGE_OPTIONS = Array.from(
   { length: 20 },
   (_, index) => `upsell_${index + 1}` as UpsellStageKey,
 );
+const UPSELL_IDENTITIES_PAGE_SIZE = 50;
 const upsellStageNumber = (key: UpsellStageKey) => Number(key.slice('upsell_'.length));
 const upsellStageLabel = (key: UpsellStageKey) => `Upsell ${upsellStageNumber(key)}`;
 const stageKeyToProductKind = (key: UpsellStageKey): TrackingProductKind =>
@@ -773,6 +774,7 @@ export function TrackingAdvancedCenter({
   const [upsellTestFilter, setUpsellTestFilter] = useState<
     'all' | 'worked' | 'failed' | 'unclassified'
   >('all');
+  const [upsellIdentityOffset, setUpsellIdentityOffset] = useState(0);
   const [vendepayPayload, setVendepayPayload] = useState(vendepaySample);
   const [utmifyToken, setUtmifyToken] = useState('');
   const [utmifyPixelId, setUtmifyPixelId] = useState('');
@@ -801,6 +803,7 @@ export function TrackingAdvancedCenter({
     { label: '30 dias', from: saoPauloDateOffset(29), to: saoPauloDateOffset(0) },
   ];
   const trackingPeriod = { from: trackingFrom, to: trackingTo };
+  const upsellIdentityPageKey = `${offerId}:${trackingFrom}:${trackingTo}`;
   const qc = useQueryClient();
   const refreshTracking = async () => {
     setIsRefreshingTracking(true);
@@ -830,17 +833,28 @@ export function TrackingAdvancedCenter({
   const upsellIntelligence = useQuery({
     queryKey: ['tracking-upsells', offerId, trackingFrom, trackingTo],
     queryFn: () => apiClient.getTrackingUpsells(offerId, { from: trackingFrom, to: trackingTo }),
-    retry: false,
-  });
-  const upsellIdentities = useQuery({
-    queryKey: ['tracking-upsell-identities', offerId, trackingFrom, trackingTo],
-    queryFn: () =>
-      apiClient.getTrackingUpsellIdentities(offerId, { from: trackingFrom, to: trackingTo }),
     enabled: section === 'upsells',
     retry: false,
-    refetchInterval: 15_000,
-    refetchIntervalInBackground: true,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
   });
+  const upsellIdentities = useQuery({
+    queryKey: ['tracking-upsell-identities', offerId, trackingFrom, trackingTo, upsellIdentityOffset],
+    queryFn: () =>
+      apiClient.getTrackingUpsellIdentities(offerId, {
+        from: trackingFrom,
+        to: trackingTo,
+        limit: UPSELL_IDENTITIES_PAGE_SIZE,
+        offset: upsellIdentityOffset,
+      }),
+    enabled: section === 'upsells',
+    retry: false,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+  useEffect(() => {
+    setUpsellIdentityOffset(0);
+  }, [upsellIdentityPageKey]);
   const filteredUpsellIdentities = (upsellIdentities.data?.items ?? []).filter((identity) => {
     if (upsellBuyerFilter === 'front_only' && identity.has_upsell) return false;
     if (upsellBuyerFilter === 'with_upsell' && !identity.has_upsell) return false;
@@ -2187,11 +2201,12 @@ export function TrackingAdvancedCenter({
                     )}
                   </div>
                   <p className="mt-1 text-xs text-white/40">
-                    Todas as compras de front aprovadas. O TMX libera os links somente após
-                    confirmar o vendaId no funil correspondente da VendePay.
+                    Compras de front aprovadas no período selecionado. O TMX libera os links
+                    somente após confirmar o vendaId no funil correspondente da VendePay.
                   </p>
                   <p className="mt-1 text-xs text-white/35">
-                    A verificação consulta novamente a intent da VendePay, mas nunca altera o
+                    A consulta é instantânea e não chama a VendePay. Use “Recuperar vendaId”
+                    quando quiser validar os identificadores pendentes; isso nunca altera o
                     histórico manual de funcionou ou não funcionou.
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
@@ -2305,6 +2320,47 @@ export function TrackingAdvancedCenter({
                   <p className="px-4 py-5 text-sm text-white/40">
                     Nenhum comprador encontrado neste filtro.
                   </p>
+                )}
+                {!upsellIdentities.isLoading && (upsellIdentities.data?.total ?? 0) > 0 && (
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.08] px-4 py-3 text-xs text-white/45">
+                    <span>
+                      Exibindo {upsellIdentityOffset + 1}–
+                      {Math.min(
+                        upsellIdentityOffset + (upsellIdentities.data?.items.length ?? 0),
+                        upsellIdentities.data?.total ?? 0,
+                      )}{' '}
+                      de {upsellIdentities.data?.total} compras aprovadas.
+                    </span>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={upsellIdentityOffset === 0}
+                        onClick={() =>
+                          setUpsellIdentityOffset((offset) =>
+                            Math.max(0, offset - UPSELL_IDENTITIES_PAGE_SIZE),
+                          )
+                        }
+                      >
+                        Anterior
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={
+                          upsellIdentityOffset + (upsellIdentities.data?.items.length ?? 0) >=
+                          (upsellIdentities.data?.total ?? 0)
+                        }
+                        onClick={() =>
+                          setUpsellIdentityOffset(
+                            (offset) => offset + UPSELL_IDENTITIES_PAGE_SIZE,
+                          )
+                        }
+                      >
+                        Próxima
+                      </Button>
+                    </div>
+                  </div>
                 )}
               </div>
             </Module>

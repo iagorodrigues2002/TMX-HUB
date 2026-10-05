@@ -81,6 +81,7 @@ const migrations = [
   '066_meta_pixel_product_rules.sql',
   '067_rename_vendepay_accounts.sql',
   '068_utmify_global_offer_routing.sql',
+  '069_upsell_intelligence_performance.sql',
 ];
 
 await sql`
