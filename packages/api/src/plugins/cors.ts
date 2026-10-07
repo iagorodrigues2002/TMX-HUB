@@ -1,11 +1,24 @@
 import cors from '@fastify/cors';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 
+const ALLOWED_ORIGINS_PROD = ['https://theminex.com', 'https://app.theminex.com'];
+const ALLOWED_ORIGINS_DEV = ['http://localhost:3100', 'http://localhost:3000'];
+
+function isAllowedOrigin(origin: string): boolean {
+  if (ALLOWED_ORIGINS_PROD.includes(origin)) return true;
+  if (process.env.NODE_ENV !== 'production' && ALLOWED_ORIGINS_DEV.includes(origin)) return true;
+  return false;
+}
+
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   await app.register(cors, {
-    // Echo any origin. We accept all clients (browser CORS already enforces
-    // the host model on the user side; the API itself is authenticated separately).
-    origin: true,
+    origin: (origin, cb) => {
+      if (!origin || isAllowedOrigin(origin)) {
+        cb(null, true);
+      } else {
+        cb(new Error('CORS: origin not allowed'), false);
+      }
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [

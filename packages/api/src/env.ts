@@ -28,8 +28,17 @@ const EnvSchema = z.object({
   S3_ENDPOINT: z.string().default('http://localhost:9000'),
   S3_REGION: z.string().default('us-east-1'),
   S3_BUCKET: z.string().default('clones'),
-  S3_ACCESS_KEY: z.string().default('minioadmin'),
-  S3_SECRET_KEY: z.string().default('minioadmin'),
+  // REQUIRED_IN_PRODUCTION: must be at least 16 chars and not the MinIO default.
+  S3_ACCESS_KEY: z
+    .string()
+    .min(16)
+    .refine((s) => s !== 'minioadmin', { message: 'S3_ACCESS_KEY must not use the MinIO default' })
+    .default('minioadmin-change-me-now'),
+  S3_SECRET_KEY: z
+    .string()
+    .min(16)
+    .refine((s) => s !== 'minioadmin', { message: 'S3_SECRET_KEY must not use the MinIO default' })
+    .default('minioadmin-change-me-now'),
   S3_FORCE_PATH_STYLE: booleanFromString.default(true),
 
   MAX_RENDER_TIMEOUT_MS: numberFromString.default(90_000),
@@ -38,7 +47,13 @@ const EnvSchema = z.object({
   BROWSER_POOL_SIZE: numberFromString.default(3),
   READYZ_SKIP_OPTIONAL: booleanFromString.default(false),
 
-  WEBHOOK_SECRET: z.string().default('dev-webhook-secret-change-me-in-production'),
+  WEBHOOK_SECRET: z
+    .string()
+    .min(32)
+    .refine((s) => s !== 'dev-webhook-secret-change-me-in-production', {
+      message: 'WEBHOOK_SECRET must not use the development default',
+    })
+    .default('dev-webhook-secret-replace-before-going-live'),
   WEBHOOK_SECRET_PREV: z.string().min(1).optional(),
   EXPLODELY_REQUIRE_SIGNATURE: booleanFromString.default(true),
   EXPLODELY_WEBHOOK_SECRET: z.string().optional(),
@@ -71,6 +86,14 @@ const EnvSchema = z.object({
   RAILWAY_PROJECT_ID: z.string().default('3704cd93-6011-4e5f-be52-f229b499b018'),
   RAILWAY_ENVIRONMENT_ID: z.string().default('bbb09ce3-96ce-44d4-8a3c-d8c8f25f558b'),
   RAILWAY_API_SERVICE_ID: z.string().default('a8bb8afa-b7a3-4b41-827d-d91fd3a283a4'),
+
+  // Brevo (Sendinblue) — transactional email for invite flow.
+  // Optional in dev (skipped with warning); required in production.
+  BREVO_API_KEY: z.string().optional(),
+  BREVO_SENDER_EMAIL: z.string().email().default('convites@theminex.com'),
+  BREVO_SENDER_NAME: z.string().default('TMX Hub'),
+  // Base URL for the invite accept link — e.g. https://app.theminex.com/invite
+  INVITE_ACCEPT_URL_BASE: z.string().default('http://localhost:3100/invite'),
 
   // AssemblyAI — used by /v1/shield-jobs to verify the protected output is
   // un-transcribable. Optional; if missing, verification is silently skipped.

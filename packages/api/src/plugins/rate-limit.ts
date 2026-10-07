@@ -134,6 +134,14 @@ export const WEBHOOK_REPLAY_RATE_LIMIT = {
   keyGenerator: tokenScopedKey,
 };
 
+export const INVITE_RATE_LIMIT = {
+  max: 20,
+  timeWindow: '1 hour',
+  groupId: 'invite-create',
+  keyGenerator: (req: FastifyRequest) =>
+    `user:${(req as FastifyRequest & { user?: { sub: string } }).user?.sub ?? req.ip}`,
+};
+
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   const FailClosedRedisStore = createFailClosedRedisStore(
     app.redis as unknown as RedisRateLimitClient,

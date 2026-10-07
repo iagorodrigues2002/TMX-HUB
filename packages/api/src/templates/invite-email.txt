@@ -1,0 +1,17 @@
+TMX Hub — Convite de Acesso
+===========================
+
+Você foi convidado por {{inviterName}} para acessar o TMX Hub.
+
+Perfil de acesso: {{roleLabel}}
+Ferramentas: {{toolsText}}
+
+Para aceitar o convite, acesse o link abaixo:
+
+  {{acceptUrl}}
+
+Este convite expira em {{expiresIn}}.
+
+---
+Se você não reconhece este convite, ignore este email — nenhuma ação é necessária.
+TMX Hub | theminex.com

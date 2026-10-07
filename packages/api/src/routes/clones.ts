@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { isValidUlid, newJobId } from '../lib/ids.js';
 import { assignOwnership, requireOwnership } from '../lib/ownership-check.js';
 import { BadRequestError, ConflictError, zodToProblem } from '../lib/problem.js';
+import { assertSafeOutboundUrl } from '../lib/url-safety.js';
 import type { CloneMetadata } from '../services/job-store.js';
 
 function metaToCloneJob(meta: CloneMetadata): Record<string, unknown> {
@@ -99,6 +100,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!parsed.success) throw zodToProblem(parsed.error, req.url);
 
     const options = CloneOptionsSchema.parse(parsed.data.options ?? {});
+
+    if (options.webhookUrl) {
+      await assertSafeOutboundUrl(options.webhookUrl);
+    }
 
     if (idempotencyKey) {
       const lookup = await app.jobStore.checkIdempotency(idempotencyKey, parsed.data);

@@ -1,9 +1,13 @@
 import { InspectRequestSchema } from '@page-cloner/shared';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { zodToProblem } from '../lib/problem.js';
+import { assertSafeOutboundUrl } from '../lib/url-safety.js';
 
 interface CoreInspectModule {
-  fetchPage(url: string, opts: Record<string, unknown>): Promise<{ html: string; finalUrl: string; statusCode: number }>;
+  fetchPage(
+    url: string,
+    opts: Record<string, unknown>,
+  ): Promise<{ html: string; finalUrl: string; statusCode: number }>;
   inspectHtml(html: string, baseUrl: string): unknown;
 }
 
@@ -17,6 +21,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!parsed.success) throw zodToProblem(parsed.error, req.url);
 
     const { url } = parsed.data;
+    await assertSafeOutboundUrl(url);
+
     const core = await loadCore();
 
     const fetched = await core.fetchPage(url, { renderMode: 'static', timeoutMs: 20_000 });

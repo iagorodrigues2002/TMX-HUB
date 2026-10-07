@@ -1,11 +1,93 @@
+import { readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { ALL_TOOL_KEYS, type ToolKey } from '@page-cloner/shared';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { env } from '../env.js';
+import { sendTransactionalEmail } from '../lib/brevo.js';
 import { signJwt } from '../lib/jwt.js';
 import { hashPassword, verifyPassword } from '../lib/password.js';
 import { BadRequestError, HttpProblem, zodToProblem } from '../lib/problem.js';
-import { LOGIN_RATE_LIMIT } from '../plugins/rate-limit.js';
+import { INVITE_RATE_LIMIT, LOGIN_RATE_LIMIT } from '../plugins/rate-limit.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+function interpolate(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? '');
+}
+
+async function loadTemplate(name: string): Promise<string> {
+  return readFile(join(__dirname, '../templates', name), 'utf-8');
+}
+
+interface InviteEmailData {
+  inviterName: string;
+  roleLabel: string;
+  allowedTools?: string[];
+  acceptUrl: string;
+  expiresIn: string;
+}
+
+async function sendInviteEmail(
+  email: string,
+  data: InviteEmailData,
+): Promise<{ messageId: string } | null> {
+  if (!env.BREVO_API_KEY) {
+    // In dev, warn and skip — don't hard-fail.
+    console.warn('[invite] BREVO_API_KEY not set — email not sent.');
+    return null;
+  }
+
+  const [htmlTemplate, txtTemplate] = await Promise.all([
+    loadTemplate('invite-email.html'),
+    loadTemplate('invite-email.txt'),
+  ]);
+
+  const toolsHtml =
+    data.allowedTools && data.allowedTools.length > 0
+      ? data.allowedTools
+          .map(
+            (t) =>
+              `<span class="tools-chip" style="display:inline-block;margin:2px 4px 2px 0;padding:3px 10px;background-color:rgba(14,124,134,0.18);color:#22d3ee;border:1px solid rgba(34,211,238,0.22);border-radius:999px;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:600;">${t}</span>`,
+          )
+          .join('')
+      : '';
+
+  const toolsText =
+    data.allowedTools && data.allowedTools.length > 0
+      ? data.allowedTools.join(', ')
+      : 'Acesso completo';
+
+  const vars: Record<string, string> = {
+    inviterName: data.inviterName,
+    roleLabel: data.roleLabel,
+    toolsHtml,
+    toolsText,
+    acceptUrl: data.acceptUrl,
+    expiresIn: data.expiresIn,
+  };
+
+  // Simple template handling — strip conditional blocks not needed
+  let html = htmlTemplate;
+  if (data.allowedTools && data.allowedTools.length > 0) {
+    html = html.replace(/\{\{#if allowedTools\}\}/g, '').replace(/\{\{\/if\}\}/g, '');
+    html = html.replace(/\{\{\^if allowedTools\}\}[\s\S]*?\{\{\/if\}\}/g, '');
+  } else {
+    html = html.replace(/\{\{#if allowedTools\}\}[\s\S]*?\{\{\/if\}\}/g, '');
+    html = html.replace(/\{\{\^if allowedTools\}\}/g, '').replace(/\{\{\/if\}\}/g, '');
+  }
+  html = interpolate(html, vars);
+
+  const txt = interpolate(txtTemplate, vars);
+
+  return sendTransactionalEmail(env.BREVO_API_KEY, env.BREVO_SENDER_EMAIL, env.BREVO_SENDER_NAME, {
+    to: [{ email }],
+    subject: `${data.inviterName} convidou você para o TMX Hub`,
+    htmlContent: html,
+    textContent: txt,
+  });
+}
 
 const ToolKeySchema = z.enum(ALL_TOOL_KEYS as [ToolKey, ...ToolKey[]]);
 
@@ -183,35 +265,116 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     });
   });
 
-  // POST /v1/auth/invites — admin gera novo convite. Retorna token + URL pronta.
-  app.post('/auth/invites', { preHandler: (req) => app.requireAuth(req) }, async (req, reply) => {
-    if (req.user?.role !== 'admin') {
-      throw new ForbiddenError('Apenas admins podem criar convites.');
-    }
-    const parsed = CreateInviteSchema.safeParse(req.body);
-    if (!parsed.success) throw zodToProblem(parsed.error, req.url);
-    const days = parsed.data.expires_in_days ?? 7;
-    const me = await app.userStore.maybeGetById(req.user.sub);
-    const invite = await app.inviteStore.create({
-      createdBy: req.user.sub,
-      ...(me?.name ? { createdByName: me.name } : {}),
-      ...(parsed.data.email ? { email: parsed.data.email } : {}),
-      ...(parsed.data.name ? { name: parsed.data.name } : {}),
-      expiresInSec: days * 24 * 60 * 60,
-      ...(parsed.data.allowed_tools && parsed.data.allowed_tools.length > 0
-        ? { allowedTools: parsed.data.allowed_tools }
-        : {}),
-    });
-    return reply.code(201).send({
-      token: invite.token,
-      email: invite.email,
-      name: invite.name,
-      created_at: invite.createdAt,
-      expires_at: invite.expiresAt,
-      invited_by: invite.createdByName,
-      allowed_tools: invite.allowedTools,
-    });
-  });
+  // POST /v1/auth/invites — admin gera novo convite e envia email pelo Brevo.
+  app.post(
+    '/auth/invites',
+    { preHandler: (req) => app.requireAuth(req), config: { rateLimit: INVITE_RATE_LIMIT } },
+    async (req, reply) => {
+      if (req.user?.role !== 'admin') {
+        throw new ForbiddenError('Apenas admins podem criar convites.');
+      }
+      const parsed = CreateInviteSchema.safeParse(req.body);
+      if (!parsed.success) throw zodToProblem(parsed.error, req.url);
+      const days = parsed.data.expires_in_days ?? 7;
+      const me = await app.userStore.maybeGetById(req.user.sub);
+      const invite = await app.inviteStore.create({
+        createdBy: req.user.sub,
+        ...(me?.name ? { createdByName: me.name } : {}),
+        ...(parsed.data.email ? { email: parsed.data.email } : {}),
+        ...(parsed.data.name ? { name: parsed.data.name } : {}),
+        expiresInSec: days * 24 * 60 * 60,
+        ...(parsed.data.allowed_tools && parsed.data.allowed_tools.length > 0
+          ? { allowedTools: parsed.data.allowed_tools }
+          : {}),
+      });
+
+      const acceptUrl = `${env.INVITE_ACCEPT_URL_BASE}/${invite.token}`;
+      const inviterName = me?.name ?? req.user.sub;
+      const roleLabel = 'Membro';
+      const expiresIn = `${days} ${days === 1 ? 'dia' : 'dias'}`;
+
+      let emailResult: { messageId: string } | null = null;
+      let emailError: string | undefined;
+
+      if (invite.email) {
+        try {
+          emailResult = await sendInviteEmail(invite.email, {
+            inviterName,
+            roleLabel,
+            allowedTools: invite.allowedTools,
+            acceptUrl,
+            expiresIn,
+          });
+        } catch (err) {
+          emailError = err instanceof Error ? err.message : 'Unknown error sending email.';
+          app.log.error({ err, inviteToken: invite.token }, 'Failed to send invite email');
+        }
+      }
+
+      const body = {
+        ok: true,
+        invite: {
+          token: invite.token,
+          email: invite.email,
+          name: invite.name,
+          created_at: invite.createdAt,
+          expires_at: invite.expiresAt,
+          invited_by: invite.createdByName,
+          allowed_tools: invite.allowedTools,
+          sent_at: emailResult ? new Date().toISOString() : null,
+          message_id: emailResult?.messageId ?? null,
+        },
+      };
+
+      if (emailError) {
+        return reply.code(207).send({ ...body, email_error: emailError });
+      }
+
+      return reply.code(201).send(body);
+    },
+  );
+
+  // POST /v1/auth/invites/:token/resend — admin reenvia email do convite.
+  app.post<{ Params: { token: string } }>(
+    '/auth/invites/:token/resend',
+    { preHandler: (req) => app.requireAuth(req) },
+    async (req, reply) => {
+      if (req.user?.role !== 'admin') {
+        throw new ForbiddenError('Apenas admins podem reenviar convites.');
+      }
+      const invite = await app.inviteStore.get(req.params.token);
+      if (!invite) {
+        return reply.code(404).send({ valid: false, detail: 'Convite inválido ou expirado.' });
+      }
+      if (!invite.email) {
+        throw new BadRequestError('Este convite não tem email associado para reenvio.');
+      }
+
+      const me = await app.userStore.maybeGetById(req.user.sub);
+      const inviterName = me?.name ?? req.user.sub;
+      const acceptUrl = `${env.INVITE_ACCEPT_URL_BASE}/${invite.token}`;
+      const expiresAt = new Date(invite.expiresAt);
+      const daysLeft = Math.max(
+        1,
+        Math.ceil((expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)),
+      );
+      const expiresIn = `${daysLeft} ${daysLeft === 1 ? 'dia' : 'dias'}`;
+
+      const emailResult = await sendInviteEmail(invite.email, {
+        inviterName,
+        roleLabel: 'Membro',
+        allowedTools: invite.allowedTools,
+        acceptUrl,
+        expiresIn,
+      });
+
+      return reply.send({
+        ok: true,
+        sent_at: new Date().toISOString(),
+        message_id: emailResult?.messageId ?? null,
+      });
+    },
+  );
 
   // GET /v1/auth/invites — admin lista convites pendentes.
   app.get('/auth/invites', { preHandler: (req) => app.requireAuth(req) }, async (req, reply) => {
