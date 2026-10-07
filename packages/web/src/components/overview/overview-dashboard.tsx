@@ -1,11 +1,6 @@
 'use client';
 
-import {
-  formatCurrency,
-  formatInt,
-  formatPercent,
-  formatRoas,
-} from '@/components/dashboard/kpi-cards';
+import { formatCurrency, formatInt } from '@/components/dashboard/kpi-cards';
 import { TRACKING_DASHBOARD_STALE_TIME } from '@/components/tracking/tracking-query';
 import { DataState } from '@/components/ui/data-state';
 import { DateRangeFilter } from '@/components/ui/date-range-filter';
@@ -25,13 +20,13 @@ import {
 } from '@/lib/date-range';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import {
+  CreditCard,
   Eye,
   LayoutDashboard,
   MousePointerClick,
   Percent,
   Receipt,
   ShoppingCart,
-  TrendingUp,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -97,6 +92,8 @@ interface DatasetAccumulator {
   intraday: Map<string, { label: string; metrics: MetricParts }>;
 }
 
+const KPI_SKELETONS = ['clicks', 'page-views', 'checkouts', 'sales', 'revenue', 'conversion'];
+
 const emptyMetrics = (): MetricParts => ({ spend: 0, sales: 0, revenue: 0, ic: 0 });
 
 function addMetrics(target: MetricParts, metrics: MetricParts) {
@@ -114,6 +111,22 @@ function computedMetrics(parts: MetricParts): MetricsView {
     conversionRate: parts.ic > 0 ? parts.sales / parts.ic : null,
     roas: parts.spend > 0 ? parts.revenue / parts.spend : null,
   };
+}
+
+function formatCompactNumber(value: number) {
+  return new Intl.NumberFormat('pt-BR', {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
+function formatConversionRate(value: number | null) {
+  if (value === null || !Number.isFinite(value)) return '—';
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'percent',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
 }
 
 function accountOffers(accounts: DashboardAccountSummary[]): OfferDescriptor[] {
@@ -168,7 +181,9 @@ function buildDatasets(
     if (!group.offerNames.includes(descriptor.name)) group.offerNames.push(descriptor.name);
 
     if (snapshot) {
-      addMetrics(group.totals, snapshot.totals);
+      // Media snapshots remain the source for spend and chart series. Sales,
+      // revenue and checkout totals come from first-party tracking below.
+      group.totals.spend += snapshot.totals.spend;
       for (const day of snapshot.snapshots) {
         group.clicks += day.clicks ?? 0;
         const current = group.daily.get(day.date) ?? { ...emptyMetrics(), clicks: 0 };
@@ -181,6 +196,9 @@ function buildDatasets(
     if (summary) {
       group.pageViews += summary.page_views;
       group.fallbackClicks += summary.ad_clicks;
+      group.totals.sales += summary.paid_orders;
+      group.totals.revenue += Number(summary.paid_revenue_brl_minor) / 100;
+      group.totals.ic += summary.checkout_events;
     }
 
     for (const window of intradaySummary?.windows ?? []) {
@@ -198,13 +216,12 @@ function buildDatasets(
 
   return [...groups.values()].map((group) => {
     const totals = computedMetrics(group.totals);
-    const pageViewConversion =
-      group.pageViews > 0 ? group.totals.sales / group.pageViews : totals.conversionRate;
+    const pageViewConversion = group.pageViews > 0 ? group.totals.sales / group.pageViews : null;
 
     return {
       key: group.key,
       label: group.ownerName,
-      currency: group.currency,
+      currency: 'BRL',
       offerCount: group.offerNames.length,
       totals,
       clicks: group.clicks || group.fallbackClicks,
@@ -325,19 +342,7 @@ function Dataset({ dataset }: { dataset: OverviewDataset }) {
         </p>
       </header>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 2xl:grid-cols-6">
-        <Kpi
-          label="Vendas"
-          value={formatInt(dataset.totals.sales)}
-          icon={<ShoppingCart className="h-4 w-4" />}
-          tone="positive"
-        />
-        <Kpi
-          label="Receita"
-          value={formatCurrency(dataset.totals.revenue, dataset.currency)}
-          icon={<Receipt className="h-4 w-4" />}
-          tone="positive"
-        />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <Kpi
           label="Cliques"
           value={formatInt(dataset.clicks)}
@@ -351,17 +356,30 @@ function Dataset({ dataset }: { dataset: OverviewDataset }) {
           icon={<Eye className="h-4 w-4" />}
         />
         <Kpi
-          label="Taxa de conversão"
-          value={formatPercent(dataset.conversionRate)}
-          hint="Vendas / PageView"
-          icon={<Percent className="h-4 w-4" />}
+          label="Initiate Checkout"
+          value={formatInt(dataset.totals.ic)}
+          hint="Checkouts iniciados"
+          icon={<CreditCard className="h-4 w-4" />}
         />
         <Kpi
-          label="ROAS"
-          value={formatRoas(dataset.totals.roas)}
-          hint="Receita / investimento"
-          icon={<TrendingUp className="h-4 w-4" />}
-          tone={dataset.totals.roas !== null && dataset.totals.roas >= 1 ? 'positive' : 'warn'}
+          label="Vendas"
+          value={formatCompactNumber(dataset.totals.sales)}
+          hint="Pedidos pagos"
+          icon={<ShoppingCart className="h-4 w-4" />}
+          tone="positive"
+        />
+        <Kpi
+          label="Receita"
+          value={formatCurrency(dataset.totals.revenue, 'BRL')}
+          hint="Receita bruta paga"
+          icon={<Receipt className="h-4 w-4" />}
+          tone="positive"
+        />
+        <Kpi
+          label="Taxa de conversão"
+          value={formatConversionRate(dataset.conversionRate)}
+          hint="Vendas / PageView"
+          icon={<Percent className="h-4 w-4" />}
         />
       </div>
 
@@ -380,6 +398,30 @@ function Dataset({ dataset }: { dataset: OverviewDataset }) {
           points={dataset.intraday}
           currency={dataset.currency}
         />
+      </div>
+    </section>
+  );
+}
+
+function OverviewLoadingSkeleton() {
+  return (
+    <section
+      aria-label="Carregando indicadores da visão geral"
+      aria-live="polite"
+      className="space-y-4 rounded-xl border border-cyan-300/[0.14] bg-cyan-300/[0.025] p-3 sm:p-4"
+    >
+      <div className="h-12 animate-pulse rounded-lg bg-white/[0.04] motion-reduce:animate-none" />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+        {KPI_SKELETONS.map((skeleton) => (
+          <div
+            key={skeleton}
+            className="h-[116px] animate-pulse rounded-xl border border-white/[0.06] bg-white/[0.035] motion-reduce:animate-none"
+          />
+        ))}
+      </div>
+      <div className="grid gap-4 xl:grid-cols-2">
+        <div className="h-72 animate-pulse rounded-xl border border-white/[0.06] bg-white/[0.025] motion-reduce:animate-none" />
+        <div className="h-72 animate-pulse rounded-xl border border-white/[0.06] bg-white/[0.025] motion-reduce:animate-none" />
       </div>
     </section>
   );
@@ -492,7 +534,7 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
       </section>
 
       {isLoading ? (
-        <DataState variant="loading" title="Carregando visão geral…" />
+        <OverviewLoadingSkeleton />
       ) : hasFatalError ? (
         <DataState
           variant="error"
