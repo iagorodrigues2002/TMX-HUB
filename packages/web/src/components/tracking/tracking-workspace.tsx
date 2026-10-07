@@ -6,8 +6,7 @@ import {
   DEFAULT_TRACKING_SECTION,
   TRACKING_NAV,
   type TrackingView,
-  isTrackingView,
-  resolveTrackingSection,
+  resolveTrackingLocation,
 } from '@/components/tracking/tracking-nav';
 import {
   TrackingOfferProvider,
@@ -40,9 +39,10 @@ function TrackingWorkspaceContent() {
     isFetching,
     refetch,
   } = useTrackingOffer();
-  const requestedView = searchParams.get('view');
-  const view: TrackingView = isTrackingView(requestedView) ? requestedView : 'overview';
-  const section = resolveTrackingSection(view, searchParams.get('section'));
+  const { view, section } = resolveTrackingLocation(
+    searchParams.get('view'),
+    searchParams.get('section'),
+  );
   const activeArea = TRACKING_NAV.find((item) => item.id === view)!;
 
   const navigate = (nextView: TrackingView, nextSection = DEFAULT_TRACKING_SECTION[nextView]) => {

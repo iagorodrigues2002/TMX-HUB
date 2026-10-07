@@ -235,3 +235,25 @@ export function resolveTrackingSection(view: TrackingView, value: string | null)
     ? (value as string)
     : DEFAULT_TRACKING_SECTION[view];
 }
+
+/**
+ * Compatibility aliases published by the shared navigation contract from Lote A.
+ * They keep old command-palette/sidebar deep-links working while the tracking
+ * workspace presents the new five-area information architecture.
+ */
+export function resolveTrackingLocation(viewValue: string | null, sectionValue: string | null) {
+  if (viewValue === 'diagnostics') {
+    const diagnosticsSection = ['health', 'console', 'help'].includes(sectionValue ?? '')
+      ? sectionValue!
+      : 'health';
+    return { view: 'finance' as const, section: diagnosticsSection };
+  }
+  if (viewValue === 'destinations' && sectionValue === 'payments') {
+    return { view: 'finance' as const, section: 'payments' };
+  }
+  if (viewValue === 'destinations' && sectionValue === 'vturb') {
+    return { view: 'capture' as const, section: 'vturb' };
+  }
+  const view: TrackingView = isTrackingView(viewValue) ? viewValue : 'overview';
+  return { view, section: resolveTrackingSection(view, sectionValue) };
+}
