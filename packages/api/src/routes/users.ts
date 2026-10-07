@@ -1,8 +1,8 @@
 import { ALL_TOOL_KEYS, type ToolKey, type User } from '@page-cloner/shared';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { BadRequestError, HttpProblem, zodToProblem } from '../lib/problem.js';
 import { hashPassword, verifyPassword } from '../lib/password.js';
+import { BadRequestError, HttpProblem, zodToProblem } from '../lib/problem.js';
 
 const ToolKeySchema = z.enum(ALL_TOOL_KEYS as [ToolKey, ...ToolKey[]]);
 
@@ -25,9 +25,7 @@ const ChangeOwnPasswordSchema = z
   })
   .strict();
 
-const AdminResetOwnPasswordSchema = z
-  .object({ new_password: z.string().min(8).max(200) })
-  .strict();
+const AdminResetOwnPasswordSchema = z.object({ new_password: z.string().min(8).max(200) }).strict();
 
 class ForbiddenError extends HttpProblem {
   constructor(detail = 'Operação não permitida.') {
@@ -205,6 +203,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       ...(parsed.data.role !== undefined ? { role: parsed.data.role } : {}),
       ...(allowedTools !== undefined ? { allowedTools } : {}),
     });
+    if (parsed.data.role !== undefined || parsed.data.allowed_tools !== undefined) {
+      app.invalidateAuthUser(updated.id);
+    }
     return reply.send(userToWire(app.userStore.toPublic(updated)));
   });
 
@@ -232,6 +233,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       }
     }
     await app.userStore.delete(req.params.id);
+    app.invalidateAuthUser(req.params.id);
     await app.offerStore.removeMemberFromAll(req.params.id);
     return reply.code(204).send();
   });

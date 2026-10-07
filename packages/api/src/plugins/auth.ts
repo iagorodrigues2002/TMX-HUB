@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { env } from '../env.js';
+import { AuthUserCache } from '../lib/auth-user-cache.js';
 import { type JwtPayload, verifyJwt } from '../lib/jwt.js';
 import { hashPassword } from '../lib/password.js';
 import { HttpProblem } from '../lib/problem.js';
@@ -12,6 +13,8 @@ declare module 'fastify' {
     activityStore: ActivityStore;
     /** Hook used as `preHandler` on protected routes. */
     requireAuth: (req: FastifyRequest) => Promise<void>;
+    /** Drops cached authorization fields after role/tool changes or deletion. */
+    invalidateAuthUser: (userId: string) => void;
   }
   interface FastifyRequest {
     /** Set by requireAuth on protected routes. */
@@ -33,8 +36,10 @@ class UnauthorizedError extends HttpProblem {
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   const userStore = new UserStore(app.redis);
   const activityStore = new ActivityStore(app.redis);
+  const authUserCache = new AuthUserCache(20_000, 1_000);
   app.decorate('userStore', userStore);
   app.decorate('activityStore', activityStore);
+  app.decorate('invalidateAuthUser', (userId: string) => authUserCache.invalidate(userId));
 
   // Bootstrap admin on first boot if env vars are present and no users exist.
   if (env.ADMIN_EMAIL && env.ADMIN_PASSWORD) {
@@ -65,10 +70,15 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!token) throw new UnauthorizedError();
     const payload = verifyJwt(token, env.JWT_SECRET);
     if (!payload) throw new UnauthorizedError('Token expirado ou inválido.');
-    // Make sure the user still exists. Sobrescreve role/tools com o fresh do
-    // store pra refletir mudanças de permissão sem precisar de relogin.
-    const user = await userStore.maybeGetById(payload.sub);
-    if (!user) throw new UnauthorizedError('Usuário não encontrado.');
+    // Keep permission changes fresh without paying a Redis round-trip on every
+    // authenticated request. Mutation routes invalidate this entry eagerly.
+    let user = authUserCache.get(payload.sub);
+    if (!user) {
+      const storedUser = await userStore.maybeGetById(payload.sub);
+      if (!storedUser) throw new UnauthorizedError('Usuário não encontrado.');
+      user = { role: storedUser.role, allowedTools: storedUser.allowedTools };
+      authUserCache.set(payload.sub, user);
+    }
     req.user = {
       ...payload,
       role: user.role,
