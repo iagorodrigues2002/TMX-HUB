@@ -453,8 +453,8 @@ export function TrackingLiveConsole({
           </div>
           {funnelDetail === 'overview' ? (
             <>
-              <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-black/15 p-4 md:p-6">
-                <div className="grid grid-cols-4 text-center">
+              <div className="overflow-x-auto rounded-xl border border-white/[0.08] bg-black/15 p-4 md:p-6">
+                <div className="grid min-w-[640px] grid-cols-4 text-center">
                   {['VISITA', 'CHECKOUT', 'PEDIDO', 'COMPRADOR'].map((label) => (
                     <p key={label} className="hud-label">
                       {label}
@@ -464,7 +464,7 @@ export function TrackingLiveConsole({
                 <svg
                   viewBox="0 0 1000 170"
                   preserveAspectRatio="none"
-                  className="mt-3 h-40 w-full"
+                  className="mt-3 h-40 w-full min-w-[640px]"
                   role="img"
                   aria-label="Fluxo de conversão da visita até a compra"
                 >
@@ -491,7 +491,7 @@ export function TrackingLiveConsole({
                     <line key={x} x1={x} x2={x} y1="5" y2="165" stroke="rgba(255,255,255,.1)" />
                   ))}
                 </svg>
-                <div className="grid grid-cols-4 gap-2 text-center">
+                <div className="grid min-w-[640px] grid-cols-4 gap-2 text-center">
                   {[
                     { label: 'Visita', value: s?.visitors ?? 0, rate: '100%' },
                     {
@@ -519,7 +519,7 @@ export function TrackingLiveConsole({
                   ))}
                 </div>
               </div>
-              <div className="mt-4 grid gap-3 md:grid-cols-4">
+              <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
                 {[
                   { label: 'Visita', value: s?.visitors ?? 0, icon: Users, rate: '100%' },
                   {
@@ -550,7 +550,7 @@ export function TrackingLiveConsole({
                     <p className="mt-1 font-mono text-2xl text-white">{value}</p>
                     <p className="mt-1 text-xs text-cyan-200/65">{rate} do topo</p>
                     {index < 3 && (
-                      <span className="absolute -right-2.5 top-1/2 hidden text-white/20 md:block">
+                      <span className="absolute -right-2.5 top-1/2 hidden text-white/20 xl:block">
                         →
                       </span>
                     )}

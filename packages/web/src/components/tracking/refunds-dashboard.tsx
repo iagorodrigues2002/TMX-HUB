@@ -436,8 +436,8 @@ export function RefundsDashboard() {
               {!data?.daily.length ? (
                 <Empty />
               ) : (
-                <div className="mt-7 overflow-hidden">
-                  <div className="relative flex h-60 min-w-0 items-end gap-1.5 border-t border-white/[.16] pt-3 before:absolute before:inset-x-0 before:bottom-9 before:border-t before:border-dashed before:border-white/[.06]">
+                <div className="mt-7 overflow-x-auto pb-2">
+                  <div className="relative flex h-60 min-w-[780px] items-end gap-1.5 border-t border-white/[.16] pt-3 before:absolute before:inset-x-0 before:bottom-9 before:border-t before:border-dashed before:border-white/[.06]">
                     {data.daily.map((day) => {
                       const isHovered = hoveredDay === day.date;
                       return (

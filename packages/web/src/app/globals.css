@@ -923,10 +923,12 @@ html[data-theme="light"] [class*="bg-white/"] {
     grid-template-columns: repeat(2, 1fr);
   }
 }
-@media (min-width: 1080px) {
+@media (min-width: 1280px) {
   [data-surface="tracking"] .tmx-kpi-tier2 {
     grid-template-columns: repeat(4, 1fr);
   }
+}
+@media (min-width: 1536px) {
   [data-surface="tracking"] .tmx-kpi-tier2.tmx-kpi-tier2-five {
     grid-template-columns: repeat(5, 1fr);
   }
