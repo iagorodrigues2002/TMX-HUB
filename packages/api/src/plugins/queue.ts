@@ -4,16 +4,18 @@ import type { Redis } from 'ioredis';
 import { env } from '../env.js';
 import { makeRedis } from '../lib/redis.js';
 import { createBundleQueue } from '../queues/bundle.queue.js';
+import { createExplodelyQueue } from '../queues/explodely.queue.js';
 import { createFunnelQueue } from '../queues/funnel.queue.js';
 import type {
   BundleJobData,
+  ExplodelyJobData,
   FunnelJobData,
   MediaJobData,
   MetaJobData,
   PushcutJobData,
-  TikTokJobData,
   RenderJobData,
   ShieldJobData,
+  TikTokJobData,
   UtmifyDeliveryJobData,
   UtmifyWebEventJobData,
   VslJobData,
@@ -23,9 +25,9 @@ import { createMetaQueue } from '../queues/meta.queue.js';
 import { createPushcutQueue } from '../queues/pushcut.queue.js';
 import { createRenderQueue } from '../queues/render.queue.js';
 import { createShieldQueue } from '../queues/shield.queue.js';
+import { createTikTokQueue } from '../queues/tiktok.queue.js';
 import { createUtmifyDeliveryQueue } from '../queues/utmify-delivery.queue.js';
 import { createUtmifyWebEventQueue } from '../queues/utmify-web-event.queue.js';
-import { createTikTokQueue } from '../queues/tiktok.queue.js';
 import { createVslQueue } from '../queues/vsl.queue.js';
 
 declare module 'fastify' {
@@ -42,6 +44,7 @@ declare module 'fastify' {
     utmifyWebEventQueue: Queue<UtmifyWebEventJobData>;
     pushcutQueue: Queue<PushcutJobData>;
     tiktokQueue: Queue<TikTokJobData>;
+    explodelyQueue: Queue<ExplodelyJobData>;
   }
 }
 
@@ -73,6 +76,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   const utmifyWebEventQueue = createUtmifyWebEventQueue(env.REDIS_URL);
   const pushcutQueue = createPushcutQueue(env.REDIS_URL);
   const tiktokQueue = createTikTokQueue(env.REDIS_URL);
+  const explodelyQueue = createExplodelyQueue(env.REDIS_URL);
 
   app.decorate('redis', redis);
   app.decorate('renderQueue', renderQueue);
@@ -86,6 +90,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.decorate('utmifyWebEventQueue', utmifyWebEventQueue);
   app.decorate('pushcutQueue', pushcutQueue);
   app.decorate('tiktokQueue', tiktokQueue);
+  app.decorate('explodelyQueue', explodelyQueue);
 
   app.addHook('onClose', async () => {
     await renderQueue.close();
@@ -99,6 +104,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     await utmifyWebEventQueue.close();
     await pushcutQueue.close();
     await tiktokQueue.close();
+    await explodelyQueue.close();
     await redis.quit();
   });
 };

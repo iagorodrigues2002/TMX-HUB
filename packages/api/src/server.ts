@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import { env } from './env.js';
+import { normalizeVendepay } from './integrations/vendepay/normalize.js';
 import { logger } from './lib/logger.js';
 import authPlugin from './plugins/auth.js';
 import corsPlugin from './plugins/cors.js';
@@ -11,20 +12,20 @@ import rateLimitPlugin from './plugins/rate-limit.js';
 import storagePlugin from './plugins/storage.js';
 import swaggerPlugin from './plugins/swagger.js';
 import routes from './routes/index.js';
-import { normalizeVendepay } from './integrations/vendepay/normalize.js';
 import { convertToBrlMinor } from './services/exchange-rate.js';
 import { runRecoveryEmailAutomation } from './services/recovery-automation.js';
 import { runVturbDeliveries } from './services/vturb.js';
 import { createBundleWorker } from './workers/bundle.worker.js';
+import { createExplodelyWorker } from './workers/explodely.worker.js';
 import { createFunnelWorker } from './workers/funnel.worker.js';
 import { createMediaWorker } from './workers/media.worker.js';
 import { createMetaWorker } from './workers/meta.worker.js';
 import { createPushcutDeliveryWorker } from './workers/pushcut-delivery.worker.js';
 import { createRenderWorker } from './workers/render.worker.js';
 import { createShieldWorker } from './workers/shield.worker.js';
+import { createTikTokWorker } from './workers/tiktok.worker.js';
 import { createUtmifyDeliveryWorker } from './workers/utmify-delivery.worker.js';
 import { createUtmifyWebEventWorker } from './workers/utmify-web-event.worker.js';
-import { createTikTokWorker } from './workers/tiktok.worker.js';
 import { createVslWorker } from './workers/vsl.worker.js';
 
 // TODO(auth): Authentication is intentionally skipped for the MVP.
@@ -63,6 +64,7 @@ async function main() {
   // worker responsible for paid/refunded/chargeback delivery.
   const utmifyDeliveryWorker = createUtmifyDeliveryWorker();
   const tikTokWorker = createTikTokWorker();
+  const explodelyWorker = createExplodelyWorker();
   await app.utmifyDeliveryQueue.resume();
   // PostgreSQL is the durable outbox. Redis may contain thousands of duplicate
   // recovery jobs from an interrupted replay, so rebuild the transient queue
@@ -110,9 +112,7 @@ async function main() {
         AND d.state='dead'
         AND d.last_error LIKE '%RATE_LIMIT_REACHED%'
     `;
-    const urgentUtmify = await app.db<
-      { id: string; status: string; next_attempt_at: Date }[]
-    >`
+    const urgentUtmify = await app.db<{ id: string; status: string; next_attempt_at: Date }[]>`
       SELECT d.id,COALESCE(o.status,'pending') AS status,d.next_attempt_at
       FROM tracking_delivery_outbox d
       LEFT JOIN tracking_orders o ON o.id=d.order_id
@@ -142,7 +142,11 @@ async function main() {
             // changes next_attempt_at and therefore creates one fresh job.
             jobId: `outbox-${id}-${nextAttemptAt.getTime()}`,
             lifo: true,
-            priority: ['paid','refunded','chargeback'].includes(status) ? 1 : status === 'abandoned' ? 2 : 10,
+            priority: ['paid', 'refunded', 'chargeback'].includes(status)
+              ? 1
+              : status === 'abandoned'
+                ? 2
+                : 10,
           },
         })),
       );
@@ -245,7 +249,11 @@ async function main() {
     `;
     await Promise.allSettled(
       pendingTikTok.map(({ id }) =>
-        app.tiktokQueue.add('send', { deliveryId: id }, { jobId: `${id}-recovery-${Math.floor(Date.now() / 30_000)}` }),
+        app.tiktokQueue.add(
+          'send',
+          { deliveryId: id },
+          { jobId: `${id}-recovery-${Math.floor(Date.now() / 30_000)}` },
+        ),
       ),
     );
   };
@@ -379,7 +387,15 @@ async function main() {
       'pushcut delivery worker did not start — sale notifications will not be sent',
     );
   if (!tikTokWorker)
-    app.log.error({ ...missingEnv }, 'tiktok worker did not start — Events API deliveries will not be sent');
+    app.log.error(
+      { ...missingEnv },
+      'tiktok worker did not start — Events API deliveries will not be sent',
+    );
+  if (!explodelyWorker)
+    app.log.error(
+      { DATABASE_URL: missingEnv.DATABASE_URL },
+      'explodely worker did not start — webhooks will remain received',
+    );
   // Disabled intentionally: this legacy dashboard importer authenticates with
   // the operator's UTMify login/password once per configured offer. Besides
   // being unnecessary for server-side order/event delivery (which uses the
@@ -409,6 +425,7 @@ async function main() {
       await utmifyWebEventWorker?.close();
       await pushcutDeliveryWorker?.close();
       await tikTokWorker?.close();
+      await explodelyWorker?.close();
       app.log.info('shutdown complete');
       process.exit(0);
     } catch (err) {

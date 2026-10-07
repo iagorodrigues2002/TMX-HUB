@@ -7,10 +7,9 @@ import buildsRoutes from './builds.js';
 import clonesRoutes from './clones.js';
 import formsRoutes from './forms.js';
 import funnelJobsRoutes from './funnel-jobs.js';
-import healthRoutes from './health.js';
 import googleAdsAdminRoutes from './google-ads-admin.js';
 import googleAdsOAuthRoutes from './google-ads-oauth.js';
-import tiktokAdsAdminRoutes from './tiktok-ads-admin.js';
+import healthRoutes from './health.js';
 import inspectRoutes from './inspect.js';
 import linksRoutes from './links.js';
 import mediaJobsRoutes from './media-jobs.js';
@@ -23,15 +22,17 @@ import pushcutAdminRoutes from './pushcut-admin.js';
 import recoveryAdminRoutes from './recovery-admin.js';
 import refundsDashboardRoutes from './refunds-dashboard.js';
 import shieldJobsRoutes from './shield-jobs.js';
+import tiktokAdsAdminRoutes from './tiktok-ads-admin.js';
 import trackingAdminRoutes from './tracking-admin.js';
 import trackingAdvancedRoutes from './tracking-advanced.js';
 import trackingOverviewRoutes from './tracking-overview.js';
 import trackingPublicRoutes from './tracking-public.js';
 import usersRoutes from './users.js';
-import utmifyTrackingAdminRoutes from './utmify-tracking-admin.js';
 import utmifyGlobalAdminRoutes from './utmify-global-admin.js';
+import utmifyTrackingAdminRoutes from './utmify-tracking-admin.js';
 import vslJobsRoutes from './vsl-jobs.js';
 import webhookTestRoutes from './webhook-test.js';
+import explodelyWebhookRoutes from './webhooks-explodely.js';
 
 /**
  * Mapeia prefixos de path (sob /v1) → ToolKey requerida. Paths não listados
@@ -79,6 +80,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       // Stays public; the ULID in the URL is the capability token.
       await v1.register(previewRoutes);
       await v1.register(trackingPublicRoutes);
+      await v1.register(explodelyWebhookRoutes);
 
       // Everything below requires a valid JWT.
       await v1.register(async (protectedRoutes) => {
