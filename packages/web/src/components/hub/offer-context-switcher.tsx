@@ -3,7 +3,9 @@
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -11,7 +13,7 @@ import { type OfferView, apiClient } from '@/lib/api-client';
 import { useQuery } from '@tanstack/react-query';
 import { Store } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { type ReactNode, createContext, useContext, useEffect, useState } from 'react';
+import { type ReactNode, createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 const OFFER_STORAGE_KEY = 'tmx-ui.offer.current';
 export const OPEN_OFFER_SWITCHER_EVENT = 'tmx-ui.offer-switcher.open';
@@ -34,8 +36,19 @@ export function isOfferContextPath(pathname: string) {
   );
 }
 
-function offerLabel(offer: OfferView) {
-  return offer.companyName ? `${offer.name} · ${offer.companyName}` : offer.name;
+function groupOffersByCompany(offers: OfferView[]) {
+  const groups = new Map<string, OfferView[]>();
+  for (const offer of offers) {
+    const company = offer.companyName?.trim() || 'Sem empresa';
+    groups.set(company, [...(groups.get(company) ?? []), offer]);
+  }
+
+  return [...groups.entries()]
+    .sort(([left], [right]) => left.localeCompare(right, 'pt-BR'))
+    .map(([company, companyOffers]) => ({
+      company,
+      offers: companyOffers.sort((left, right) => left.name.localeCompare(right.name, 'pt-BR')),
+    }));
 }
 
 export function OfferContextProvider({ children }: { children: ReactNode }) {
@@ -105,6 +118,7 @@ export function OfferContextSwitcher() {
   const { offers, currentOfferId, isLoading, isError, retry, setCurrentOfferId } =
     useOfferContext();
   const [open, setOpen] = useState(false);
+  const offersByCompany = useMemo(() => groupOffersByCompany(offers), [offers]);
 
   useEffect(() => {
     const handleOpen = () => setOpen(true);
@@ -139,10 +153,15 @@ export function OfferContextSwitcher() {
         </SelectTrigger>
         <SelectContent align="start" className="border-border/60">
           {isError && <SelectItem value="__retry">Tentar carregar novamente</SelectItem>}
-          {offers.map((offer) => (
-            <SelectItem key={offer.id} value={offer.id}>
-              {offerLabel(offer)}
-            </SelectItem>
+          {offersByCompany.map((group) => (
+            <SelectGroup key={group.company}>
+              <SelectLabel>{group.company}</SelectLabel>
+              {group.offers.map((offer) => (
+                <SelectItem key={offer.id} value={offer.id}>
+                  {offer.name}
+                </SelectItem>
+              ))}
+            </SelectGroup>
           ))}
         </SelectContent>
       </Select>
