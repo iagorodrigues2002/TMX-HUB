@@ -144,6 +144,8 @@ export function DataState({
       className={cn(
         'glass-card flex min-h-32 flex-col items-center justify-center gap-3 p-6 text-center',
         variant === 'loading' && 'tmx-data-state-loading',
+        variant === 'error' && 'tmx-data-state-error',
+        variant !== 'loading' && 'tmx-data-state-content',
         className,
       )}
       data-variant={variant}
@@ -153,11 +155,11 @@ export function DataState({
         className={cn(
           'h-5 w-5',
           variant === 'loading' && 'animate-spin text-primary',
-          variant === 'error' && 'text-danger',
+          variant === 'error' && 'tmx-error-icon text-danger',
           variant === 'empty' && 'text-white/45',
         )}
       />
-      <div className="max-w-lg space-y-1">
+      <div className={cn('max-w-lg space-y-1', variant === 'error' && 'tmx-error-message')}>
         <p className="text-sm font-semibold text-white">{title}</p>
         {description && <p className="text-sm leading-6 text-white/55">{description}</p>}
         {suggestion && (
@@ -173,10 +175,12 @@ export function DataState({
           size="sm"
           className="min-h-11"
           disabled={isRetrying}
+          loading={isRetrying}
+          loadingLabel="Tentando novamente…"
           onClick={onRetry}
         >
-          <RefreshCw className={cn('h-4 w-4', isRetrying && 'animate-spin')} />
-          {isRetrying ? 'Tentando novamente…' : 'Tentar novamente'}
+          <RefreshCw className="h-4 w-4" />
+          Tentar novamente
         </Button>
       )}
       {action}
