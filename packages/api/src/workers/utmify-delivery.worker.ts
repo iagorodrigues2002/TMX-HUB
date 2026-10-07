@@ -12,6 +12,7 @@ import { makeRedis } from '../lib/redis.js';
 import { decryptSecret } from '../lib/secret-box.js';
 import { assertUtmifyHost } from '../lib/utmify-hosts.js';
 import { UTMIFY_DELIVERY_QUEUE_NAME, type UtmifyDeliveryJobData } from '../queues/index.js';
+import { trackingDeliveryFailureState } from '../services/tracking-delivery-retry.js';
 
 export function buildUtmifyNetworkParameters(source: NetworkParams): NetworkIdentifiers {
   return canonicalNetworkIdentifiers(source);
@@ -136,15 +137,21 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
       );
       return;
     }
+    let currentAttempt = row.attempts;
     try {
-      if (row.amount_minor === null || !row.currency) {
-        throw new Error('Pedido sem valor ou moeda para envio à UTMify.');
-      }
-      await db`
+      const [attempt] = await db<{ attempts: number }[]>`
           UPDATE tracking_delivery_outbox
           SET state = 'processing', attempts = attempts + 1
           WHERE id = ${row.id}
+          RETURNING attempts
         `;
+      currentAttempt = attempt?.attempts ?? currentAttempt + 1;
+      // Count validation failures too. Previously this check ran before the
+      // increment, so legacy orders without amount/currency retried forever
+      // with attempts=0 and could remain claimed as processing after a stop.
+      if (row.amount_minor === null || !row.currency) {
+        throw new Error('Pedido sem valor ou moeda para envio à UTMify.');
+      }
       // Always report in BRL when the ingestion converted successfully.
       // UTMify aggregates in one currency per dashboard, and the operator's
       // dashboards are all BRL. If conversion didn't happen (rate unknown),
@@ -243,9 +250,10 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
       const message = error instanceof Error ? error.message : String(error);
       if (message.includes('RATE_LIMIT_REACHED') || message.includes('UTMify HTTP 429'))
         rateLimitedUntil = Date.now() + 120_000;
+      const failureState = trackingDeliveryFailureState(currentAttempt);
       await db`
           UPDATE tracking_delivery_outbox
-          SET state = CASE WHEN attempts >= 8 THEN 'dead' ELSE 'failed' END,
+          SET state = ${failureState},
               last_error = ${message},
               next_attempt_at = now() + make_interval(secs => LEAST(3600, 5 * power(2, attempts)))
           WHERE id = ${row.id}
