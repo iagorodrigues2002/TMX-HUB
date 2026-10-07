@@ -2,6 +2,7 @@
 
 import { TrackingRefundsSummary } from '@/components/tracking/refunds-dashboard';
 import { DiagnosticsSection } from '@/components/tracking/sections/diagnostics/diagnostics-section';
+import { GatewaysSection } from '@/components/tracking/sections/finance/gateways-section';
 import {
   TrackingSectionContent,
   type TrackingSectionId,
@@ -22,6 +23,9 @@ export function FinanceSection({
   }
   if (section === 'health' || section === 'console' || section === 'help') {
     return <DiagnosticsSection offerId={offerId} canManage={canManage} section={section} />;
+  }
+  if (section === 'payments') {
+    return <GatewaysSection offerId={offerId} canManage={canManage} />;
   }
   return (
     <TrackingSectionContent
