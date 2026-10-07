@@ -1,3 +1,5 @@
+import { constants } from 'node:zlib';
+import compress from '@fastify/compress';
 import Fastify from 'fastify';
 import { env } from './env.js';
 import { normalizeVendepay } from './integrations/vendepay/normalize.js';
@@ -42,8 +44,15 @@ export async function buildApp() {
     disableRequestLogging: process.env.NODE_ENV === 'production',
   });
 
-  // TODO(perf): Register @fastify/compress with Brotli/gzip and a 1 KiB threshold
-  // once the dependency is approved for this package.
+  await app.register(compress, {
+    global: true,
+    encodings: ['br', 'gzip', 'deflate'],
+    threshold: 1024,
+    brotliOptions: {
+      params: { [constants.BROTLI_PARAM_QUALITY]: 4 },
+    },
+  });
+
   // Order matters: queue first (decorates app.redis), then storage (uses redis),
   // then auth (decorates app.userStore + activityStore + requireAuth).
   await app.register(queuePlugin);
