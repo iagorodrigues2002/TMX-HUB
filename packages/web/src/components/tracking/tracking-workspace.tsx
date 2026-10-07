@@ -6,6 +6,7 @@ import {
   DEFAULT_TRACKING_SECTION,
   TRACKING_NAV,
   type TrackingView,
+  buildTrackingHref,
   resolveTrackingLocation,
 } from '@/components/tracking/tracking-nav';
 import {
@@ -46,10 +47,17 @@ function TrackingWorkspaceContent() {
   const activeArea = TRACKING_NAV.find((item) => item.id === view)!;
 
   const navigate = (nextView: TrackingView, nextSection = DEFAULT_TRACKING_SECTION[nextView]) => {
-    const next = new URLSearchParams(searchParams.toString());
-    next.set('view', nextView);
-    next.set('section', nextSection);
-    router.push(`${pathname}?${next.toString()}`, { scroll: false });
+    if (!activeOfferId) return;
+    router.push(
+      buildTrackingHref({
+        view: nextView,
+        section: nextSection,
+        offerId: activeOfferId,
+        pathname,
+        searchParams: searchParams.toString(),
+      }),
+      { scroll: false },
+    );
   };
 
   return (

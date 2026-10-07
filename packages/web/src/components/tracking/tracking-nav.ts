@@ -233,6 +233,35 @@ export const DEFAULT_TRACKING_SECTION: Record<TrackingView, string> = {
   finance: 'payments',
 };
 
+interface BuildTrackingHrefOptions {
+  view: TrackingView;
+  section?: string | null;
+  offerId: string;
+  pathname?: string;
+  searchParams?: string;
+}
+
+export function buildTrackingHref({
+  view,
+  section,
+  offerId,
+  pathname = '/tracking',
+  searchParams = '',
+}: BuildTrackingHrefOptions) {
+  const current = new URLSearchParams(searchParams);
+  const next = new URLSearchParams();
+
+  next.set('offer', offerId);
+  next.set('view', view);
+  if (section) next.set('section', section);
+
+  current.forEach((value, key) => {
+    if (!next.has(key) && key !== 'section') next.append(key, value);
+  });
+
+  return `${pathname}?${next.toString()}`;
+}
+
 export function isTrackingView(value: string | null): value is TrackingView {
   return TRACKING_NAV.some((area) => area.id === value);
 }
