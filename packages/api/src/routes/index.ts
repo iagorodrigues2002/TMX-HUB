@@ -53,6 +53,7 @@ const TOOL_PATH_MAP: Array<{ prefix: string; tools: ToolKey[] }> = [
   { prefix: '/v1/webhook-test', tools: ['webhook-tester'] },
   { prefix: '/v1/offers', tools: ['ofertas'] },
   { prefix: '/v1/dashboard', tools: ['ofertas'] },
+  { prefix: '/v1/tracking', tools: ['ofertas'] },
 ];
 
 class ToolForbiddenError extends HttpProblem {
