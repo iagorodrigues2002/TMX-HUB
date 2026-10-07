@@ -9,6 +9,7 @@
     "dev": "tsx watch src/server.ts",
     "start": "node scripts/migrate.mjs && node dist/server.js",
     "migrate": "node scripts/migrate.mjs",
+    "purge:tracking-events": "node scripts/purge-old-events.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",

@@ -84,6 +84,9 @@ const migrations = [
   '069_upsell_intelligence_performance.sql',
   '070_explodely_gateway.sql',
   '071_tracking_perf_indices.sql',
+  '072_google_ads_oauth_tenant_binding.sql',
+  '073_tracking_retention_and_consents.sql',
+  '074_offer_member_roles.sql',
 ];
 
 await sql`
