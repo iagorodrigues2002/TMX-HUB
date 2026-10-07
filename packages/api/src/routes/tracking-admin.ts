@@ -1287,7 +1287,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     },
   );
 
-  app.get<{ Params: { id: string } }>(
+  app.get<{ Params: { id: string }; Querystring: { connection_id?: string } }>(
     '/offers/:id/tracking/vendepay/receipts',
     async (req, reply) => {
       await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
@@ -1303,6 +1303,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         JOIN tracking_projects p ON p.id = v.project_id
         LEFT JOIN tracking_orders o ON o.id = r.order_id
         WHERE p.offer_id = ${req.params.id}
+          AND (${req.query.connection_id ?? null}::text IS NULL OR r.connection_id = ${req.query.connection_id ?? null})
         ORDER BY r.received_at DESC
         LIMIT 100
       `;
@@ -2341,6 +2342,72 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         currency_fixed: currencyFixed,
         brl_filled: brlFilled,
         failures,
+      });
+    },
+  );
+
+  // Re-apply lifecycle events kept in the immutable webhook receipt ledger.
+  // This only changes historical refunded/chargeback orders, so it never
+  // replays a paid purchase or emits a conversion a second time.
+  app.post<{ Params: { id: string } }>(
+    '/offers/:id/tracking/orders/backfill-reversals',
+    async (req, reply) => {
+      await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
+      if (!app.db) return reply.code(503).send(databaseUnavailable);
+      const receipts = await app.db<Array<{ payload: unknown; connection_id: string }>>`
+        SELECT r.payload, r.connection_id
+        FROM webhook_receipts r
+        JOIN vendepay_connections c ON c.id = r.connection_id
+        JOIN tracking_projects p ON p.id = c.project_id
+        WHERE p.offer_id = ${req.params.id}
+          AND r.received_at >= now() - interval '180 days'
+        ORDER BY r.received_at ASC
+        LIMIT 5000
+      `;
+      let recognized = 0;
+      let updated = 0;
+      let missingOrder = 0;
+      for (const receipt of receipts) {
+        const normalized = normalizeVendepay(receipt.payload);
+        if (
+          normalized.kind !== 'processable' ||
+          !['refunded', 'chargeback'].includes(normalized.event.status)
+        )
+          continue;
+        recognized += 1;
+        const event = normalized.event;
+        const rows = await app.db`
+          UPDATE tracking_orders o
+          SET
+            status = CASE
+              WHEN o.status = 'chargeback' THEN 'chargeback'
+              WHEN o.status = 'refunded' AND ${event.status} = 'refunded' THEN 'refunded'
+              ELSE ${event.status}
+            END,
+            refunded_at = CASE
+              WHEN ${event.status} = 'refunded' THEN COALESCE(o.refunded_at, ${event.occurredAt})
+              ELSE o.refunded_at
+            END,
+            chargeback_at = CASE
+              WHEN ${event.status} = 'chargeback' THEN COALESCE(o.chargeback_at, ${event.occurredAt})
+              ELSE o.chargeback_at
+            END,
+            updated_at = now()
+          FROM tracking_projects p
+          WHERE o.project_id = p.id
+            AND p.offer_id = ${req.params.id}
+            AND o.gateway_connection_id = ${receipt.connection_id}
+            AND o.external_id = ${event.transactionId}
+          RETURNING o.id
+        `;
+        if (rows.length) updated += 1;
+        else missingOrder += 1;
+      }
+      return reply.send({
+        inspected: receipts.length,
+        recognized,
+        updated,
+        missing_order: missingOrder,
       });
     },
   );

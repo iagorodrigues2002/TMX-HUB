@@ -157,10 +157,27 @@ export function normalizeExplodely(
     };
   }
   if (!field(payload, 'currency', 'currency_code')) diagnostics.push('currency_not_provided');
-  const trackingId = field(payload, 'tracking_id', 'trackingId', 'Tracking ID', 'custom1');
+  const trackingId = field(
+    payload,
+    'tracking_id',
+    'trackingId',
+    'Tracking ID',
+    'tid',
+    'src',
+    'vtid',
+    'custom1',
+  );
   const source: Record<string, string> = {};
   for (const key of [
     'affiliate',
+    'src',
+    'tid',
+    'vtid',
+    'sck',
+    'sid',
+    'subid',
+    'xcod',
+    ...Array.from({ length: 20 }, (_, index) => `sub${index + 1}`),
     'custom1',
     'custom2',
     'custom3',
@@ -175,6 +192,8 @@ export function normalizeExplodely(
     'gbraid',
     'wbraid',
     'fbclid',
+    'fbc',
+    'fbp',
     '_fbc',
     '_fbp',
     'ttclid',
@@ -185,6 +204,9 @@ export function normalizeExplodely(
     const value = field(payload, key);
     if (value) source[key] = value;
   }
+  if (trackingId && !source.src) source.src = trackingId;
+  if (source.fbc && !source._fbc) source._fbc = source.fbc;
+  if (source.fbp && !source._fbp) source._fbp = source.fbp;
   const buyer = Object.fromEntries(
     [
       ['name', field(payload, 'customerName', 'customer_name', 'Customer Name')],

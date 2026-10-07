@@ -146,8 +146,12 @@ const normalizeStatus = (raw = ''): VendepayStatus => {
     /(^|[._])(recusad[oa]|falha|falhou|failed|declined)$/.test(status)
   )
     return 'refused';
-  if (['refunded', 'refund', 'reembolsado'].includes(status)) return 'refunded';
-  if (['chargeback', 'dispute'].includes(status)) return 'chargeback';
+  if (['refunded', 'refund', 'reembolsado', 'reembolso'].includes(status)) return 'refunded';
+  // VendePay's transaction ledger labels this lifecycle event simply as
+  // "Charge" (with the human description "Taxa de chargeback"). Treat it
+  // exactly like the explicit webhook spellings so the original order is
+  // updated instead of remaining with an unknown status.
+  if (['chargeback', 'charge', 'dispute'].includes(status)) return 'chargeback';
   if (['cancelled', 'canceled', 'cancelado'].includes(status)) return 'cancelled';
   if (['carrinho.abandonado', 'carrinho_abandonado', 'abandonado'].includes(status))
     return 'abandoned';
@@ -167,7 +171,15 @@ const statusAt = (
   ]
     .map((path) => textAt(value, [path]))
     .filter((candidate): candidate is string => Boolean(candidate));
-  const recognized = candidates.find((candidate) => normalizeStatus(candidate) !== 'unknown');
+  // A lifecycle notification can retain the original transaction status
+  // (`completed`) while carrying the actual transition in `event` or `type`
+  // (`Charge` / `Reembolso`). Reversals must win over a generic paid status.
+  const reversal = candidates.find((candidate) => {
+    const status = normalizeStatus(candidate);
+    return status === 'refunded' || status === 'chargeback';
+  });
+  const recognized =
+    reversal ?? candidates.find((candidate) => normalizeStatus(candidate) !== 'unknown');
   const rawStatus = recognized ?? candidates[0];
   return { status: normalizeStatus(rawStatus), ...(rawStatus ? { rawStatus } : {}) };
 };
@@ -401,23 +413,24 @@ export function normalizeVendepay(raw: unknown, receivedAt = new Date()): Vendep
     'order.trackeamentoId',
     'checkout.trackeamentoId',
   ]);
-  const vendid = textAt(payload, [
-    'vendid',
-    'vendId',
-    'vend_id',
-    'data.vendid',
-    'data.vendId',
-    'order.vendid',
-    'transaction.vendid',
-    'customer.vendid',
-    'buyer.vendid',
-    'vendaId',
-    'venda_id',
-    'data.vendaId',
-    'data.venda_id',
-    'order.vendaId',
-    'transaction.vendaId',
-  ]) ?? textByNormalizedKey(payload, new Set(['vendid', 'vendaid']));
+  const vendid =
+    textAt(payload, [
+      'vendid',
+      'vendId',
+      'vend_id',
+      'data.vendid',
+      'data.vendId',
+      'order.vendid',
+      'transaction.vendid',
+      'customer.vendid',
+      'buyer.vendid',
+      'vendaId',
+      'venda_id',
+      'data.vendaId',
+      'data.venda_id',
+      'order.vendaId',
+      'transaction.vendaId',
+    ]) ?? textByNormalizedKey(payload, new Set(['vendid', 'vendaid']));
   const paymentMethod = paymentMethodCode(
     textAt(payload, [
       'payment_method',

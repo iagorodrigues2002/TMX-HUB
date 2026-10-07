@@ -31,6 +31,20 @@ export type VturbPlayer = {
   duration: number;
   created_at?: string;
 };
+export type VturbComparisonGroup = {
+  id: string;
+  name: string;
+  player_ids: string[];
+  players: Array<{
+    player_id: string;
+    traffic_percentage: number;
+    started_at: string | null;
+    locked: boolean;
+  }>;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+};
 export type VturbCountryMetric = {
   grouped_field: string;
   total_viewed_device_uniq: number;
@@ -62,6 +76,32 @@ export type VturbAnalytics = {
     total_conversions: number;
     total_amount_brl: number;
   }>;
+};
+export type VturbComparisonAnalytics = {
+  kind: 'comparison_group';
+  comparison_group: VturbComparisonGroup;
+  period: { from: string; to: string };
+  stats: {
+    stats?: Array<{
+      player_id: string;
+      pitch_time?: number;
+      video_duration?: number;
+      views?: { total_uniq_device?: number };
+      plays?: { total_uniq_device?: number };
+      conversions?: {
+        total?: number;
+        total_amount_brl?: number;
+        total_amount_usd?: number;
+        total_amount_eur?: number;
+      };
+      pitch_retention_rate?: number;
+      play_rate?: number;
+      conversion_rate?: number;
+      rpv_brl?: number;
+      rpv_usd?: number;
+      rpv_eur?: number;
+    }>;
+  };
 };
 export type TrackingOrderKind = TrackingProductKind | 'unknown';
 
@@ -1915,7 +1955,11 @@ export const apiClient = {
       provider: string;
       name: string;
       enabled: boolean;
-      settings: { product_id?: string | null; environment?: 'sandbox' | 'production' };
+      settings: {
+        product_id?: string | null;
+        currency?: string;
+        environment?: 'sandbox' | 'production';
+      };
       api_key_configured: boolean;
       signing_secret_configured: boolean;
       last_validated_at: string | null;
@@ -2058,7 +2102,10 @@ export const apiClient = {
     });
   },
 
-  async listVendepayReceipts(id: string): Promise<{
+  async listVendepayReceipts(
+    id: string,
+    connectionId?: string,
+  ): Promise<{
     receipts: Array<{
       id: string;
       connection_id: string;
@@ -2075,7 +2122,17 @@ export const apiClient = {
       product?: Record<string, string>;
     }>;
   }> {
-    return request(`/v1/offers/${id}/tracking/vendepay/receipts`);
+    const query = connectionId ? `?connection_id=${encodeURIComponent(connectionId)}` : '';
+    return request(`/v1/offers/${id}/tracking/vendepay/receipts${query}`);
+  },
+
+  async backfillTrackingReversals(id: string): Promise<{
+    inspected: number;
+    recognized: number;
+    updated: number;
+    missing_order: number;
+  }> {
+    return request(`/v1/offers/${id}/tracking/orders/backfill-reversals`, { method: 'POST' });
   },
 
   async getTrackingSummary(
@@ -2564,6 +2621,7 @@ export const apiClient = {
       enabled: boolean;
       endpoint_url?: string;
       player_id?: string;
+      comparison_group_id?: string;
       conversion_param?: string;
       analytics_token_configured?: boolean;
       last_validated_at?: string;
@@ -2581,15 +2639,19 @@ export const apiClient = {
       analytics_api_token?: string;
       endpoint_url?: string;
       player_id?: string | null;
+      comparison_group_id?: string | null;
       conversion_param: string;
     },
-  ): Promise<{ ok: boolean; players: VturbPlayer[] }> {
+  ): Promise<{ ok: boolean; players: VturbPlayer[]; comparison_groups: VturbComparisonGroup[] }> {
     return request(`/v1/offers/${id}/tracking/vturb`, { method: 'PATCH', body });
   },
 
-  async getVturbPlayers(
-    id: string,
-  ): Promise<{ players: VturbPlayer[]; selected_player_id: string | null }> {
+  async getVturbPlayers(id: string): Promise<{
+    players: VturbPlayer[];
+    comparison_groups: VturbComparisonGroup[];
+    selected_player_id: string | null;
+    selected_comparison_group_id: string | null;
+  }> {
     return request(`/v1/offers/${id}/tracking/vturb/players`);
   },
 
@@ -2597,9 +2659,11 @@ export const apiClient = {
     id: string,
     period: { from: string; to: string },
     playerId?: string,
-  ): Promise<VturbAnalytics> {
+    comparisonGroupId?: string,
+  ): Promise<VturbAnalytics | VturbComparisonAnalytics> {
     const params = new URLSearchParams({ from: period.from, to: period.to });
     if (playerId) params.set('player_id', playerId);
+    if (comparisonGroupId) params.set('comparison_group_id', comparisonGroupId);
     return request(`/v1/offers/${id}/tracking/vturb/analytics?${params.toString()}`);
   },
 

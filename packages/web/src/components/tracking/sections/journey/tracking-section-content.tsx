@@ -293,6 +293,7 @@ function VturbIntelligence({
     enabled: boolean;
     endpoint_url?: string;
     player_id?: string;
+    comparison_group_id?: string;
     conversion_param?: string;
     analytics_token_configured?: boolean;
     last_validated_at?: string;
@@ -303,12 +304,19 @@ function VturbIntelligence({
   const [token, setToken] = useState('');
   const [endpoint, setEndpoint] = useState(config?.endpoint_url ?? '');
   const [playerId, setPlayerId] = useState(config?.player_id ?? '');
+  const [comparisonGroupId, setComparisonGroupId] = useState(config?.comparison_group_id ?? '');
   const [conversionParam, setConversionParam] = useState(config?.conversion_param ?? 'vtid');
   useEffect(() => {
     setEndpoint(config?.endpoint_url ?? '');
     setPlayerId(config?.player_id ?? '');
+    setComparisonGroupId(config?.comparison_group_id ?? '');
     setConversionParam(config?.conversion_param ?? 'vtid');
-  }, [config?.endpoint_url, config?.player_id, config?.conversion_param]);
+  }, [
+    config?.endpoint_url,
+    config?.player_id,
+    config?.comparison_group_id,
+    config?.conversion_param,
+  ]);
   const players = useQuery({
     queryKey: ['vturb-players', offerId],
     queryFn: () => apiClient.getVturbPlayers(offerId),
@@ -317,10 +325,19 @@ function VturbIntelligence({
     staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
   const selectedPlayerId = playerId || config?.player_id || '';
+  const selectedComparisonGroupId = comparisonGroupId || config?.comparison_group_id || '';
   const analytics = useQuery({
-    queryKey: ['vturb-analytics', offerId, selectedPlayerId, from, to],
-    queryFn: () => apiClient.getVturbAnalytics(offerId, { from, to }, selectedPlayerId),
-    enabled: Boolean(config?.analytics_token_configured && selectedPlayerId),
+    queryKey: ['vturb-analytics', offerId, selectedPlayerId, selectedComparisonGroupId, from, to],
+    queryFn: () =>
+      apiClient.getVturbAnalytics(
+        offerId,
+        { from, to },
+        selectedPlayerId,
+        selectedComparisonGroupId,
+      ),
+    enabled: Boolean(
+      config?.analytics_token_configured && (selectedPlayerId || selectedComparisonGroupId),
+    ),
     retry: 1,
     staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
@@ -331,19 +348,23 @@ function VturbIntelligence({
         analytics_api_token: token.trim() || undefined,
         endpoint_url: endpoint.trim(),
         player_id: playerId || null,
+        comparison_group_id: comparisonGroupId || null,
         conversion_param: conversionParam,
       }),
-    onSuccess: (result) => {
+    onSuccess: () => {
       setToken('');
-      if (!playerId && result.players[0]) setPlayerId(result.players[0].id);
       void qc.invalidateQueries({ queryKey: ['tracking-advanced', offerId] });
       void qc.invalidateQueries({ queryKey: ['vturb-players', offerId] });
       toast.success('VTurb validada e vinculada à oferta.');
     },
     onError: (error) => toast.error((error as Error).message),
   });
-  const localConversions = analytics.data?.tmx_country_conversions ?? [];
-  const countries = (analytics.data?.countries ?? []).map((country) => {
+  const singleAnalytics =
+    analytics.data && !('kind' in analytics.data) ? analytics.data : undefined;
+  const comparisonAnalytics =
+    analytics.data && 'kind' in analytics.data ? analytics.data : undefined;
+  const localConversions = singleAnalytics?.tmx_country_conversions ?? [];
+  const countries = (singleAnalytics?.countries ?? []).map((country) => {
     const local = localConversions.find(
       (row) => row.country.trim().toLowerCase() === country.grouped_field.trim().toLowerCase(),
     );
@@ -366,7 +387,7 @@ function VturbIntelligence({
   const clicks = sum('total_clicked_device_uniq');
   const conversions = sum('total_conversions');
   const pitchRate = plays ? (pitchAudience / plays) * 100 : 0;
-  const curve = analytics.data?.engagement?.grouped_timed ?? [];
+  const curve = singleAnalytics?.engagement?.grouped_timed ?? [];
   const maxCurve = Math.max(1, ...curve.map((point) => point.total_users));
 
   return (
@@ -429,18 +450,37 @@ function VturbIntelligence({
             />
           </label>
           <label className="text-[10px] uppercase tracking-wider text-white/40">
-            VSL desta oferta
+            VSL ou teste A/B desta oferta
             <select
               className="mt-2 h-11 w-full rounded-lg border border-white/10 bg-[#071820] px-3 text-sm text-white outline-none focus:border-cyan-300/50"
-              value={playerId}
-              onChange={(event) => setPlayerId(event.target.value)}
+              value={
+                comparisonGroupId
+                  ? `group:${comparisonGroupId}`
+                  : playerId
+                    ? `player:${playerId}`
+                    : ''
+              }
+              onChange={(event) => {
+                const [kind, id] = event.target.value.split(':', 2);
+                setPlayerId(kind === 'player' ? (id ?? '') : '');
+                setComparisonGroupId(kind === 'group' ? (id ?? '') : '');
+              }}
             >
-              <option value="">Selecione a VSL</option>
-              {players.data?.players.map((player) => (
-                <option key={player.id} value={player.id}>
-                  {player.name} · pitch {formatDuration(player.pitch_time)}
-                </option>
-              ))}
+              <option value="">Selecione uma VSL ou teste A/B</option>
+              <optgroup label="VSLs">
+                {players.data?.players.map((player) => (
+                  <option key={player.id} value={`player:${player.id}`}>
+                    {player.name} · pitch {formatDuration(player.pitch_time)}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Testes A/B da VTurb">
+                {players.data?.comparison_groups.map((group) => (
+                  <option key={group.id} value={`group:${group.id}`}>
+                    {group.name} · {group.player_ids.length} variantes
+                  </option>
+                ))}
+              </optgroup>
             </select>
           </label>
           <label
@@ -481,7 +521,8 @@ function VturbIntelligence({
           <div className="lg:col-span-2 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-cyan-300/10 bg-cyan-300/[0.035] p-3 text-xs text-white/45">
             <span>
               O mesmo parâmetro deve ser selecionado no rastreamento da VTurb. O TMX preserva a
-              chave <code className="text-cyan-200">v3_…</code> até o webhook da VendePay.
+              chave <code className="text-cyan-200">v3_…</code> até o webhook. Em um teste A/B, ela
+              identifica automaticamente a variante que gerou a venda.
             </span>
             <Button
               onClick={() => save.mutate()}
@@ -493,14 +534,61 @@ function VturbIntelligence({
         </div>
       )}
 
-      {selectedPlayerId && (
+      {comparisonAnalytics && (
+        <div className="overflow-hidden rounded-2xl border border-violet-300/20 bg-violet-300/[0.035]">
+          <div className="border-b border-violet-300/10 p-4">
+            <p className="text-sm font-medium text-violet-100">
+              Teste A/B · {comparisonAnalytics.comparison_group.name}
+            </p>
+            <p className="mt-1 text-xs text-white/45">
+              Métricas por variante retornadas pela VTurb para o período selecionado.
+            </p>
+          </div>
+          <div className="grid gap-px bg-violet-300/10 md:grid-cols-2">
+            {(comparisonAnalytics.stats.stats ?? []).map((stat) => {
+              const player = players.data?.players.find((item) => item.id === stat.player_id);
+              const revenue = Number(stat.conversions?.total_amount_brl ?? 0);
+              return (
+                <div key={stat.player_id} className="bg-[#06151b]/90 p-4">
+                  <p className="text-sm font-medium text-white/85">
+                    {player?.name ?? `VSL ${stat.player_id}`}
+                  </p>
+                  <p className="mt-1 text-xs text-white/40">
+                    Pitch {formatDuration(stat.pitch_time)}
+                  </p>
+                  <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                    <Metric
+                      label="Plays"
+                      value={Number(stat.plays?.total_uniq_device ?? 0).toLocaleString('pt-BR')}
+                    />
+                    <Metric
+                      label="Conversões"
+                      value={Number(stat.conversions?.total ?? 0).toLocaleString('pt-BR')}
+                    />
+                    <Metric
+                      label="Conversão"
+                      value={`${Number(stat.conversion_rate ?? 0).toFixed(2)}%`}
+                    />
+                    <Metric
+                      label="Receita"
+                      value={revenue ? formatMoney(revenue * 100, 'BRL') : '—'}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {selectedPlayerId && !selectedComparisonGroupId && (
         <>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
             <Metric label="Visualizações" value={views.toLocaleString('pt-BR')} />
             <Metric label="Plays" value={plays.toLocaleString('pt-BR')} />
             <Metric
               label="Tempo do pitch"
-              value={formatDuration(analytics.data?.player.pitch_time)}
+              value={formatDuration(singleAnalytics?.player.pitch_time)}
             />
             <Metric label="Retenção no pitch" value={`${pitchRate.toFixed(1)}%`} />
             <Metric label="Cliques" value={clicks.toLocaleString('pt-BR')} />
@@ -514,7 +602,7 @@ function VturbIntelligence({
                   <p className="text-xs text-white/35">O marcador mostra o momento do pitch.</p>
                 </div>
                 <span className="rounded-full bg-cyan-300/10 px-3 py-1 text-xs text-cyan-200">
-                  média {Number(analytics.data?.engagement?.engagement_rate ?? 0).toFixed(1)}%
+                  média {Number(singleAnalytics?.engagement?.engagement_rate ?? 0).toFixed(1)}%
                 </span>
               </div>
               <div className="relative mt-6 flex h-44 items-end gap-px overflow-hidden rounded-xl border border-white/[0.06] bg-black/15 p-3">
@@ -528,11 +616,11 @@ function VturbIntelligence({
                       style={{ height: `${Math.max(2, (point.total_users / maxCurve) * 100)}%` }}
                     />
                   ))}
-                {analytics.data?.player.duration ? (
+                {singleAnalytics?.player.duration ? (
                   <div
                     className="absolute bottom-3 top-3 w-px bg-amber-300 shadow-[0_0_12px_rgba(252,211,77,.7)]"
                     style={{
-                      left: `${Math.min(100, (analytics.data.player.pitch_time / analytics.data.player.duration) * 100)}%`,
+                      left: `${Math.min(100, (singleAnalytics.player.pitch_time / singleAnalytics.player.duration) * 100)}%`,
                     }}
                   >
                     <span className="absolute -top-5 -translate-x-1/2 whitespace-nowrap text-[9px] uppercase tracking-wider text-amber-200">
@@ -559,7 +647,7 @@ function VturbIntelligence({
                   <span>
                     Tempo médio:{' '}
                     <strong className="text-white/85">
-                      {formatDuration(analytics.data?.engagement?.average_watched_time)}
+                      {formatDuration(singleAnalytics?.engagement?.average_watched_time)}
                     </strong>
                   </span>
                 </div>

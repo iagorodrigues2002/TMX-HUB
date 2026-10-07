@@ -5,6 +5,7 @@ import { ulid } from 'ulid';
 import { z } from 'zod';
 import { env } from '../env.js';
 import { normalizePaysight } from '../integrations/paysight/normalize.js';
+import { normalizeVendepayWebhook } from '../integrations/vendepay/explodely-compat.js';
 import { normalizeVendepay } from '../integrations/vendepay/normalize.js';
 import { collectNetworkIdentifiers } from '../lib/network-detection.js';
 import { decryptSecret, encryptSecret } from '../lib/secret-box.js';
@@ -1565,11 +1566,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           token_hash: string;
           offer_id: string;
           name: string;
+          payload_adapter: 'vendepay' | 'explodely';
           signing_secret_encrypted: string | null;
         }>
       >`
         SELECT vc.id, vc.project_id, vc.token_hash, tp.offer_id, vc.name,
-               vc.signing_secret_encrypted
+               vc.payload_adapter, vc.signing_secret_encrypted
         FROM vendepay_connections vc
         JOIN tracking_projects tp ON tp.id = vc.project_id
         WHERE vc.token_hash = ${candidate} AND vc.enabled = true
@@ -1597,7 +1599,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         return reply.code(401).send({ accepted: false, error: signature.error });
       }
 
-      const normalized = normalizeVendepay(req.body);
+      const normalized = normalizeVendepayWebhook(
+        req.body,
+        connection.payload_adapter === 'explodely',
+      );
       const receiptPayload = webhookPayloadForStorage(req.body, env.WEBHOOK_PAYLOAD_SCRUB);
       const receiptId = ulid();
       // Offers live in Redis (OfferStore), not Postgres — resolve the funnel
@@ -2123,6 +2128,24 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         tiktok_deliveries: outcome.tiktokDeliveryIds?.length ?? 0,
         ...(!outcome.inserted ? { duplicate: true } : {}),
       });
+    },
+  );
+
+  // Explodely's legacy IPN can use GET on the historic VendePay URL. Reuse
+  // the POST pipeline so token/HMAC verification, deduplication and delivery
+  // behavior stay identical.
+  app.get<{ Querystring: Record<string, string | undefined> }>(
+    '/webhooks/vendepay',
+    { logLevel: 'silent' },
+    async (req, reply) => {
+      const result = await app.inject({
+        method: 'POST',
+        url: req.raw.url,
+        payload: req.query,
+      });
+      const contentType = result.headers['content-type'];
+      if (contentType) reply.header('content-type', contentType);
+      return reply.code(result.statusCode).send(result.json());
     },
   );
 

@@ -15,13 +15,25 @@ import {
 } from '@/components/tracking/tracking-offer-context';
 import { Button } from '@/components/ui/button';
 import { DataState } from '@/components/ui/data-state';
+import type { OfferView } from '@/lib/api-client';
 import { useDisplayCurrency } from '@/lib/currency-preference';
 import { cn } from '@/lib/utils';
 import { ChevronDown, RadioTower, RefreshCw, Store } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useMemo } from 'react';
 
-function offerLabel(name: string, companyName?: string | null) {
-  return companyName ? `${name} · ${companyName}` : name;
+function groupOffersByCompany(offers: OfferView[]) {
+  const groups = new Map<string, OfferView[]>();
+  for (const offer of offers) {
+    const company = offer.companyName?.trim() || 'Sem empresa';
+    groups.set(company, [...(groups.get(company) ?? []), offer]);
+  }
+  return [...groups.entries()]
+    .sort(([left], [right]) => left.localeCompare(right, 'pt-BR'))
+    .map(([company, companyOffers]) => ({
+      company,
+      offers: companyOffers.sort((left, right) => left.name.localeCompare(right.name, 'pt-BR')),
+    }));
 }
 
 function TrackingWorkspaceContent() {
@@ -40,6 +52,7 @@ function TrackingWorkspaceContent() {
     isFetching,
     refetch,
   } = useTrackingOffer();
+  const offersByCompany = useMemo(() => groupOffersByCompany(offers), [offers]);
   const { view, section } = resolveTrackingLocation(
     searchParams.get('view'),
     searchParams.get('section'),
@@ -108,10 +121,14 @@ function TrackingWorkspaceContent() {
                 onChange={(event) => setActiveOfferId(event.target.value)}
                 className="h-11 w-full appearance-none rounded-md border border-[var(--hairline-strong)] bg-[var(--surface-inset)] px-3 pr-10 text-sm text-[var(--ink-primary)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--signal-500)]"
               >
-                {offers.map((offer) => (
-                  <option key={offer.id} value={offer.id}>
-                    {offerLabel(offer.name, offer.companyName)}
-                  </option>
+                {offersByCompany.map((group) => (
+                  <optgroup key={group.company} label={group.company}>
+                    {group.offers.map((offer) => (
+                      <option key={offer.id} value={offer.id}>
+                        {offer.name}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
               <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-white/40" />
