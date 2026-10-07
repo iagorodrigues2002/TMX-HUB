@@ -7,6 +7,7 @@ import {
 } from '../integrations/utmify/web-events.js';
 import { logger } from '../lib/logger.js';
 import { makeRedis } from '../lib/redis.js';
+import { assertUtmifyHost } from '../lib/utmify-hosts.js';
 import { UTMIFY_WEB_EVENT_QUEUE_NAME, type UtmifyWebEventJobData } from '../queues/index.js';
 
 const UTMIFY_EVENTS_URL = 'https://tracking.utmify.com.br/tracking/v1/events';
@@ -64,8 +65,10 @@ export function createUtmifyWebEventWorker(): Worker<UtmifyWebEventJobData> | nu
           clientIp: row.client_ip,
           userAgent: row.user_agent,
         });
+        assertUtmifyHost(UTMIFY_EVENTS_URL);
         const response = await fetch(UTMIFY_EVENTS_URL, {
           method: 'POST',
+          redirect: 'error',
           headers: {
             'content-type': 'application/json',
             'x-tmx-event-id': job.data.deliveryId,

@@ -5,6 +5,7 @@ import { buildUtmifyOrderPayload } from '../integrations/utmify/sales.js';
 import { logger } from '../lib/logger.js';
 import { makeRedis } from '../lib/redis.js';
 import { decryptSecret } from '../lib/secret-box.js';
+import { assertUtmifyHost } from '../lib/utmify-hosts.js';
 import { UTMIFY_DELIVERY_QUEUE_NAME, type UtmifyDeliveryJobData } from '../queues/index.js';
 
 export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | null {
@@ -15,11 +16,11 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
   });
   let rateLimitedUntil = 0;
   const processDelivery = async (deliveryId: string) => {
-      if (Date.now() < rateLimitedUntil) return;
-      // A route can be disabled after an event is queued. Stop that pending
-      // global delivery here too, so changing the selector takes effect
-      // immediately and does not depend on queue timing.
-      await db`
+    if (Date.now() < rateLimitedUntil) return;
+    // A route can be disabled after an event is queued. Stop that pending
+    // global delivery here too, so changing the selector takes effect
+    // immediately and does not depend on queue timing.
+    await db`
         UPDATE tracking_delivery_outbox d
         SET state='skipped',last_error='Oferta removida da UTMify Geral antes do envio.'
         FROM tracking_utmify_destinations u,tracking_utmify_global_offer_routes r
@@ -27,33 +28,33 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
           AND u.scope='global' AND r.enabled=false
           AND d.state IN ('pending','failed','processing')
       `;
-      const [row] = await db<
-        Array<{
-          id: string;
-          event_type: string;
-          attempts: number;
-          endpoint_url: string;
-          api_token_encrypted: string;
-          external_id: string;
-          provider: string;
-          status: string;
-          amount_minor: number | null;
-          currency: string | null;
-          amount_brl_minor: number | null;
-          buyer: {
-            name?: string;
-            email?: string;
-            phone?: string;
-            document?: string;
-            country?: string;
-          };
-          occurred_at: Date;
-          paid_at: Date | null;
-          lifecycle_at: Date | null;
-          source: Record<string, string>;
-          client_ip: string | null;
-        }>
-      >`
+    const [row] = await db<
+      Array<{
+        id: string;
+        event_type: string;
+        attempts: number;
+        endpoint_url: string;
+        api_token_encrypted: string;
+        external_id: string;
+        provider: string;
+        status: string;
+        amount_minor: number | null;
+        currency: string | null;
+        amount_brl_minor: number | null;
+        buyer: {
+          name?: string;
+          email?: string;
+          phone?: string;
+          document?: string;
+          country?: string;
+        };
+        occurred_at: Date;
+        paid_at: Date | null;
+        lifecycle_at: Date | null;
+        source: Record<string, string>;
+        client_ip: string | null;
+      }>
+    >`
         SELECT d.id, d.event_type, d.attempts, u.endpoint_url, u.api_token_encrypted,
                COALESCE(o.external_id, 'TMX-IC-' || d.event_id) AS external_id,
                COALESCE(o.provider, 'tmx') AS provider,
@@ -80,7 +81,7 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
                COALESCE(direct_event.client_ip, best_event.client_ip, o.attribution_source->>'client_ip') AS client_ip
         FROM tracking_delivery_outbox d
         JOIN tracking_utmify_destinations u ON u.id = d.destination_id AND u.enabled = true
-        LEFT JOIN tracking_orders o ON o.id = d.order_id
+        LEFT JOIN tracking_orders o ON o.id = d.order_id AND o.project_id = d.project_id
         LEFT JOIN tracking_events direct_event
           ON direct_event.project_id = d.project_id AND direct_event.id = d.event_id
         LEFT JOIN tracking_visitors visitor
@@ -104,128 +105,130 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
           AND d.destination_kind = 'utmify'
           AND d.state IN ('pending','failed','processing')
       `;
-      if (!row) return;
-      // UTMify rejects any status outside {waiting_payment, paid, refused,
-      // refunded, chargedback} with HTTP 400. Cancelled orders (Vendepay's
-      // "carrinho.abandonado") don't have a receipient status, so instead
-      // of burning 8 retry attempts hitting a wall, mark the delivery as
-      // skipped up front. Refunded/chargeback still flow.
-      if (row.status === 'cancelled') {
-        await db`
+    if (!row) return;
+    // UTMify rejects any status outside {waiting_payment, paid, refused,
+    // refunded, chargedback} with HTTP 400. Cancelled orders (Vendepay's
+    // "carrinho.abandonado") don't have a receipient status, so instead
+    // of burning 8 retry attempts hitting a wall, mark the delivery as
+    // skipped up front. Refunded/chargeback still flow.
+    if (row.status === 'cancelled') {
+      await db`
           UPDATE tracking_delivery_outbox
           SET state = 'skipped',
               last_error = 'Status cancelled não é aceito pela UTMify (aceita apenas waiting_payment, paid, refused, refunded, chargedback).'
           WHERE id = ${row.id}
         `;
-        logger.info(
-          { deliveryId: row.id, transactionId: row.external_id },
-          'utmify delivery skipped: cancelled status not accepted by UTMify',
-        );
-        return;
+      logger.info(
+        { deliveryId: row.id, transactionId: row.external_id },
+        'utmify delivery skipped: cancelled status not accepted by UTMify',
+      );
+      return;
+    }
+    try {
+      if (row.amount_minor === null || !row.currency) {
+        throw new Error('Pedido sem valor ou moeda para envio à UTMify.');
       }
-      try {
-        if (row.amount_minor === null || !row.currency) {
-          throw new Error('Pedido sem valor ou moeda para envio à UTMify.');
-        }
-        await db`
+      await db`
           UPDATE tracking_delivery_outbox
           SET state = 'processing', attempts = attempts + 1
           WHERE id = ${row.id}
         `;
-        // Always report in BRL when the ingestion converted successfully.
-        // UTMify aggregates in one currency per dashboard, and the operator's
-        // dashboards are all BRL. If conversion didn't happen (rate unknown),
-        // we fall back to the original amount + currency.
-        const useBrl = row.amount_brl_minor != null;
-        const outboundMinor = useBrl ? row.amount_brl_minor! : row.amount_minor;
-        const outboundCurrency = useBrl ? 'BRL' : row.currency;
-        const payload = buildUtmifyOrderPayload({
-          isTest: row.provider === 'tmx-test',
-          orderId: row.external_id,
-          provider: row.provider,
-          status:
-            row.event_type === 'event.initiate_checkout.neutralize' || row.status === 'abandoned'
-              ? 'refused'
-              : row.status,
-          amountMinor: outboundMinor,
-          currency: outboundCurrency,
-          createdAt: row.occurred_at,
-          paidAt: row.paid_at,
-          refundedAt: row.lifecycle_at,
-          buyer: row.buyer,
-          source: row.source,
-          // UTMify rejects checkout records without an IP. Legacy ICs created before IP
-          // persistence use a documentation-only address; new events keep the real req.ip.
-          clientIp: row.client_ip ?? '203.0.113.1',
-        });
-        const token = decryptSecret(row.api_token_encrypted, env.TRACKING_ENCRYPTION_KEY!);
-        const response = await fetch(row.endpoint_url, {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            'x-api-token': token,
-            // Attempts counter is part of the key so a forced resend (via
-            // the resend-paid endpoint) presents a fresh idempotency-key to
-            // UTMify instead of getting the cached success response.
-            'x-idempotency-key': `${row.id}:${row.event_type}:${row.attempts}`,
-          },
-          body: JSON.stringify(payload),
-          signal: AbortSignal.timeout(15_000),
-        });
-        const responseText = await response.text();
-        const providerResult = (() => {
-          if (!responseText) return {};
-          try {
-            return JSON.parse(responseText) as object;
-          } catch {
-            return { message: responseText.slice(0, 800) };
-          }
-        })();
-        if (!response.ok) {
-          const detail = JSON.stringify(providerResult).slice(0, 800);
-          throw new Error(`UTMify HTTP ${response.status}${detail !== '{}' ? `: ${detail}` : ''}`);
+      // Always report in BRL when the ingestion converted successfully.
+      // UTMify aggregates in one currency per dashboard, and the operator's
+      // dashboards are all BRL. If conversion didn't happen (rate unknown),
+      // we fall back to the original amount + currency.
+      const useBrl = row.amount_brl_minor != null;
+      const outboundMinor = useBrl ? row.amount_brl_minor! : row.amount_minor;
+      const outboundCurrency = useBrl ? 'BRL' : row.currency;
+      const payload = buildUtmifyOrderPayload({
+        isTest: row.provider === 'tmx-test',
+        orderId: row.external_id,
+        provider: row.provider,
+        status:
+          row.event_type === 'event.initiate_checkout.neutralize' || row.status === 'abandoned'
+            ? 'refused'
+            : row.status,
+        amountMinor: outboundMinor,
+        currency: outboundCurrency,
+        createdAt: row.occurred_at,
+        paidAt: row.paid_at,
+        refundedAt: row.lifecycle_at,
+        buyer: row.buyer,
+        source: row.source,
+        // UTMify rejects checkout records without an IP. Legacy ICs created before IP
+        // persistence use a documentation-only address; new events keep the real req.ip.
+        clientIp: row.client_ip ?? '203.0.113.1',
+      });
+      assertUtmifyHost(row.endpoint_url);
+      const token = decryptSecret(row.api_token_encrypted, env.TRACKING_ENCRYPTION_KEY!);
+      const response = await fetch(row.endpoint_url, {
+        method: 'POST',
+        redirect: 'error',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-token': token,
+          // Attempts counter is part of the key so a forced resend (via
+          // the resend-paid endpoint) presents a fresh idempotency-key to
+          // UTMify instead of getting the cached success response.
+          'x-idempotency-key': `${row.id}:${row.event_type}:${row.attempts}`,
+        },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(15_000),
+      });
+      const responseText = await response.text();
+      const providerResult = (() => {
+        if (!responseText) return {};
+        try {
+          return JSON.parse(responseText) as object;
+        } catch {
+          return { message: responseText.slice(0, 800) };
         }
-        // Keep a PII-free receipt so "HTTP 200" can be audited against the
-        // exact attribution shape accepted by UTMify.
-        const result = {
-          provider: providerResult,
-          sent: {
-            orderId: payload.orderId,
-            status: payload.status,
-            paymentMethod: payload.paymentMethod,
-            createdAt: payload.createdAt,
-            approvedDate: payload.approvedDate,
-            trackingParameters: payload.trackingParameters,
-          },
-        };
-        await db`
+      })();
+      if (!response.ok) {
+        const detail = JSON.stringify(providerResult).slice(0, 800);
+        throw new Error(`UTMify HTTP ${response.status}${detail !== '{}' ? `: ${detail}` : ''}`);
+      }
+      // Keep a PII-free receipt so "HTTP 200" can be audited against the
+      // exact attribution shape accepted by UTMify.
+      const result = {
+        provider: providerResult,
+        sent: {
+          orderId: payload.orderId,
+          status: payload.status,
+          paymentMethod: payload.paymentMethod,
+          createdAt: payload.createdAt,
+          approvedDate: payload.approvedDate,
+          trackingParameters: payload.trackingParameters,
+        },
+      };
+      await db`
           UPDATE tracking_delivery_outbox
           SET state = 'delivered', response_status = ${response.status},
               response = ${db.json(result as never)}, last_error = NULL, delivered_at = now()
           WHERE id = ${row.id}
         `;
-        logger.info(
-          {
-            deliveryId: row.id,
-            transactionId: row.external_id,
-            status: row.status,
-            responseStatus: response.status,
-          },
-          'utmify order delivery succeeded',
-        );
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        if (message.includes('RATE_LIMIT_REACHED') || message.includes('UTMify HTTP 429'))
-          rateLimitedUntil = Date.now() + 120_000;
-        await db`
+      logger.info(
+        {
+          deliveryId: row.id,
+          transactionId: row.external_id,
+          status: row.status,
+          responseStatus: response.status,
+        },
+        'utmify order delivery succeeded',
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes('RATE_LIMIT_REACHED') || message.includes('UTMify HTTP 429'))
+        rateLimitedUntil = Date.now() + 120_000;
+      await db`
           UPDATE tracking_delivery_outbox
           SET state = CASE WHEN attempts >= 8 THEN 'dead' ELSE 'failed' END,
               last_error = ${message},
               next_attempt_at = now() + make_interval(secs => LEAST(3600, 5 * power(2, attempts)))
           WHERE id = ${row.id}
         `;
-        throw error;
-      }
+      throw error;
+    }
   };
   const worker = new Worker<UtmifyDeliveryJobData>(
     UTMIFY_DELIVERY_QUEUE_NAME,
@@ -284,7 +287,10 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
       if (candidate) await processDelivery(candidate.id);
     } catch (error) {
       logger.error(
-        { error: error instanceof Error ? { message: error.message, stack: error.stack } : String(error) },
+        {
+          error:
+            error instanceof Error ? { message: error.message, stack: error.stack } : String(error),
+        },
         'utmify database delivery pump error',
       );
     } finally {

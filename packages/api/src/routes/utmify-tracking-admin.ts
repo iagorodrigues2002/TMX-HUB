@@ -3,6 +3,7 @@ import { ulid } from 'ulid';
 import { z } from 'zod';
 import { env } from '../env.js';
 import { encryptSecret } from '../lib/secret-box.js';
+import { assertUtmifyHost } from '../lib/utmify-hosts.js';
 
 const DestinationSchema = z.object({
   name: z.string().trim().min(1).max(80).default('UTMify'),
@@ -36,6 +37,14 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       }
       const parsed = DestinationSchema.safeParse(req.body);
       if (!parsed.success) return reply.code(400).send({ error: 'invalid_utmify_destination' });
+      try {
+        assertUtmifyHost(parsed.data.endpoint_url);
+      } catch {
+        return reply.code(400).send({
+          error: 'utmify_host_not_allowed',
+          message: 'A URL deve usar um host oficial da UTMify.',
+        });
+      }
       const [project] = await app.db<{ id: string }[]>`
         SELECT id FROM tracking_projects
         WHERE offer_id = ${req.params.id} AND enabled = true
@@ -66,7 +75,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
       if (!app.db) return reply.code(503).send({ error: 'database_unavailable' });
       const parsed = DestinationEnabledSchema.safeParse(req.body);
-      if (!parsed.success) return reply.code(400).send({ error: 'invalid_utmify_destination_status' });
+      if (!parsed.success)
+        return reply.code(400).send({ error: 'invalid_utmify_destination_status' });
       const [destination] = await app.db`
         UPDATE tracking_utmify_destinations u
         SET enabled=${parsed.data.enabled}, updated_at=now()
@@ -186,7 +196,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             AND NULLIF(o.attribution_source->>'ad_id','') IS NOT NULL AS complete
         `;
         const orderIds = repaired.map(({ id }) => id);
-        const resetDeliveries = orderIds.length ? await sql<{ id: string }[]>`
+        const resetDeliveries = orderIds.length
+          ? await sql<{ id: string }[]>`
           UPDATE tracking_delivery_outbox d
           SET state='pending', last_error=NULL, next_attempt_at=now(), delivered_at=NULL
           FROM tracking_utmify_destinations u
@@ -194,30 +205,35 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             AND d.project_id=${project.id} AND d.destination_kind='utmify'
             AND d.order_id IN ${sql(orderIds)} AND d.event_type='order.paid'
           RETURNING d.id
-        ` : [];
-        const deliveries = resetDeliveries.length ? await sql<{ id: string }[]>`
+        `
+          : [];
+        const deliveries = resetDeliveries.length
+          ? await sql<{ id: string }[]>`
           SELECT d.id
           FROM tracking_delivery_outbox d
           JOIN tracking_orders o ON o.id=d.order_id
           WHERE d.id IN ${sql(resetDeliveries.map(({ id }) => id))}
           ORDER BY COALESCE(o.paid_at, o.occurred_at) DESC
-        ` : [];
+        `
+          : [];
         return { repaired, deliveries };
       });
 
-      await Promise.allSettled(result.deliveries.map(({ id }) =>
-        app.utmifyDeliveryQueue.add(
-          'send',
-          { deliveryId: id },
-          {
-            jobId: `${id}-front-${Date.now()}`,
-            // Live/reconciled offer sales must not sit behind a months-long
-            // global backfill. BullMQ processes priority jobs first; the
-            // per-worker limiter still protects UTMify from bursts.
-            priority: 1,
-          },
+      await Promise.allSettled(
+        result.deliveries.map(({ id }) =>
+          app.utmifyDeliveryQueue.add(
+            'send',
+            { deliveryId: id },
+            {
+              jobId: `${id}-front-${Date.now()}`,
+              // Live/reconciled offer sales must not sit behind a months-long
+              // global backfill. BullMQ processes priority jobs first; the
+              // per-worker limiter still protects UTMify from bursts.
+              priority: 1,
+            },
+          ),
         ),
-      ));
+      );
       return reply.code(202).send({
         front_orders_scanned: result.repaired.length,
         fully_attributed: result.repaired.filter(({ complete }) => complete).length,

@@ -3,12 +3,17 @@ import { ulid } from 'ulid';
 import { z } from 'zod';
 import { env } from '../env.js';
 import { encryptSecret } from '../lib/secret-box.js';
+import { assertUtmifyHost } from '../lib/utmify-hosts.js';
 
 const GlobalSchema = z.object({
   name: z.string().trim().min(1).max(80).default('UTMify Geral'),
   api_token: z.string().trim().min(16).max(4096).optional(),
   endpoint_url: z.string().url().default('https://api.utmify.com.br/api-credentials/orders'),
-  pixel_id: z.string().trim().regex(/^[a-f0-9]{24}$/i).nullish(),
+  pixel_id: z
+    .string()
+    .trim()
+    .regex(/^[a-f0-9]{24}$/i)
+    .nullish(),
   enabled: z.boolean().default(true),
 });
 const GlobalOfferRoutesSchema = z.object({
@@ -17,7 +22,9 @@ const GlobalOfferRoutesSchema = z.object({
 
 function assertAdmin(req: { user?: { role: string } }) {
   if (req.user?.role !== 'admin') {
-    const error = new Error('Apenas administradores podem configurar a UTMify Geral.') as Error & { statusCode?: number };
+    const error = new Error('Apenas administradores podem configurar a UTMify Geral.') as Error & {
+      statusCode?: number;
+    };
     error.statusCode = 403;
     throw error;
   }
@@ -25,7 +32,13 @@ function assertAdmin(req: { user?: { role: string } }) {
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   async function offerRoutes() {
-    if (!app.db) return [] as Array<{ id: string; name: string; company_name: string | null; enabled: boolean }>;
+    if (!app.db)
+      return [] as Array<{
+        id: string;
+        name: string;
+        company_name: string | null;
+        enabled: boolean;
+      }>;
     const projects = await app.db<{ id: string; offer_id: string; enabled: boolean | null }[]>`
       SELECT p.id,p.offer_id,r.enabled
       FROM tracking_projects p
@@ -34,7 +47,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       ORDER BY p.created_at ASC
     `;
     const offers = await app.offerStore.listAll();
-    const offerDetails = new Map(offers.map((offer) => [offer.id, { name: offer.name, companyName: offer.companyName ?? null }]));
+    const offerDetails = new Map(
+      offers.map((offer) => [
+        offer.id,
+        { name: offer.name, companyName: offer.companyName ?? null },
+      ]),
+    );
     return projects.map((project) => ({
       id: project.offer_id,
       name: offerDetails.get(project.offer_id)?.name ?? 'Oferta sem cadastro',
@@ -46,14 +64,18 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   app.get('/utmify-global', async (req, reply) => {
     assertAdmin(req);
-    if (!app.db) return reply.code(503).send({ configured: false, destination: null, stats: null, offers: [] });
+    if (!app.db)
+      return reply
+        .code(503)
+        .send({ configured: false, destination: null, stats: null, offers: [] });
     const [destination] = await app.db`
       SELECT id,name,endpoint_url,external_pixel_id AS pixel_id,enabled,
              (api_token_encrypted IS NOT NULL) AS token_configured,created_at,updated_at
       FROM tracking_utmify_destinations WHERE scope='global' LIMIT 1
     `;
     const routes = await offerRoutes();
-    if (!destination) return reply.send({ configured: false, destination: null, stats: null, offers: routes });
+    if (!destination)
+      return reply.send({ configured: false, destination: null, stats: null, offers: routes });
     const [stats] = await app.db`
       SELECT
         count(*) FILTER (WHERE d.created_at>=now()-interval '7 days')::int AS orders_7d,
@@ -73,7 +95,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     assertAdmin(req);
     if (!app.db) return reply.code(503).send({ error: 'database_unavailable' });
     const parsed = GlobalOfferRoutesSchema.safeParse(req.body);
-    if (!parsed.success) return reply.code(400).send({ error: 'invalid_utmify_global_offer_routes' });
+    if (!parsed.success)
+      return reply.code(400).send({ error: 'invalid_utmify_global_offer_routes' });
     const projects = await app.db<{ id: string; offer_id: string }[]>`
       SELECT id,offer_id FROM tracking_projects WHERE enabled=true
     `;
@@ -102,6 +125,14 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     }
     const parsed = GlobalSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: 'invalid_utmify_global_config' });
+    try {
+      assertUtmifyHost(parsed.data.endpoint_url);
+    } catch {
+      return reply.code(400).send({
+        error: 'utmify_host_not_allowed',
+        message: 'A URL deve usar um host oficial da UTMify.',
+      });
+    }
     const [existing] = await app.db<{ id: string; api_token_encrypted: string | null }[]>`
       SELECT id,api_token_encrypted FROM tracking_utmify_destinations WHERE scope='global' LIMIT 1
     `;
@@ -175,7 +206,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       `;
     });
     await app.utmifyDeliveryQueue.add('send', { deliveryId });
-    return reply.code(202).send({ accepted: true, delivery_id: deliveryId, transaction_id: transactionId });
+    return reply
+      .code(202)
+      .send({ accepted: true, delivery_id: deliveryId, transaction_id: transactionId });
   });
 
   app.post('/utmify-global/replay', async (req, reply) => {
@@ -251,7 +284,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         queued += jobs.length;
       } catch (error) {
         queueFailed += batch.length;
-        app.log.error({ error, offset, batchSize: batch.length }, 'utmify global replay batch enqueue failed');
+        app.log.error(
+          { error, offset, batchSize: batch.length },
+          'utmify global replay batch enqueue failed',
+        );
       }
     }
     return reply.code(202).send({
