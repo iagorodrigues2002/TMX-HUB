@@ -1,10 +1,11 @@
+import { ALL_TOOL_KEYS, type ToolKey } from '@page-cloner/shared';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { ALL_TOOL_KEYS, type ToolKey } from '@page-cloner/shared';
 import { env } from '../env.js';
 import { signJwt } from '../lib/jwt.js';
 import { hashPassword, verifyPassword } from '../lib/password.js';
 import { BadRequestError, HttpProblem, zodToProblem } from '../lib/problem.js';
+import { LOGIN_RATE_LIMIT } from '../plugins/rate-limit.js';
 
 const ToolKeySchema = z.enum(ALL_TOOL_KEYS as [ToolKey, ...ToolKey[]]);
 
@@ -62,7 +63,7 @@ class InvalidCredentialsError extends HttpProblem {
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   // POST /v1/auth/login → { user, token, expires_at }
-  app.post('/auth/login', async (req, reply) => {
+  app.post('/auth/login', { config: { rateLimit: LOGIN_RATE_LIMIT } }, async (req, reply) => {
     const parsed = LoginSchema.safeParse(req.body);
     if (!parsed.success) throw zodToProblem(parsed.error, req.url);
     const { email, password } = parsed.data;
