@@ -14,11 +14,13 @@ import { useAuth } from '@/lib/auth-context';
 import { usePrivacy } from '@/lib/privacy-context';
 import { Eye, EyeOff, KeyRound, LogOut, Moon, Sun } from 'lucide-react';
 import Link from 'next/link';
+import { useState } from 'react';
 
 export function UserMenu() {
   const { user, logout } = useAuth();
   const { isPrivate, togglePrivacy } = usePrivacy();
   const { theme, toggleTheme } = useInterfaceTheme();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   if (!user) return null;
 
@@ -55,11 +57,12 @@ export function UserMenu() {
         {theme === 'dark' ? <Sun aria-hidden /> : <Moon aria-hidden />}
       </Button>
 
-      <DropdownMenu>
+      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
             aria-label={`Abrir menu de ${user.name}`}
+            onClick={() => setMenuOpen(true)}
             className="ml-0.5 grid h-11 w-11 cursor-pointer place-items-center rounded-md border border-border/60 bg-muted text-[11px] font-semibold text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-accent sm:h-9 sm:w-9"
           >
             {initials || '·'}
