@@ -1,41 +1,21 @@
 'use client';
 
-import { KpiGrid, formatCurrency, formatInt, formatRoas } from '@/components/dashboard/kpi-cards';
 import { HubShell } from '@/components/hub/hub-shell';
 import { ToolCard } from '@/components/hub/tool-card';
+import { OverviewDashboard } from '@/components/overview/overview-dashboard';
 import { Button } from '@/components/ui/button';
-import { DataState } from '@/components/ui/data-state';
-import { DateRangeFilter } from '@/components/ui/date-range-filter';
-import { apiClient, canAccessTool } from '@/lib/api-client';
+import { canAccessTool } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
-import { DASHBOARD_DATE_PRESETS, rollingDateRange } from '@/lib/date-range';
 import { visibleToolCatalog } from '@/lib/tool-catalog';
-import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, Plus, ScrollText } from 'lucide-react';
+import { ScrollText } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
 
 export const dynamic = 'force-dynamic';
 
 export default function HubLandingPage() {
   const { user } = useAuth();
-  const [period, setPeriod] = useState(() => rollingDateRange(7));
-  const { from, to } = period;
   const hasOffers = canAccessTool(user, 'ofertas');
   const homeTools = visibleToolCatalog(user, { homeOnly: true });
-
-  const {
-    data: summary,
-    isLoading: summaryLoading,
-    isError: summaryError,
-    isFetching: summaryFetching,
-    refetch,
-  } = useQuery({
-    queryKey: ['dashboard-summary', from, to],
-    queryFn: () => apiClient.getDashboardSummary({ from, to }),
-    enabled: Boolean(user) && hasOffers,
-    refetchOnWindowFocus: false,
-  });
 
   const firstName = user?.name?.split(/\s+/)[0] ?? 'Operador';
 
@@ -62,155 +42,15 @@ export default function HubLandingPage() {
         </h1>
         <p className="mt-3 max-w-xl text-sm leading-6 text-white/55">
           {hasOffers
-            ? 'Visão geral separada por conta. Use os filtros pra mudar o período.'
+            ? 'Acompanhe pedidos, receita e liquidação de todas as suas ofertas em um só lugar.'
             : 'Seu espaço de trabalho mostra somente as ferramentas liberadas pelo administrador.'}
         </p>
       </header>
 
       {hasOffers && (
-        <>
-          {/* Filter bar */}
-          <section className="mt-8">
-            <DateRangeFilter
-              value={period}
-              onChange={setPeriod}
-              presets={DASHBOARD_DATE_PRESETS}
-              isRefreshing={summaryFetching}
-              onRefresh={() => void refetch()}
-            />
-          </section>
-
-          {/* Account-isolated KPIs */}
-          <section className="mt-6">
-            {summaryLoading ? (
-              <DataState variant="loading" title="Carregando resumo das contas…" />
-            ) : summaryError && !summary ? (
-              <DataState
-                variant="error"
-                title="Não foi possível carregar o dashboard"
-                description="Verifique sua conexão e tente consultar o período novamente."
-                isRetrying={summaryFetching}
-                onRetry={() => void refetch()}
-              />
-            ) : summary?.accounts.length === 0 ? (
-              <DataState
-                variant="empty"
-                title="Nenhuma oferta disponível neste período"
-                description="Cadastre ou revise suas ofertas para começar a centralizar links e métricas."
-                action={
-                  <Button asChild size="sm">
-                    <Link href="/ofertas">
-                      <Plus className="h-3.5 w-3.5" />
-                      Ir para ofertas
-                    </Link>
-                  </Button>
-                }
-              />
-            ) : (
-              <div className="space-y-6">
-                {summary?.accounts.map((account) => (
-                  <section
-                    key={account.ownerId}
-                    className="space-y-3 rounded-xl border border-cyan-300/[0.14] bg-cyan-300/[0.025] p-3 sm:p-4"
-                  >
-                    <div className="flex items-center justify-between gap-3 border-b border-cyan-300/[0.1] pb-3">
-                      <div>
-                        <p className="hud-label">Resumo da conta</p>
-                        <h2 className="mt-1 text-base font-semibold text-white">
-                          {account.ownerName}
-                        </h2>
-                      </div>
-                      <span className="rounded-full border border-cyan-300/20 bg-cyan-300/[0.06] px-3 py-1 text-xs text-cyan-100/70">
-                        {account.offers.length} {account.offers.length === 1 ? 'oferta' : 'ofertas'}
-                      </span>
-                    </div>
-                    {account.currencyTotals.map(({ currency, totals }) => (
-                      <div key={currency}>
-                        <p className="hud-label mb-2">Resumo em {currency}</p>
-                        <KpiGrid metrics={totals} currency={currency} />
-                      </div>
-                    ))}
-                  </section>
-                ))}
-              </div>
-            )}
-          </section>
-
-          {/* Per-offer cards */}
-          {summary && summary.accounts.length > 0 && (
-            <section className="mt-8">
-              <div className="mb-3 flex items-baseline justify-between">
-                <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-white/55">
-                  Ofertas por conta
-                </h2>
-                <Link
-                  href="/ofertas"
-                  className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300 hover:text-cyan-200"
-                >
-                  Gerenciar →
-                </Link>
-              </div>
-
-              <div className="space-y-6">
-                {summary.accounts.map((account) => (
-                  <section key={account.ownerId} className="space-y-3">
-                    <div className="flex items-center gap-2 px-1">
-                      <span className="hud-label">Conta</span>
-                      <span className="text-xs font-medium text-cyan-100/80">
-                        {account.ownerName}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                      {account.offers.map((entry) => (
-                        <Link
-                          key={entry.offer.id}
-                          href={`/ofertas/${entry.offer.id}`}
-                          className="glass-card flex flex-col gap-3 p-4 transition hover:border-cyan-300/30"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <h3 className="truncate text-base font-semibold text-white">
-                              {entry.offer.name}
-                            </h3>
-                            <ArrowRight className="h-4 w-4 shrink-0 text-cyan-300/70" />
-                          </div>
-                          <dl className="grid grid-cols-2 gap-2 text-xs">
-                            <div>
-                              <dt className="hud-label">Vendas</dt>
-                              <dd className="mt-0.5 font-mono text-emerald-300">
-                                {formatInt(entry.totals.sales)}
-                              </dd>
-                            </div>
-                            <div>
-                              <dt className="hud-label">Faturamento</dt>
-                              <dd className="mt-0.5 font-mono text-emerald-300">
-                                {formatCurrency(entry.totals.revenue, entry.offer.currency)}
-                              </dd>
-                            </div>
-                            <div>
-                              <dt className="hud-label">Investido</dt>
-                              <dd className="mt-0.5 font-mono text-amber-300">
-                                {formatCurrency(entry.totals.spend, entry.offer.currency)}
-                              </dd>
-                            </div>
-                            <div>
-                              <dt className="hud-label">ROAS</dt>
-                              <dd className="mt-0.5 font-mono text-cyan-300">
-                                {formatRoas(entry.totals.roas)}
-                              </dd>
-                            </div>
-                          </dl>
-                          <p className="text-[10px] uppercase tracking-[0.14em] text-white/40">
-                            {entry.snapshotsCount} snapshot(s) no período
-                          </p>
-                        </Link>
-                      ))}
-                    </div>
-                  </section>
-                ))}
-              </div>
-            </section>
-          )}
-        </>
+        <section className="mt-8" aria-label="Visão geral da conta">
+          <OverviewDashboard scope="account" />
+        </section>
       )}
 
       {/* Tools */}
