@@ -71,7 +71,7 @@ export function UserMenu() {
         <DropdownMenuContent
           align="end"
           sideOffset={8}
-          className="w-64 rounded-xl border-border/60 bg-popover/95 p-1 text-popover-foreground shadow-card backdrop-blur-xl"
+          className="tmx-user-menu w-64 rounded-xl border-border/60 bg-popover/95 p-1 text-popover-foreground shadow-card backdrop-blur-xl"
         >
           <DropdownMenuLabel className="px-3 py-2 font-normal">
             <span className="block truncate text-[14px] font-semibold text-foreground">

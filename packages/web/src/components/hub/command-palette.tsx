@@ -314,7 +314,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
               className="min-h-40 border-0 bg-transparent shadow-none"
             />
           ) : (
-            <div aria-label="Resultados" className="space-y-0.5">
+            <div key={query} aria-label="Resultados" className="space-y-0.5">
               {filtered.map((entry, index) => {
                 const Icon = entry.icon;
                 return (
@@ -325,7 +325,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                     onMouseEnter={() => setActiveIndex(index)}
                     onClick={() => runEntry(entry)}
                     className={cn(
-                      'flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-md px-3 text-left text-[13px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+                      'tmx-command-result flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-md px-3 text-left text-[13px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
                       index === activeIndex && 'bg-accent text-foreground',
                     )}
                   >

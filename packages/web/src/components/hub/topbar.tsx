@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Menu, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react';
+import { Bell, Menu, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import type { ReactNode } from 'react';
@@ -15,6 +15,8 @@ interface TopbarProps {
   onToggleSidebar: () => void;
   onOpenMobileNavigation: () => void;
   onOpenCommandPalette?: () => void;
+  notificationCount?: number;
+  onOpenNotifications?: () => void;
 }
 
 interface BreadcrumbItem {
@@ -95,7 +97,7 @@ function Breadcrumbs({ items }: { items: BreadcrumbItem[] }) {
   const current = items.at(-1);
 
   return (
-    <nav aria-label="Breadcrumb" className="min-w-0">
+    <nav aria-label="Breadcrumb" className="tmx-breadcrumb min-w-0">
       <div className="flex min-w-0 items-center gap-1.5 text-[13px] md:hidden">
         {parent?.href && (
           <Link
@@ -146,6 +148,8 @@ export function Topbar({
   onToggleSidebar,
   onOpenMobileNavigation,
   onOpenCommandPalette,
+  notificationCount = 0,
+  onOpenNotifications,
 }: TopbarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -207,7 +211,7 @@ export function Topbar({
 
       <div className="hidden h-5 w-px bg-border/60 md:block" aria-hidden />
       <div className="min-w-0 flex-1">
-        <Breadcrumbs items={breadcrumbs} />
+        <Breadcrumbs key={`${pathname}?${searchParams.toString()}`} items={breadcrumbs} />
       </div>
 
       <OfferContextSwitcher />
@@ -227,6 +231,29 @@ export function Topbar({
           <kbd className="hidden rounded border border-border/60 bg-background px-1.5 py-0.5 text-[11px] xl:inline">
             ⌘K
           </kbd>
+        </Button>
+      )}
+
+      {onOpenNotifications && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={onOpenNotifications}
+          aria-label={
+            notificationCount > 0
+              ? `${notificationCount} ${notificationCount === 1 ? 'notificação nova' : 'notificações novas'}`
+              : 'Notificações'
+          }
+          className="relative h-11 w-11 shrink-0 sm:h-9 sm:w-9"
+        >
+          <Bell className="h-4 w-4" aria-hidden />
+          {notificationCount > 0 && (
+            <span className="absolute right-2 top-2 flex h-2 w-2" aria-hidden>
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-danger opacity-70" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-danger" />
+            </span>
+          )}
         </Button>
       )}
 

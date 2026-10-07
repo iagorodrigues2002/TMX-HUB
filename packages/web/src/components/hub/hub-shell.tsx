@@ -14,11 +14,20 @@ interface HubShellProps {
   children: ReactNode;
   breadcrumb?: string[];
   topbarRight?: ReactNode;
+  notificationCount?: number;
+  onOpenNotifications?: () => void;
   /** When true, the children control their own scroll/layout (e.g. the editor). */
   fullBleed?: boolean;
 }
 
-export function HubShell({ children, breadcrumb, topbarRight, fullBleed }: HubShellProps) {
+export function HubShell({
+  children,
+  breadcrumb,
+  topbarRight,
+  notificationCount,
+  onOpenNotifications,
+  fullBleed,
+}: HubShellProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -60,6 +69,8 @@ export function HubShell({ children, breadcrumb, topbarRight, fullBleed }: HubSh
             onToggleSidebar={toggleSidebar}
             onOpenMobileNavigation={() => setMobileNavOpen(true)}
             onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+            notificationCount={notificationCount}
+            onOpenNotifications={onOpenNotifications}
           />
           <div className="flex flex-1 overflow-hidden">
             <Sidebar

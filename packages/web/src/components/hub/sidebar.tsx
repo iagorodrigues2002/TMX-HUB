@@ -75,6 +75,7 @@ function DesktopItem({
   const childActive = visibleChildren.some((child) => itemIsActive(child, pathname, search));
   const active = ownActive || childActive;
   const Icon = item.icon;
+  const submenuOpen = !collapsed && expanded && visibleChildren.length > 0;
 
   return (
     <div>
@@ -112,27 +113,34 @@ function DesktopItem({
         )}
       </div>
 
-      {!collapsed && expanded && visibleChildren.length > 0 && (
-        <div className="ml-4 border-l border-border/60 py-1 pl-3">
-          <p className="px-2 pb-1 pt-2 text-[11px] font-medium text-muted-foreground">
-            {item.label}
-          </p>
-          <div className="space-y-0.5">
-            {visibleChildren.map((child) => {
-              const ChildIcon = child.icon;
-              const childIsActive = itemIsActive(child, pathname, search);
-              return (
-                <Link
-                  key={child.id}
-                  href={child.href}
-                  aria-current={childIsActive ? 'page' : undefined}
-                  className="nav-item min-h-9 px-2.5 py-2 text-xs"
-                >
-                  <ChildIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                  <span className="truncate">{child.label}</span>
-                </Link>
-              );
-            })}
+      {visibleChildren.length > 0 && (
+        <div
+          data-expanded={submenuOpen}
+          aria-hidden={!submenuOpen}
+          className="tmx-sidebar-submenu ml-4 border-l border-border/60 pl-3"
+        >
+          <div className="py-1">
+            <p className="px-2 pb-1 pt-2 text-[11px] font-medium text-muted-foreground">
+              {item.label}
+            </p>
+            <div className="space-y-0.5">
+              {visibleChildren.map((child) => {
+                const ChildIcon = child.icon;
+                const childIsActive = itemIsActive(child, pathname, search);
+                return (
+                  <Link
+                    key={child.id}
+                    href={child.href}
+                    tabIndex={submenuOpen ? undefined : -1}
+                    aria-current={childIsActive ? 'page' : undefined}
+                    className="nav-item min-h-9 px-2.5 py-2 text-xs"
+                  >
+                    <ChildIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    <span className="truncate">{child.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
