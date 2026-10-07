@@ -5,10 +5,15 @@ import { z } from 'zod';
 import { env } from '../env.js';
 import { normalizeVendepay } from '../integrations/vendepay/normalize.js';
 import { normalizePaysight } from '../integrations/paysight/normalize.js';
+import { normalizeExplodely } from '../integrations/explodely/normalize.js';
 import { encryptSecret } from '../lib/secret-box.js';
 import { createTrackingToken, readTrackingToken } from '../lib/tracking-token.js';
 import { convertToBrlMinor } from '../services/exchange-rate.js';
-import { buildTikTokPixelScript, buildTrackerScript, buildVturbBridgeScriptV2 } from '../services/tracker-script.js';
+import {
+  buildTikTokPixelScript,
+  buildTrackerScript,
+  buildVturbBridgeScriptV2,
+} from '../services/tracker-script.js';
 import { checkUpsellCompatibility } from '../services/upsell-compatibility.js';
 import { findVturbConversionKeyInUrl } from '../services/vturb.js';
 
@@ -316,6 +321,19 @@ async function enqueueInitiateCheckout(
 }
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
+  // Explodely's legacy IPN can POST URL-encoded fields while its newer
+  // Seller Hub webhooks may post JSON. Normalize both formats below.
+  app.addContentTypeParser(
+    /^application\/x-www-form-urlencoded(?:;.*)?$/i,
+    { parseAs: 'string' },
+    (_request, body, done) => {
+      try {
+        done(null, Object.fromEntries(new URLSearchParams(body as string)));
+      } catch (error) {
+        done(error as Error, undefined);
+      }
+    },
+  );
   async function upsellDestinationForAccount(
     stage: {
       project_id: string;
@@ -558,8 +576,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           buildTrackerScript(
             req.query.key,
             pixels.map((pixel) => pixel.pixel_id),
-          ) + buildTikTokPixelScript(tikTokPixels.map((pixel) => pixel.pixel_code))
-            + (vturb ? buildVturbBridgeScriptV2(req.query.key, vturb.conversion_param) : ''),
+          ) +
+            buildTikTokPixelScript(tikTokPixels.map((pixel) => pixel.pixel_code)) +
+            (vturb ? buildVturbBridgeScriptV2(req.query.key, vturb.conversion_param) : ''),
         )
     );
   });
@@ -1888,17 +1907,27 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   // Generic payment gateway receiver. VendePay intentionally keeps its mature
   // route above; new processors (starting with Paysight) use this isolated
   // connection model so enabling them cannot alter VendePay ingestion.
-  app.post<{ Querystring: { token?: string } }>(
-    '/webhooks/paysight',
+  app.post<{ Params: { provider: 'paysight' | 'explodely' }; Querystring: { token?: string } }>(
+    '/webhooks/:provider',
     { bodyLimit: 256 * 1024, logLevel: 'silent' },
     async (req, reply) => {
       if (!app.db || !req.query.token) return reply.code(404).send({ accepted: false });
+      const provider = req.params.provider;
+      if (provider !== 'paysight' && provider !== 'explodely')
+        return reply.code(404).send({ accepted: false });
       const candidate = createHash('sha256').update(req.query.token).digest('hex');
-      const [connection] = await app.db<Array<{ id: string; project_id: string; offer_id: string }>>`
-        SELECT g.id,g.project_id,p.offer_id
+      const [connection] = await app.db<
+        Array<{
+          id: string;
+          project_id: string;
+          offer_id: string;
+          settings: Record<string, unknown>;
+        }>
+      >`
+        SELECT g.id,g.project_id,p.offer_id,g.settings
         FROM tracking_gateway_connections g
         JOIN tracking_projects p ON p.id=g.project_id
-        WHERE g.provider='paysight' AND g.enabled=true AND g.webhook_token_hash=${candidate}
+        WHERE g.provider=${provider} AND g.enabled=true AND g.webhook_token_hash=${candidate}
         LIMIT 1
       `;
       if (!connection) return reply.code(404).send({ accepted: false });
@@ -1914,7 +1943,15 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       // The durable receipt is per transaction, never per HTTP batch.
       const incoming = Array.isArray(req.body) ? req.body : [req.body];
       const payload = incoming[0];
-      const normalized = normalizePaysight(payload);
+      const normalized =
+        provider === 'explodely'
+          ? normalizeExplodely(
+              payload,
+              typeof connection.settings.currency === 'string'
+                ? connection.settings.currency
+                : 'USD',
+            )
+          : normalizePaysight(payload);
       const receiptId = ulid();
       if (normalized.kind === 'quarantined') {
         await app.db`
@@ -1933,7 +1970,13 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           VALUES(${receiptId},${connection.id},${normalized.dedupeKey},${sql.json(payload as never)},'received')
           ON CONFLICT(gateway_connection_id,dedupe_key) DO NOTHING RETURNING id
         `;
-        if (!receipt[0]) return { duplicate: true, meta: [] as string[], utmify: [] as string[], tiktok: [] as string[] };
+        if (!receipt[0])
+          return {
+            duplicate: true,
+            meta: [] as string[],
+            utmify: [] as string[],
+            tiktok: [] as string[],
+          };
         const [visitor] = event.trackingSrc
           ? await sql<Array<{ visitor_id: string }>>`
               SELECT visitor_id FROM tracking_visitors
@@ -1942,18 +1985,26 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             `
           : [];
         const [productKind] = event.product.id
-          ? await sql<Array<{ kind: string }>>`SELECT kind FROM tracking_product_kinds WHERE project_id=${connection.project_id} AND product_id=${event.product.id} LIMIT 1`
+          ? await sql<
+              Array<{ kind: string }>
+            >`SELECT kind FROM tracking_product_kinds WHERE project_id=${connection.project_id} AND product_id=${event.product.id} LIMIT 1`
           : [];
         const [visitorSource] = visitor
-          ? await sql<Array<{ first_source: Record<string,string>; last_source: Record<string,string> }>>`
+          ? await sql<
+              Array<{ first_source: Record<string, string>; last_source: Record<string, string> }>
+            >`
               SELECT first_source,last_source FROM tracking_visitors WHERE project_id=${connection.project_id} AND visitor_id=${visitor.visitor_id} LIMIT 1
             `
           : [];
-        const attribution = { ...(visitorSource?.first_source ?? {}), ...(visitorSource?.last_source ?? {}), ...event.source };
+        const attribution = {
+          ...(visitorSource?.first_source ?? {}),
+          ...(visitorSource?.last_source ?? {}),
+          ...event.source,
+        };
         const [order] = await sql<Array<{ id: string; status: string; order_kind: string }>>`
           INSERT INTO tracking_orders
             (id,project_id,provider,external_id,status,amount_minor,currency,visitor_id,buyer,raw_status,occurred_at,paid_at,payment_method,product,attribution_source,order_kind,refunded_at,chargeback_at,gateway_connection_id)
-          VALUES(${ulid()},${connection.project_id},'paysight',${event.transactionId},${event.status},${event.amountMinor ?? null},${event.currency ?? null},${visitor?.visitor_id ?? null},${sql.json(event.buyer)},${event.rawStatus ?? null},${event.occurredAt},${event.status === 'paid' ? event.occurredAt : null},${event.paymentMethod ?? null},${sql.json(event.product)},${sql.json(attribution)},${productKind?.kind ?? 'unknown'},${event.status === 'refunded' ? event.occurredAt : null},${event.status === 'chargeback' ? event.occurredAt : null},${connection.id})
+          VALUES(${ulid()},${connection.project_id},${provider},${event.transactionId},${event.status},${event.amountMinor ?? null},${event.currency ?? null},${visitor?.visitor_id ?? null},${sql.json(event.buyer)},${event.rawStatus ?? null},${event.occurredAt},${event.status === 'paid' ? event.occurredAt : null},${event.paymentMethod ?? null},${sql.json(event.product)},${sql.json(attribution)},${productKind?.kind ?? 'unknown'},${event.status === 'refunded' ? event.occurredAt : null},${event.status === 'chargeback' ? event.occurredAt : null},${connection.id})
           ON CONFLICT(project_id,provider,external_id) DO UPDATE SET
             status=CASE WHEN tracking_orders.status IN ('refunded','chargeback') THEN tracking_orders.status WHEN tracking_orders.status='paid' AND EXCLUDED.status IN ('pending','refused','unknown') THEN tracking_orders.status ELSE EXCLUDED.status END,
             amount_minor=COALESCE(EXCLUDED.amount_minor,tracking_orders.amount_minor), currency=COALESCE(EXCLUDED.currency,tracking_orders.currency),
@@ -1978,29 +2029,62 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             ),true)=true
           ))
         `) {
-          const [row] = await sql<Array<{ id:string }>>`
+          const [row] = await sql<Array<{ id: string }>>`
             INSERT INTO tracking_delivery_outbox(id,project_id,destination_kind,destination_id,order_id,event_id,event_type,state)
-            VALUES(${ulid()},${connection.project_id},'utmify',${destination.id},${order!.id},${`paysight:${event.transactionId}:${event.status}`},${`order.${event.status}`},${event.status === 'cancelled' || event.status === 'abandoned' ? 'skipped' : 'pending'})
+            VALUES(${ulid()},${connection.project_id},'utmify',${destination.id},${order!.id},${`${provider}:${event.transactionId}:${event.status}`},${`order.${event.status}`},${event.status === 'cancelled' || event.status === 'abandoned' ? 'skipped' : 'pending'})
             ON CONFLICT(destination_kind,destination_id,event_id) DO NOTHING RETURNING id`;
           if (row) utmify.push(row.id);
         }
-        if (order!.status !== 'paid' || order!.order_kind !== 'front') return { duplicate:false, meta:[] as string[],utmify,tiktok:[] as string[] };
+        if (order!.status !== 'paid' || order!.order_kind !== 'front')
+          return { duplicate: false, meta: [] as string[], utmify, tiktok: [] as string[] };
         const meta: string[] = [];
-        for (const pixel of await sql<Array<{ id:string }>>`SELECT id FROM meta_pixels WHERE project_id=${connection.project_id} AND enabled=true AND (NOT EXISTS (SELECT 1 FROM meta_pixel_products mpp WHERE mpp.pixel_id=meta_pixels.id) OR ${event.product.id ?? null}::text IN (SELECT mpp.product_id FROM meta_pixel_products mpp WHERE mpp.pixel_id=meta_pixels.id))`) {
-          const [row] = await sql<Array<{ id:string }>>`INSERT INTO meta_deliveries(id,project_id,pixel_id,order_id,event_id) VALUES(${ulid()},${connection.project_id},${pixel.id},${order!.id},${`paysight:${event.transactionId}:purchase`}) ON CONFLICT(pixel_id,event_id) DO NOTHING RETURNING id`;
+        for (const pixel of await sql<
+          Array<{ id: string }>
+        >`SELECT id FROM meta_pixels WHERE project_id=${connection.project_id} AND enabled=true AND (NOT EXISTS (SELECT 1 FROM meta_pixel_products mpp WHERE mpp.pixel_id=meta_pixels.id) OR ${event.product.id ?? null}::text IN (SELECT mpp.product_id FROM meta_pixel_products mpp WHERE mpp.pixel_id=meta_pixels.id))`) {
+          const [row] = await sql<
+            Array<{ id: string }>
+          >`INSERT INTO meta_deliveries(id,project_id,pixel_id,order_id,event_id) VALUES(${ulid()},${connection.project_id},${pixel.id},${order!.id},${`${provider}:${event.transactionId}:purchase`}) ON CONFLICT(pixel_id,event_id) DO NOTHING RETURNING id`;
           if (row) meta.push(row.id);
         }
         const tiktok: string[] = [];
-        for (const destination of await sql<Array<{ id:string }>>`SELECT id FROM tracking_tiktok_destinations WHERE project_id=${connection.project_id} AND enabled=true`) {
-          const [row] = await sql<Array<{ id:string }>>`INSERT INTO tracking_tiktok_deliveries(id,project_id,destination_id,order_id,event_id,event_name) VALUES(${ulid()},${connection.project_id},${destination.id},${order!.id},${`paysight:${event.transactionId}:tiktok:purchase`},'Purchase') ON CONFLICT(destination_id,event_id) DO NOTHING RETURNING id`;
+        for (const destination of await sql<
+          Array<{ id: string }>
+        >`SELECT id FROM tracking_tiktok_destinations WHERE project_id=${connection.project_id} AND enabled=true`) {
+          const [row] = await sql<
+            Array<{ id: string }>
+          >`INSERT INTO tracking_tiktok_deliveries(id,project_id,destination_id,order_id,event_id,event_name) VALUES(${ulid()},${connection.project_id},${destination.id},${order!.id},${`${provider}:${event.transactionId}:tiktok:purchase`},'Purchase') ON CONFLICT(destination_id,event_id) DO NOTHING RETURNING id`;
           if (row) tiktok.push(row.id);
         }
-        return { duplicate:false,meta,utmify,tiktok };
+        return { duplicate: false, meta, utmify, tiktok };
       });
-      await Promise.allSettled(outcome.meta.map((id) => app.metaQueue.add('send',{ deliveryId:id })));
-      await Promise.allSettled(outcome.utmify.map((id) => app.utmifyDeliveryQueue.add('send',{ deliveryId:id })));
-      await Promise.allSettled(outcome.tiktok.map((id) => app.tiktokQueue.add('send',{ deliveryId:id })));
-      return reply.code(202).send({ accepted:true, duplicate:outcome.duplicate });
+      await Promise.allSettled(
+        outcome.meta.map((id) => app.metaQueue.add('send', { deliveryId: id })),
+      );
+      await Promise.allSettled(
+        outcome.utmify.map((id) => app.utmifyDeliveryQueue.add('send', { deliveryId: id })),
+      );
+      await Promise.allSettled(
+        outcome.tiktok.map((id) => app.tiktokQueue.add('send', { deliveryId: id })),
+      );
+      return reply.code(202).send({ accepted: true, duplicate: outcome.duplicate });
+    },
+  );
+
+  // Explodely's legacy Global IPN can be configured as GET. Route it through
+  // the exact same token validation, receipt persistence and idempotent POST
+  // pipeline instead of maintaining a second implementation.
+  app.get<{ Querystring: Record<string, string | undefined> }>(
+    '/webhooks/explodely',
+    { logLevel: 'silent' },
+    async (req, reply) => {
+      const result = await app.inject({
+        method: 'POST',
+        url: req.raw.url,
+        payload: req.query,
+      });
+      const contentType = result.headers['content-type'];
+      if (contentType) reply.header('content-type', contentType);
+      return reply.code(result.statusCode).send(result.json());
     },
   );
 

@@ -1516,7 +1516,9 @@ export const apiClient = {
     return request('/v1/utmify-global/replay', { method: 'POST' });
   },
 
-  async saveUtmifyGlobalOffers(offerIds: string[]): Promise<{ offers: UtmifyGlobalConfig['offers'] }> {
+  async saveUtmifyGlobalOffers(
+    offerIds: string[],
+  ): Promise<{ offers: UtmifyGlobalConfig['offers'] }> {
     return request('/v1/utmify-global/offers', { method: 'PUT', body: { offer_ids: offerIds } });
   },
 
@@ -1905,7 +1907,11 @@ export const apiClient = {
       provider: string;
       name: string;
       enabled: boolean;
-      settings: { product_id?: string | null; environment?: 'sandbox' | 'production' };
+      settings: {
+        product_id?: string | null;
+        currency?: string;
+        environment?: 'sandbox' | 'production';
+      };
       api_key_configured: boolean;
       signing_secret_configured: boolean;
       last_validated_at: string | null;
@@ -1918,8 +1924,20 @@ export const apiClient = {
 
   async createGatewayConnection(
     id: string,
-    body: { provider: 'paysight'; name: string; api_key?: string; signing_secret?: string; product_id?: string; environment?: 'sandbox' | 'production' },
-  ): Promise<{ connection: { id: string; provider: string; name: string }; webhook_url: string; warning: string }> {
+    body: {
+      provider: 'paysight' | 'explodely';
+      name: string;
+      api_key?: string;
+      signing_secret?: string;
+      product_id?: string;
+      currency?: string;
+      environment?: 'sandbox' | 'production';
+    },
+  ): Promise<{
+    connection: { id: string; provider: string; name: string };
+    webhook_url: string;
+    warning: string;
+  }> {
     return request(`/v1/offers/${id}/tracking/gateway-connections`, { method: 'POST', body });
   },
 
@@ -2026,7 +2044,10 @@ export const apiClient = {
     });
   },
 
-  async listVendepayReceipts(id: string, connectionId?: string): Promise<{
+  async listVendepayReceipts(
+    id: string,
+    connectionId?: string,
+  ): Promise<{
     receipts: Array<{
       id: string;
       connection_id: string;
@@ -2808,9 +2829,7 @@ export const apiClient = {
     if (period.from) pagination.set('from', period.from);
     if (period.to) pagination.set('to', period.to);
     if (period.all) pagination.set('all', 'true');
-    return request(
-      `/v1/offers/${id}/tracking/upsell-identities?${pagination.toString()}`,
-    );
+    return request(`/v1/offers/${id}/tracking/upsell-identities?${pagination.toString()}`);
   },
 
   async reconcileTrackingUpsellIdentities(id: string): Promise<{
@@ -3062,8 +3081,15 @@ export const apiClient = {
     return request(`/v1/offers/${id}/tracking/meta-deliveries`);
   },
 
-  async setMetaPixelProducts(id: string, pixelId: string, productIds: string[]): Promise<{ product_ids: string[] }> {
-    return request(`/v1/offers/${id}/tracking/meta-pixels/${pixelId}/products`, { method: 'PUT', body: { product_ids: productIds } });
+  async setMetaPixelProducts(
+    id: string,
+    pixelId: string,
+    productIds: string[],
+  ): Promise<{ product_ids: string[] }> {
+    return request(`/v1/offers/${id}/tracking/meta-pixels/${pixelId}/products`, {
+      method: 'PUT',
+      body: { product_ids: productIds },
+    });
   },
 
   async reconcileInitiateCheckouts(

@@ -758,7 +758,9 @@ export function TrackingAdvancedCenter({
   const [paysightSecret, setPaysightSecret] = useState('');
   const [paysightProduct, setPaysightProduct] = useState('');
   const [paysightWebhook, setPaysightWebhook] = useState('');
-  const [gatewayPlatform, setGatewayPlatform] = useState<'vendepay' | 'paysight'>('vendepay');
+  const [gatewayPlatform, setGatewayPlatform] = useState<'vendepay' | 'paysight' | 'explodely'>(
+    'vendepay',
+  );
   const [gatewayName, setGatewayName] = useState('');
   const [gatewayCreatedWebhook, setGatewayCreatedWebhook] = useState('');
   const [upsellStageKey, setUpsellStageKey] = useState<UpsellStageKey>('upsell_1');
@@ -1218,10 +1220,15 @@ export function TrackingAdvancedCenter({
     onError: (error) => toast.error((error as Error).message),
   });
   const toggleUtmify = useMutation({
-    mutationFn: (enabled: boolean) => apiClient.setTrackingUtmifyDestinationEnabled(offerId, enabled),
+    mutationFn: (enabled: boolean) =>
+      apiClient.setTrackingUtmifyDestinationEnabled(offerId, enabled),
     onSuccess: (result) => {
       void qc.invalidateQueries({ queryKey: ['tracking-utmify-destination', offerId] });
-      toast.success(result.destination.enabled ? 'Envio de vendas à UTMify ativado.' : 'Envio de vendas à UTMify pausado.');
+      toast.success(
+        result.destination.enabled
+          ? 'Envio de vendas à UTMify ativado.'
+          : 'Envio de vendas à UTMify pausado.',
+      );
     },
     onError: (error) => toast.error((error as Error).message),
   });
@@ -1470,15 +1477,19 @@ export function TrackingAdvancedCenter({
     onError: (error) => toast.error((error as Error).message),
   });
   const savePaysightGateway = useMutation({
-    mutationFn: () => apiClient.createGatewayConnection(offerId, {
-      provider: 'paysight', name: paysightName.trim(),
-      ...(paysightApiKey.trim() ? { api_key: paysightApiKey.trim() } : {}),
-      ...(paysightSecret.trim() ? { signing_secret: paysightSecret.trim() } : {}),
-      ...(paysightProduct.trim() ? { product_id: paysightProduct.trim() } : {}),
-      environment: 'production',
-    }),
+    mutationFn: () =>
+      apiClient.createGatewayConnection(offerId, {
+        provider: 'paysight',
+        name: paysightName.trim(),
+        ...(paysightApiKey.trim() ? { api_key: paysightApiKey.trim() } : {}),
+        ...(paysightSecret.trim() ? { signing_secret: paysightSecret.trim() } : {}),
+        ...(paysightProduct.trim() ? { product_id: paysightProduct.trim() } : {}),
+        environment: 'production',
+      }),
     onSuccess: (result) => {
-      setPaysightWebhook(result.webhook_url); setPaysightApiKey(''); setPaysightSecret('');
+      setPaysightWebhook(result.webhook_url);
+      setPaysightApiKey('');
+      setPaysightSecret('');
       void qc.invalidateQueries({ queryKey: ['tracking-advanced', offerId] });
       toast.success('Paysight conectada. Copie a URL do webhook agora.');
     },
@@ -1486,11 +1497,18 @@ export function TrackingAdvancedCenter({
   });
   const createGateway = useMutation({
     mutationFn: async () => {
-      if (gatewayPlatform === 'vendepay') return apiClient.createVendepayConnection(offerId, gatewayName.trim());
-      return apiClient.createGatewayConnection(offerId, { provider: 'paysight', name: gatewayName.trim(), environment: 'production' });
+      if (gatewayPlatform === 'vendepay')
+        return apiClient.createVendepayConnection(offerId, gatewayName.trim());
+      return apiClient.createGatewayConnection(offerId, {
+        provider: gatewayPlatform,
+        name: gatewayName.trim(),
+        environment: 'production',
+      });
     },
     onSuccess: (result) => {
-      setGatewayCreatedWebhook('vendepay_webhook_url' in result ? result.vendepay_webhook_url : result.webhook_url);
+      setGatewayCreatedWebhook(
+        'vendepay_webhook_url' in result ? result.vendepay_webhook_url : result.webhook_url,
+      );
       setGatewayName('');
       void qc.invalidateQueries({ queryKey: ['tracking-config', offerId] });
       void qc.invalidateQueries({ queryKey: ['tracking-advanced', offerId] });
@@ -1542,7 +1560,8 @@ export function TrackingAdvancedCenter({
   });
   const vendepayReceipts = useQuery({
     queryKey: ['tracking-vendepay-receipts', offerId, selectedVendepayConnectionId],
-    queryFn: () => apiClient.listVendepayReceipts(offerId, selectedVendepayConnectionId || undefined),
+    queryFn: () =>
+      apiClient.listVendepayReceipts(offerId, selectedVendepayConnectionId || undefined),
     enabled:
       section === 'gateways' &&
       Boolean(config.data?.configured) &&
@@ -1655,7 +1674,8 @@ export function TrackingAdvancedCenter({
       label: 'Conectar destinos',
       detail: 'Meta, TikTok ou UTMify',
       ready: hasConversionDestination,
-      target: hasActiveTikTokDestination && !hasActiveMetaDestination
+      target:
+        hasActiveTikTokDestination && !hasActiveMetaDestination
           ? ('tiktok' as Section)
           : hasActiveMetaDestination
             ? ('pixels' as Section)
@@ -2215,13 +2235,13 @@ export function TrackingAdvancedCenter({
                     )}
                   </div>
                   <p className="mt-1 text-xs text-white/40">
-                    Histórico completo de compras de front aprovadas. O TMX libera os links
-                    somente após confirmar o vendaId no funil correspondente da VendePay.
+                    Histórico completo de compras de front aprovadas. O TMX libera os links somente
+                    após confirmar o vendaId no funil correspondente da VendePay.
                   </p>
                   <p className="mt-1 text-xs text-white/35">
-                    A consulta é instantânea e não chama a VendePay. Use “Recuperar vendaId”
-                    quando quiser validar os identificadores pendentes; isso nunca altera o
-                    histórico manual de funcionou ou não funcionou.
+                    A consulta é instantânea e não chama a VendePay. Use “Recuperar vendaId” quando
+                    quiser validar os identificadores pendentes; isso nunca altera o histórico
+                    manual de funcionou ou não funcionou.
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {(
@@ -2366,9 +2386,7 @@ export function TrackingAdvancedCenter({
                           (upsellIdentities.data?.total ?? 0)
                         }
                         onClick={() =>
-                          setUpsellIdentityOffset(
-                            (offset) => offset + UPSELL_IDENTITIES_PAGE_SIZE,
-                          )
+                          setUpsellIdentityOffset((offset) => offset + UPSELL_IDENTITIES_PAGE_SIZE)
                         }
                       >
                         Próxima
@@ -2666,29 +2684,92 @@ export function TrackingAdvancedCenter({
                   <div>
                     <p className="hud-label text-violet-200">Gateways universais</p>
                     <p className="mt-1 text-xs leading-5 text-white/50">
-                      Use esta camada para Paysight e próximos processadores. A VendePay abaixo continua independente e não é alterada.
+                      Use esta camada para Paysight e próximos processadores. A VendePay abaixo
+                      continua independente e não é alterada.
                     </p>
                   </div>
                 </div>
-                {(advanced.data?.gateways ?? []).filter((gateway) => gateway.provider !== 'vendepay').map((gateway) => (
-                  <div key={gateway.id ?? gateway.provider} className="mt-3 flex items-center justify-between rounded border border-white/[0.08] bg-black/15 px-3 py-2 text-xs">
-                    <span className="text-white/75">{gateway.name ?? gateway.provider}</span>
-                    <span className={gateway.enabled ? 'text-emerald-200' : 'text-white/40'}>{gateway.last_webhook_at ? 'webhook ativo' : gateway.enabled ? 'aguardando webhook' : 'pausado'}</span>
-                  </div>
-                ))}
+                {(advanced.data?.gateways ?? [])
+                  .filter((gateway) => gateway.provider !== 'vendepay')
+                  .map((gateway) => (
+                    <div
+                      key={gateway.id ?? gateway.provider}
+                      className="mt-3 flex items-center justify-between rounded border border-white/[0.08] bg-black/15 px-3 py-2 text-xs"
+                    >
+                      <span className="text-white/75">{gateway.name ?? gateway.provider}</span>
+                      <span className={gateway.enabled ? 'text-emerald-200' : 'text-white/40'}>
+                        {gateway.last_webhook_at
+                          ? 'webhook ativo'
+                          : gateway.enabled
+                            ? 'aguardando webhook'
+                            : 'pausado'}
+                      </span>
+                    </div>
+                  ))}
                 {canManage && config.data?.configured && (
                   <div className="mt-4 border-t border-violet-300/15 pt-4">
                     <p className="hud-label text-violet-200">Nova conexão</p>
-                    <p className="mt-1 text-xs text-white/45">1. Escolha a plataforma · 2. Dê um nome interno · 3. Salve e receba o webhook exclusivo.</p>
+                    <p className="mt-1 text-xs text-white/45">
+                      1. Escolha a plataforma · 2. Dê um nome interno · 3. Salve e receba o webhook
+                      exclusivo.
+                    </p>
                     <div className="mt-3 grid gap-2 md:grid-cols-[220px_minmax(0,1fr)_auto]">
-                      <select aria-label="Plataforma de pagamento" value={gatewayPlatform} onChange={(event) => setGatewayPlatform(event.target.value as 'vendepay' | 'paysight')} className="h-10 rounded-md border border-white/[0.1] bg-[#071720] px-3 text-sm text-white">
+                      <select
+                        aria-label="Plataforma de pagamento"
+                        value={gatewayPlatform}
+                        onChange={(event) =>
+                          setGatewayPlatform(
+                            event.target.value as 'vendepay' | 'paysight' | 'explodely',
+                          )
+                        }
+                        className="h-10 rounded-md border border-white/[0.1] bg-[#071720] px-3 text-sm text-white"
+                      >
                         <option value="vendepay">VendePay</option>
                         <option value="paysight">Paysight</option>
+                        <option value="explodely">Explodely</option>
                       </select>
-                      <Input value={gatewayName} onChange={(event) => setGatewayName(event.target.value)} placeholder={gatewayPlatform === 'vendepay' ? 'Ex.: VendePay · Conta do Yola' : 'Ex.: Paysight · Conta do Yola'} />
-                      <Button disabled={gatewayName.trim().length < 2 || createGateway.isPending} onClick={() => createGateway.mutate()}>{createGateway.isPending ? 'Criando…' : 'Criar e gerar webhook'}</Button>
+                      <Input
+                        value={gatewayName}
+                        onChange={(event) => setGatewayName(event.target.value)}
+                        placeholder={
+                          gatewayPlatform === 'vendepay'
+                            ? 'Ex.: VendePay · Conta do Yola'
+                            : gatewayPlatform === 'explodely'
+                              ? 'Ex.: Explodely · Conta do Yola'
+                              : 'Ex.: Paysight · Conta do Yola'
+                        }
+                      />
+                      <Button
+                        disabled={gatewayName.trim().length < 2 || createGateway.isPending}
+                        onClick={() => createGateway.mutate()}
+                      >
+                        {createGateway.isPending ? 'Criando…' : 'Criar e gerar webhook'}
+                      </Button>
                     </div>
-                    {gatewayCreatedWebhook && <div className="mt-3 rounded border border-amber-300/25 bg-amber-300/[0.05] p-3 text-xs"><p className="font-medium text-amber-100">Webhook pronto para cadastrar na {gatewayPlatform === 'vendepay' ? 'VendePay' : 'Paysight'}</p><code className="mt-2 block break-all text-cyan-100">{gatewayCreatedWebhook}</code></div>}
+                    {gatewayCreatedWebhook && (
+                      <div className="mt-3 rounded border border-amber-300/25 bg-amber-300/[0.05] p-3 text-xs">
+                        <p className="font-medium text-amber-100">
+                          Webhook pronto para cadastrar na{' '}
+                          {gatewayPlatform === 'vendepay'
+                            ? 'VendePay'
+                            : gatewayPlatform === 'explodely'
+                              ? 'Explodely'
+                              : 'Paysight'}
+                        </p>
+                        <code className="mt-2 block break-all text-cyan-100">
+                          {gatewayCreatedWebhook}
+                        </code>
+                      </div>
+                    )}
+                    {gatewayCreatedWebhook && gatewayPlatform === 'explodely' && (
+                      <p className="mt-2 text-xs leading-5 text-white/55">
+                        No Explodely, acesse{' '}
+                        <span className="text-white/75">Seller Hub → Integrations → Webhooks</span>,
+                        cole a URL e selecione vendas, reembolsos e chargebacks. Marque Order ID,
+                        Amount, Product ID/Name, Customer, Tracking ID, IP e Country. Para o IPN
+                        legado, use a mesma URL nos eventos Sale e Refund/Chargeback.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -2926,7 +3007,9 @@ export function TrackingAdvancedCenter({
                     disabled={backfillReversals.isPending}
                     onClick={() => backfillReversals.mutate()}
                   >
-                    {backfillReversals.isPending ? 'Reprocessando…' : 'Reprocessar reembolsos e chargebacks'}
+                    {backfillReversals.isPending
+                      ? 'Reprocessando…'
+                      : 'Reprocessar reembolsos e chargebacks'}
                   </Button>
                 </div>
                 <div className="mt-3 space-y-2">
@@ -3200,13 +3283,27 @@ export function TrackingAdvancedCenter({
                         : 'border-amber-300/30 bg-amber-300/[0.08] text-amber-100',
                     )}
                   >
-                    <span className={cn('h-4 w-7 rounded-full p-0.5 transition-colors', utmify.data.destination?.enabled ? 'bg-emerald-400/80' : 'bg-white/20')}>
-                      <span className={cn('block h-3 w-3 rounded-full bg-white shadow transition-transform', utmify.data.destination?.enabled ? 'translate-x-3' : 'translate-x-0')} />
+                    <span
+                      className={cn(
+                        'h-4 w-7 rounded-full p-0.5 transition-colors',
+                        utmify.data.destination?.enabled ? 'bg-emerald-400/80' : 'bg-white/20',
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          'block h-3 w-3 rounded-full bg-white shadow transition-transform',
+                          utmify.data.destination?.enabled ? 'translate-x-3' : 'translate-x-0',
+                        )}
+                      />
                     </span>
                     {utmify.data.destination?.enabled ? 'Envio ativo' : 'Envio pausado'}
                   </button>
                 ) : (
-                  <span className={utmify.data?.destination?.enabled ? 'text-emerald-300' : 'text-amber-300'}>
+                  <span
+                    className={
+                      utmify.data?.destination?.enabled ? 'text-emerald-300' : 'text-amber-300'
+                    }
+                  >
                     {utmify.data?.destination?.enabled ? 'operacional' : 'envio pausado'}
                   </span>
                 )}
