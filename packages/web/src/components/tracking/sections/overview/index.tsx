@@ -17,37 +17,13 @@ export function OverviewSection({ offerId, section }: OverviewSectionProps) {
   const config = useQuery({
     queryKey: ['tracking-config', offerId],
     queryFn: () => apiClient.getTrackingConfig(offerId),
+    enabled: section !== 'summary',
     retry: false,
     staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
 
   if (section === 'summary') {
-    return (
-      <div className="space-y-4">
-        <section className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-base font-semibold text-white">Resumo da operação</h2>
-              <p className="mt-1 text-sm text-white/50">
-                A mesma visão financeira da página inicial, filtrada pela oferta ativa.
-              </p>
-            </div>
-            {!config.isLoading && (
-              <span
-                className={
-                  config.data?.configured
-                    ? 'rounded-md border border-emerald-300/20 bg-emerald-300/[0.06] px-3 py-2 text-xs text-emerald-200'
-                    : 'rounded-md border border-amber-300/20 bg-amber-300/[0.06] px-3 py-2 text-xs text-amber-100'
-                }
-              >
-                {config.data?.configured ? 'Captura ativa' : 'Configuração pendente'}
-              </span>
-            )}
-          </div>
-        </section>
-        <OverviewDashboard scope="offer" offerId={offerId} />
-      </div>
-    );
+    return <OverviewDashboard scope="offer" offerId={offerId} />;
   }
 
   if (config.isLoading) {
