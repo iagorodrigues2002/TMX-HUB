@@ -5,7 +5,6 @@ import { AuthProvider } from '@/lib/auth-context';
 import { PrivacyProvider } from '@/lib/privacy-context';
 import { makeQueryClient } from '@/lib/query-client';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { type ReactNode, useState } from 'react';
 import { Toaster } from 'sonner';
 
@@ -24,7 +23,6 @@ export function Providers({ children }: { children: ReactNode }) {
           <PrivacyProvider>{children}</PrivacyProvider>
         </AuthProvider>
         <ThemeAwareToaster />
-        {process.env.NODE_ENV === 'development' && <ReactQueryDevtools initialIsOpen={false} />}
       </QueryClientProvider>
     </InterfaceThemeProvider>
   );
