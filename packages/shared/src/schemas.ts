@@ -14,6 +14,26 @@ export const CloneStatusSchema = z.enum([
 ]);
 export const BuildStatusSchema = z.enum(['queued', 'building', 'ready', 'failed']);
 
+export const TrackingGatewayProviderSchema = z.enum(['paysight', 'explodely']);
+
+export const ExplodelyGatewaySettingsSchema = z
+  .object({
+    vendor_id: z.string().trim().min(1, 'Informe o vendor_id da Explodely.').max(256),
+    seller_id: z.string().trim().min(1).max(256).optional(),
+    currency: z.enum(['USD', 'BRL', 'EUR']).default('USD'),
+    amount_unit: z.enum(['cents', 'decimal']).default('cents'),
+    amount_scale: z.coerce
+      .number()
+      .int('O divisor deve ser um número inteiro.')
+      .positive('O divisor deve ser maior que zero.')
+      .max(1_000_000)
+      .refine((value) => Number.isInteger(Math.log10(value)), {
+        message: 'Use um divisor em potência de 10 (ex.: 1, 10, 100).',
+      })
+      .default(100),
+  })
+  .strict();
+
 export const ViewportSchema = z.object({
   width: z.number().int().min(320).max(3840),
   height: z.number().int().min(320).max(2160),
@@ -133,6 +153,8 @@ export type BulkLinkUpdate = z.infer<typeof BulkLinkUpdateSchema>;
 export type BuildOptionsRequest = z.infer<typeof BuildOptionsSchema>;
 export type Problem = z.infer<typeof ProblemSchema>;
 export type InspectRequest = z.infer<typeof InspectRequestSchema>;
+export type TrackingGatewayProvider = z.infer<typeof TrackingGatewayProviderSchema>;
+export type ExplodelyGatewaySettings = z.infer<typeof ExplodelyGatewaySettingsSchema>;
 
 export const CreateFunnelJobRequestSchema = z
   .object({

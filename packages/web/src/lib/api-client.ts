@@ -3,6 +3,7 @@ import type {
   BuildOptionsRequest,
   BulkLinkUpdate,
   CloneState,
+  ExplodelyGatewaySettings,
   Form,
   FunnelJob,
   FunnelJobStatus,
@@ -180,18 +181,25 @@ export const authToken = {
     if (volatileAuthToken) return volatileAuthToken;
     try {
       const persisted = window.localStorage.getItem(TOKEN_STORAGE_KEY);
-      if (persisted) return (volatileAuthToken = persisted);
+      if (persisted) {
+        volatileAuthToken = persisted;
+        return persisted;
+      }
     } catch {
       // Mobile/private browsers may block localStorage. Continue through the
       // session and cookie fallbacks instead of silently losing the login.
     }
     try {
       const session = window.sessionStorage.getItem(TOKEN_STORAGE_KEY);
-      if (session) return (volatileAuthToken = session);
+      if (session) {
+        volatileAuthToken = session;
+        return session;
+      }
     } catch {
       // Cookie fallback below.
     }
-    return (volatileAuthToken = authCookie());
+    volatileAuthToken = authCookie();
+    return volatileAuthToken;
   },
   set(token: string): void {
     if (typeof window === 'undefined') return;
@@ -1516,7 +1524,9 @@ export const apiClient = {
     return request('/v1/utmify-global/replay', { method: 'POST' });
   },
 
-  async saveUtmifyGlobalOffers(offerIds: string[]): Promise<{ offers: UtmifyGlobalConfig['offers'] }> {
+  async saveUtmifyGlobalOffers(
+    offerIds: string[],
+  ): Promise<{ offers: UtmifyGlobalConfig['offers'] }> {
     return request('/v1/utmify-global/offers', { method: 'PUT', body: { offer_ids: offerIds } });
   },
 
@@ -1918,8 +1928,30 @@ export const apiClient = {
 
   async createGatewayConnection(
     id: string,
-    body: { provider: 'paysight'; name: string; api_key?: string; signing_secret?: string; product_id?: string; environment?: 'sandbox' | 'production' },
-  ): Promise<{ connection: { id: string; provider: string; name: string }; webhook_url: string; warning: string }> {
+    body:
+      | {
+          provider: 'paysight';
+          name: string;
+          api_key?: string;
+          signing_secret?: string;
+          product_id?: string;
+          environment?: 'sandbox' | 'production';
+        }
+      | {
+          provider: 'explodely';
+          name: string;
+          vendor_id: string;
+          seller_id?: string;
+          currency: ExplodelyGatewaySettings['currency'];
+          amount_unit: 'minor' | 'decimal';
+          amount_scale: number;
+          environment?: 'sandbox' | 'production';
+        },
+  ): Promise<{
+    connection: { id: string; provider: string; name: string };
+    webhook_url: string;
+    warning: string;
+  }> {
     return request(`/v1/offers/${id}/tracking/gateway-connections`, { method: 'POST', body });
   },
 
@@ -2798,9 +2830,7 @@ export const apiClient = {
     if (period.from) pagination.set('from', period.from);
     if (period.to) pagination.set('to', period.to);
     if (period.all) pagination.set('all', 'true');
-    return request(
-      `/v1/offers/${id}/tracking/upsell-identities?${pagination.toString()}`,
-    );
+    return request(`/v1/offers/${id}/tracking/upsell-identities?${pagination.toString()}`);
   },
 
   async reconcileTrackingUpsellIdentities(id: string): Promise<{
@@ -3052,8 +3082,15 @@ export const apiClient = {
     return request(`/v1/offers/${id}/tracking/meta-deliveries`);
   },
 
-  async setMetaPixelProducts(id: string, pixelId: string, productIds: string[]): Promise<{ product_ids: string[] }> {
-    return request(`/v1/offers/${id}/tracking/meta-pixels/${pixelId}/products`, { method: 'PUT', body: { product_ids: productIds } });
+  async setMetaPixelProducts(
+    id: string,
+    pixelId: string,
+    productIds: string[],
+  ): Promise<{ product_ids: string[] }> {
+    return request(`/v1/offers/${id}/tracking/meta-pixels/${pixelId}/products`, {
+      method: 'PUT',
+      body: { product_ids: productIds },
+    });
   },
 
   async reconcileInitiateCheckouts(
