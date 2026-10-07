@@ -27,6 +27,8 @@ export function TrackingAdvancedCenter({
       return <OverviewSection {...shared} />;
     case 'journey':
       return <JourneySection {...shared} />;
+    case 'upsell-intelligence':
+      return <JourneySection {...shared} section="upsells" />;
     case 'capture':
       return <CaptureSection {...shared} />;
     case 'destinations':

@@ -25,7 +25,13 @@ import {
   Webhook,
 } from 'lucide-react';
 
-export type TrackingView = 'overview' | 'journey' | 'capture' | 'destinations' | 'finance';
+export type TrackingView =
+  | 'overview'
+  | 'journey'
+  | 'upsell-intelligence'
+  | 'capture'
+  | 'destinations'
+  | 'finance';
 
 export interface TrackingNavSection {
   id: string;
@@ -88,12 +94,6 @@ export const TRACKING_NAV: TrackingNavArea[] = [
         icon: Megaphone,
       },
       {
-        id: 'upsells',
-        label: 'Upsells',
-        description: 'Desempenho e identidade dos compradores.',
-        icon: CreditCard,
-      },
-      {
         id: 'entry-links',
         label: 'Links de entrada',
         description: 'Links TMX usados como destino dos anúncios.',
@@ -104,6 +104,20 @@ export const TRACKING_NAV: TrackingNavArea[] = [
         label: 'Testes A/B',
         description: 'Experimentos e métricas por variante.',
         icon: FlaskConical,
+      },
+    ],
+  },
+  {
+    id: 'upsell-intelligence',
+    label: 'Upsell Intelligence',
+    description: 'Etapas, identidades e redirecionamentos de upsell.',
+    icon: CreditCard,
+    sections: [
+      {
+        id: 'upsell-intelligence',
+        label: 'Upsell Intelligence',
+        description: 'Desempenho e identidade dos compradores.',
+        icon: CreditCard,
       },
     ],
   },
@@ -220,6 +234,7 @@ export const TRACKING_NAV: TrackingNavArea[] = [
 export const DEFAULT_TRACKING_SECTION: Record<TrackingView, string> = {
   overview: 'summary',
   journey: 'live',
+  'upsell-intelligence': 'upsell-intelligence',
   capture: 'code-pixels',
   destinations: 'meta',
   finance: 'payments',
@@ -241,6 +256,9 @@ export function resolveTrackingSection(view: TrackingView, value: string | null)
  * every current navigation surface uses the canonical view and section IDs.
  */
 export function resolveTrackingLocation(viewValue: string | null, sectionValue: string | null) {
+  if (viewValue === 'journey' && sectionValue === 'upsells') {
+    return { view: 'upsell-intelligence' as const, section: 'upsell-intelligence' };
+  }
   if (viewValue === 'diagnostics') {
     const diagnosticsSection = ['health', 'console', 'help'].includes(sectionValue ?? '')
       ? sectionValue!

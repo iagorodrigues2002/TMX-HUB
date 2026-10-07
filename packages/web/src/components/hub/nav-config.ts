@@ -139,7 +139,16 @@ export const NAV_ITEMS: NavItem[] = [
         icon: Route,
         group: 'Rastreamento',
         ...trackingTool,
-        keywords: ['funil', 'eventos ao vivo', 'campanhas', 'upsells', 'retenção'],
+        keywords: ['funil', 'eventos ao vivo', 'campanhas', 'retenção'],
+      },
+      {
+        id: 'tracking-upsell-intelligence',
+        label: 'Upsell Intelligence',
+        href: '/tracking?view=upsell-intelligence',
+        icon: CreditCard,
+        group: 'Rastreamento',
+        ...trackingTool,
+        keywords: ['upsells', 'etapas', 'identidades', 'redirecionamentos', 'pós-compra'],
       },
       {
         id: 'tracking-capture',
