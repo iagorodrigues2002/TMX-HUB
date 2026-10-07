@@ -701,18 +701,30 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
           }
         />
 
-        <div className="inline-flex w-fit rounded-lg border border-white/10 bg-black/15 p-1">
+        <div
+          className="relative inline-grid w-fit grid-cols-2 rounded-lg border border-white/10 bg-black/15 p-1"
+          role="tablist"
+          aria-label="Visualização intradiária"
+        >
+          <span
+            aria-hidden="true"
+            className={`pointer-events-none absolute bottom-1 left-1 h-px w-[calc(50%-0.25rem)] bg-cyan-300 shadow-[0_0_8px_rgba(34,211,238,0.6)] transition-transform duration-[180ms] ease-out motion-reduce:transition-none ${intradayMode === 'ads' ? 'translate-x-full' : 'translate-x-0'}`}
+          />
           <button
             type="button"
             onClick={() => setIntradayMode('overview')}
-            className={`rounded-md px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] transition ${intradayMode === 'overview' ? 'bg-cyan-300/15 text-cyan-200' : 'text-white/45 hover:text-white/75'}`}
+            role="tab"
+            aria-selected={intradayMode === 'overview'}
+            className={`min-h-11 rounded-md px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] transition-colors duration-[180ms] ${intradayMode === 'overview' ? 'bg-cyan-300/10 text-cyan-200' : 'text-white/45 hover:text-white/75'}`}
           >
             Visão geral
           </button>
           <button
             type="button"
             onClick={() => setIntradayMode('ads')}
-            className={`rounded-md px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] transition ${intradayMode === 'ads' ? 'bg-cyan-300/15 text-cyan-200' : 'text-white/45 hover:text-white/75'}`}
+            role="tab"
+            aria-selected={intradayMode === 'ads'}
+            className={`min-h-11 rounded-md px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] transition-colors duration-[180ms] ${intradayMode === 'ads' ? 'bg-cyan-300/10 text-cyan-200' : 'text-white/45 hover:text-white/75'}`}
           >
             Por anúncios
           </button>

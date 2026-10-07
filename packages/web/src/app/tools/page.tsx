@@ -27,15 +27,19 @@ export default function ToolsIndexPage() {
       <section className="mt-10">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {visible.map(({ id, icon: Icon, title, description, href, badge, disabled }) => (
-            <ToolCard
+            <div
               key={id}
-              icon={<Icon className="h-6 w-6" />}
-              title={title}
-              description={description}
-              href={href}
-              badge={badge}
-              disabled={disabled}
-            />
+              className={`transition-transform duration-[180ms] ease-out motion-reduce:transition-none ${disabled ? '' : 'hover:-translate-y-0.5 hover:-rotate-1 motion-reduce:hover:translate-y-0 motion-reduce:hover:rotate-0'} ${badge && ['BETA', 'NOVO'].includes(badge.toUpperCase()) ? '[&_.tool-card_span]:animate-pulse [&_.tool-card_span]:[animation-duration:2.4s] motion-reduce:[&_.tool-card_span]:animate-none' : ''}`}
+            >
+              <ToolCard
+                icon={<Icon className="h-6 w-6" />}
+                title={title}
+                description={description}
+                href={href}
+                badge={badge}
+                disabled={disabled}
+              />
+            </div>
           ))}
         </div>
       </section>

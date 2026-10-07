@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Kpi } from '@/components/ui/kpi';
 import { type OfferView, apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
-import { PERIOD_DATE_PRESETS, rollingDateRange } from '@/lib/date-range';
+import { type DateRange, PERIOD_DATE_PRESETS, rollingDateRange } from '@/lib/date-range';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowRight,
@@ -22,7 +22,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { OfferCard } from './offer-card';
 import { OfferEditDialog } from './offer-edit-dialog';
@@ -42,6 +42,10 @@ export function OfferList() {
   const [editing, setEditing] = useState<OfferView | null>(null);
   const [memberIds, setMemberIds] = useState<string[]>([]);
   const [createAttempted, setCreateAttempted] = useState(false);
+  const [filterPhase, setFilterPhase] = useState<'idle' | 'exiting' | 'waiting' | 'entering'>(
+    'idle',
+  );
+  const filterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const usersQuery = useQuery({
     queryKey: ['users-list'],
@@ -60,6 +64,31 @@ export function OfferList() {
     refetchInterval: 60_000,
   });
   const offers = offersQuery.data ?? [];
+
+  useEffect(() => {
+    if (filterPhase !== 'waiting' || summaryQuery.isFetching) return;
+
+    setFilterPhase('entering');
+    filterTimerRef.current = setTimeout(() => setFilterPhase('idle'), 180);
+  }, [filterPhase, summaryQuery.isFetching]);
+
+  useEffect(
+    () => () => {
+      if (filterTimerRef.current) clearTimeout(filterTimerRef.current);
+    },
+    [],
+  );
+
+  const changePeriod = (nextPeriod: DateRange) => {
+    if (nextPeriod.from === from && nextPeriod.to === to) return;
+    if (filterTimerRef.current) clearTimeout(filterTimerRef.current);
+
+    setFilterPhase('exiting');
+    filterTimerRef.current = setTimeout(() => {
+      setPeriod(nextPeriod);
+      setFilterPhase('waiting');
+    }, 120);
+  };
 
   const createMut = useMutation({
     mutationFn: () =>
@@ -121,13 +150,22 @@ export function OfferList() {
     utmifyPassword: utmifyPassword ? null : 'Informe a senha da UTMify.',
   };
   const summary = summaryQuery.data;
+  const visibleSummaryOffers =
+    summary?.accounts.reduce((total, account) => total + account.offers.length, 0) ?? 0;
+  const animateSummaryContainer = visibleSummaryOffers > 20;
+  const filterMotionClass =
+    filterPhase === 'exiting' || filterPhase === 'waiting'
+      ? 'opacity-0 transition-opacity duration-[120ms] ease-out motion-reduce:transition-none'
+      : filterPhase === 'entering'
+        ? 'animate-[tmx-tabs-content-in_180ms_ease-out_both] motion-reduce:animate-none'
+        : '';
 
   return (
     <div className="space-y-7">
       <section className="space-y-4">
         <DateRangeFilter
           value={period}
-          onChange={setPeriod}
+          onChange={changePeriod}
           presets={PERIOD_DATE_PRESETS}
           status={
             <>
@@ -152,9 +190,10 @@ export function OfferList() {
             variant="empty"
             title="Resumo indisponível"
             description="Ainda não há métricas consolidadas para este período."
+            className="animate-[tmx-tabs-content-in_180ms_ease-out_both] motion-reduce:animate-none"
           />
         ) : (
-          <>
+          <div className={animateSummaryContainer ? filterMotionClass : undefined}>
             <div className="space-y-3">
               {summary.accounts.map((account) => (
                 <section
@@ -211,7 +250,7 @@ export function OfferList() {
                       <Link
                         key={entry.offer.id}
                         href={`/ofertas/${entry.offer.id}`}
-                        className="glass-card group space-y-4 p-4 transition hover:border-cyan-300/35"
+                        className={`glass-card group space-y-4 p-4 transition-[transform,box-shadow,border-color,opacity] duration-[180ms] ease-out hover:-translate-y-0.5 hover:border-cyan-300/35 hover:shadow-[0_12px_30px_rgba(34,211,238,0.12)] motion-reduce:transition-none motion-reduce:hover:translate-y-0 ${animateSummaryContainer ? '' : filterMotionClass}`}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
@@ -254,7 +293,7 @@ export function OfferList() {
                 </section>
               ))}
             </div>
-          </>
+          </div>
         )}
       </section>
 
@@ -384,6 +423,7 @@ export function OfferList() {
             variant="empty"
             title="Nenhuma oferta cadastrada"
             description="Cadastre sua primeira empresa e oferta para iniciar a análise."
+            className="animate-[tmx-tabs-content-in_180ms_ease-out_both] motion-reduce:animate-none"
           />
         ) : (
           <>
@@ -397,7 +437,10 @@ export function OfferList() {
             )}
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
               {offers.map((offer) => (
-                <div key={offer.id} className="space-y-2">
+                <div
+                  key={offer.id}
+                  className="space-y-2 rounded-xl transition-[transform,box-shadow] duration-[180ms] ease-out hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(34,211,238,0.12)] motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+                >
                   <OfferCard
                     offer={offer}
                     {...(offer.canManage
