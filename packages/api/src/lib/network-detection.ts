@@ -133,3 +133,14 @@ export function collectNetworkIdentifiers(
     ...(twclid ? { twclid } : {}),
   };
 }
+
+/** Returns only the identifiers accepted by the detected destination network. */
+export function canonicalNetworkIdentifiers(params: NetworkParams): NetworkIdentifiers {
+  const network = detectNetwork(params);
+  const identifiers = collectNetworkIdentifiers(params);
+  return {
+    ...canonicalClickId(network, params),
+    ...(network === 'meta' && identifiers.fbp ? { fbp: identifiers.fbp } : {}),
+    ...(network === 'tiktok' && identifiers.ttp ? { ttp: identifiers.ttp } : {}),
+  };
+}

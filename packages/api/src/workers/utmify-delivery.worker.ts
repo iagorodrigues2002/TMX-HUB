@@ -3,10 +3,19 @@ import postgres from 'postgres';
 import { env } from '../env.js';
 import { buildUtmifyOrderPayload } from '../integrations/utmify/sales.js';
 import { logger } from '../lib/logger.js';
+import {
+  type NetworkIdentifiers,
+  type NetworkParams,
+  canonicalNetworkIdentifiers,
+} from '../lib/network-detection.js';
 import { makeRedis } from '../lib/redis.js';
 import { decryptSecret } from '../lib/secret-box.js';
 import { assertUtmifyHost } from '../lib/utmify-hosts.js';
 import { UTMIFY_DELIVERY_QUEUE_NAME, type UtmifyDeliveryJobData } from '../queues/index.js';
+
+export function buildUtmifyNetworkParameters(source: NetworkParams): NetworkIdentifiers {
+  return canonicalNetworkIdentifiers(source);
+}
 
 export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | null {
   if (!env.DATABASE_URL || !env.TRACKING_ENCRYPTION_KEY) return null;
@@ -68,8 +77,11 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
                COALESCE(o.chargeback_at, o.refunded_at) AS lifecycle_at,
                COALESCE(visitor.first_source, '{}'::jsonb) ||
                COALESCE(visitor.last_source, '{}'::jsonb) ||
+               COALESCE(visitor.click_ids, '{}'::jsonb) ||
                COALESCE(best_event.source, '{}'::jsonb) ||
+               COALESCE(best_event.click_ids, '{}'::jsonb) ||
                COALESCE(direct_event.source, '{}'::jsonb) ||
+               COALESCE(direct_event.click_ids, '{}'::jsonb) ||
                COALESCE(o.attribution_source, '{}'::jsonb) ||
                jsonb_strip_nulls(jsonb_build_object(
                  'payment_method', COALESCE(o.payment_method, 'pix'),
@@ -88,7 +100,7 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
           ON visitor.project_id=d.project_id
          AND visitor.visitor_id=COALESCE(o.visitor_id, direct_event.visitor_id)
         LEFT JOIN LATERAL (
-          SELECT te.source, te.client_ip
+          SELECT te.source, te.click_ids, te.client_ip
           FROM tracking_events te
           WHERE te.project_id=d.project_id
             AND te.visitor_id=COALESCE(o.visitor_id, direct_event.visitor_id)
@@ -140,7 +152,7 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
       const useBrl = row.amount_brl_minor != null;
       const outboundMinor = useBrl ? row.amount_brl_minor! : row.amount_minor;
       const outboundCurrency = useBrl ? 'BRL' : row.currency;
-      const payload = buildUtmifyOrderPayload({
+      const basePayload = buildUtmifyOrderPayload({
         isTest: row.provider === 'tmx-test',
         orderId: row.external_id,
         provider: row.provider,
@@ -159,6 +171,17 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
         // persistence use a documentation-only address; new events keep the real req.ip.
         clientIp: row.client_ip ?? '203.0.113.1',
       });
+      // The public sales documentation lists the stable UTM fields. UTMify
+      // also accepts network click identifiers inside trackingParameters; send
+      // only the canonical fields for the detected network to prevent leakage
+      // of a stale identifier from another channel.
+      const payload = {
+        ...basePayload,
+        trackingParameters: {
+          ...basePayload.trackingParameters,
+          ...buildUtmifyNetworkParameters(row.source),
+        },
+      };
       assertUtmifyHost(row.endpoint_url);
       const token = decryptSecret(row.api_token_encrypted, env.TRACKING_ENCRYPTION_KEY!);
       const response = await fetch(row.endpoint_url, {

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { collectNetworkIdentifiers } from '../src/lib/network-detection.js';
+import {
+  canonicalNetworkIdentifiers,
+  collectNetworkIdentifiers,
+} from '../src/lib/network-detection.js';
 import { buildTrackerScript } from '../src/services/tracker-script.js';
 import { buildGoogleClickConversion } from '../src/workers/google-ads.worker.js';
 
@@ -52,5 +55,24 @@ describe('network tracker capture', () => {
       wbraid: 'google-ios',
       gbraid: 'google-ios-alt',
     });
+  });
+
+  it('sends UTMify only the canonical fields for the detected traffic network', () => {
+    expect(
+      canonicalNetworkIdentifiers({
+        fbc: 'fb.1.1.old-meta-click',
+        fbp: 'fb.1.old-browser',
+        gclid: 'current-google-click',
+        wbraid: 'current-google-ios',
+        utm_source: 'youtube',
+      }),
+    ).toEqual({ gclid: 'current-google-click', wbraid: 'current-google-ios' });
+    expect(
+      canonicalNetworkIdentifiers({
+        ttclid: 'tiktok-click',
+        _ttp: 'tiktok-browser',
+        utm_source: 'tiktok',
+      }),
+    ).toEqual({ ttclid: 'tiktok-click', ttp: 'tiktok-browser' });
   });
 });

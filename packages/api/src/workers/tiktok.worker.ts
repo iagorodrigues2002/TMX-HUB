@@ -4,6 +4,7 @@ import postgres from 'postgres';
 import { env } from '../env.js';
 import type { TikTokEventInput } from '../integrations/tiktok/contracts.js';
 import { logger } from '../lib/logger.js';
+import { canonicalClickId } from '../lib/network-detection.js';
 import { makeRedis } from '../lib/redis.js';
 import { decryptSecret } from '../lib/secret-box.js';
 import { TIKTOK_QUEUE_NAME, type TikTokJobData } from '../queues/index.js';
@@ -101,7 +102,9 @@ export function createTikTokWorker(): Worker<TikTokJobData> | null {
              o.external_id,o.amount_minor,o.currency,o.amount_brl_minor,o.product,COALESCE(o.buyer,'{}'::jsonb) buyer,o.paid_at,o.visitor_id,
              COALESCE(event.event_url, latest.event_url) event_url,
              COALESCE(event.referrer, latest.referrer) referrer,
-             COALESCE(visitor.last_source,'{}'::jsonb) || COALESCE(latest.source,'{}'::jsonb) || COALESCE(event.source,'{}'::jsonb) source,
+             COALESCE(visitor.last_source,'{}'::jsonb) || COALESCE(visitor.click_ids,'{}'::jsonb) ||
+             COALESCE(latest.source,'{}'::jsonb) || COALESCE(latest.click_ids,'{}'::jsonb) ||
+             COALESCE(event.source,'{}'::jsonb) || COALESCE(event.click_ids,'{}'::jsonb) source,
              COALESCE(event.client_ip,latest.client_ip) client_ip,COALESCE(event.user_agent,latest.user_agent) user_agent,
              d.created_at
       FROM tracking_tiktok_deliveries d
@@ -109,7 +112,7 @@ export function createTikTokWorker(): Worker<TikTokJobData> | null {
       LEFT JOIN tracking_orders o ON o.id=d.order_id
       LEFT JOIN tracking_events event ON event.project_id=d.project_id AND event.id=d.event_id
       LEFT JOIN tracking_visitors visitor ON visitor.project_id=d.project_id AND visitor.visitor_id=COALESCE(o.visitor_id,event.visitor_id)
-      LEFT JOIN LATERAL (SELECT event_url,referrer,source,client_ip,user_agent FROM tracking_events te WHERE te.project_id=d.project_id AND te.visitor_id=COALESCE(o.visitor_id,event.visitor_id) ORDER BY te.received_at DESC LIMIT 1) latest ON true
+      LEFT JOIN LATERAL (SELECT event_url,referrer,source,click_ids,client_ip,user_agent FROM tracking_events te WHERE te.project_id=d.project_id AND te.visitor_id=COALESCE(o.visitor_id,event.visitor_id) ORDER BY te.received_at DESC LIMIT 1) latest ON true
       WHERE d.id=${deliveryId} AND d.state IN ('pending','failed','processing','test')
     `;
     if (!row) return;
@@ -120,6 +123,7 @@ export function createTikTokWorker(): Worker<TikTokJobData> | null {
     // TODO(LGPD consent gate): before outbound delivery, load
     // tracking_consents for the visitor. For denied consent, keep only the
     // hashed email identifier and omit phone, IP, UA, cookies and URL.
+    const { ttclid } = canonicalClickId('tiktok', row.source);
     const payload = buildTikTokPayload({
       pixelCode: row.pixel_code,
       eventId: row.event_id,
@@ -130,7 +134,7 @@ export function createTikTokWorker(): Worker<TikTokJobData> | null {
       value: Number(((minor ?? 1) / 100).toFixed(2)),
       currency: currency ?? 'BRL',
       orderId: row.external_id ?? `TMX-TEST-${row.id}`,
-      ttclid: row.source.ttclid,
+      ttclid,
       ttp: row.source._ttp ?? row.source.ttp,
       email: row.buyer.email ?? row.test_context.email ?? undefined,
       phone: row.buyer.phone ?? row.test_context.phone ?? undefined,

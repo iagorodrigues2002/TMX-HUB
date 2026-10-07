@@ -4,6 +4,7 @@ import postgres from 'postgres';
 import { env } from '../env.js';
 import { assertMetaCapiAccepted } from '../integrations/meta/capi-response.js';
 import { logger } from '../lib/logger.js';
+import { canonicalClickId } from '../lib/network-detection.js';
 import { makeRedis } from '../lib/redis.js';
 import { decryptSecret } from '../lib/secret-box.js';
 import { META_QUEUE_NAME, type MetaJobData } from '../queues/index.js';
@@ -83,7 +84,14 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
           amount_brl_minor: number | null;
           order_kind: string | null;
           product: { id?: string; name?: string; planId?: string; planName?: string } | null;
-          buyer: { email?: string; phone?: string; firstName?: string; lastName?: string; country?: string; postalCode?: string };
+          buyer: {
+            email?: string;
+            phone?: string;
+            firstName?: string;
+            lastName?: string;
+            country?: string;
+            postalCode?: string;
+          };
           identity_email: string | null;
           identity_phone: string | null;
           identity_postal_code: string | null;
@@ -93,6 +101,8 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
           source: {
             _fbp?: string;
             _fbc?: string;
+            fbp?: string;
+            fbc?: string;
             fbclid?: string;
             _fbclid_ts?: string;
             country?: string;
@@ -165,8 +175,10 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
                COALESCE(o.attribution_source, '{}'::jsonb) ||
                COALESCE(tv.first_source, '{}'::jsonb) ||
                COALESCE(tv.last_source, '{}'::jsonb) ||
+               COALESCE(tv.click_ids, '{}'::jsonb) ||
+               COALESCE(direct_event.click_ids, '{}'::jsonb) ||
                COALESCE(direct_event.source, '{}'::jsonb) || COALESCE((
-                 SELECT te.source FROM tracking_events te
+                 SELECT te.source || te.click_ids FROM tracking_events te
                  WHERE te.project_id = md.project_id
                    AND te.visitor_id = COALESCE(o.visitor_id, direct_event.visitor_id)
                    AND te.source <> '{}'::jsonb
@@ -230,16 +242,15 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
         if (row.buyer.lastName) userData.ln = [hash(row.buyer.lastName)];
         if (postalCode) userData.zp = [hash(postalCode)];
         if (row.visitor_id) userData.external_id = [hash(row.visitor_id)];
-        if (row.source?._fbp) userData.fbp = row.source._fbp;
-        if (row.source?._fbc) userData.fbc = row.source._fbc;
-        if (!row.source?._fbc && row.source?.fbclid) {
-          const clickTime = Number(row.source._fbclid_ts);
-          const timestamp = Number.isFinite(clickTime)
-            ? clickTime
-            : new Date(row.event_at).getTime();
-          userData.fbc = `fb.1.${timestamp}.${row.source.fbclid}`;
-        }
-        if (row.client_ip ?? row.source?.client_ip) userData.client_ip_address = row.client_ip ?? row.source.client_ip!;
+        const fbp = row.source?.fbp ?? row.source?._fbp;
+        const { fbc } = canonicalClickId('meta', {
+          ...row.source,
+          _fbclid_ts: row.source?._fbclid_ts ?? String(new Date(row.event_at).getTime()),
+        });
+        if (fbp) userData.fbp = fbp;
+        if (fbc) userData.fbc = fbc;
+        if (row.client_ip ?? row.source?.client_ip)
+          userData.client_ip_address = row.client_ip ?? row.source.client_ip!;
         if (row.user_agent) userData.client_user_agent = row.user_agent;
         const country = row.buyer.country || row.source?.country;
         if (country && /^[a-z]{2}$/i.test(country)) {
@@ -260,12 +271,14 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
               custom_data:
                 row.event_name === 'Purchase'
                   ? buildPurchaseCustomData(row)
-                  : row.event_name === 'InitiateCheckout' ? {
-                      content_name: 'Checkout',
-                      content_category: 'checkout',
-                      content_type: 'product',
-                      currency: row.currency,
-                    } : {},
+                  : row.event_name === 'InitiateCheckout'
+                    ? {
+                        content_name: 'Checkout',
+                        content_category: 'checkout',
+                        content_type: 'product',
+                        currency: row.currency,
+                      }
+                    : {},
             },
           ],
           partner_agent: 'tmxhub-1.0',
