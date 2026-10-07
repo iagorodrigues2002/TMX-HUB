@@ -36,4 +36,40 @@ describe('Explodely webhook signature', () => {
     expect(received).toHaveLength(1);
     await app.close();
   });
+
+  it('accepts the previous secret and emits a rotation warning', async () => {
+    const logLines: string[] = [];
+    const app = Fastify({
+      logger: {
+        level: 'warn',
+        stream: { write: (line: string) => logLines.push(line) },
+      },
+    });
+    const currentSecret = 'explodely-current-secret';
+    const previousSecret = 'explodely-previous-secret';
+    await app.register(explodelyWebhookRoutes, {
+      requireSignature: true,
+      webhookSecret: currentSecret,
+      webhookSecretPrevious: previousSecret,
+      persistReceipt: async () => ({ duplicate: false }),
+      enqueue: async () => undefined,
+    });
+    const payload = JSON.stringify({
+      type: 'sale',
+      orderid: 'rotated-sale',
+      vendor_id: 'vendor-a',
+    });
+    const signature = createHmac('sha256', previousSecret).update(payload).digest('hex');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/webhooks/explodely',
+      headers: { 'content-type': 'application/json', 'x-explodely-signature': signature },
+      payload,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(logLines.join('\n')).toContain('previous webhook secret');
+    await app.close();
+  });
 });

@@ -8,6 +8,8 @@ import {
   identifyExplodelyTransaction,
   parseExplodelyPayload,
 } from '../integrations/explodely/normalize.js';
+import { scrubWebhookPayload, scrubWebhookRawPayload } from '../lib/webhook-payload.js';
+import { WEBHOOK_RATE_LIMIT } from '../plugins/rate-limit.js';
 
 type ReceiptInput = {
   receiptId: string;
@@ -26,6 +28,7 @@ export type ExplodelyRouteOptions = {
   enqueue?: (receiptId: string) => Promise<unknown>;
   requireSignature?: boolean;
   webhookSecret?: string;
+  webhookSecretPrevious?: string;
 };
 
 export async function persistExplodelyReceipt(db: Sql, input: ReceiptInput) {
@@ -87,13 +90,18 @@ const plugin: FastifyPluginAsync<ExplodelyRouteOptions> = async (app, options) =
 
   app.post(
     '/webhooks/explodely',
-    { bodyLimit: 256 * 1024, logLevel: 'silent' },
+    {
+      bodyLimit: 256 * 1024,
+      logLevel: 'silent',
+      config: { rateLimit: WEBHOOK_RATE_LIMIT },
+    },
     async (request, reply) => {
       const rawBody = Buffer.isBuffer(request.body)
         ? request.body
         : Buffer.from(typeof request.body === 'string' ? request.body : '');
       const requireSignature = options.requireSignature ?? env.EXPLODELY_REQUIRE_SIGNATURE;
       const webhookSecret = options.webhookSecret ?? env.EXPLODELY_WEBHOOK_SECRET;
+      const webhookSecretPrevious = options.webhookSecretPrevious ?? env.WEBHOOK_SECRET_PREV;
       const suppliedSignature =
         (request.headers['x-explodely-signature'] as string | undefined) ??
         (request.headers['x-signature'] as string | undefined);
@@ -102,7 +110,13 @@ const plugin: FastifyPluginAsync<ExplodelyRouteOptions> = async (app, options) =
       // assinatura/replay protection quando o Explodely publicar ou confirmar o wire format.
       if (requireSignature && webhookSecret) {
         if (!signatureIsValid(rawBody, suppliedSignature, webhookSecret)) {
-          return reply.code(401).send({ accepted: false, error: 'invalid_signature' });
+          if (
+            !webhookSecretPrevious ||
+            !signatureIsValid(rawBody, suppliedSignature, webhookSecretPrevious)
+          ) {
+            return reply.code(401).send({ accepted: false, error: 'invalid_signature' });
+          }
+          app.log.warn('Explodely signature accepted with previous webhook secret');
         }
       } else if (requireSignature) {
         request.log.error('Explodely signature is required but EXPLODELY_WEBHOOK_SECRET is unset');

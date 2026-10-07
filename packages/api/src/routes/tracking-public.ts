@@ -7,7 +7,9 @@ import { env } from '../env.js';
 import { normalizePaysight } from '../integrations/paysight/normalize.js';
 import { normalizeVendepay } from '../integrations/vendepay/normalize.js';
 import { decryptSecret, encryptSecret } from '../lib/secret-box.js';
-import { createTrackingToken, readTrackingToken } from '../lib/tracking-token.js';
+import { createTrackingToken, readTrackingTokenWithRotation } from '../lib/tracking-token.js';
+import { webhookPayloadForStorage } from '../lib/webhook-payload.js';
+import { WEBHOOK_RATE_LIMIT, WEBHOOK_REPLAY_RATE_LIMIT } from '../plugins/rate-limit.js';
 import { convertToBrlMinor } from '../services/exchange-rate.js';
 import {
   buildTikTokPixelScript,
@@ -15,6 +17,11 @@ import {
   buildVturbBridgeScriptV2,
 } from '../services/tracker-script.js';
 import { checkUpsellCompatibility } from '../services/upsell-compatibility.js';
+import {
+  VENDEPAY_REPLAY_MAX_ATTEMPTS,
+  vendepayReplayFailureTransition,
+  vendepayReplaySucceeded,
+} from '../services/vendepay-replay.js';
 import { findVturbConversionKeyInUrl } from '../services/vturb.js';
 
 const EventSchema = z.object({
@@ -85,6 +92,14 @@ type EntryRedirectRequest = FastifyRequest<{
 }>;
 
 const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex');
+
+function readRotatingTrackingToken(token: string, request: FastifyRequest) {
+  const result = readTrackingTokenWithRotation(token, env.WEBHOOK_SECRET, env.WEBHOOK_SECRET_PREV);
+  if (result?.matched === 'previous') {
+    request.server.log.warn('Signed tracking token accepted with previous webhook secret');
+  }
+  return result?.payload ?? null;
+}
 
 const rawWebhookBodies = new WeakMap<FastifyRequest, Buffer>();
 
@@ -290,23 +305,28 @@ type UpsellToken = {
   issuedAt: number;
 };
 
-const upsellSignature = (encoded: string) =>
-  createHmac('sha256', env.WEBHOOK_SECRET).update(`upsell|${encoded}`).digest('base64url');
+const upsellSignature = (encoded: string, secret: string) =>
+  createHmac('sha256', secret).update(`upsell|${encoded}`).digest('base64url');
 
 function createUpsellToken(payload: Omit<UpsellToken, 'issuedAt'>) {
   const encoded = Buffer.from(
     JSON.stringify({ ...payload, issuedAt: Math.floor(Date.now() / 1000) }),
   ).toString('base64url');
-  return `${encoded}.${upsellSignature(encoded)}`;
+  return `${encoded}.${upsellSignature(encoded, env.WEBHOOK_SECRET)}`;
 }
 
-function readUpsellToken(token: string): UpsellToken | null {
+function readUpsellToken(token: string, request: FastifyRequest): UpsellToken | null {
   const [encoded, supplied] = token.split('.');
   if (!encoded || !supplied) return null;
-  const expected = upsellSignature(encoded);
   const a = Buffer.from(supplied);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  const matches = (secret: string) => {
+    const expected = Buffer.from(upsellSignature(encoded, secret));
+    return a.length === expected.length && timingSafeEqual(a, expected);
+  };
+  if (!matches(env.WEBHOOK_SECRET)) {
+    if (!env.WEBHOOK_SECRET_PREV || !matches(env.WEBHOOK_SECRET_PREV)) return null;
+    request.server.log.warn('Signed upsell token accepted with previous webhook secret');
+  }
   try {
     const parsed = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8')) as UpsellToken;
     return parsed?.projectId && parsed?.stageId && parsed?.visitorId && parsed?.journeyId
@@ -666,7 +686,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     `;
     if (!project?.enabled) return reply.code(404).send({ accepted: false });
     const linkedIdentity = input.tracking_token
-      ? readTrackingToken(input.tracking_token, env.WEBHOOK_SECRET)
+      ? readRotatingTrackingToken(input.tracking_token, req)
       : null;
     const visitorId =
       linkedIdentity?.projectId === project.id ? linkedIdentity.visitorId : input.visitor_id;
@@ -965,7 +985,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       destination.searchParams.set('tmx_ab', selected.label);
       return reply.redirect(destination.toString(), 302);
     }
-    const linked = req.query.src ? readTrackingToken(req.query.src, env.WEBHOOK_SECRET) : null;
+    const linked = req.query.src ? readRotatingTrackingToken(req.query.src, req) : null;
     const linkedIdentity = linked?.projectId === test.project_id ? linked : null;
     const redirectAttribution = extractAttributionQuery(req.query);
     const userAgent = req.headers['user-agent'] ?? null;
@@ -1231,7 +1251,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             );
         }
       }
-      const linked = req.query.src ? readTrackingToken(req.query.src, env.WEBHOOK_SECRET) : null;
+      const linked = req.query.src ? readRotatingTrackingToken(req.query.src, req) : null;
       const validLinked = linked?.projectId === stage.project_id ? linked : null;
       const visitorId =
         validLinked?.visitorId ?? cookieValue(req.headers.cookie, '_tmx_upsell_v') ?? ulid();
@@ -1284,7 +1304,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const parsed = UpsellEventSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ accepted: false });
     const input = parsed.data;
-    const token = input.token ? readUpsellToken(input.token) : null;
+    const token = input.token ? readUpsellToken(input.token, req) : null;
     const [stage] = await app.db<
       Array<{
         id: string;
@@ -1427,7 +1447,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   app.post<{ Querystring: { token?: string } }>(
     '/webhooks/vendepay',
-    { bodyLimit: 256 * 1024, logLevel: 'silent', preParsing: captureRawWebhookBody },
+    {
+      bodyLimit: 256 * 1024,
+      logLevel: 'silent',
+      preParsing: captureRawWebhookBody,
+      config: { rateLimit: WEBHOOK_RATE_LIMIT },
+    },
     async (req, reply) => {
       if (!app.db || !req.query.token) return reply.code(404).send({ accepted: false });
       const candidate = tokenHash(req.query.token);
@@ -1525,7 +1550,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         const event = normalized.event;
         const skipsUtmify = event.status === 'cancelled' || event.status === 'abandoned';
         const trackingIdentity = event.trackingSrc
-          ? readTrackingToken(event.trackingSrc, env.WEBHOOK_SECRET)
+          ? readRotatingTrackingToken(event.trackingSrc, req)
           : null;
         let attributedVisitorId =
           trackingIdentity?.projectId === connection.project_id ? trackingIdentity.visitorId : null;
@@ -2003,7 +2028,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   // connection model so enabling them cannot alter VendePay ingestion.
   app.post<{ Querystring: { token?: string } }>(
     '/webhooks/paysight',
-    { bodyLimit: 256 * 1024, logLevel: 'silent', preParsing: captureRawWebhookBody },
+    {
+      bodyLimit: 256 * 1024,
+      logLevel: 'silent',
+      preParsing: captureRawWebhookBody,
+      config: { rateLimit: WEBHOOK_RATE_LIMIT },
+    },
     async (req, reply) => {
       if (!app.db || !req.query.token) return reply.code(404).send({ accepted: false });
       const candidate = createHash('sha256').update(req.query.token).digest('hex');
@@ -2180,7 +2210,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   app.post<{ Querystring: { token?: string } }>(
     '/webhooks/vendepay/replay-quarantine',
-    { bodyLimit: 1024, logLevel: 'silent' },
+    {
+      bodyLimit: 1024,
+      logLevel: 'silent',
+      config: { rateLimit: WEBHOOK_REPLAY_RATE_LIMIT },
+    },
     async (req, reply) => {
       if (!app.db || !req.query.token) return reply.code(404).send({ accepted: false });
       const candidate = tokenHash(req.query.token);
@@ -2218,25 +2252,46 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         }
       }
 
-      const receipts = await app.db<Array<{ id: string; payload: unknown }>>`
-        SELECT id, payload
-        FROM webhook_receipts
-        WHERE connection_id = ${connection.id}
-          AND state = 'quarantined'
-        ORDER BY received_at ASC
-        LIMIT 500
-      `;
+      const receipts = await app.db.begin(
+        async (sql) => sql<Array<{ id: string; payload: unknown; replay_attempts: number }>>`
+        WITH selected AS (
+          SELECT id
+          FROM webhook_receipts
+          WHERE connection_id = ${connection.id}
+            AND state = 'quarantined'
+            AND COALESCE(replay_state, 'quarantined') = 'quarantined'
+            AND replay_attempts < ${VENDEPAY_REPLAY_MAX_ATTEMPTS}
+          ORDER BY received_at ASC
+          LIMIT 500
+          FOR UPDATE SKIP LOCKED
+        )
+        UPDATE webhook_receipts receipt
+        SET replay_attempts = receipt.replay_attempts + 1,
+            last_replay_at = now(),
+            replay_state = 'replaying'
+        FROM selected
+        WHERE receipt.id = selected.id
+        RETURNING receipt.id, receipt.payload, receipt.replay_attempts
+        `,
+      );
       let replayed = 0;
       let stillQuarantined = 0;
       let failed = 0;
       for (const receipt of receipts) {
         if (normalizeVendepay(receipt.payload).kind !== 'processable') {
+          const failure = vendepayReplayFailureTransition(receipt.replay_attempts - 1);
           await app.db`
             UPDATE webhook_receipts
-            SET state='terminal', processed_at=COALESCE(processed_at,now())
-            WHERE id=${receipt.id} AND state='quarantined'
+            SET state=${failure.terminal ? 'failed' : 'quarantined'},
+                replay_state=${failure.replayState},
+                processed_at=CASE
+                  WHEN ${failure.terminal} THEN COALESCE(processed_at,now())
+                  ELSE processed_at
+                END
+            WHERE id=${receipt.id} AND replay_state='replaying'
           `;
-          stillQuarantined += 1;
+          if (failure.terminal) failed += 1;
+          else stillQuarantined += 1;
           continue;
         }
         const rawPayload = JSON.stringify(receipt.payload);
@@ -2255,8 +2310,34 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           },
           payload: rawPayload,
         });
-        if (response.statusCode >= 200 && response.statusCode < 300) replayed += 1;
-        else failed += 1;
+        let responseBody: unknown;
+        try {
+          responseBody = response.json();
+        } catch {
+          responseBody = null;
+        }
+        if (vendepayReplaySucceeded(response.statusCode, responseBody)) {
+          await app.db`
+            UPDATE webhook_receipts
+            SET state='processed', replay_state='replayed', processed_at=COALESCE(processed_at,now())
+            WHERE id=${receipt.id} AND replay_state='replaying'
+          `;
+          replayed += 1;
+        } else {
+          const failure = vendepayReplayFailureTransition(receipt.replay_attempts - 1);
+          await app.db`
+            UPDATE webhook_receipts
+            SET state=${failure.terminal ? 'failed' : 'quarantined'},
+                replay_state=${failure.replayState},
+                processed_at=CASE
+                  WHEN ${failure.terminal} THEN COALESCE(processed_at,now())
+                  ELSE processed_at
+                END
+            WHERE id=${receipt.id} AND replay_state='replaying'
+          `;
+          failed += 1;
+          if (!failure.terminal) stillQuarantined += 1;
+        }
       }
       return reply.send({
         accepted: true,
