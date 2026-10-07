@@ -1,17 +1,21 @@
-import { ulid } from 'ulid';
-import {
-  CreateNicheRequestSchema,
-  UpdateNicheRequestSchema,
-} from '@page-cloner/shared';
-import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
-import { BadRequestError, NotFoundError, zodToProblem } from '../lib/problem.js';
+import { CreateNicheRequestSchema, UpdateNicheRequestSchema } from '@page-cloner/shared';
 import type { Niche, NicheWhite } from '@page-cloner/shared';
+import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import { ulid } from 'ulid';
+import { type ListPaginationQuery, paginateItems, parseListPagination } from '../lib/pagination.js';
+import { BadRequestError, NotFoundError, zodToProblem } from '../lib/problem.js';
 
 const ALLOWED_AUDIO = new Set([
-  'audio/mpeg', 'audio/mp3',
-  'audio/wav', 'audio/x-wav',
-  'audio/m4a', 'audio/x-m4a', 'audio/aac', 'audio/mp4',
-  'audio/ogg', 'audio/webm',
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/wav',
+  'audio/x-wav',
+  'audio/m4a',
+  'audio/x-m4a',
+  'audio/aac',
+  'audio/mp4',
+  'audio/ogg',
+  'audio/webm',
 ]);
 
 const ALLOWED_AUDIO_EXT = new Set(['mp3', 'wav', 'm4a', 'aac', 'ogg', 'webm']);
@@ -27,22 +31,26 @@ function resolveAudioMime(declared: string, filename: string): string | null {
   const ext = (filename.split('.').pop() || '').toLowerCase();
   if (!ALLOWED_AUDIO_EXT.has(ext)) return null;
   switch (ext) {
-    case 'mp3': return 'audio/mpeg';
-    case 'wav': return 'audio/wav';
-    case 'm4a': return 'audio/m4a';
-    case 'aac': return 'audio/aac';
-    case 'ogg': return 'audio/ogg';
-    case 'webm': return 'audio/webm';
-    default: return null;
+    case 'mp3':
+      return 'audio/mpeg';
+    case 'wav':
+      return 'audio/wav';
+    case 'm4a':
+      return 'audio/m4a';
+    case 'aac':
+      return 'audio/aac';
+    case 'ogg':
+      return 'audio/ogg';
+    case 'webm':
+      return 'audio/webm';
+    default:
+      return null;
   }
 }
 
 const MAX_WHITE_BYTES = 20 * 1024 * 1024; // 20 MB per white audio
 
-function nicheToWire(
-  n: Niche,
-  ctx: { userId: string; isAdmin: boolean },
-): Record<string, unknown> {
+function nicheToWire(n: Niche, ctx: { userId: string; isAdmin: boolean }): Record<string, unknown> {
   const canModify = ctx.isAdmin || n.userId === ctx.userId;
   return {
     id: n.id,
@@ -77,11 +85,15 @@ function extFromMime(mime: string, fallback: string): string {
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   // GET /v1/niches — lista TODOS os nichos da instância (compartilhado).
-  app.get('/niches', async (req, reply) => {
+  app.get<{ Querystring: ListPaginationQuery }>('/niches', async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');
     const ctx = { userId: req.user.sub, isAdmin: req.user.role === 'admin' };
     const niches = await app.nicheStore.listAll();
-    return reply.send({ niches: niches.map((n) => nicheToWire(n, ctx)) });
+    const page = paginateItems(niches, parseListPagination(req.query));
+    return reply.send({
+      niches: page.items.map((n) => nicheToWire(n, ctx)),
+      pagination: page.pagination,
+    });
   });
 
   // POST /v1/niches — qualquer usuário autenticado pode criar.
@@ -104,12 +116,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const parsed = UpdateNicheRequestSchema.safeParse(req.body);
     if (!parsed.success) throw zodToProblem(parsed.error, req.url);
     const isAdmin = req.user.role === 'admin';
-    const updated = await app.nicheStore.update(
-      req.params.id,
-      req.user.sub,
-      isAdmin,
-      parsed.data,
-    );
+    const updated = await app.nicheStore.update(req.params.id, req.user.sub, isAdmin, parsed.data);
     return reply.send(nicheToWire(updated, { userId: req.user.sub, isAdmin }));
   });
 
@@ -164,8 +171,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         'niches: mime/ext de áudio não reconhecido',
       );
       throw new BadRequestError(
-        `Tipo de áudio não suportado pra "${filePart.filename}" (mime="${declaredMime || 'vazio'}"). ` +
-          'Use mp3, wav, m4a, aac, ogg ou webm.',
+        `Tipo de áudio não suportado pra "${filePart.filename}" (mime="${declaredMime || 'vazio'}"). Use mp3, wav, m4a, aac, ogg ou webm.`,
       );
     }
 
@@ -198,11 +204,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     async (req, reply) => {
       if (!req.user) throw new BadRequestError('No user attached.');
       const isAdmin = req.user.role === 'admin';
-      const niche = await app.nicheStore.assertCanModify(
-        req.params.id,
-        req.user.sub,
-        isAdmin,
-      );
+      const niche = await app.nicheStore.assertCanModify(req.params.id, req.user.sub, isAdmin);
       const white = niche.whites.find((w) => w.id === req.params.whiteId);
       if (!white) throw new NotFoundError(`White não encontrado: ${req.params.whiteId}`);
       await app.storage.delete(white.storageKey).catch(() => undefined);

@@ -14,12 +14,17 @@ import {
   OPENCODE_MODELS,
   generateCampaignAnalysis,
 } from '../services/campaign-ai.js';
-import { computeMetrics } from '../services/snapshot-store.js';
 import { canConfigureTrackingOffer, canManageOffer } from '../services/offer-store.js';
+import { computeMetrics } from '../services/snapshot-store.js';
 
 function offerToWire(
   o: Offer,
-  options: { includeAccess?: boolean; canManage?: boolean; userId?: string; isAdmin?: boolean } = {},
+  options: {
+    includeAccess?: boolean;
+    canManage?: boolean;
+    userId?: string;
+    isAdmin?: boolean;
+  } = {},
 ): Record<string, unknown> {
   return {
     id: o.id,
@@ -40,7 +45,11 @@ function offerToWire(
     // This is deliberately computed server-side. The web app uses it only to
     // expose management controls; every write still re-checks assertManager.
     can_manage: Boolean(options.canManage),
-    can_configure_tracking: canConfigureTrackingOffer(o, options.userId ?? o.userId, options.isAdmin ?? false),
+    can_configure_tracking: canConfigureTrackingOffer(
+      o,
+      options.userId ?? o.userId,
+      options.isAdmin ?? false,
+    ),
   };
 }
 
@@ -60,6 +69,7 @@ async function validateMemberIds(
       await app.userStore.update(member.id, {
         allowedTools: [...member.allowedTools, 'ofertas'],
       });
+      app.invalidateAuthUser(member.id);
     }
   }
   return unique;
@@ -679,9 +689,14 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       const ownerUsers = await Promise.all(
         [...owners.keys()].map(async (id) => [id, await app.userStore.maybeGetById(id)] as const),
       );
-      const ownerNames = new Map(ownerUsers.map(([id, user]) => [id, user?.name ?? 'Conta indisponível'] as const));
+      const ownerNames = new Map(
+        ownerUsers.map(([id, user]) => [id, user?.name ?? 'Conta indisponível'] as const),
+      );
       const accounts = [...owners.entries()].map(([ownerId, accountOffers]) => {
-        const byCurrency = new Map<string, { spend: number; sales: number; revenue: number; ic: number }>();
+        const byCurrency = new Map<
+          string,
+          { spend: number; sales: number; revenue: number; ic: number }
+        >();
         let spend = 0;
         let sales = 0;
         let revenue = 0;
@@ -691,7 +706,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           sales += entry.totals.sales;
           revenue += entry.totals.revenue;
           ic += entry.totals.ic;
-          const currencyTotals = byCurrency.get(entry.currency) ?? { spend: 0, sales: 0, revenue: 0, ic: 0 };
+          const currencyTotals = byCurrency.get(entry.currency) ?? {
+            spend: 0,
+            sales: 0,
+            revenue: 0,
+            ic: 0,
+          };
           currencyTotals.spend += entry.totals.spend;
           currencyTotals.sales += entry.totals.sales;
           currencyTotals.revenue += entry.totals.revenue;
@@ -700,14 +720,19 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         }
         return {
           owner_id: ownerId,
-          owner_name: ownerId === req.user!.sub ? 'Minha conta' : (ownerNames.get(ownerId) ?? 'Conta compartilhada'),
+          owner_name:
+            ownerId === req.user!.sub
+              ? 'Minha conta'
+              : (ownerNames.get(ownerId) ?? 'Conta compartilhada'),
           is_current_user: ownerId === req.user!.sub,
           totals: computeMetrics({ spend, sales, revenue, ic }),
           currency_totals: [...byCurrency.entries()].map(([currency, values]) => ({
             currency,
             totals: computeMetrics(values),
           })),
-          offers: accountOffers.map(({ currency: _currency, owner_id: _ownerId, ...entry }) => entry),
+          offers: accountOffers.map(
+            ({ currency: _currency, owner_id: _ownerId, ...entry }) => entry,
+          ),
         };
       });
       return reply.send({

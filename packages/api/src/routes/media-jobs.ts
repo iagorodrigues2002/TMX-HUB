@@ -3,6 +3,7 @@ import archiver from 'archiver';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { ulid } from 'ulid';
 import { z } from 'zod';
+import { type ListPaginationQuery, paginateItems, parseListPagination } from '../lib/pagination.js';
 import { BadRequestError, NotFoundError, zodToProblem } from '../lib/problem.js';
 
 const MAX_INPUT_BYTES = 500 * 1024 * 1024;
@@ -155,12 +156,13 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     return reply.code(202).send(toWire(job));
   });
 
-  app.get('/media-jobs', async (req) => {
+  app.get<{ Querystring: ListPaginationQuery }>('/media-jobs', async (req) => {
     if (!req.user) throw new BadRequestError('No user attached.');
     const jobs = await app.mediaJobStore.listByUser(req.user.sub);
+    const page = paginateItems(jobs, parseListPagination(req.query));
     return {
       jobs: await Promise.all(
-        jobs.map(async (job) => {
+        page.items.map(async (job) => {
           const url = job.outputStorageKey
             ? await app.storage
                 .presignGet(job.outputStorageKey, 24 * 60 * 60, job.outputFilename)
@@ -169,6 +171,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           return toWire(job, url);
         }),
       ),
+      pagination: page.pagination,
     };
   });
 

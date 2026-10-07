@@ -1,27 +1,35 @@
-import archiver from 'archiver';
-import { ulid } from 'ulid';
 import { CreateShieldJobBodySchema } from '@page-cloner/shared';
+import type { ShieldJob } from '@page-cloner/shared';
+import archiver from 'archiver';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import { ulid } from 'ulid';
 import { z } from 'zod';
 import { isValidUlid } from '../lib/ids.js';
+import { type ListPaginationQuery, paginateItems, parseListPagination } from '../lib/pagination.js';
 import { BadRequestError, NotFoundError, zodToProblem } from '../lib/problem.js';
-import type { ShieldJob } from '@page-cloner/shared';
 
 const BulkDownloadBodySchema = z
   .object({ ids: z.array(z.string().min(1)).min(1).max(100) })
   .strict();
 
 const ALLOWED_VIDEO = new Set([
-  'video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm', 'video/x-matroska',
+  'video/mp4',
+  'video/quicktime',
+  'video/x-msvideo',
+  'video/webm',
+  'video/x-matroska',
   // Allow audio-only too — the worker still applies phase-cancel to the audio.
-  'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/m4a', 'audio/x-m4a',
-  'audio/aac', 'audio/mp4',
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/wav',
+  'audio/x-wav',
+  'audio/m4a',
+  'audio/x-m4a',
+  'audio/aac',
+  'audio/mp4',
 ]);
 
-const ALLOWED_EXT = new Set([
-  'mp4', 'mov', 'avi', 'webm', 'mkv',
-  'mp3', 'wav', 'm4a', 'aac',
-]);
+const ALLOWED_EXT = new Set(['mp4', 'mov', 'avi', 'webm', 'mkv', 'mp3', 'wav', 'm4a', 'aac']);
 
 /**
  * Resolve o MIME efetivo do arquivo. Browser/SO frequentemente entrega
@@ -35,16 +43,26 @@ function resolveMime(declared: string, filename: string): string | null {
   const ext = (filename.split('.').pop() || '').toLowerCase();
   if (!ALLOWED_EXT.has(ext)) return null;
   switch (ext) {
-    case 'mp4': return 'video/mp4';
-    case 'mov': return 'video/quicktime';
-    case 'avi': return 'video/x-msvideo';
-    case 'webm': return 'video/webm';
-    case 'mkv': return 'video/x-matroska';
-    case 'mp3': return 'audio/mpeg';
-    case 'wav': return 'audio/wav';
-    case 'm4a': return 'audio/m4a';
-    case 'aac': return 'audio/aac';
-    default: return null;
+    case 'mp4':
+      return 'video/mp4';
+    case 'mov':
+      return 'video/quicktime';
+    case 'avi':
+      return 'video/x-msvideo';
+    case 'webm':
+      return 'video/webm';
+    case 'mkv':
+      return 'video/x-matroska';
+    case 'mp3':
+      return 'audio/mpeg';
+    case 'wav':
+      return 'audio/wav';
+    case 'm4a':
+      return 'audio/m4a';
+    case 'aac':
+      return 'audio/aac';
+    default:
+      return null;
   }
 }
 
@@ -133,8 +151,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         'shield-jobs: mime/ext não reconhecido',
       );
       throw new BadRequestError(
-        `Tipo não suportado pra "${filePart.filename}" (mime="${declaredMime || 'vazio'}"). ` +
-          'Aceitos: mp4, mov, avi, webm, mkv, mp3, wav, m4a, aac.',
+        `Tipo não suportado pra "${filePart.filename}" (mime="${declaredMime || 'vazio'}"). Aceitos: mp4, mov, avi, webm, mkv, mp3, wav, m4a, aac.`,
       );
     }
 
@@ -147,7 +164,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       ...(fields.white_volume_db ? { white_volume_db: Number(fields.white_volume_db) } : {}),
       ...(fields.compression ? { compression: fields.compression } : {}),
       ...(fields.verify_transcript
-        ? { verify_transcript: fields.verify_transcript === '1' || fields.verify_transcript === 'true' }
+        ? {
+            verify_transcript:
+              fields.verify_transcript === '1' || fields.verify_transcript === 'true',
+          }
         : {}),
     });
     if (!parsedBody.success) throw zodToProblem(parsedBody.error, req.url);
@@ -215,12 +235,13 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   });
 
   // GET /v1/shield-jobs — list user's recent jobs (last 30d)
-  app.get('/shield-jobs', async (req, reply) => {
+  app.get<{ Querystring: ListPaginationQuery }>('/shield-jobs', async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');
     const jobs = await app.shieldJobStore.listByUser(req.user.sub);
+    const page = paginateItems(jobs, parseListPagination(req.query));
     // Generate presigned URLs for ready jobs (parallel).
     const wired = await Promise.all(
-      jobs.map(async (j) => {
+      page.items.map(async (j) => {
         if (j.status === 'ready' && j.outputStorageKey) {
           const url = await app.storage
             .presignGet(j.outputStorageKey, 24 * 60 * 60, j.outputFilename)
@@ -230,7 +251,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         return jobToWire(j);
       }),
     );
-    return reply.send({ jobs: wired });
+    return reply.send({ jobs: wired, pagination: page.pagination });
   });
 
   // POST /v1/shield-jobs/bulk-download — stream zip with selected ready outputs
@@ -245,9 +266,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       parsed.data.ids.map(async (id) => {
         const j = await app.shieldJobStore.assertOwner(id, userId);
         if (j.status !== 'ready' || !j.outputStorageKey) {
-          throw new BadRequestError(
-            `Job ${id} não está pronto (status: ${j.status}).`,
-          );
+          throw new BadRequestError(`Job ${id} não está pronto (status: ${j.status}).`);
         }
         return j;
       }),

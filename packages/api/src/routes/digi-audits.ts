@@ -1,10 +1,8 @@
-import {
-  CreateDigiAuditRequestSchema,
-  UpdateDigiAuditRequestSchema,
-} from '@page-cloner/shared';
-import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
-import { BadRequestError, zodToProblem } from '../lib/problem.js';
+import { CreateDigiAuditRequestSchema, UpdateDigiAuditRequestSchema } from '@page-cloner/shared';
 import type { DigiAudit } from '@page-cloner/shared';
+import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import { type ListPaginationQuery, paginateItems, parseListPagination } from '../lib/pagination.js';
+import { BadRequestError, zodToProblem } from '../lib/problem.js';
 
 function toWire(a: DigiAudit): Record<string, unknown> {
   return {
@@ -21,10 +19,11 @@ function toWire(a: DigiAudit): Record<string, unknown> {
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   // GET /v1/digi-audits — list
-  app.get('/digi-audits', async (req, reply) => {
+  app.get<{ Querystring: ListPaginationQuery }>('/digi-audits', async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');
     const audits = await app.digiAuditStore.listByUser(req.user.sub);
-    return reply.send({ audits: audits.map(toWire) });
+    const page = paginateItems(audits, parseListPagination(req.query));
+    return reply.send({ audits: page.items.map(toWire), pagination: page.pagination });
   });
 
   // POST /v1/digi-audits

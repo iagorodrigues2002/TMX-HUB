@@ -1,5 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
+import Fastify from 'fastify';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AuthUserCache } from '../src/lib/auth-user-cache.js';
+import { signJwt } from '../src/lib/jwt.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe('AuthUserCache', () => {
   it('serves cached permissions until the TTL expires', () => {
@@ -36,5 +42,38 @@ describe('AuthUserCache', () => {
     cache.invalidate('user-1');
 
     expect(cache.get('user-1')).toBeUndefined();
+  });
+
+  it('avoids a second Redis read and reloads after invalidation', async () => {
+    const secret = 'test-only-jwt-secret-at-least-32-characters';
+    vi.stubEnv('JWT_SECRET', secret);
+    vi.resetModules();
+    const { default: authPlugin } = await import('../src/plugins/auth.js');
+    const hgetall = vi.fn().mockResolvedValue({
+      id: 'user-1',
+      email: 'user@example.com',
+      name: 'User',
+      role: 'user',
+      passwordHash: 'hash',
+      createdAt: new Date().toISOString(),
+    });
+    const app = Fastify();
+    app.decorate('redis', { hgetall } as never);
+    await app.register(authPlugin);
+    app.get('/protected', { preHandler: app.requireAuth }, async (request) => request.user);
+    const { token } = signJwt({ sub: 'user-1', email: 'user@example.com', role: 'user' }, secret);
+
+    try {
+      const headers = { authorization: `Bearer ${token}` };
+      expect((await app.inject({ url: '/protected', headers })).statusCode).toBe(200);
+      expect((await app.inject({ url: '/protected', headers })).statusCode).toBe(200);
+      expect(hgetall).toHaveBeenCalledTimes(1);
+
+      app.invalidateAuthUser('user-1');
+      expect((await app.inject({ url: '/protected', headers })).statusCode).toBe(200);
+      expect(hgetall).toHaveBeenCalledTimes(2);
+    } finally {
+      await app.close();
+    }
   });
 });

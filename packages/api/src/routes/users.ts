@@ -1,6 +1,7 @@
 import { ALL_TOOL_KEYS, type ToolKey, type User } from '@page-cloner/shared';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { type ListPaginationQuery, paginateItems, parseListPagination } from '../lib/pagination.js';
 import { hashPassword, verifyPassword } from '../lib/password.js';
 import { BadRequestError, HttpProblem, zodToProblem } from '../lib/problem.js';
 
@@ -138,14 +139,16 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   });
 
   // GET /v1/users — admin lista todos os usuários
-  app.get('/users', async (req, reply) => {
+  app.get<{ Querystring: ListPaginationQuery }>('/users', async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');
     if (req.user.role !== 'admin') {
       throw new ForbiddenError('Apenas admins podem listar usuários.');
     }
     const users = await app.userStore.listAll();
+    const page = paginateItems(users, parseListPagination(req.query));
     return reply.send({
-      users: users.map((u) => userToWire(app.userStore.toPublic(u))),
+      users: page.items.map((u) => userToWire(app.userStore.toPublic(u))),
+      pagination: page.pagination,
     });
   });
 
