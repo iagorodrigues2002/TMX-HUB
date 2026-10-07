@@ -28,17 +28,20 @@ const THEME_STORAGE_KEY = 'tmx-ui.theme';
 
 export function InterfaceThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<InterfaceTheme>('dark');
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
     setTheme(saved === 'light' ? 'light' : 'dark');
+    setHydrated(true);
   }, []);
 
   useEffect(() => {
+    if (!hydrated) return;
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
     window.localStorage.setItem(THEME_STORAGE_KEY, theme);
-  }, [theme]);
+  }, [hydrated, theme]);
 
   return (
     <InterfaceThemeContext

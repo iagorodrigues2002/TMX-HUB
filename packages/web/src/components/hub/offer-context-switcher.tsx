@@ -52,7 +52,7 @@ export function OfferContextProvider({ children }: { children: ReactNode }) {
   const routeOfferId = /^\/ofertas\/([^/]+)$/.exec(pathname)?.[1];
   const queryOfferId = searchParams.get('offer') ?? '';
   const offers = offersQuery.data ?? [];
-  const currentOfferId = routeOfferId ?? queryOfferId ?? storedOfferId;
+  const currentOfferId = routeOfferId || queryOfferId || storedOfferId;
   const resolvedOfferId = offers.some((offer) => offer.id === currentOfferId)
     ? currentOfferId
     : (offers[0]?.id ?? currentOfferId);
@@ -115,7 +115,7 @@ export function OfferContextSwitcher() {
   if (!isOfferContextPath(pathname)) return null;
 
   return (
-    <div className="hidden min-w-0 sm:block">
+    <div className="min-w-0">
       <Select
         open={open}
         onOpenChange={setOpen}
@@ -125,16 +125,17 @@ export function OfferContextSwitcher() {
       >
         <SelectTrigger
           aria-label="Trocar oferta atual"
-          className="h-9 w-[min(30vw,240px)] border-border/60 bg-muted/70 px-3 text-[13px]"
+          className="h-11 w-11 justify-center border-border/60 bg-muted/70 px-0 text-[13px] sm:h-9 sm:w-[min(30vw,240px)] sm:justify-between sm:px-3"
         >
-          <span className="flex min-w-0 items-center gap-2">
-            <Store className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
+          <Store className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
+          <span className="hidden min-w-0 items-center gap-2 sm:flex">
             <SelectValue
               placeholder={
                 isLoading ? 'Carregando ofertas…' : isError ? 'Falha ao carregar' : 'Sem ofertas'
               }
             />
           </span>
+          <span className="sr-only sm:hidden">Trocar oferta atual</span>
         </SelectTrigger>
         <SelectContent align="start" className="border-border/60">
           {isError && <SelectItem value="__retry">Tentar carregar novamente</SelectItem>}
