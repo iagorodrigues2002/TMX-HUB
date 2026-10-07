@@ -22,12 +22,26 @@ import {
   Store,
   Webhook,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 type WorkspaceTab = 'monitor' | 'configure' | 'diagnose';
 
 function offerLabel(offer: OfferView) {
-  return offer.companyName ? `${offer.name} · ${offer.companyName}` : offer.name;
+  return offer.name;
+}
+
+function groupOffersByCompany(offers: OfferView[]) {
+  const groups = new Map<string, OfferView[]>();
+  for (const offer of offers) {
+    const company = offer.companyName?.trim() || 'Sem empresa';
+    groups.set(company, [...(groups.get(company) ?? []), offer]);
+  }
+  return [...groups.entries()]
+    .sort(([left], [right]) => left.localeCompare(right, 'pt-BR'))
+    .map(([company, companyOffers]) => ({
+      company,
+      offers: companyOffers.sort((left, right) => left.name.localeCompare(right.name, 'pt-BR')),
+    }));
 }
 
 export function TrackingWorkspace() {
@@ -39,6 +53,7 @@ export function TrackingWorkspace() {
     queryKey: ['tracking-offers'],
     queryFn: () => apiClient.listOffers(),
   });
+  const offersByCompany = useMemo(() => groupOffersByCompany(offers.data ?? []), [offers.data]);
 
   useEffect(() => {
     if (!selectedOfferId && offers.data?.[0]) {
@@ -167,10 +182,14 @@ export function TrackingWorkspace() {
                 onChange={(event) => setSelectedOfferId(event.target.value)}
                 className="h-11 w-full appearance-none rounded-md border border-white/[0.10] bg-[#06131d] px-4 pr-10 text-sm text-white outline-none transition focus:border-cyan-300/40"
               >
-                {(offers.data ?? []).map((offer) => (
-                  <option key={offer.id} value={offer.id}>
-                    {offerLabel(offer)}
-                  </option>
+                {offersByCompany.map((group) => (
+                  <optgroup key={group.company} label={group.company}>
+                    {group.offers.map((offer) => (
+                      <option key={offer.id} value={offer.id}>
+                        {offerLabel(offer)}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
               <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-white/35" />
@@ -217,10 +236,14 @@ export function TrackingWorkspace() {
                     onChange={(event) => setSelectedOfferId(event.target.value)}
                     className="h-11 w-full appearance-none rounded-md border border-white/[0.10] bg-[#06131d] px-4 pr-10 text-sm text-white outline-none transition focus:border-cyan-300/40"
                   >
-                    {(offers.data ?? []).map((offer) => (
-                      <option key={offer.id} value={offer.id}>
-                        {offerLabel(offer)}
-                      </option>
+                    {offersByCompany.map((group) => (
+                      <optgroup key={group.company} label={group.company}>
+                        {group.offers.map((offer) => (
+                          <option key={offer.id} value={offer.id}>
+                            {offerLabel(offer)}
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-white/35" />
