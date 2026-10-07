@@ -3622,9 +3622,14 @@ export function TrackingSectionContent({
                           </p>
                         )}
                         {delivery.response && (
-                          <p className="mt-1 max-w-2xl break-all font-mono text-[10px] text-white/30">
-                            Recibo: {JSON.stringify(delivery.response)}
-                          </p>
+                          <details className="mt-2 max-w-2xl text-white/40">
+                            <summary className="flex min-h-11 cursor-pointer items-center text-xs font-medium text-white/55 hover:text-white/75">
+                              Ver recibo técnico da UTMify
+                            </summary>
+                            <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all rounded border border-white/[0.07] bg-black/20 p-3 font-mono text-[10px] leading-4 text-white/45">
+                              {JSON.stringify(delivery.response, null, 2)}
+                            </pre>
+                          </details>
                         )}
                       </div>
                       <div className="flex items-center gap-3">
