@@ -1,8 +1,9 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import type { Offer, OfferStatus, UpdateOfferRequest } from '@page-cloner/shared';
 import type { Redis } from 'ioredis';
+import type { Sql } from 'postgres';
 import { ulid } from 'ulid';
-import { ConflictError, NotFoundError } from '../lib/problem.js';
+import { ConflictError, HttpProblem, NotFoundError } from '../lib/problem.js';
 
 const OFFER_PREFIX = 'offer:'; // {id} → hash
 const USER_OFFERS_PREFIX = 'user-offers:'; // {userId} → set of offer ids
@@ -90,11 +91,19 @@ export function canManageOffer(offer: Offer, userId: string, isAdmin = false): b
   return isAdmin || offer.userId === userId;
 }
 
-// A member can configure tracking only inside an offer explicitly shared with
-// them. This is intentionally narrower than canManageOffer: it does not let a
-// guest rename, share, delete, or view any other offer.
-export function canConfigureTrackingOffer(offer: Offer, userId: string, isAdmin = false): boolean {
-  return canAccessOffer(offer, userId, isAdmin);
+export type OfferMemberRole = 'owner' | 'tracking_manager' | 'member';
+
+export function canConfigureTrackingOffer(
+  offer: Offer,
+  userId: string,
+  isAdmin = false,
+  memberRole: OfferMemberRole = 'member',
+): boolean {
+  return (
+    isAdmin ||
+    offer.userId === userId ||
+    (Boolean(offer.memberIds?.includes(userId)) && memberRole === 'tracking_manager')
+  );
 }
 
 export class OfferStore {
@@ -103,6 +112,7 @@ export class OfferStore {
   constructor(
     private readonly redis: Redis,
     encryptionSecret: string,
+    private readonly db: Sql | null = null,
   ) {
     this.encryptionKey = createHash('sha256').update(encryptionSecret).digest();
   }
@@ -467,9 +477,35 @@ export class OfferStore {
   }
 
   async assertTrackingManager(id: string, userId: string, isAdmin = false): Promise<Offer> {
+    return this.requireRole(id, userId, ['owner', 'tracking_manager'], isAdmin);
+  }
+
+  async requireRole(
+    id: string,
+    userId: string,
+    allowedRoles: OfferMemberRole[],
+    isAdmin = false,
+  ): Promise<Offer> {
     const offer = await this.get(id);
-    if (!canConfigureTrackingOffer(offer, userId, isAdmin)) {
+    if (!canAccessOffer(offer, userId, isAdmin)) {
       throw new NotFoundError(`Oferta não encontrada: ${id}`);
+    }
+    let role: OfferMemberRole = isAdmin || offer.userId === userId ? 'owner' : 'member';
+    if (role === 'member' && this.db) {
+      const [membership] = await this.db<Array<{ role: OfferMemberRole }>>`
+        SELECT role FROM offer_members
+        WHERE offer_id=${id} AND user_id=${userId}
+        LIMIT 1
+      `;
+      role = membership?.role ?? 'member';
+    }
+    if (!allowedRoles.includes(role)) {
+      throw new HttpProblem({
+        status: 403,
+        title: 'Forbidden',
+        detail: 'Somente owners e tracking managers podem alterar o tracking desta oferta.',
+        code: 'offer_role_forbidden',
+      });
     }
     return offer;
   }

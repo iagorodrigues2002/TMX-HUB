@@ -38,7 +38,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.decorate('jobStore', new JobStore(app.redis, storage));
   app.decorate('vslJobStore', new VslJobStore(app.redis));
   app.decorate('funnelJobStore', new FunnelJobStore(app.redis));
-  app.decorate('offerStore', new OfferStore(app.redis, env.JWT_SECRET));
+  app.decorate('offerStore', new OfferStore(app.redis, env.JWT_SECRET, app.db));
   app.decorate('snapshotStore', new SnapshotStore(app.redis));
   app.decorate('intradayStore', new IntradayStore(app.redis));
   app.decorate('nicheStore', new NicheStore(app.redis));

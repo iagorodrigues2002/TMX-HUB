@@ -1,6 +1,10 @@
 import type { Offer } from '@page-cloner/shared';
 import { describe, expect, it } from 'vitest';
-import { canAccessOffer, canManageOffer } from '../src/services/offer-store.js';
+import {
+  canAccessOffer,
+  canConfigureTrackingOffer,
+  canManageOffer,
+} from '../src/services/offer-store.js';
 
 const offer: Offer = {
   id: 'offer-1',
@@ -26,5 +30,12 @@ describe('offer member access', () => {
     expect(canManageOffer(offer, 'owner-1')).toBe(true);
     expect(canManageOffer(offer, 'member-1')).toBe(false);
     expect(canManageOffer(offer, 'admin-1', true)).toBe(true);
+  });
+
+  it('allows tracking configuration only to owners and explicit tracking managers', () => {
+    expect(canConfigureTrackingOffer(offer, 'owner-1')).toBe(true);
+    expect(canConfigureTrackingOffer(offer, 'member-1')).toBe(false);
+    expect(canConfigureTrackingOffer(offer, 'member-1', false, 'tracking_manager')).toBe(true);
+    expect(canConfigureTrackingOffer(offer, 'admin-1', true)).toBe(true);
   });
 });
