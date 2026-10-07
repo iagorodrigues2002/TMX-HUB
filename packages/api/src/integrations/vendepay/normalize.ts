@@ -146,7 +146,7 @@ const normalizeStatus = (raw = ''): VendepayStatus => {
     /(^|[._])(recusad[oa]|falha|falhou|failed|declined)$/.test(status)
   )
     return 'refused';
-  if (['refunded', 'refund', 'reembolsado'].includes(status)) return 'refunded';
+  if (['refunded', 'refund', 'reembolsado', 'reembolso'].includes(status)) return 'refunded';
   // VendePay's transaction ledger labels this lifecycle event simply as
   // "Charge" (with the human description "Taxa de chargeback"). Treat it
   // exactly like the explicit webhook spellings so the original order is

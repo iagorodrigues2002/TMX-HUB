@@ -291,6 +291,21 @@ describe('normalizeVendepay', () => {
     },
   );
 
+  it.each(['Reembolso', 'reembolso', 'refunded', 'refund', 'reembolsado'])(
+    'normaliza o evento %s da Vendepay como reembolso',
+    (type) => {
+      const result = normalizeVendepay({
+        transaction_id: `refund-${type}`,
+        type,
+        amount: '67.00',
+        currency: 'USD',
+      });
+      expect(result.kind).toBe('processable');
+      if (result.kind !== 'processable') return;
+      expect(result.event.status).toBe('refunded');
+    },
+  );
+
   it('coloca payload sem transação em quarentena', () => {
     const result = normalizeVendepay({ event: 'something', status: 'unknown' });
     expect(result.kind).toBe('quarantined');
