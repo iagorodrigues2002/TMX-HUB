@@ -1,8 +1,8 @@
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'offer_member_role') THEN
-    CREATE TYPE offer_member_role AS ENUM ('owner', 'tracking_manager', 'member');
-  END IF;
+  CREATE TYPE offer_member_role AS ENUM ('owner', 'tracking_manager', 'member');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
 END
 $$;
 
