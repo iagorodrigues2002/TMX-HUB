@@ -1,16 +1,23 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { env } from '@/lib/env';
+import { useEffect, useState } from 'react';
 
 interface CheckResult {
   name: string;
   url: string;
-  status: 'pending' | 'ok' | 'fail';
+  status: 'pending' | 'ok' | 'warning' | 'fail';
   http?: number;
   durationMs?: number;
   error?: string;
   body?: string;
+}
+
+interface CheckTarget {
+  name: string;
+  path: string;
+  method: 'GET';
+  headers?: Record<string, string>;
 }
 
 export default function DebugPage() {
@@ -37,13 +44,16 @@ export default function DebugPage() {
   const mixedContent = protocol === 'https:' && apiProto === 'http:';
 
   async function runChecks() {
-    const targets = [
+    const targets: CheckTarget[] = [
       { name: 'GET /healthz', path: '/healthz', method: 'GET' as const },
       { name: 'GET /readyz', path: '/readyz', method: 'GET' as const },
       {
-        name: 'OPTIONS /v1/clones (CORS preflight)',
-        path: '/v1/clones',
-        method: 'OPTIONS' as const,
+        name: 'CORS preflight (GET /healthz + Authorization)',
+        path: '/healthz',
+        method: 'GET',
+        // Authorization is safe to set in fetch and makes the browser issue the
+        // OPTIONS preflight itself. Origin and Access-Control-Request-* are forbidden.
+        headers: { Authorization: 'Bearer debug-cors-preflight' },
       },
     ];
 
@@ -62,14 +72,7 @@ export default function DebugPage() {
           const res = await fetch(url, {
             method: t.method,
             cache: 'no-store',
-            headers:
-              t.method === 'OPTIONS'
-                ? {
-                    'Access-Control-Request-Method': 'POST',
-                    'Access-Control-Request-Headers': 'content-type',
-                    Origin: window.location.origin,
-                  }
-                : undefined,
+            headers: t.headers,
           });
           const dur = Math.round(performance.now() - t0);
           let body = '';
@@ -81,7 +84,12 @@ export default function DebugPage() {
           return {
             name: t.name,
             url,
-            status: res.ok || (t.method === 'OPTIONS' && res.status === 204) ? 'ok' : 'fail',
+            status:
+              t.path === '/readyz' && res.status === 503
+                ? 'warning'
+                : res.status === 200
+                  ? 'ok'
+                  : 'fail',
             http: res.status,
             durationMs: dur,
             body,
@@ -129,9 +137,7 @@ export default function DebugPage() {
             <dd>{apiProto}</dd>
             <dt className="text-zinc-500">Mixed content?</dt>
             <dd className={mixedContent ? 'text-red-400' : 'text-emerald-400'}>
-              {mixedContent
-                ? '⚠ SIM — página HTTPS chamando API HTTP. Browser bloqueia.'
-                : 'não'}
+              {mixedContent ? '⚠ SIM — página HTTPS chamando API HTTP. Browser bloqueia.' : 'não'}
             </dd>
           </dl>
         </section>
@@ -155,9 +161,11 @@ export default function DebugPage() {
                 className={`rounded border p-3 ${
                   c.status === 'ok'
                     ? 'border-emerald-800 bg-emerald-950/30'
-                    : c.status === 'fail'
-                      ? 'border-red-800 bg-red-950/30'
-                      : 'border-zinc-800'
+                    : c.status === 'warning'
+                      ? 'border-amber-800 bg-amber-950/30'
+                      : c.status === 'fail'
+                        ? 'border-red-800 bg-red-950/30'
+                        : 'border-zinc-800'
                 }`}
               >
                 <div className="flex items-center justify-between">
@@ -166,18 +174,22 @@ export default function DebugPage() {
                     className={
                       c.status === 'ok'
                         ? 'text-emerald-400'
-                        : c.status === 'fail'
-                          ? 'text-red-400'
-                          : 'text-zinc-500'
+                        : c.status === 'warning'
+                          ? 'text-amber-300'
+                          : c.status === 'fail'
+                            ? 'text-red-400'
+                            : 'text-zinc-500'
                     }
                   >
                     {c.status === 'pending'
                       ? '…'
                       : c.status === 'ok'
                         ? `✓ HTTP ${c.http} (${c.durationMs}ms)`
-                        : c.http
-                          ? `✗ HTTP ${c.http} (${c.durationMs}ms)`
-                          : `✗ erro de rede (${c.durationMs}ms)`}
+                        : c.status === 'warning'
+                          ? `⚠ HTTP ${c.http} (${c.durationMs}ms) — MinIO/Chromium indisponível; esperado em dev`
+                          : c.http
+                            ? `✗ HTTP ${c.http} (${c.durationMs}ms)`
+                            : `✗ erro de rede (${c.durationMs}ms)`}
                   </span>
                 </div>
                 <div className="mt-1 break-all text-xs text-zinc-500">{c.url}</div>
@@ -207,10 +219,12 @@ export default function DebugPage() {
               <strong>Erro de rede em /healthz</strong> → API não está rodando ou URL está errada.
             </li>
             <li>
-              <strong>HTTP 502/503</strong> → API levantou mas crashou (verificar logs do Railway).
+              <strong>/readyz HTTP 503</strong> → dependências opcionais como MinIO ou Chromium
+              podem estar paradas em dev; trate como warning.
             </li>
             <li>
-              <strong>OPTIONS falha mas GET ok</strong> → CORS quebrado.
+              <strong>CORS preflight falha mas /healthz passa</strong> → configuração de CORS
+              bloqueou o header Authorization.
             </li>
           </ul>
         </section>
