@@ -306,6 +306,25 @@ describe('normalizeVendepay', () => {
     },
   );
 
+  it.each([
+    ['Charge', 'chargeback'],
+    ['Reembolso', 'refunded'],
+  ])(
+    'prioriza o tipo de ciclo %s quando o status da transação ainda é completed',
+    (type, expectedStatus) => {
+      const result = normalizeVendepay({
+        transaction_id: `lifecycle-${type}`,
+        status: 'completed',
+        type,
+        amount: '24.64',
+        currency: 'USD',
+      });
+      expect(result.kind).toBe('processable');
+      if (result.kind !== 'processable') return;
+      expect(result.event.status).toBe(expectedStatus);
+    },
+  );
+
   it('coloca payload sem transação em quarentena', () => {
     const result = normalizeVendepay({ event: 'something', status: 'unknown' });
     expect(result.kind).toBe('quarantined');

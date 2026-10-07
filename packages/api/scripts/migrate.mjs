@@ -82,6 +82,7 @@ const migrations = [
   '067_rename_vendepay_accounts.sql',
   '068_utmify_global_offer_routing.sql',
   '069_upsell_intelligence_performance.sql',
+  '070_repair_vendepay_lifecycle_labels.sql',
 ];
 
 await sql`

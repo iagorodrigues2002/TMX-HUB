@@ -171,7 +171,14 @@ const statusAt = (
   ]
     .map((path) => textAt(value, [path]))
     .filter((candidate): candidate is string => Boolean(candidate));
-  const recognized = candidates.find((candidate) => normalizeStatus(candidate) !== 'unknown');
+  // A lifecycle notification can retain the original transaction status
+  // (`completed`) while carrying the actual transition in `event` or `type`
+  // (`Charge` / `Reembolso`). Reversals must win over a generic paid status.
+  const reversal = candidates.find((candidate) => {
+    const status = normalizeStatus(candidate);
+    return status === 'refunded' || status === 'chargeback';
+  });
+  const recognized = reversal ?? candidates.find((candidate) => normalizeStatus(candidate) !== 'unknown');
   const rawStatus = recognized ?? candidates[0];
   return { status: normalizeStatus(rawStatus), ...(rawStatus ? { rawStatus } : {}) };
 };
