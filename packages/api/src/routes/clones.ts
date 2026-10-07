@@ -89,7 +89,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.post('/clones', async (req, reply) => {
     const idemKey = req.headers['idempotency-key'];
     const idempotencyKey =
-      typeof idemKey === 'string' && idemKey.length > 0 && idemKey.length <= 128 ? idemKey : null;
+      typeof idemKey === 'string' && idemKey.length > 0 && idemKey.length <= 128
+        ? `${req.user!.sub}:${idemKey}`
+        : null;
 
     const camelBody = camelizeCreateRequest(req.body);
     const parsed = CreateCloneRequestSchema.safeParse(camelBody);
