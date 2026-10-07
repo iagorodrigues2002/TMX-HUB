@@ -3,6 +3,7 @@
 import { DestinationFormShell } from '@/components/tracking/sections/destinations/destination-form-shell';
 import { DestinationList } from '@/components/tracking/sections/destinations/destination-list';
 import { DestinationShell } from '@/components/tracking/sections/destinations/destination-shell';
+import { NetworkTrackingCard } from '@/components/tracking/sections/destinations/network-tracking-card';
 import { TRACKING_DASHBOARD_STALE_TIME } from '@/components/tracking/tracking-query';
 import { Button } from '@/components/ui/button';
 import { FormField } from '@/components/ui/form-field';
@@ -148,6 +149,7 @@ export function MetaPixelsPanel({ offerId, canManage }: MetaPixelsPanelProps) {
       count={pixels.data?.pixels.length ?? 0}
       countLabel="pixels"
     >
+      <NetworkTrackingCard className="mb-4" network="meta" />
       <p className="max-w-3xl text-xs leading-5 text-white/45">
         Cada IC e venda elegível é enviado via CAPI para todos os pixels ativos desta oferta. Ao
         adicionar outro pixel, o TMX também envia automaticamente as conversões dos últimos sete

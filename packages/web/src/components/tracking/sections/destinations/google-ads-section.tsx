@@ -5,6 +5,7 @@ import {
   DestinationShell,
   destinationLegacyContentClassName,
 } from '@/components/tracking/sections/destinations/destination-shell';
+import { NetworkTrackingCard } from '@/components/tracking/sections/destinations/network-tracking-card';
 
 export function GoogleAdsSection({ offerId }: { offerId: string }) {
   return (
@@ -13,6 +14,7 @@ export function GoogleAdsSection({ offerId }: { offerId: string }) {
       description="Contas e ações de conversão independentes por oferta, com autorização e validação técnica no mesmo fluxo."
       contentClassName={destinationLegacyContentClassName}
     >
+      <NetworkTrackingCard className="mb-5" network="google" />
       <GoogleAdsDestinations key={offerId} offerId={offerId} />
     </DestinationShell>
   );
