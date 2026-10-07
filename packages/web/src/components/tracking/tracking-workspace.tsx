@@ -2,272 +2,256 @@
 
 import { TrackingAdvancedCenter } from '@/components/tracking/tracking-advanced-center';
 import { TrackingBackdrop } from '@/components/tracking/tracking-backdrop';
-import { TrackingHealthCenter } from '@/components/tracking/tracking-health-center';
-import { TrackingHelp } from '@/components/tracking/tracking-help';
-import { TrackingOverviewDashboard } from '@/components/tracking/tracking-overview-dashboard';
+import {
+  DEFAULT_TRACKING_SECTION,
+  TRACKING_NAV,
+  type TrackingView,
+  isTrackingView,
+  resolveTrackingSection,
+} from '@/components/tracking/tracking-nav';
+import {
+  TrackingOfferProvider,
+  useTrackingOffer,
+} from '@/components/tracking/tracking-offer-context';
 import { Button } from '@/components/ui/button';
-import { type OfferView, apiClient } from '@/lib/api-client';
-import { useAuth } from '@/lib/auth-context';
+import { DataState } from '@/components/ui/data-state';
 import { useDisplayCurrency } from '@/lib/currency-preference';
 import { cn } from '@/lib/utils';
-import { useQuery } from '@tanstack/react-query';
-import {
-  Activity,
-  CheckCircle2,
-  ChevronDown,
-  HeartPulse,
-  Loader2,
-  RadioTower,
-  ShieldCheck,
-  Store,
-  Webhook,
-} from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { ChevronDown, RadioTower, RefreshCw, Store } from 'lucide-react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
-type WorkspaceTab = 'monitor' | 'configure' | 'diagnose';
-
-function offerLabel(offer: OfferView) {
-  return offer.companyName ? `${offer.name} · ${offer.companyName}` : offer.name;
+function offerLabel(name: string, companyName?: string | null) {
+  return companyName ? `${name} · ${companyName}` : name;
 }
 
-export function TrackingWorkspace() {
-  const { user } = useAuth();
-  const [tab, setTab] = useState<WorkspaceTab>('monitor');
-  const [selectedOfferId, setSelectedOfferId] = useState('');
+function TrackingWorkspaceContent() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [displayCurrency, setDisplayCurrency] = useDisplayCurrency();
-  const offers = useQuery({
-    queryKey: ['tracking-offers'],
-    queryFn: () => apiClient.listOffers(),
-  });
+  const {
+    offers,
+    activeOffer,
+    activeOfferId,
+    setActiveOfferId,
+    canManage,
+    isLoading,
+    isError,
+    isFetching,
+    refetch,
+  } = useTrackingOffer();
+  const requestedView = searchParams.get('view');
+  const view: TrackingView = isTrackingView(requestedView) ? requestedView : 'overview';
+  const section = resolveTrackingSection(view, searchParams.get('section'));
+  const activeArea = TRACKING_NAV.find((item) => item.id === view)!;
 
-  useEffect(() => {
-    if (!selectedOfferId && offers.data?.[0]) {
-      setSelectedOfferId(offers.data[0].id);
-    }
-  }, [offers.data, selectedOfferId]);
-
-  const selectedOffer = offers.data?.find((offer) => offer.id === selectedOfferId);
-  const canManage = Boolean(selectedOffer?.canConfigureTracking);
+  const navigate = (nextView: TrackingView, nextSection = DEFAULT_TRACKING_SECTION[nextView]) => {
+    const next = new URLSearchParams(searchParams.toString());
+    next.set('view', nextView);
+    next.set('section', nextSection);
+    router.push(`${pathname}?${next.toString()}`, { scroll: false });
+  };
 
   return (
-    <div data-surface="tracking" className="signal-reveal space-y-6">
+    <div data-surface="tracking" className="signal-reveal space-y-4">
       <TrackingBackdrop />
-      <header className="tmx-command-hero overflow-hidden rounded-2xl border border-cyan-300/15 bg-gradient-to-br from-cyan-300/[0.08] via-white/[0.025] to-transparent p-5 sm:p-6 md:p-8">
-        <div className="flex flex-wrap items-start justify-between gap-6">
-          <div className="max-w-3xl">
-            <div className="mb-4 flex items-center gap-3">
-              <div className="grid h-11 w-11 place-items-center rounded-lg border border-cyan-300/25 bg-cyan-300/[0.08]">
-                <RadioTower className="h-5 w-5 text-cyan-300" />
-              </div>
-              <div>
-                <p className="hud-label">TMX Signal · First-party data</p>
-                <p className="mt-1 flex items-center gap-2 text-xs text-emerald-200/80">
-                  <span className="status-dot" aria-hidden /> Infraestrutura online
-                </p>
-              </div>
+      <header className="rounded-xl border border-cyan-300/15 bg-bg-elevated/75 p-4 md:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex min-w-0 gap-3">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-cyan-300/25 bg-cyan-300/[0.08]">
+              <RadioTower className="h-5 w-5 text-cyan-300" />
             </div>
-            <h1 className="text-3xl font-bold tracking-tight text-white md:text-4xl">
-              Trackeamento avançado
-            </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-white/55">
-              Acompanhe a jornada da visita até a compra, atribua vendas da Vendepay e envie
-              conversões server-side para a Meta em uma única central.
-            </p>
+            <div className="min-w-0">
+              <h1 className="text-xl font-semibold tracking-tight text-white md:text-2xl">
+                Rastreamento
+              </h1>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-white/55">
+                Acompanhe cada sinal da entrada à receita e configure somente o ponto em foco.
+              </p>
+            </div>
           </div>
-          <div className="flex min-w-[230px] flex-col items-end gap-3">
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { icon: Webhook, label: 'Vendepay', value: 'Webhook' },
-                { icon: ShieldCheck, label: 'Meta', value: 'CAPI' },
-                { icon: Activity, label: 'Eventos', value: 'First-party' },
-                { icon: CheckCircle2, label: 'Entrega', value: 'Retentativas' },
-              ].map(({ icon: Icon, label, value }) => (
-                <div key={label} className="rounded-md border border-white/[0.07] bg-black/15 p-3">
-                  <Icon className="h-3.5 w-3.5 text-cyan-300/75" />
-                  <p className="mt-2 font-mono text-[10px] uppercase tracking-wider text-white/35">
-                    {label}
-                  </p>
-                  <p className="mt-0.5 text-xs text-white/70">{value}</p>
-                </div>
-              ))}
-            </div>
-            <fieldset className="tmx-currency-toggle">
-              <legend className="tmx-currency-toggle-label">Moeda</legend>
-              {(['BRL', 'USD'] as const).map((code) => (
-                <button
-                  key={code}
-                  type="button"
-                  onClick={() => setDisplayCurrency(code)}
-                  className="tmx-currency-toggle-btn"
-                  data-active={displayCurrency === code}
-                  aria-pressed={displayCurrency === code}
-                >
-                  {code}
-                </button>
-              ))}
-            </fieldset>
-          </div>
-        </div>
-      </header>
-
-      <div className="flex flex-wrap gap-2 border-b border-white/[0.07] pb-3">
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={() => setTab('monitor')}
-          className={cn(
-            'gap-2 text-white/45',
-            tab === 'monitor' && 'bg-cyan-300/[0.09] text-cyan-200',
-          )}
-        >
-          <HeartPulse className="h-4 w-4" />
-          Acompanhar
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={() => setTab('configure')}
-          className={cn(
-            'gap-2 text-white/45',
-            tab === 'configure' && 'bg-cyan-300/[0.09] text-cyan-200',
-          )}
-        >
-          <ShieldCheck className="h-4 w-4" />
-          Configurar
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={() => setTab('diagnose')}
-          className={cn(
-            'gap-2 text-white/45',
-            tab === 'diagnose' && 'bg-cyan-300/[0.09] text-cyan-200',
-          )}
-        >
-          <HeartPulse className="h-4 w-4" />
-          Diagnosticar
-        </Button>
-      </div>
-
-      {tab === 'monitor' ? (
-        <div className="space-y-5">
-          <TrackingOverviewDashboard />
-        </div>
-      ) : tab === 'diagnose' ? (
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-end justify-between gap-3 rounded-xl border border-white/[0.08] bg-white/[0.025] p-4">
-            <div>
-              <p className="hud-label">Oferta monitorada</p>
-              <p className="mt-1 text-xs text-white/40">Selecione a operação que deseja auditar.</p>
-            </div>
-            <div className="relative min-w-full sm:min-w-[320px]">
-              <select
-                aria-label="Selecionar oferta para saúde do tracking"
-                value={selectedOfferId}
-                onChange={(event) => setSelectedOfferId(event.target.value)}
-                className="h-11 w-full appearance-none rounded-md border border-white/[0.10] bg-[#06131d] px-4 pr-10 text-sm text-white outline-none transition focus:border-cyan-300/40"
+          <fieldset className="tmx-currency-toggle">
+            <legend className="tmx-currency-toggle-label">Moeda</legend>
+            {(['BRL', 'USD'] as const).map((code) => (
+              <button
+                key={code}
+                type="button"
+                onClick={() => setDisplayCurrency(code)}
+                className="tmx-currency-toggle-btn"
+                data-active={displayCurrency === code}
+                aria-pressed={displayCurrency === code}
               >
-                {(offers.data ?? []).map((offer) => (
+                {code}
+              </button>
+            ))}
+          </fieldset>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-white/[0.07] pt-4">
+          <div className="min-w-full flex-1 sm:min-w-72">
+            <label htmlFor="tracking-offer" className="text-xs font-medium text-white/55">
+              Oferta ativa
+            </label>
+            <div className="relative mt-1.5">
+              <select
+                id="tracking-offer"
+                value={activeOfferId}
+                disabled={isLoading || !offers.length}
+                onChange={(event) => setActiveOfferId(event.target.value)}
+                className="h-11 w-full appearance-none rounded-md border border-white/[0.10] bg-[#06131d] px-3 pr-10 text-sm text-white outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/40"
+              >
+                {offers.map((offer) => (
                   <option key={offer.id} value={offer.id}>
-                    {offerLabel(offer)}
+                    {offerLabel(offer.name, offer.companyName)}
                   </option>
                 ))}
               </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-white/35" />
+              <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-white/40" />
             </div>
           </div>
-          {selectedOffer ? (
-            <TrackingHealthCenter offerId={selectedOffer.id} canManage={Boolean(canManage)} />
-          ) : (
-            <div className="glass-card p-8 text-center text-sm text-white/40">
-              Nenhuma oferta disponível.
+          {activeOffer && (
+            <div className="flex min-h-11 flex-wrap items-center gap-2 text-xs">
+              <span className="rounded-md border border-white/[0.08] px-2.5 py-1.5 text-white/55">
+                {activeOffer.status}
+              </span>
+              <span className="rounded-md border border-white/[0.08] px-2.5 py-1.5 text-white/55">
+                {activeOffer.currency}
+              </span>
+              <span
+                className={cn(
+                  'rounded-md border px-2.5 py-1.5',
+                  canManage
+                    ? 'border-emerald-300/20 text-emerald-200'
+                    : 'border-white/[0.08] text-white/55',
+                )}
+              >
+                {canManage ? 'Pode configurar' : 'Somente leitura'}
+              </span>
             </div>
           )}
-          <details className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
-            <summary className="cursor-pointer list-none text-sm font-medium text-cyan-100">
-              Abrir tutoriais e testes da instalação
-            </summary>
-            <div className="mt-5 border-t border-white/[0.07] pt-5">
-              <TrackingHelp offerId={selectedOfferId} />
-            </div>
-          </details>
         </div>
-      ) : (
-        <div className="space-y-5">
-          <section className="rounded-lg border border-white/[0.08] bg-white/[0.025] p-5">
-            <div className="flex flex-wrap items-end justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <Store className="h-4 w-4 text-cyan-300" />
-                  <p className="hud-label">Oferta monitorada</p>
-                </div>
-                <p className="mt-2 text-sm text-white/50">
-                  Todas as configurações e métricas abaixo pertencem à oferta selecionada.
-                </p>
-              </div>
-              {offers.isLoading ? (
-                <div className="flex items-center gap-2 text-sm text-white/45">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Carregando ofertas…
-                </div>
-              ) : (
-                <div className="relative min-w-full sm:min-w-[320px]">
-                  <select
-                    aria-label="Selecionar oferta para tracking"
-                    value={selectedOfferId}
-                    onChange={(event) => setSelectedOfferId(event.target.value)}
-                    className="h-11 w-full appearance-none rounded-md border border-white/[0.10] bg-[#06131d] px-4 pr-10 text-sm text-white outline-none transition focus:border-cyan-300/40"
-                  >
-                    {(offers.data ?? []).map((offer) => (
-                      <option key={offer.id} value={offer.id}>
-                        {offerLabel(offer)}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-white/35" />
-                </div>
-              )}
-            </div>
-            {selectedOffer && (
-              <div className="mt-4 flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.14em]">
-                <span className="rounded border border-white/[0.07] px-2 py-1 text-white/45">
-                  {selectedOffer.status}
-                </span>
-                <span className="rounded border border-white/[0.07] px-2 py-1 text-white/45">
-                  {selectedOffer.currency}
-                </span>
-                <span
+      </header>
+
+      <nav
+        aria-label="Áreas de rastreamento"
+        className="rounded-lg border border-white/[0.08] bg-black/15 p-2"
+      >
+        <div className="flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {TRACKING_NAV.map((area) => {
+            const Icon = area.icon;
+            return (
+              <button
+                key={area.id}
+                type="button"
+                aria-current={view === area.id ? 'page' : undefined}
+                onClick={() => navigate(area.id)}
+                className={cn(
+                  'flex min-h-11 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium text-white/50 transition-colors hover:bg-white/[0.04] hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/40',
+                  view === area.id && 'bg-cyan-300/[0.10] text-cyan-100',
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                {area.label}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+
+      <div className="grid min-w-0 gap-4 xl:grid-cols-[230px_minmax(0,1fr)]">
+        <aside className="h-fit rounded-lg border border-white/[0.08] bg-black/15 p-2 xl:sticky xl:top-20">
+          <div className="px-2 py-2">
+            <h2 className="text-sm font-semibold text-white/85">{activeArea.label}</h2>
+            <p className="mt-1 text-xs leading-5 text-white/45">{activeArea.description}</p>
+          </div>
+          <div className="mt-1 flex gap-1.5 overflow-x-auto xl:block xl:overflow-visible">
+            {activeArea.sections.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  aria-current={section === item.id ? 'page' : undefined}
+                  onClick={() => navigate(view, item.id)}
                   className={cn(
-                    'rounded border px-2 py-1',
-                    canManage
-                      ? 'border-emerald-300/15 text-emerald-200/70'
-                      : 'border-white/[0.07] text-white/45',
+                    'flex min-h-11 min-w-44 shrink-0 items-start gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/40 xl:mb-1 xl:w-full xl:min-w-0',
+                    section === item.id && 'bg-white/[0.06]',
                   )}
                 >
-                  {canManage ? 'Acesso de configuração' : 'Somente leitura'}
-                </span>
-              </div>
-            )}
-          </section>
+                  <Icon
+                    className={cn(
+                      'mt-0.5 h-4 w-4 shrink-0 text-white/35',
+                      section === item.id && 'text-cyan-300',
+                    )}
+                  />
+                  <span>
+                    <span
+                      className={cn(
+                        'block text-xs font-medium text-white/55',
+                        section === item.id && 'text-white',
+                      )}
+                    >
+                      {item.label}
+                    </span>
+                    <span className="mt-0.5 hidden text-[11px] leading-4 text-white/35 xl:block">
+                      {item.description}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </aside>
 
-          {offers.isError ? (
-            <div className="rounded-lg border border-red-300/15 bg-red-300/[0.04] p-5 text-sm text-red-100/75">
-              Não foi possível carregar as ofertas. Atualize a página e tente novamente.
-            </div>
-          ) : !offers.isLoading && !selectedOffer ? (
-            <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-8 text-center">
-              <Store className="mx-auto h-6 w-6 text-white/25" />
-              <h2 className="mt-3 font-medium text-white/80">Nenhuma oferta disponível</h2>
-              <p className="mt-1 text-sm text-white/40">
-                Crie ou solicite acesso a uma oferta para iniciar o tracking.
-              </p>
-            </div>
-          ) : selectedOffer ? (
-            <>
-              <TrackingAdvancedCenter offerId={selectedOffer.id} canManage={Boolean(canManage)} />
-            </>
-          ) : null}
-        </div>
+        <main className="min-w-0">
+          {isLoading ? (
+            <DataState variant="loading" title="Carregando ofertas…" />
+          ) : isError ? (
+            <DataState
+              variant="error"
+              title="Não foi possível carregar as ofertas"
+              description="Verifique a conexão e tente novamente."
+              onRetry={refetch}
+              isRetrying={isFetching}
+            />
+          ) : !activeOffer ? (
+            <DataState
+              variant="empty"
+              title="Nenhuma oferta disponível"
+              description="Crie ou solicite acesso a uma oferta para iniciar o rastreamento."
+              action={
+                <Button asChild variant="outline">
+                  <a href="/ofertas">
+                    <Store className="h-4 w-4" /> Abrir ofertas
+                  </a>
+                </Button>
+              }
+            />
+          ) : (
+            <TrackingAdvancedCenter
+              key={`${activeOffer.id}:${view}:${section}`}
+              offerId={activeOffer.id}
+              canManage={canManage}
+              view={view}
+              section={section}
+            />
+          )}
+        </main>
+      </div>
+
+      {isFetching && !isLoading && (
+        <output className="fixed bottom-20 right-4 z-20 flex items-center gap-2 rounded-lg border border-white/[0.10] bg-bg-elevated px-3 py-2 text-xs text-white/60 shadow-xl md:bottom-4">
+          <RefreshCw className="h-3.5 w-3.5 animate-spin" /> Atualizando contexto
+        </output>
       )}
     </div>
+  );
+}
+
+export function TrackingWorkspace() {
+  return (
+    <TrackingOfferProvider>
+      <TrackingWorkspaceContent />
+    </TrackingOfferProvider>
   );
 }

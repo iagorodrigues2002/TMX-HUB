@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 
 export default function TrackingPage() {
   return (
-    <HubShell breadcrumb={['TRACKEAMENTO AVANÇADO']}>
+    <HubShell breadcrumb={['RASTREAMENTO']}>
       <ToolGuard tool="ofertas">
         <TrackingWorkspace />
       </ToolGuard>
