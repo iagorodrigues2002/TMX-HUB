@@ -908,6 +908,87 @@ html[data-theme="light"] [class*="bg-[#0" i] {
   overflow: hidden;
 }
 
+.tmx-data-state-content {
+  animation: tmx-data-state-content-in 300ms cubic-bezier(0, 0, 0.2, 1) both;
+  will-change: opacity;
+}
+
+.tmx-data-state-error {
+  animation: tmx-data-state-content-in 300ms cubic-bezier(0, 0, 0.2, 1) both, tmx-error-shake 180ms
+    cubic-bezier(0.4, 0, 0.2, 1) both;
+  will-change: opacity, transform;
+}
+
+.tmx-error-message {
+  animation: tmx-feedback-fade-in 180ms cubic-bezier(0, 0, 0.2, 1) both;
+}
+
+.tmx-error-icon {
+  animation: tmx-error-icon-pulse 240ms cubic-bezier(0.16, 1, 0.3, 1) 1;
+}
+
+.tmx-field-error {
+  animation: tmx-field-error-in 180ms linear both;
+  will-change: opacity, transform;
+}
+
+.tmx-field-success {
+  animation: tmx-feedback-fade-in 180ms cubic-bezier(0, 0, 0.2, 1) both;
+}
+
+.tmx-check-path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: tmx-check-draw 220ms cubic-bezier(0.16, 1, 0.3, 1) 40ms forwards;
+}
+
+.tmx-button-content {
+  animation: tmx-button-content-in 160ms cubic-bezier(0, 0, 0.2, 1) both;
+}
+
+.tmx-button-success {
+  position: relative;
+  isolation: isolate;
+}
+
+.tmx-button-success::after {
+  position: absolute;
+  inset: -3px;
+  z-index: -1;
+  border: 1px solid color-mix(in srgb, var(--color-success) 72%, transparent);
+  border-radius: inherit;
+  content: "";
+  animation: tmx-success-pulse 240ms cubic-bezier(0, 0, 0.2, 1) both;
+  pointer-events: none;
+}
+
+.tmx-button-success .tmx-check-icon path {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  animation: tmx-check-icon-draw 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.tmx-toast[data-mounted="true"][data-front="true"] {
+  animation: tmx-toast-in-from-right 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tmx-toast-error {
+  border-inline-start: 3px solid var(--color-danger) !important;
+}
+
+.tmx-toast-success {
+  border-inline-start: 3px solid var(--color-success) !important;
+}
+
+.tmx-toast-icon {
+  transform: translateZ(0);
+}
+
+.tmx-toast-success-icon {
+  width: 20px;
+  height: 20px;
+}
+
 .tmx-data-state-loading::after {
   position: absolute;
   inset: 0;
@@ -930,6 +1011,122 @@ html[data-theme="light"] [class*="bg-[#0" i] {
   }
 }
 
+@keyframes tmx-data-state-content-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes tmx-error-shake {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  16.667%,
+  50%,
+  83.333% {
+    transform: translate3d(-2px, 0, 0);
+  }
+  33.333%,
+  66.667% {
+    transform: translate3d(2px, 0, 0);
+  }
+}
+
+@keyframes tmx-field-error-in {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0);
+  }
+  16.667%,
+  50%,
+  83.333% {
+    transform: translate3d(-2px, 0, 0);
+  }
+  33.333%,
+  66.667% {
+    transform: translate3d(2px, 0, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes tmx-feedback-fade-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 2px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes tmx-error-icon-pulse {
+  0% {
+    opacity: 0.55;
+    transform: scale(0.92);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes tmx-check-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes tmx-check-icon-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes tmx-button-content-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 2px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes tmx-success-pulse {
+  from {
+    opacity: 0.8;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes tmx-toast-in-from-right {
+  from {
+    opacity: 0;
+    transform: var(--y) translate3d(14px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: var(--y) translate3d(0, 0, 0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -944,6 +1141,11 @@ html[data-theme="light"] [class*="bg-[#0" i] {
     animation: none !important;
     opacity: 0;
     transform: none;
+  }
+
+  .tmx-check-path,
+  .tmx-button-success .tmx-check-icon path {
+    stroke-dashoffset: 0;
   }
 }
 

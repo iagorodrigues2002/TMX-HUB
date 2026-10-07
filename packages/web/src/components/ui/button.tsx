@@ -3,6 +3,7 @@
 import { cn } from '@/lib/utils';
 import { Slot } from '@radix-ui/react-slot';
 import { type VariantProps, cva } from 'class-variance-authority';
+import { Check, Loader2 } from 'lucide-react';
 import * as React from 'react';
 
 /**
@@ -59,10 +60,42 @@ export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean;
+  loading?: boolean;
+  loadingLabel?: string;
+  success?: boolean;
+  successLabel?: string;
+  successDuration?: number;
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, style, ...props }, ref) => {
+  (
+    {
+      children,
+      className,
+      variant,
+      size,
+      asChild = false,
+      style,
+      disabled,
+      loading = false,
+      loadingLabel = 'Carregando…',
+      success = false,
+      successLabel = 'Concluído',
+      successDuration = 1200,
+      ...props
+    },
+    ref,
+  ) => {
+    const [showSuccess, setShowSuccess] = React.useState(false);
+
+    React.useEffect(() => {
+      if (!success) return;
+
+      setShowSuccess(true);
+      const timeout = window.setTimeout(() => setShowSuccess(false), successDuration);
+      return () => window.clearTimeout(timeout);
+    }, [success, successDuration]);
+
     const Comp = asChild ? Slot : 'button';
     const isDefault = !variant || variant === 'default';
     const mergedStyle = isDefault
@@ -73,11 +106,41 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       : style;
     return (
       <Comp
-        className={cn(buttonVariants({ variant, size, className }))}
+        aria-busy={!asChild && loading ? true : undefined}
+        className={cn(
+          buttonVariants({ variant, size, className }),
+          !asChild && showSuccess && 'tmx-button-success',
+        )}
+        data-feedback={!asChild && showSuccess ? 'success' : loading ? 'loading' : undefined}
+        disabled={!asChild ? disabled || loading || showSuccess : disabled}
         style={mergedStyle}
         ref={ref}
         {...props}
-      />
+      >
+        {asChild ? (
+          children
+        ) : (
+          <span
+            aria-live="polite"
+            className="tmx-button-content inline-flex items-center justify-center gap-2"
+            key={showSuccess ? 'success' : loading ? 'loading' : 'idle'}
+          >
+            {showSuccess ? (
+              <>
+                <Check aria-hidden className="tmx-check-icon" />
+                <span>{successLabel}</span>
+              </>
+            ) : loading ? (
+              <>
+                <Loader2 aria-hidden className="animate-spin" />
+                <span>{loadingLabel}</span>
+              </>
+            ) : (
+              children
+            )}
+          </span>
+        )}
+      </Comp>
     );
   },
 );
