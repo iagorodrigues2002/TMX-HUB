@@ -1,7 +1,8 @@
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 
 export interface CheckEntry {
-  status: 'ok' | 'fail';
+  status: 'ok' | 'warning' | 'fail';
+  optional?: true;
   detail?: string;
 }
 
@@ -21,6 +22,8 @@ export type HealthRouteOptions = {
 export async function checkReadiness(app: FastifyInstance): Promise<ReadinessDetails> {
   const checks: Record<string, CheckEntry> = {};
   let healthy = true;
+  const tolerateOptionalFailures =
+    process.env.NODE_ENV !== 'production' || process.env.READYZ_SKIP_OPTIONAL === 'true';
 
   try {
     const pong = await app.redis.ping();
@@ -43,10 +46,14 @@ export async function checkReadiness(app: FastifyInstance): Promise<ReadinessDet
 
   try {
     await app.storage.ping();
-    checks.s3 = { status: 'ok' };
+    checks.s3 = { status: 'ok', optional: true };
   } catch (err) {
-    checks.s3 = { status: 'fail', detail: (err as Error)?.message ?? 'unknown error' };
-    healthy = false;
+    checks.s3 = {
+      status: tolerateOptionalFailures ? 'warning' : 'fail',
+      optional: true,
+      detail: (err as Error)?.message ?? 'unknown error',
+    };
+    if (!tolerateOptionalFailures) healthy = false;
   }
 
   try {
@@ -54,20 +61,22 @@ export async function checkReadiness(app: FastifyInstance): Promise<ReadinessDet
     const exePath = playwrightMod.chromium.executablePath();
     const fs = await import('node:fs');
     if (fs.existsSync(exePath)) {
-      checks.browser = { status: 'ok', detail: exePath };
+      checks.browser = { status: 'ok', optional: true, detail: exePath };
     } else {
       checks.browser = {
-        status: 'fail',
+        status: tolerateOptionalFailures ? 'warning' : 'fail',
+        optional: true,
         detail: `executable missing at ${exePath} (PLAYWRIGHT_BROWSERS_PATH=${process.env.PLAYWRIGHT_BROWSERS_PATH ?? '<unset>'})`,
       };
-      healthy = false;
+      if (!tolerateOptionalFailures) healthy = false;
     }
   } catch (err) {
     checks.browser = {
-      status: 'fail',
+      status: tolerateOptionalFailures ? 'warning' : 'fail',
+      optional: true,
       detail: `playwright not loadable: ${(err as Error)?.message ?? 'unknown'}`,
     };
-    healthy = false;
+    if (!tolerateOptionalFailures) healthy = false;
   }
 
   return {

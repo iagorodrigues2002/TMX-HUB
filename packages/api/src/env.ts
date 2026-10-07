@@ -36,6 +36,7 @@ const EnvSchema = z.object({
   MAX_ASSET_BYTES: numberFromString.default(26_214_400),
   MAX_TOTAL_BYTES: numberFromString.default(262_144_000),
   BROWSER_POOL_SIZE: numberFromString.default(3),
+  READYZ_SKIP_OPTIONAL: booleanFromString.default(false),
 
   WEBHOOK_SECRET: z.string().default('dev-webhook-secret-change-me-in-production'),
   WEBHOOK_SECRET_PREV: z.string().min(1).optional(),
