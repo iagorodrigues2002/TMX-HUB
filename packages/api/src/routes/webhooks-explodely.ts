@@ -147,8 +147,12 @@ const plugin: FastifyPluginAsync<ExplodelyRouteOptions> = async (app, options) =
       const outcome = await persist({
         receiptId,
         transactionId,
-        payload,
-        rawBody: rawBody.toString('utf8'),
+        payload: env.WEBHOOK_PAYLOAD_SCRUB
+          ? (scrubWebhookPayload(payload) as ExplodelyPayload)
+          : payload,
+        rawBody: env.WEBHOOK_PAYLOAD_SCRUB
+          ? scrubWebhookRawPayload(rawBody.toString('utf8'), contentType)
+          : rawBody.toString('utf8'),
         contentType,
       });
       const enqueue =

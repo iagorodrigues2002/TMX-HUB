@@ -57,6 +57,25 @@ const BootstrapSchema = z.object({
   tracking_token: z.string().max(2048).optional(),
 });
 
+const ConsentRecordSchema = z.object({
+  public_key: z.string().min(16).max(128),
+  visitor_id: z.string().min(8).max(128),
+  consent: z.enum(['granted', 'denied']),
+  version: z.string().trim().min(1).max(64),
+  purposes: z
+    .array(
+      z
+        .string()
+        .trim()
+        .min(1)
+        .max(40)
+        .regex(/^[a-z][a-z0-9_-]*$/),
+    )
+    .max(16)
+    .default([]),
+  client_at: z.string().datetime().optional(),
+});
+
 const AbAssignmentSchema = z.object({
   public_key: z.string().min(8).max(120),
   visitor_id: z.string().min(8).max(120),
@@ -427,6 +446,33 @@ async function enqueueInitiateCheckout(
 }
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
+  app.post('/consent/record', { bodyLimit: 16 * 1024 }, async (req, reply) => {
+    if (!app.db) return reply.code(503).send({ recorded: false });
+    const parsed = ConsentRecordSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ recorded: false });
+    const input = parsed.data;
+    const [project] = await app.db<{ id: string }[]>`
+      SELECT id FROM tracking_projects
+      WHERE public_key=${input.public_key} AND enabled=true
+      LIMIT 1
+    `;
+    if (!project) return reply.code(404).send({ recorded: false });
+    const consentedAt = input.client_at ? new Date(input.client_at) : new Date();
+    await app.db`
+      INSERT INTO tracking_consents
+        (project_id,visitor_id,state,consent_version,purposes,consented_at)
+      VALUES
+        (${project.id},${input.visitor_id},${input.consent},${input.version},${input.purposes},${consentedAt})
+      ON CONFLICT(project_id,visitor_id) DO UPDATE SET
+        state=excluded.state,
+        consent_version=excluded.consent_version,
+        purposes=excluded.purposes,
+        consented_at=excluded.consented_at,
+        updated_at=now()
+    `;
+    return reply.send({ recorded: true, consent: input.consent });
+  });
+
   async function upsellDestinationForAccount(
     stage: {
       project_id: string;
@@ -1496,6 +1542,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       }
 
       const normalized = normalizeVendepay(req.body);
+      const receiptPayload = webhookPayloadForStorage(req.body, env.WEBHOOK_PAYLOAD_SCRUB);
       const receiptId = ulid();
       // Offers live in Redis (OfferStore), not Postgres — resolve the funnel
       // name here (route has app.offerStore) so it can be persisted onto the
@@ -1534,7 +1581,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           INSERT INTO webhook_receipts
             (id, connection_id, dedupe_key, payload, state, diagnostics)
           VALUES
-            (${receiptId}, ${connection.id}, ${normalized.dedupeKey}, ${sql.json(req.body as never)},
+            (${receiptId}, ${connection.id}, ${normalized.dedupeKey}, ${sql.json(receiptPayload as never)},
              ${normalized.kind}, ${sql.json(normalized.kind === 'quarantined' ? normalized.diagnostics : [])})
           ON CONFLICT (connection_id, dedupe_key) DO NOTHING
           RETURNING id
@@ -2090,12 +2137,13 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       const incoming = Array.isArray(req.body) ? req.body : [req.body];
       const payload = incoming[0];
       const normalized = normalizePaysight(payload);
+      const receiptPayload = webhookPayloadForStorage(payload, env.WEBHOOK_PAYLOAD_SCRUB);
       const receiptId = ulid();
       if (normalized.kind === 'quarantined') {
         await app.db`
           INSERT INTO tracking_gateway_webhook_receipts
             (id,gateway_connection_id,dedupe_key,payload,state,diagnostics)
-          VALUES(${receiptId},${connection.id},${normalized.dedupeKey},${app.db.json(payload as never)},'quarantined',${app.db.json(normalized.diagnostics)})
+          VALUES(${receiptId},${connection.id},${normalized.dedupeKey},${app.db.json(receiptPayload as never)},'quarantined',${app.db.json(normalized.diagnostics)})
           ON CONFLICT(gateway_connection_id,dedupe_key) DO NOTHING
         `;
         return reply.code(200).send({ accepted: true, state: 'quarantined' });
@@ -2105,7 +2153,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         const receipt = await sql`
           INSERT INTO tracking_gateway_webhook_receipts
             (id,gateway_connection_id,dedupe_key,payload,state)
-          VALUES(${receiptId},${connection.id},${normalized.dedupeKey},${sql.json(payload as never)},'received')
+          VALUES(${receiptId},${connection.id},${normalized.dedupeKey},${sql.json(receiptPayload as never)},'received')
           ON CONFLICT(gateway_connection_id,dedupe_key) DO NOTHING RETURNING id
         `;
         if (!receipt[0])
