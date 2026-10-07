@@ -227,7 +227,7 @@ export function RecoveryCenter() {
           </div>
         </div>
       </header>
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <section className="grid grid-cols-2 gap-3 xl:grid-cols-5">
         {[
           ['Elegíveis', r?.totals.eligible ?? 0],
           ['E-mails enviados', r?.email_metrics?.sent ?? 0],
@@ -238,9 +238,14 @@ export function RecoveryCenter() {
             `R$ ${(Number(r?.totals.recovered_minor ?? 0) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
           ],
         ].map(([label, value]) => (
-          <div key={label} className="tmx-kpi-card rounded-xl border border-white/[0.08] p-4">
+          <div
+            key={label}
+            className="tmx-kpi-card min-w-0 rounded-xl border border-white/[0.08] p-4"
+          >
             <p className="hud-label text-[9px]">{label}</p>
-            <p className="mono-num mt-3 text-xl text-white">{value}</p>
+            <p className="mono-num mt-3 min-w-0 break-words text-base text-white xl:text-xl">
+              {value}
+            </p>
           </div>
         ))}
       </section>
@@ -698,7 +703,7 @@ export function RecoveryCenter() {
             </p>
           </div>
         </div>
-        <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-7">
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 2xl:grid-cols-7">
           {[
             ['Enviados', r?.email_metrics?.sent ?? 0],
             ['Entregues', r?.email_metrics?.delivered ?? 0],
@@ -714,9 +719,14 @@ export function RecoveryCenter() {
               `R$ ${(Number(r?.email_metrics?.recovered_minor ?? 0) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
             ],
           ].map(([label, value]) => (
-            <div key={label} className="rounded-xl border border-white/[0.07] bg-black/10 p-3">
+            <div
+              key={label}
+              className="min-w-0 rounded-xl border border-white/[0.07] bg-black/10 p-3"
+            >
               <p className="hud-label text-[8px]">{label}</p>
-              <p className="mono-num mt-2 text-lg text-white">{value}</p>
+              <p className="mono-num mt-2 min-w-0 break-words text-base text-white xl:text-lg">
+                {value}
+              </p>
             </div>
           ))}
         </div>
