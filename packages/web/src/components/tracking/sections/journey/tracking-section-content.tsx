@@ -677,8 +677,8 @@ export type TrackingSectionId =
   | 'gateways'
   | 'meta'
   | 'utmify'
-  | 'google'
-  | 'tiktok'
+  | 'google-ads'
+  | 'tiktok-ads'
   | 'pushcut'
   | 'fees'
   | 'help';
@@ -691,7 +691,12 @@ const ADVANCED_QUERY_SECTIONS = new Set<TrackingSectionId>([
   'ab',
   'vturb',
 ]);
-const CONFIG_QUERY_SECTIONS = new Set<TrackingSectionId>(['gateways', 'meta', 'tiktok', 'utmify']);
+const CONFIG_QUERY_SECTIONS = new Set<TrackingSectionId>([
+  'gateways',
+  'meta',
+  'tiktok-ads',
+  'utmify',
+]);
 
 const sections: Array<{
   id: TrackingSectionId;
@@ -712,8 +717,8 @@ const sections: Array<{
   { id: 'gateways', label: 'Gateways', icon: Cable, group: 'Configuração' },
   { id: 'meta', label: 'Envio ao Meta', icon: Send, group: 'Configuração' },
   { id: 'utmify', label: 'Envio à UTMify', icon: Cable, group: 'Configuração' },
-  { id: 'google', label: 'Google Ads', icon: Globe2, group: 'Configuração' },
-  { id: 'tiktok', label: 'TikTok Ads', icon: RadioTower, group: 'Configuração' },
+  { id: 'google-ads', label: 'Google Ads', icon: Globe2, group: 'Configuração' },
+  { id: 'tiktok-ads', label: 'TikTok Ads', icon: RadioTower, group: 'Configuração' },
   { id: 'pushcut', label: 'Notificações Pushcut', icon: BellRing, group: 'Configuração' },
   { id: 'fees', label: 'Taxas e líquido', icon: Percent, group: 'Configuração' },
   { id: 'help', label: 'Ajuda e testes', icon: HelpCircle, group: 'Configuração' },
@@ -745,7 +750,7 @@ const trackingAreas: Array<{
     id: 'integrations',
     label: 'Integrações',
     icon: Cable,
-    sections: ['gateways', 'pixels', 'meta', 'utmify', 'vturb', 'google', 'tiktok'],
+    sections: ['gateways', 'pixels', 'meta', 'utmify', 'vturb', 'google-ads', 'tiktok-ads'],
   },
   { id: 'finance', label: 'Financeiro', icon: Percent, sections: ['refunds', 'fees'] },
   { id: 'automations', label: 'Automações', icon: BellRing, sections: ['pushcut'] },
@@ -1231,7 +1236,7 @@ export function TrackingSectionContent({
   const tiktokDestinations = useQuery({
     queryKey: ['tiktok-destinations', offerId],
     queryFn: () => apiClient.tiktokDestinations(offerId),
-    enabled: section === 'tiktok' && Boolean(config.data?.configured),
+    enabled: section === 'tiktok-ads' && Boolean(config.data?.configured),
     retry: false,
     staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
@@ -1769,7 +1774,7 @@ export function TrackingSectionContent({
       ready: hasConversionDestination,
       target:
         hasActiveTikTokDestination && !hasActiveMetaDestination
-          ? ('tiktok' as TrackingSectionId)
+          ? ('tiktok-ads' as TrackingSectionId)
           : hasActiveMetaDestination
             ? ('pixels' as TrackingSectionId)
             : ('utmify' as TrackingSectionId),
@@ -3378,7 +3383,7 @@ export function TrackingSectionContent({
               </div>
             </Module>
           )}
-          {section === 'google' && (
+          {section === 'google-ads' && (
             <Module
               title="Google Ads"
               description="Contas e ações de conversão independentes por oferta."
@@ -3386,7 +3391,7 @@ export function TrackingSectionContent({
               <GoogleAdsDestinations key={offerId} offerId={offerId} />
             </Module>
           )}
-          {section === 'tiktok' && (
+          {section === 'tiktok-ads' && (
             <Module
               title="TikTok Ads"
               description="Pixels e Events API independentes por oferta, com teste sem venda real."

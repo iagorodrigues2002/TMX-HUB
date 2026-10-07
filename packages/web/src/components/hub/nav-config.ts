@@ -153,7 +153,7 @@ export const NAV_ITEMS: NavItem[] = [
       {
         id: 'tracking-diagnostics',
         label: 'Diagnóstico',
-        href: '/tracking?view=diagnostics',
+        href: '/tracking?view=finance&section=health',
         icon: Bug,
         group: 'Rastreamento',
         ...trackingTool,
@@ -237,7 +237,7 @@ export const NAV_ITEMS: NavItem[] = [
       {
         id: 'integration-payments',
         label: 'Pagamentos e webhooks',
-        href: '/tracking?view=destinations&section=payments',
+        href: '/tracking?view=finance&section=payments',
         icon: CreditCard,
         group: 'Integrações',
         ...trackingTool,

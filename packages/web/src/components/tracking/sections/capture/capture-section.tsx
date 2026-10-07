@@ -8,7 +8,6 @@ import {
 const CAPTURE_SECTION: Record<string, TrackingSectionId> = {
   'code-pixels': 'code',
   domains: 'domains',
-  vturb: 'vturb',
 };
 
 export function CaptureSection({

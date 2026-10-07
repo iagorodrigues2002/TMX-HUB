@@ -7,9 +7,10 @@ import {
 
 const DESTINATION_SECTION: Record<string, TrackingSectionId> = {
   meta: 'meta',
-  'tiktok-ads': 'tiktok',
+  'tiktok-ads': 'tiktok-ads',
   utmify: 'utmify',
-  'google-ads': 'google',
+  'google-ads': 'google-ads',
+  vturb: 'vturb',
   pushcut: 'pushcut',
 };
 

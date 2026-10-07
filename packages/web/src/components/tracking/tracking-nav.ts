@@ -125,12 +125,6 @@ export const TRACKING_NAV: TrackingNavArea[] = [
         description: 'Origens autorizadas e subdomínio TMX.',
         icon: Globe2,
       },
-      {
-        id: 'vturb',
-        label: 'vTurb',
-        description: 'Player, retenção e conversões da VSL.',
-        icon: Video,
-      },
     ],
   },
   {
@@ -162,6 +156,12 @@ export const TRACKING_NAV: TrackingNavArea[] = [
         label: 'Google Ads',
         description: 'Conta e ações de conversão.',
         icon: Globe2,
+      },
+      {
+        id: 'vturb',
+        label: 'vTurb',
+        description: 'Player, retenção e conversões da VSL.',
+        icon: Video,
       },
       {
         id: 'pushcut',
@@ -237,9 +237,8 @@ export function resolveTrackingSection(view: TrackingView, value: string | null)
 }
 
 /**
- * Compatibility aliases published by the shared navigation contract from Lote A.
- * They keep old command-palette/sidebar deep-links working while the tracking
- * workspace presents the new five-area information architecture.
+ * Compatibility aliases keep previously published deep-links working while
+ * every current navigation surface uses the canonical view and section IDs.
  */
 export function resolveTrackingLocation(viewValue: string | null, sectionValue: string | null) {
   if (viewValue === 'diagnostics') {
@@ -250,9 +249,6 @@ export function resolveTrackingLocation(viewValue: string | null, sectionValue: 
   }
   if (viewValue === 'destinations' && sectionValue === 'payments') {
     return { view: 'finance' as const, section: 'payments' };
-  }
-  if (viewValue === 'destinations' && sectionValue === 'vturb') {
-    return { view: 'capture' as const, section: 'vturb' };
   }
   const view: TrackingView = isTrackingView(viewValue) ? viewValue : 'overview';
   return { view, section: resolveTrackingSection(view, sectionValue) };
