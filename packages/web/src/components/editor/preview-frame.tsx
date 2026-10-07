@@ -1,9 +1,9 @@
 'use client';
 
-import { useMemo } from 'react';
-import type { CloneStatus } from '@page-cloner/shared';
 import { apiClient } from '@/lib/api-client';
+import type { CloneStatus } from '@page-cloner/shared';
 import { Loader2 } from 'lucide-react';
+import { useMemo } from 'react';
 
 interface PreviewFrameProps {
   jobId: string;
@@ -15,14 +15,13 @@ export function PreviewFrame({ jobId, status }: PreviewFrameProps) {
 
   if (status !== 'ready') {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-[#04101A]/40">
+      <div className="flex h-full w-full items-center justify-center bg-background/40">
         <div className="flex flex-col items-center gap-4">
           <span
             aria-hidden
             className="grid h-14 w-14 place-items-center rounded-full border border-cyan-300/30 shadow-[0_0_24px_rgba(34,211,238,0.25)]"
             style={{
-              background:
-                'linear-gradient(135deg, rgba(20,184,166,0.18), rgba(34,211,238,0.05))',
+              background: 'linear-gradient(135deg, rgba(20,184,166,0.18), rgba(34,211,238,0.05))',
             }}
           >
             <Loader2 className="h-6 w-6 animate-spin text-cyan-300" />

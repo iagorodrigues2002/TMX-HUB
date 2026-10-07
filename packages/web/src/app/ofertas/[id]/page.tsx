@@ -62,45 +62,45 @@ function WindowMetrics({ metrics, currency }: { metrics: MetricsView; currency: 
     <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
       <div>
         <dt className="hud-label">Investido</dt>
-        <dd className="mt-1 font-mono text-[15px] text-amber-300">
+        <dd className="mt-1 font-mono text-base text-amber-300">
           {formatCurrency(metrics.spend, currency)}
         </dd>
       </div>
       <div>
         <dt className="hud-label">Vendas</dt>
-        <dd className="mt-1 font-mono text-[15px] text-emerald-300">{formatInt(metrics.sales)}</dd>
+        <dd className="mt-1 font-mono text-base text-emerald-300">{formatInt(metrics.sales)}</dd>
       </div>
       <div>
         <dt className="hud-label">CPA</dt>
-        <dd className="mt-1 font-mono text-[15px] text-white/85">
+        <dd className="mt-1 font-mono text-base text-white/85">
           {formatCurrency(metrics.cpa, currency)}
         </dd>
       </div>
       <div>
         <dt className="hud-label">IC</dt>
-        <dd className="mt-1 font-mono text-[15px] text-cyan-300">{formatInt(metrics.ic)}</dd>
+        <dd className="mt-1 font-mono text-base text-cyan-300">{formatInt(metrics.ic)}</dd>
       </div>
       <div>
         <dt className="hud-label">Faturamento</dt>
-        <dd className="mt-1 font-mono text-[15px] text-emerald-300">
+        <dd className="mt-1 font-mono text-base text-emerald-300">
           {formatCurrency(metrics.revenue, currency)}
         </dd>
       </div>
       <div>
         <dt className="hud-label">CPA IC</dt>
-        <dd className="mt-1 font-mono text-[15px] text-white/85">
+        <dd className="mt-1 font-mono text-base text-white/85">
           {formatCurrency(metrics.icCpa, currency)}
         </dd>
       </div>
       <div>
         <dt className="hud-label">Conv. IC</dt>
-        <dd className="mt-1 font-mono text-[15px] text-white/85">
+        <dd className="mt-1 font-mono text-base text-white/85">
           {formatPercent(metrics.conversionRate)}
         </dd>
       </div>
       <div>
         <dt className="hud-label">ROAS</dt>
-        <dd className="mt-1 font-mono text-[15px] text-cyan-300">{formatRoas(metrics.roas)}</dd>
+        <dd className="mt-1 font-mono text-base text-cyan-300">{formatRoas(metrics.roas)}</dd>
       </div>
     </dl>
   );
@@ -341,7 +341,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link href="/ofertas" className="gap-1">
             <ArrowLeft className="h-4 w-4" />
-            <span className="text-[11px] font-semibold uppercase tracking-[0.18em]">
+            <span className="text-xs font-semibold uppercase tracking-[0.18em]">
               Todas as ofertas
             </span>
           </Link>
@@ -356,7 +356,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-white">{offerName}</h1>
           {offer?.dashboardId && canManage && (
-            <p className="font-mono text-[11px] text-white/40">
+            <p className="font-mono text-xs text-white/40">
               utmify dashboardId: {offer.dashboardId} · moeda: {currency}
             </p>
           )}
@@ -381,7 +381,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 [&::-webkit-details-marker]:hidden">
             <div>
               <p className="hud-label">Conta de anúncios via UTMify</p>
-              <p className="mt-1 text-[12px] text-white/55">
+              <p className="mt-1 text-xs text-white/55">
                 {capabilitiesQuery.data?.accountFields.length ?? 0} conta(s) identificada(s) ·
                 clique para abrir
               </p>
@@ -400,20 +400,20 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                     key={JSON.stringify(account)}
                     className="rounded-lg border border-white/[0.06] bg-black/10 px-3 py-3"
                   >
-                    <p className="mb-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-cyan-300/70">
+                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-300/70">
                       Conta {index + 1}
                     </p>
                     <div className="space-y-2">
                       {Object.entries(account).map(([key, value]) => (
                         <div key={key}>
-                          <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-white/35">
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35">
                             {key === 'accountId'
                               ? 'ID da conta'
                               : key === 'accountStatus'
                                 ? 'Status da conta'
                                 : key}
                           </p>
-                          <p className="mt-1 truncate font-mono text-[12px] text-white/80">
+                          <p className="mt-1 truncate font-mono text-xs text-white/80">
                             {String(value)}
                           </p>
                         </div>
@@ -423,11 +423,11 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                 ))}
               </div>
             ) : capabilitiesQuery.isSuccess ? (
-              <p className="mt-3 text-[12px] text-amber-200/75">
+              <p className="mt-3 text-xs text-amber-200/75">
                 O endpoint de anúncios não retornou nome nem status da conta neste período.
               </p>
             ) : capabilitiesQuery.isError ? (
-              <p className="mt-3 text-[12px] text-rose-200/75">
+              <p className="mt-3 text-xs text-danger/75">
                 Não foi possível inspecionar os campos da conta agora.
               </p>
             ) : null}
@@ -513,7 +513,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
           <section className="glass-card overflow-hidden p-0">
             <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3">
               <div>
-                <h3 className="text-[14px] font-semibold text-white">Anúncios</h3>
+                <h3 className="text-sm font-semibold text-white">Anúncios</h3>
                 <p className="mt-0.5 text-[10px] uppercase tracking-[0.14em] text-white/40">
                   Dados UTMify em nível de ad
                 </p>
@@ -529,14 +529,14 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
               </div>
             </header>
             {adTotals.length === 0 ? (
-              <div className="p-8 text-center text-[13px] text-white/45">
+              <div className="p-8 text-center text-sm text-white/45">
                 {adSearch
                   ? 'Nenhum anúncio corresponde à busca.'
                   : 'Os anúncios aparecerão após a primeira sincronização UTMify.'}
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-[12px]">
+                <table className="w-full text-xs">
                   <thead className="bg-white/[0.03] text-left text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
                     <tr>
                       <th className="px-3 py-2">Anúncio</th>
@@ -591,16 +591,16 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
 
           <section className="glass-card overflow-hidden p-0">
             <header className="flex items-baseline justify-between border-b border-white/[0.06] px-4 py-3">
-              <h3 className="text-[14px] font-semibold text-white">Série diária</h3>
+              <h3 className="text-sm font-semibold text-white">Série diária</h3>
               <span className="hud-label">{data.snapshots.length} dia(s)</span>
             </header>
             {data.snapshots.length === 0 ? (
-              <div className="p-8 text-center text-[13px] text-white/45">
+              <div className="p-8 text-center text-sm text-white/45">
                 Nenhum dado sincronizado nesse período. Verifique a conexão UTMify da oferta.
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-[12px]">
+                <table className="w-full text-xs">
                   <thead className="bg-white/[0.03] text-left text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
                     <tr>
                       <th className="px-3 py-2">Data</th>
@@ -653,13 +653,13 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
           {adsetTotals.length > 0 && (
             <section className="glass-card overflow-hidden p-0">
               <header className="flex items-baseline justify-between border-b border-white/[0.06] px-4 py-3">
-                <h3 className="text-[14px] font-semibold text-white">Adsets</h3>
+                <h3 className="text-sm font-semibold text-white">Adsets</h3>
                 <span className="hud-label">
                   {adsetTotals.length} no período · ranqueado por faturamento
                 </span>
               </header>
               <div className="overflow-x-auto">
-                <table className="w-full text-[12px]">
+                <table className="w-full text-xs">
                   <thead className="bg-white/[0.03] text-left text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
                     <tr>
                       <th className="px-3 py-2">Adset</th>
@@ -716,7 +716,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
               <Clock3 className="h-4 w-4 text-cyan-300" />
               <h2 className="text-[16px] font-semibold text-white">Janelas intradiárias</h2>
             </div>
-            <p className="mt-1 text-[12px] text-white/45">
+            <p className="mt-1 text-xs text-white/45">
               Checkpoints a cada 30 minutos · janelas fixas de 2 horas · horário de São Paulo ·
               selecione um período pra somar vários dias
             </p>
@@ -774,14 +774,14 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
           <button
             type="button"
             onClick={() => setIntradayMode('overview')}
-            className={`rounded-md px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] transition ${intradayMode === 'overview' ? 'bg-cyan-300/15 text-cyan-200' : 'text-white/45 hover:text-white/75'}`}
+            className={`rounded-md px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] transition ${intradayMode === 'overview' ? 'bg-cyan-300/15 text-cyan-200' : 'text-white/45 hover:text-white/75'}`}
           >
             Visão geral
           </button>
           <button
             type="button"
             onClick={() => setIntradayMode('ads')}
-            className={`rounded-md px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] transition ${intradayMode === 'ads' ? 'bg-cyan-300/15 text-cyan-200' : 'text-white/45 hover:text-white/75'}`}
+            className={`rounded-md px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] transition ${intradayMode === 'ads' ? 'bg-cyan-300/15 text-cyan-200' : 'text-white/45 hover:text-white/75'}`}
           >
             Por anúncios
           </button>
@@ -812,7 +812,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                     ? `Acumulado no período · ${new Date(`${intradayFrom}T12:00:00`).toLocaleDateString('pt-BR')} a ${new Date(`${intradayTo}T12:00:00`).toLocaleDateString('pt-BR')}`
                     : `Janela geral · ${new Date(`${intradayFrom}T12:00:00`).toLocaleDateString('pt-BR')}`}
                 </p>
-                <p className="mt-1 text-[12px] text-white/45">
+                <p className="mt-1 text-xs text-white/45">
                   {isIntradayRange
                     ? `Soma de ${'days' in intraday ? intraday.days : 0} dia(s)`
                     : 'Acumulado desde 00h'}
@@ -826,12 +826,12 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                       <p className="hud-label">
                         {intradayFrom === todayIso() ? 'Janela atual' : 'Última janela disponível'}
                       </p>
-                      <p className="mt-1 text-[12px] text-white/45">
+                      <p className="mt-1 text-xs text-white/45">
                         {currentWindow?.label ?? 'Aguardando checkpoint'}
                       </p>
                     </div>
                     {currentWindow?.partial && (
-                      <span className="rounded-full border border-amber-300/20 px-2 py-1 text-[9px] uppercase tracking-[0.12em] text-amber-200">
+                      <span className="rounded-full border border-amber-300/20 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-amber-200">
                         Parcial
                       </span>
                     )}
@@ -839,7 +839,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                   {currentWindow?.available ? (
                     <WindowMetrics metrics={currentWindow.metrics} currency={currency} />
                   ) : (
-                    <p className="mt-5 text-[12px] text-white/45">
+                    <p className="mt-5 text-xs text-white/45">
                       É necessário um checkpoint anterior ao início da janela para calcular a
                       diferença.
                     </p>
@@ -850,8 +850,8 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
 
             <div className="glass-card overflow-hidden p-0">
               <header className="border-b border-white/[0.06] px-4 py-3">
-                <h3 className="text-[14px] font-semibold text-white">Janelas de 2 horas</h3>
-                <p className="mt-1 text-[11px] text-white/40">
+                <h3 className="text-sm font-semibold text-white">Janelas de 2 horas</h3>
+                <p className="mt-1 text-xs text-white/40">
                   Cada valor representa somente o que aconteceu dentro daquela faixa.
                 </p>
               </header>
@@ -859,17 +859,17 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                 {intraday.windows.map((window) => (
                   <article key={window.index} className="bg-[#07151b] p-4">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="font-mono text-[13px] font-semibold text-white/85">
+                      <p className="font-mono text-sm font-semibold text-white/85">
                         {window.label}
                       </p>
-                      <span className="text-[9px] uppercase tracking-[0.12em] text-white/30">
+                      <span className="text-[10px] uppercase tracking-[0.12em] text-white/30">
                         {isIntradayRange && 'daysAvailable' in window
                           ? `${window.daysAvailable}/${'days' in intraday ? intraday.days : 0} dias`
                           : `${window.samples} coleta(s)`}
                       </span>
                     </div>
                     {window.available ? (
-                      <dl className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+                      <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
                         <div>
                           <dt className="text-white/35">Investido</dt>
                           <dd className="font-mono text-amber-300">
@@ -904,7 +904,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                         </div>
                       </dl>
                     ) : (
-                      <p className="mt-3 text-[11px] text-white/30">
+                      <p className="mt-3 text-xs text-white/30">
                         {window.partial
                           ? 'Coleta iniciada no meio desta janela.'
                           : 'Sem dados coletados.'}
@@ -918,17 +918,15 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
             <div className="glass-card p-4">
               <div className="flex flex-wrap items-end gap-3">
                 <div className="mr-auto">
-                  <h3 className="text-[14px] font-semibold text-white">Comparar janelas</h3>
-                  <p className="mt-1 text-[11px] text-white/40">
-                    Selecione duas faixas já calculadas.
-                  </p>
+                  <h3 className="text-sm font-semibold text-white">Comparar janelas</h3>
+                  <p className="mt-1 text-xs text-white/40">Selecione duas faixas já calculadas.</p>
                 </div>
                 <Label className="space-y-1">
                   <span className="hud-label">Janela A</span>
                   <select
                     value={compareLeft}
                     onChange={(event) => setCompareLeft(event.target.value)}
-                    className="block h-9 rounded-md border border-white/10 bg-[#0b1b22] px-3 text-[12px] text-white"
+                    className="block h-9 rounded-md border border-white/10 bg-bg-elevated px-3 text-xs text-white"
                   >
                     <option value="">Anterior disponível</option>
                     {availableWindows.map((window) => (
@@ -943,7 +941,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                   <select
                     value={compareRight}
                     onChange={(event) => setCompareRight(event.target.value)}
-                    className="block h-9 rounded-md border border-white/10 bg-[#0b1b22] px-3 text-[12px] text-white"
+                    className="block h-9 rounded-md border border-white/10 bg-bg-elevated px-3 text-xs text-white"
                   >
                     <option value="">Mais recente disponível</option>
                     {availableWindows.map((window) => (
@@ -961,7 +959,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                       key={window.index}
                       className="rounded-xl border border-white/[0.06] bg-black/10 p-4"
                     >
-                      <p className="font-mono text-[13px] font-semibold text-cyan-200">
+                      <p className="font-mono text-sm font-semibold text-cyan-200">
                         {window.label}
                       </p>
                       <WindowMetrics metrics={window.metrics} currency={currency} />
@@ -969,7 +967,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                   ))}
                 </div>
               ) : (
-                <p className="mt-4 text-[12px] text-white/40">
+                <p className="mt-4 text-xs text-white/40">
                   A comparação ficará disponível após duas janelas completas.
                 </p>
               )}
@@ -979,8 +977,8 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
           <div className="glass-card overflow-hidden p-0">
             <header className="flex flex-wrap items-end gap-3 border-b border-white/[0.06] px-4 py-4">
               <div className="mr-auto">
-                <h3 className="text-[14px] font-semibold text-white">Desempenho por anúncio</h3>
-                <p className="mt-1 text-[11px] text-white/40">
+                <h3 className="text-sm font-semibold text-white">Desempenho por anúncio</h3>
+                <p className="mt-1 text-xs text-white/40">
                   Anúncios com o mesmo nome são agrupados em uma única linha.
                 </p>
               </div>
@@ -989,7 +987,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                 <select
                   value={intradayAdWindow}
                   onChange={(event) => setIntradayAdWindow(event.target.value)}
-                  className="block h-10 min-w-[190px] rounded-md border border-white/10 bg-[#0b1b22] px-3 text-[12px] text-white"
+                  className="block h-10 min-w-[190px] rounded-md border border-white/10 bg-bg-elevated px-3 text-xs text-white"
                 >
                   <option value="overall">
                     {isIntradayRange ? 'Acumulado do período' : 'Acumulado do dia'}
@@ -1015,7 +1013,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
             </header>
 
             {selectedAdWindow?.adsPartial && (
-              <div className="border-b border-amber-300/10 bg-amber-300/[0.04] px-4 py-3 text-[11px] text-amber-100/70">
+              <div className="border-b border-amber-300/10 bg-amber-300/[0.04] px-4 py-3 text-xs text-amber-100/70">
                 Janela parcial: o cálculo começa no primeiro checkpoint com anúncios disponível
                 nesta faixa.
               </div>
@@ -1023,7 +1021,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
 
             {filteredIntradayAds.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="w-full text-[12px]">
+                <table className="w-full text-xs">
                   <thead className="bg-white/[0.03] text-left text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
                     <tr>
                       <th className="px-4 py-3">Anúncio</th>
@@ -1075,7 +1073,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                 </table>
               </div>
             ) : (
-              <div className="px-4 py-12 text-center text-[12px] text-white/40">
+              <div className="px-4 py-12 text-center text-xs text-white/40">
                 {intradayAdSearch.trim()
                   ? 'Nenhum anúncio encontrado nesta janela.'
                   : 'Aguardando checkpoints com dados de anúncios para esta janela.'}
@@ -1085,10 +1083,8 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
             <section className="border-t border-cyan-300/10">
               <header className="flex flex-wrap items-end gap-3 px-4 py-4">
                 <div className="mr-auto">
-                  <h3 className="text-[14px] font-semibold text-white">
-                    Comparar janelas por anúncio
-                  </h3>
-                  <p className="mt-1 text-[11px] text-white/40">
+                  <h3 className="text-sm font-semibold text-white">Comparar janelas por anúncio</h3>
+                  <p className="mt-1 text-xs text-white/40">
                     Compare o mesmo anúncio em duas faixas de 2 horas.
                   </p>
                 </div>
@@ -1097,7 +1093,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                   <select
                     value={adCompareLeft}
                     onChange={(event) => setAdCompareLeft(event.target.value)}
-                    className="block h-9 min-w-[150px] rounded-md border border-white/10 bg-[#0b1b22] px-3 text-[12px] text-white"
+                    className="block h-9 min-w-[150px] rounded-md border border-white/10 bg-bg-elevated px-3 text-xs text-white"
                   >
                     <option value="">Anterior disponível</option>
                     {availableAdWindows.map((window) => (
@@ -1112,7 +1108,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                   <select
                     value={adCompareRight}
                     onChange={(event) => setAdCompareRight(event.target.value)}
-                    className="block h-9 min-w-[150px] rounded-md border border-white/10 bg-[#0b1b22] px-3 text-[12px] text-white"
+                    className="block h-9 min-w-[150px] rounded-md border border-white/10 bg-bg-elevated px-3 text-xs text-white"
                   >
                     <option value="">Mais recente disponível</option>
                     {availableAdWindows.map((window) => (
@@ -1126,8 +1122,8 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
 
               {leftAdWindow?.adsAvailable && rightAdWindow?.adsAvailable ? (
                 <div className="overflow-x-auto border-t border-white/[0.05]">
-                  <table className="w-full text-[11px]">
-                    <thead className="bg-white/[0.03] text-[9px] font-semibold uppercase tracking-[0.14em] text-white/50">
+                  <table className="w-full text-xs">
+                    <thead className="bg-white/[0.03] text-[10px] font-semibold uppercase tracking-[0.14em] text-white/50">
                       <tr>
                         <th rowSpan={2} className="px-4 py-3 text-left">
                           Anúncio
@@ -1204,7 +1200,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                   </table>
                 </div>
               ) : (
-                <p className="border-t border-white/[0.05] px-4 py-8 text-center text-[12px] text-white/40">
+                <p className="border-t border-white/[0.05] px-4 py-8 text-center text-xs text-white/40">
                   A comparação por anúncio ficará disponível após duas janelas com checkpoints de
                   anúncios.
                 </p>

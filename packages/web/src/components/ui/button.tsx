@@ -28,16 +28,16 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: [
-          'border border-cyan-200/20 text-[#031516] shadow-[0_0_12px_rgba(34,211,238,0.25),inset_0_1px_0_rgba(255,255,255,.28)]',
+          'border border-cyan-200/20 text-accent-on shadow-[0_0_12px_rgba(34,211,238,0.25),inset_0_1px_0_rgba(255,255,255,.28)]',
           'hover:brightness-110 hover:shadow-[0_0_24px_rgba(34,211,238,0.42)]',
         ].join(' '),
         secondary:
           'bg-cyan-100/[0.07] text-white border border-cyan-100/[0.12] hover:bg-cyan-100/[0.12] hover:border-cyan-100/20',
         outline:
-          'bg-[#071720]/65 text-white border border-cyan-100/[0.16] shadow-[inset_0_1px_0_rgba(255,255,255,.025)] hover:bg-cyan-100/[0.07] hover:border-cyan-300/45 hover:shadow-[0_0_18px_rgba(34,211,238,.08)]',
+          'bg-bg-elevated/65 text-white border border-cyan-100/[0.16] shadow-[inset_0_1px_0_rgba(255,255,255,.025)] hover:bg-cyan-100/[0.07] hover:border-cyan-300/45 hover:shadow-[0_0_18px_rgba(34,211,238,.08)]',
         ghost: 'text-white/70 hover:bg-white/[0.04] hover:text-white normal-case tracking-normal',
         destructive:
-          'bg-rose-500/90 text-white hover:bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.25)]',
+          'bg-danger/90 text-white hover:bg-danger shadow-[0_0_12px_rgba(244,63,94,0.25)]',
         link: 'text-cyan-300 underline-offset-4 hover:underline normal-case tracking-normal',
       },
       size: {
@@ -66,7 +66,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     const isDefault = !variant || variant === 'default';
     const mergedStyle = isDefault
       ? {
-          backgroundImage: 'linear-gradient(90deg, #0E7C86 0%, #22D3EE 100%)',
+          backgroundImage: 'linear-gradient(90deg, var(--accent-from) 0%, var(--accent-to) 100%)',
           ...style,
         }
       : style;

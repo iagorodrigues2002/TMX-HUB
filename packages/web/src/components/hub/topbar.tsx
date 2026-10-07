@@ -43,13 +43,14 @@ export function Topbar({ breadcrumb, right }: TopbarProps) {
             <span
               className="bg-clip-text text-transparent"
               style={{
-                backgroundImage: 'linear-gradient(90deg, #0E7C86 0%, #22D3EE 100%)',
+                backgroundImage:
+                  'linear-gradient(90deg, var(--accent-from) 0%, var(--accent-to) 100%)',
               }}
             >
               HUB
             </span>
           </span>
-          <span className="hidden text-[9px] font-semibold uppercase tracking-[0.16em] text-white/55 sm:block">
+          <span className="hidden text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55 sm:block">
             TERMINAL DE CONTROLE
           </span>
         </span>
@@ -58,7 +59,7 @@ export function Topbar({ breadcrumb, right }: TopbarProps) {
       {breadcrumb && breadcrumb.length > 0 && (
         <nav
           aria-label="Breadcrumb"
-          className="hidden items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40 md:flex"
+          className="hidden items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-white/40 md:flex"
         >
           <span aria-hidden className="text-white/40">
             /

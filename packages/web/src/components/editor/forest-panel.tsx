@@ -1,12 +1,12 @@
 'use client';
 
-import { Search } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import type { Form, Link } from '@page-cloner/shared';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSelectionStore } from '@/lib/selection-store';
 import { cn, truncate } from '@/lib/utils';
+import type { Form, Link } from '@page-cloner/shared';
+import { Search } from 'lucide-react';
+import { useMemo, useState } from 'react';
 
 interface ForestPanelProps {
   forms: Form[];
@@ -44,7 +44,7 @@ export function ForestPanel({ forms, links, isLoading }: ForestPanelProps) {
   }, [links, q]);
 
   return (
-    <div className="flex h-full flex-col bg-[#04101A]/40">
+    <div className="flex h-full flex-col bg-background/40">
       <div className="border-b border-white/[0.06] p-3">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/40" />
@@ -64,12 +64,8 @@ export function ForestPanel({ forms, links, isLoading }: ForestPanelProps) {
       >
         <div className="px-3 pt-3">
           <TabsList>
-            <TabsTrigger value="forms">
-              Forms · {forms.length}
-            </TabsTrigger>
-            <TabsTrigger value="links">
-              Links · {links.length}
-            </TabsTrigger>
+            <TabsTrigger value="forms">Forms · {forms.length}</TabsTrigger>
+            <TabsTrigger value="links">Links · {links.length}</TabsTrigger>
           </TabsList>
         </div>
 
@@ -171,9 +167,7 @@ export function ForestPanel({ forms, links, isLoading }: ForestPanelProps) {
                         </span>
                         <span className="block truncate pt-0.5 font-mono text-[10px] text-white/40">
                           {truncate(l.currentHref || l.originalHref, 44)}
-                          {l.isCta && (
-                            <span className="ml-1 text-cyan-300/80"> · CTA</span>
-                          )}
+                          {l.isCta && <span className="ml-1 text-cyan-300/80"> · CTA</span>}
                         </span>
                       </span>
                     </button>

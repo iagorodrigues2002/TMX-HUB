@@ -83,8 +83,8 @@ export function RefundsDashboard() {
       <section className="tmx-command-hero rounded-2xl border border-cyan-300/15 p-5 sm:p-7">
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div className="flex gap-4">
-            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl border border-rose-300/25 bg-rose-400/[.08]">
-              <RotateCcw className="h-5 w-5 text-rose-200" />
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl border border-danger/25 bg-danger/[.08]">
+              <RotateCcw className="h-5 w-5 text-danger" />
             </div>
             <div>
               <p className="hud-label">Inteligência financeira</p>
@@ -131,7 +131,7 @@ export function RefundsDashboard() {
               aria-describedby={offers.isError ? 'refund-offers-error' : undefined}
               value={offerId}
               onChange={(e) => setOfferId(e.target.value)}
-              className="h-10 w-full rounded-lg border border-cyan-100/[.16] bg-[#071720] px-3 text-sm text-white"
+              className="h-10 w-full rounded-lg border border-cyan-100/[.16] bg-bg-elevated px-3 text-sm text-white"
             >
               <option value="">Todas as ofertas</option>
               {offers.data?.map((offer) => (
@@ -147,7 +147,7 @@ export function RefundsDashboard() {
               id="refunds-product"
               value={product}
               onChange={(e) => setProduct(e.target.value)}
-              className="h-10 w-full rounded-lg border border-cyan-100/[.16] bg-[#071720] px-3 text-sm text-white"
+              className="h-10 w-full rounded-lg border border-cyan-100/[.16] bg-bg-elevated px-3 text-sm text-white"
             >
               <option value="">Todos os produtos</option>
               {products.map((item) => (
@@ -163,7 +163,7 @@ export function RefundsDashboard() {
               id="refunds-vendepay"
               value={vendepay}
               onChange={(e) => setVendepay(e.target.value as '' | 'mainex' | 'cobrak')}
-              className="h-10 w-full rounded-lg border border-cyan-100/[.16] bg-[#071720] px-3 text-sm text-white"
+              className="h-10 w-full rounded-lg border border-cyan-100/[.16] bg-bg-elevated px-3 text-sm text-white"
             >
               <option value="">Todas as VendePay</option>
               <option value="mainex">VendePay Mainex</option>
@@ -260,14 +260,14 @@ export function RefundsDashboard() {
               label="Chargebacks"
               value={pick(data?.totals.chargeback_brl_minor)}
               detail={`${data?.totals.chargeback_orders ?? 0} ocorrências`}
-              tone="rose"
+              tone="danger"
             />
             <Kpi
               icon={ArrowDownRight}
               label="Impacto total"
               value={pick(data?.totals.brl_minor)}
               detail={`${data?.totals.count ?? 0} reversões`}
-              tone="rose"
+              tone="danger"
             />
             <Kpi
               icon={BadgeDollarSign}
@@ -282,7 +282,7 @@ export function RefundsDashboard() {
             />
           </section>
 
-          <section className="rounded-2xl border border-cyan-200/[.12] bg-[#071720]/70 p-5">
+          <section className="rounded-2xl border border-cyan-200/[.12] bg-bg-elevated/70 p-5">
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
                 <p className="hud-label">Origem da reversão</p>
@@ -291,7 +291,7 @@ export function RefundsDashboard() {
                 </h2>
               </div>
               {leadingVendepay ? (
-                <p className="rounded-full border border-rose-300/20 bg-rose-400/[.08] px-3 py-1.5 text-xs text-rose-100">
+                <p className="rounded-full border border-danger/20 bg-danger/[.08] px-3 py-1.5 text-xs text-danger">
                   Maior impacto:{' '}
                   <span className="font-semibold">{leadingVendepay.connection_name}</span> ·{' '}
                   {pick(leadingVendepay.brl_minor)}
@@ -315,7 +315,7 @@ export function RefundsDashboard() {
                       <span
                         className={
                           item.brl_minor === (leadingVendepay?.brl_minor ?? -1) && item.count > 0
-                            ? 'text-xs font-medium text-rose-200'
+                            ? 'text-xs font-medium text-danger'
                             : 'text-xs text-white/40'
                         }
                       >
@@ -324,7 +324,7 @@ export function RefundsDashboard() {
                           : '—'}
                       </span>
                     </div>
-                    <p className="mono-num mt-3 text-2xl text-rose-100">{pick(item.brl_minor)}</p>
+                    <p className="mono-num mt-3 text-2xl text-danger">{pick(item.brl_minor)}</p>
                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/50">
                       <span>{item.refunded_orders} reembolsos</span>
                       <span>{item.chargeback_orders} chargebacks</span>
@@ -349,7 +349,7 @@ export function RefundsDashboard() {
           </section>
 
           <section className="space-y-5">
-            <div className="min-w-0 rounded-2xl border border-white/[.09] bg-[#071720]/70 p-5">
+            <div className="min-w-0 rounded-2xl border border-white/[.09] bg-bg-elevated/70 p-5">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="hud-label">Evolução</p>
@@ -383,7 +383,7 @@ export function RefundsDashboard() {
                                 {money(day.refunded_brl_minor)}
                               </span>
                             </p>
-                            <p className="mt-0.5 text-xs text-rose-100">
+                            <p className="mt-0.5 text-xs text-danger">
                               Chargebacks:{' '}
                               <span className="mono-num font-medium">
                                 {money(day.chargeback_brl_minor)}
@@ -399,7 +399,7 @@ export function RefundsDashboard() {
                             aria-label={`${day.date}: reembolsos ${money(day.refunded_brl_minor)}, chargebacks ${money(day.chargeback_brl_minor)}`}
                             onFocus={() => setHoveredDay(day.date)}
                             onBlur={() => setHoveredDay(null)}
-                            className="min-h-1 w-full cursor-help rounded-t border-x-0 border-b-0 border-t border-amber-100/35 bg-gradient-to-t from-rose-500/70 to-amber-300/80 p-0 transition hover:brightness-125"
+                            className="min-h-1 w-full cursor-help rounded-t border-x-0 border-b-0 border-t border-amber-100/35 bg-gradient-to-t from-danger/70 to-amber-300/80 p-0 transition hover:brightness-125"
                             style={{ height: `${Math.max(3, (day.brl_minor / maxDaily) * 100)}%` }}
                           />
                           <span className="mt-2 -rotate-45 origin-top-left whitespace-nowrap font-mono text-[10px] font-medium text-white/55">
@@ -412,7 +412,7 @@ export function RefundsDashboard() {
                 </div>
               )}
             </div>
-            <div className="min-w-0 overflow-hidden rounded-2xl border border-white/[.09] bg-[#071720]/70 p-5">
+            <div className="min-w-0 overflow-hidden rounded-2xl border border-white/[.09] bg-bg-elevated/70 p-5">
               <p className="hud-label">Produtos mais afetados</p>
               <h2 className="mt-1 text-lg font-semibold text-white">Onde está a perda</h2>
               <div className="mt-5 grid gap-x-6 gap-y-4 md:grid-cols-2 xl:grid-cols-3">
@@ -421,13 +421,13 @@ export function RefundsDashboard() {
                     <div key={item.product_name} className="min-w-0">
                       <div className="flex min-w-0 justify-between gap-3 text-sm">
                         <span className="min-w-0 truncate text-white/70">{item.product_name}</span>
-                        <span className="mono-num shrink-0 text-rose-200">
+                        <span className="mono-num shrink-0 text-danger">
                           {pick(item.brl_minor)}
                         </span>
                       </div>
                       <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/[.06]">
                         <div
-                          className="h-full rounded-full bg-rose-400/75"
+                          className="h-full rounded-full bg-danger/75"
                           style={{
                             width: `${Math.max(4, (item.brl_minor / Math.max(products[0]?.brl_minor ?? 1, 1)) * 100)}%`,
                           }}
@@ -445,7 +445,7 @@ export function RefundsDashboard() {
             </div>
           </section>
 
-          <section className="rounded-2xl border border-white/[.09] bg-[#071720]/70 p-5">
+          <section className="rounded-2xl border border-white/[.09] bg-bg-elevated/70 p-5">
             <div className="flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-amber-200" />
               <div>
@@ -458,33 +458,33 @@ export function RefundsDashboard() {
                 <thead className="border-b border-white/[.08] text-left text-[10px] uppercase tracking-wider text-white/40">
                   <tr>
                     <th className="pb-3 font-medium">Oferta</th>
-                    <th className="pb-3 font-medium">Reembolsos</th>
-                    <th className="pb-3 font-medium">Chargebacks</th>
-                    <th className="pb-3 font-medium">Impacto total</th>
-                    <th className="pb-3 font-medium">Ocorrências</th>
+                    <th className="pb-3 text-right font-medium tabular-nums">Reembolsos</th>
+                    <th className="pb-3 text-right font-medium tabular-nums">Chargebacks</th>
+                    <th className="pb-3 text-right font-medium tabular-nums">Impacto total</th>
+                    <th className="pb-3 text-right font-medium tabular-nums">Ocorrências</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data?.offers.map((offer) => (
                     <tr key={offer.offer_id} className="border-b border-white/[.05] last:border-0">
                       <td className="py-3 font-medium text-white">{offer.offer_name}</td>
-                      <td className="mono-num py-3 text-amber-200">
+                      <td className="mono-num py-3 text-right tabular-nums text-amber-200">
                         {pick(offer.refunded_brl_minor)}
                       </td>
-                      <td className="mono-num py-3 text-rose-200">
+                      <td className="mono-num py-3 text-right tabular-nums text-danger">
                         {pick(offer.chargeback_brl_minor)}
                       </td>
-                      <td className="mono-num py-3 font-medium text-white">
+                      <td className="mono-num py-3 text-right font-medium tabular-nums text-white">
                         {pick(offer.brl_minor)}
                       </td>
-                      <td className="py-3 text-white/55">{offer.count}</td>
+                      <td className="py-3 text-right tabular-nums text-white/55">{offer.count}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           </section>
-          <section className="rounded-2xl border border-white/[.09] bg-[#071720]/70 p-5">
+          <section className="rounded-2xl border border-white/[.09] bg-bg-elevated/70 p-5">
             <p className="hud-label">Auditoria</p>
             <h2 className="mt-1 text-lg font-semibold text-white">Pedidos revertidos</h2>
             <div className="mt-5 overflow-x-auto">
@@ -497,7 +497,7 @@ export function RefundsDashboard() {
                     <th className="pb-3">Pedido</th>
                     <th className="pb-3">Cliente</th>
                     <th className="pb-3">Tipo</th>
-                    <th className="pb-3">Valor</th>
+                    <th className="pb-3 text-right tabular-nums">Valor</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -520,14 +520,16 @@ export function RefundsDashboard() {
                         <span
                           className={
                             item.status === 'chargeback'
-                              ? 'rounded-full border border-rose-300/20 bg-rose-400/[.08] px-2 py-1 text-[10px] uppercase text-rose-200'
+                              ? 'rounded-full border border-danger/20 bg-danger/[.08] px-2 py-1 text-[10px] uppercase text-danger'
                               : 'rounded-full border border-amber-300/20 bg-amber-400/[.08] px-2 py-1 text-[10px] uppercase text-amber-100'
                           }
                         >
                           {item.status === 'chargeback' ? 'Chargeback' : 'Reembolso'}
                         </span>
                       </td>
-                      <td className="mono-num py-3 text-rose-100">{pick(item.brl_minor)}</td>
+                      <td className="mono-num py-3 text-right tabular-nums text-danger">
+                        {pick(item.brl_minor)}
+                      </td>
                     </tr>
                   ))}
                   {!data?.items.length && (
@@ -557,11 +559,11 @@ function Kpi({
   label: string;
   value: string;
   detail: string;
-  tone: 'amber' | 'rose';
+  tone: 'amber' | 'danger';
 }) {
-  const c = tone === 'rose' ? 'text-rose-200' : 'text-amber-100';
+  const c = tone === 'danger' ? 'text-danger' : 'text-amber-100';
   return (
-    <div className="rounded-2xl border border-white/[.09] bg-[#071720]/70 p-5">
+    <div className="rounded-2xl border border-white/[.09] bg-bg-elevated/70 p-5">
       <div className="flex items-center justify-between">
         <p className="hud-label">{label}</p>
         <Icon className={`h-4 w-4 ${c}`} />

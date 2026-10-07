@@ -2,11 +2,11 @@
 
 import { AuthGate } from '@/components/auth/auth-gate';
 import type { ReactNode } from 'react';
+import { FinancialPrivacyMask } from './financial-privacy-mask';
 import { MicroFooter } from './micro-footer';
 import { Sidebar } from './sidebar';
 import { Topbar } from './topbar';
 import { UserMenu } from './user-menu';
-import { FinancialPrivacyMask } from './financial-privacy-mask';
 
 interface HubShellProps {
   children: ReactNode;
@@ -29,7 +29,7 @@ export function HubShell({ children, breadcrumb, topbarRight, fullBleed }: HubSh
     <AuthGate>
       <a
         href="#conteudo-principal"
-        className="fixed left-4 top-3 z-[100] -translate-y-20 rounded-lg bg-cyan-300 px-4 py-2 text-sm font-semibold text-[#031516] transition focus:translate-y-0"
+        className="fixed left-4 top-3 z-[100] -translate-y-20 rounded-lg bg-cyan-300 px-4 py-2 text-sm font-semibold text-accent-on transition focus:translate-y-0"
       >
         Pular para o conteúdo
       </a>

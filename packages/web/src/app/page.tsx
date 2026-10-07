@@ -76,7 +76,7 @@ export default function HubLandingPage() {
       <header className="tmx-command-hero rounded-2xl border border-cyan-300/15 p-5 sm:p-7 md:p-8">
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <p className="hud-label">Operator Console</p>
-          <span className="flex items-center gap-2 rounded-full border border-emerald-300/15 bg-emerald-300/[0.05] px-3 py-1 font-mono text-[9px] uppercase tracking-[0.18em] text-emerald-200/70">
+          <span className="flex items-center gap-2 rounded-full border border-emerald-300/15 bg-emerald-300/[0.05] px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-emerald-200/70">
             <span className="status-dot" aria-hidden /> Sistema online
           </span>
         </div>
@@ -84,12 +84,15 @@ export default function HubLandingPage() {
           Olá,{' '}
           <span
             className="bg-clip-text text-transparent"
-            style={{ backgroundImage: 'linear-gradient(90deg, #0E7C86 0%, #22D3EE 100%)' }}
+            style={{
+              backgroundImage:
+                'linear-gradient(90deg, var(--accent-from) 0%, var(--accent-to) 100%)',
+            }}
           >
             {firstName}
           </span>
         </h1>
-        <p className="mt-3 max-w-xl text-[14px] leading-6 text-white/55">
+        <p className="mt-3 max-w-xl text-sm leading-6 text-white/55">
           {hasOffers
             ? 'Visão geral separada por conta. Use os filtros pra mudar o período.'
             : 'Seu espaço de trabalho mostra somente as ferramentas liberadas pelo administrador.'}
@@ -194,7 +197,7 @@ export default function HubLandingPage() {
                           {account.ownerName}
                         </h2>
                       </div>
-                      <span className="rounded-full border border-cyan-300/20 bg-cyan-300/[0.06] px-3 py-1 text-[11px] text-cyan-100/70">
+                      <span className="rounded-full border border-cyan-300/20 bg-cyan-300/[0.06] px-3 py-1 text-xs text-cyan-100/70">
                         {account.offers.length} {account.offers.length === 1 ? 'oferta' : 'ofertas'}
                       </span>
                     </div>
@@ -214,12 +217,12 @@ export default function HubLandingPage() {
           {summary && summary.accounts.length > 0 && (
             <section className="mt-8">
               <div className="mb-3 flex items-baseline justify-between">
-                <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">
+                <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-white/55">
                   Ofertas por conta
                 </h2>
                 <Link
                   href="/ofertas"
-                  className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-300 hover:text-cyan-200"
+                  className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300 hover:text-cyan-200"
                 >
                   Gerenciar →
                 </Link>
@@ -230,7 +233,7 @@ export default function HubLandingPage() {
                   <section key={account.ownerId} className="space-y-3">
                     <div className="flex items-center gap-2 px-1">
                       <span className="hud-label">Conta</span>
-                      <span className="text-[12px] font-medium text-cyan-100/80">
+                      <span className="text-xs font-medium text-cyan-100/80">
                         {account.ownerName}
                       </span>
                     </div>
@@ -242,12 +245,12 @@ export default function HubLandingPage() {
                           className="glass-card flex flex-col gap-3 p-4 transition hover:border-cyan-300/30"
                         >
                           <div className="flex items-center justify-between gap-2">
-                            <h3 className="truncate text-[15px] font-semibold text-white">
+                            <h3 className="truncate text-base font-semibold text-white">
                               {entry.offer.name}
                             </h3>
                             <ArrowRight className="h-4 w-4 shrink-0 text-cyan-300/70" />
                           </div>
-                          <dl className="grid grid-cols-2 gap-2 text-[12px]">
+                          <dl className="grid grid-cols-2 gap-2 text-xs">
                             <div>
                               <dt className="hud-label">Vendas</dt>
                               <dd className="mt-0.5 font-mono text-emerald-300">
@@ -290,12 +293,12 @@ export default function HubLandingPage() {
       {/* Tools */}
       <section className="mt-12">
         <div className="mb-4 flex items-baseline justify-between">
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-white/55">
             Ferramentas
           </h2>
           <Link
             href="/tools"
-            className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-300 hover:text-cyan-200"
+            className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300 hover:text-cyan-200"
           >
             Ver todas →
           </Link>

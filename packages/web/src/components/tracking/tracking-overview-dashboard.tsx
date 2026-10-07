@@ -179,7 +179,7 @@ export function TrackingOverviewDashboard() {
                     <div className="tmx-kpi-strip-head">
                       <span className="tmx-kpi-strip-label">Taxa de reembolso/chargeback</span>
                     </div>
-                    <p className="mono-num tmx-kpi-strip-value text-red-200">
+                    <p className="mono-num tmx-kpi-strip-value text-danger">
                       {pick(
                         totals?.refund_chargeback_fee_brl_minor,
                         totals?.refund_chargeback_fee_usd_minor,
@@ -225,16 +225,16 @@ export function TrackingOverviewDashboard() {
                   <thead>
                     <tr className="border-b border-white/[0.08] text-left text-[10px] uppercase tracking-wider text-white/40">
                       <th className="p-3 font-medium">Oferta</th>
-                      <th className="p-3 font-medium">Pedidos</th>
-                      <th className="p-3 font-medium">Bruto</th>
-                      <th className="p-3 font-medium">Com erro</th>
-                      <th className="p-3 font-medium">Reembolsos</th>
-                      <th className="p-3 font-medium">Chargeback</th>
-                      <th className="p-3 font-medium">Taxas</th>
-                      <th className="p-3 font-medium">Taxa R/CB</th>
-                      <th className="p-3 font-medium">Em reserva</th>
-                      <th className="p-3 font-medium">Líquido agora</th>
-                      <th className="p-3 font-medium">Líquido total</th>
+                      <th className="p-3 text-right font-medium tabular-nums">Pedidos</th>
+                      <th className="p-3 text-right font-medium tabular-nums">Bruto</th>
+                      <th className="p-3 text-right font-medium tabular-nums">Com erro</th>
+                      <th className="p-3 text-right font-medium tabular-nums">Reembolsos</th>
+                      <th className="p-3 text-right font-medium tabular-nums">Chargeback</th>
+                      <th className="p-3 text-right font-medium tabular-nums">Taxas</th>
+                      <th className="p-3 text-right font-medium tabular-nums">Taxa R/CB</th>
+                      <th className="p-3 text-right font-medium tabular-nums">Em reserva</th>
+                      <th className="p-3 text-right font-medium tabular-nums">Líquido agora</th>
+                      <th className="p-3 text-right font-medium tabular-nums">Líquido total</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -244,11 +244,13 @@ export function TrackingOverviewDashboard() {
                         className="border-b border-white/[0.05] text-white/75 last:border-0"
                       >
                         <td className="p-3 font-medium text-white/90">{offer.offer_name}</td>
-                        <td className="mono-num p-3">{integer(offer.paid_orders)}</td>
-                        <td className="mono-num p-3">
+                        <td className="mono-num p-3 text-right tabular-nums">
+                          {integer(offer.paid_orders)}
+                        </td>
+                        <td className="mono-num p-3 text-right tabular-nums">
                           {pick(offer.gross_revenue_brl_minor, offer.gross_revenue_usd_minor)}
                         </td>
-                        <td className="mono-num p-3 text-amber-200/80">
+                        <td className="mono-num p-3 text-right tabular-nums text-amber-200/80">
                           <span className="block">
                             {pick(offer.failed_revenue_brl_minor, offer.failed_revenue_usd_minor)}
                           </span>
@@ -256,19 +258,19 @@ export function TrackingOverviewDashboard() {
                             {integer(offer.failed_orders)} pedidos
                           </span>
                         </td>
-                        <td className="mono-num p-3 text-amber-200/80">
+                        <td className="mono-num p-3 text-right tabular-nums text-amber-200/80">
                           {pick(offer.refunded_revenue_brl_minor, offer.refunded_revenue_usd_minor)}
                         </td>
-                        <td className="mono-num p-3 text-red-200/80">
+                        <td className="mono-num p-3 text-right tabular-nums text-danger/80">
                           {pick(
                             offer.chargeback_revenue_brl_minor,
                             offer.chargeback_revenue_usd_minor,
                           )}
                         </td>
-                        <td className="mono-num p-3 text-white/50">
+                        <td className="mono-num p-3 text-right tabular-nums text-white/50">
                           {pick(offer.fees_brl_minor, offer.fees_usd_minor)}
                         </td>
-                        <td className="mono-num p-3 text-red-200/80">
+                        <td className="mono-num p-3 text-right tabular-nums text-danger/80">
                           <span className="block">
                             {pick(
                               offer.refund_chargeback_fee_brl_minor,
@@ -279,13 +281,13 @@ export function TrackingOverviewDashboard() {
                             {integer(offer.refund_chargeback_fee_count)} ocorrências
                           </span>
                         </td>
-                        <td className="mono-num p-3 text-white/50">
+                        <td className="mono-num p-3 text-right tabular-nums text-white/50">
                           {pick(offer.reserve_brl_minor, offer.reserve_usd_minor)}
                         </td>
-                        <td className="mono-num p-3 font-medium text-cyan-200">
+                        <td className="mono-num p-3 text-right font-medium tabular-nums text-cyan-200">
                           {pick(offer.net_available_brl_minor, offer.net_available_usd_minor)}
                         </td>
-                        <td className="mono-num p-3 font-medium text-emerald-200">
+                        <td className="mono-num p-3 text-right font-medium tabular-nums text-emerald-200">
                           {pick(offer.net_revenue_brl_minor, offer.net_revenue_usd_minor)}
                         </td>
                       </tr>
