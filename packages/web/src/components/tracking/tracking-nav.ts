@@ -18,7 +18,6 @@ import {
   Megaphone,
   Percent,
   RadioTower,
-  RotateCcw,
   Route,
   Send,
   Video,
@@ -196,12 +195,6 @@ export const TRACKING_NAV: TrackingNavArea[] = [
         label: 'Gateways e webhooks',
         description: 'VendePay, Paysight e Explodely sem duplicação.',
         icon: Webhook,
-      },
-      {
-        id: 'refunds',
-        label: 'Reembolsos',
-        description: 'Resumo financeiro com acesso ao relatório completo.',
-        icon: RotateCcw,
       },
       {
         id: 'fees',
