@@ -5,56 +5,24 @@ import { HubShell } from '@/components/hub/hub-shell';
 import { ToolCard } from '@/components/hub/tool-card';
 import { Button } from '@/components/ui/button';
 import { DataState } from '@/components/ui/data-state';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { DateRangeFilter } from '@/components/ui/date-range-filter';
 import { apiClient, canAccessTool } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
+import { DASHBOARD_DATE_PRESETS, rollingDateRange } from '@/lib/date-range';
+import { visibleToolCatalog } from '@/lib/tool-catalog';
 import { useQuery } from '@tanstack/react-query';
-import {
-  ArrowRight,
-  BarChart3,
-  Layers,
-  Network,
-  Plus,
-  RefreshCw,
-  ScrollText,
-  Shield,
-  Video,
-  Webhook,
-} from 'lucide-react';
+import { ArrowRight, Plus, ScrollText } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 
 export const dynamic = 'force-dynamic';
 
-function todayIso() {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Sao_Paulo',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date());
-}
-
-function nDaysAgoIso(n: number) {
-  const [year = 1970, month = 1, day = 1] = todayIso().split('-').map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day - n, 12));
-  return date.toISOString().slice(0, 10);
-}
-
-const PRESETS = [
-  { label: 'Hoje', from: () => todayIso(), to: () => todayIso() },
-  { label: 'Ontem', from: () => nDaysAgoIso(1), to: () => nDaysAgoIso(1) },
-  { label: 'Anteontem', from: () => nDaysAgoIso(2), to: () => nDaysAgoIso(2) },
-  { label: '7 dias atrás', from: () => nDaysAgoIso(7), to: () => nDaysAgoIso(7) },
-  { label: '30 dias atrás', from: () => nDaysAgoIso(30), to: () => nDaysAgoIso(30) },
-];
-
 export default function HubLandingPage() {
   const { user } = useAuth();
-  const [from, setFrom] = useState(() => nDaysAgoIso(6));
-  const [to, setTo] = useState(() => todayIso());
+  const [period, setPeriod] = useState(() => rollingDateRange(7));
+  const { from, to } = period;
   const hasOffers = canAccessTool(user, 'ofertas');
+  const homeTools = visibleToolCatalog(user, { homeOnly: true });
 
   const {
     data: summary,
@@ -103,58 +71,13 @@ export default function HubLandingPage() {
         <>
           {/* Filter bar */}
           <section className="mt-8">
-            <div className="glass-card flex flex-wrap items-end gap-3 p-3 sm:p-4">
-              <div className="flex max-w-full gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {PRESETS.map((p) => {
-                  const active = from === p.from() && to === p.to();
-                  return (
-                    <Button
-                      key={p.label}
-                      size="sm"
-                      className="h-10 shrink-0"
-                      variant={active ? 'default' : 'outline'}
-                      onClick={() => {
-                        setFrom(p.from());
-                        setTo(p.to());
-                      }}
-                    >
-                      {p.label}
-                    </Button>
-                  );
-                })}
-              </div>
-              <div className="flex w-full flex-wrap items-end gap-2 xl:ml-auto xl:w-auto">
-                <div className="min-w-[140px] flex-1 space-y-1 sm:flex-none">
-                  <Label className="hud-label">De</Label>
-                  <Input
-                    type="date"
-                    value={from}
-                    onChange={(e) => setFrom(e.target.value)}
-                    className="h-11 w-full sm:h-9 sm:w-[150px]"
-                  />
-                </div>
-                <div className="min-w-[140px] flex-1 space-y-1 sm:flex-none">
-                  <Label className="hud-label">Até</Label>
-                  <Input
-                    type="date"
-                    value={to}
-                    onChange={(e) => setTo(e.target.value)}
-                    className="h-11 w-full sm:h-9 sm:w-[150px]"
-                  />
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-11 flex-1 gap-2 sm:h-9 sm:flex-none"
-                  disabled={summaryFetching}
-                  onClick={() => void refetch()}
-                >
-                  <RefreshCw className={summaryFetching ? 'animate-spin' : ''} />
-                  Atualizar
-                </Button>
-              </div>
-            </div>
+            <DateRangeFilter
+              value={period}
+              onChange={setPeriod}
+              presets={DASHBOARD_DATE_PRESETS}
+              isRefreshing={summaryFetching}
+              onRefresh={() => void refetch()}
+            />
           </section>
 
           {/* Account-isolated KPIs */}
@@ -304,55 +227,17 @@ export default function HubLandingPage() {
           </Link>
         </div>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {canAccessTool(user, 'cloner') && (
+          {homeTools.map(({ id, icon: Icon, title, description, href, badge, disabled }) => (
             <ToolCard
-              icon={<Layers className="h-6 w-6" />}
-              title="Page Cloner"
-              description="Clone páginas, sanitiza, personaliza e empacota como HTML ou ZIP."
-              href="/tools/cloner"
+              key={id}
+              icon={<Icon className="h-6 w-6" />}
+              title={title}
+              description={description}
+              href={href}
+              badge={badge}
+              disabled={disabled}
             />
-          )}
-          {canAccessTool(user, 'vsl') && (
-            <ToolCard
-              icon={<Video className="h-6 w-6" />}
-              title="VSL Downloader"
-              description="Detecta e baixa VSLs de qualquer player como MP4."
-              href="/tools/vsl"
-              badge="Beta"
-            />
-          )}
-          {canAccessTool(user, 'upsell-analyzer') && (
-            <ToolCard
-              icon={<BarChart3 className="h-6 w-6" />}
-              title="Upsell Analyzer"
-              description="Taxas de aceite/rejeite/não-vista de funis de upsell."
-              href="/tools/upsell-analyzer"
-            />
-          )}
-          {canAccessTool(user, 'webhook-tester') && (
-            <ToolCard
-              icon={<Webhook className="h-6 w-6" />}
-              title="Webhook Tester"
-              description="Simula webhooks de Hotmart, Kiwify, Stripe e outros."
-              href="/tools/webhook-tester"
-            />
-          )}
-          {canAccessTool(user, 'funnel-clone') && (
-            <ToolCard
-              icon={<Network className="h-6 w-6" />}
-              title="Funnel Full Clone"
-              description="Descobre e baixa o funil inteiro a partir do front."
-              href="/tools/funnel-clone"
-            />
-          )}
-          {canAccessTool(user, 'video-shield') && (
-            <ToolCard
-              icon={<Shield className="h-6 w-6" />}
-              title="Video Studio"
-              description="Proteja e otimize vídeos em uma única central."
-              href="/tools/video-shield"
-            />
-          )}
+          ))}
         </div>
       </section>
 

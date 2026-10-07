@@ -7,5 +7,11 @@ import { UtmifyGlobalCenter } from '@/components/utmify/utmify-global-center';
 export const dynamic = 'force-dynamic';
 
 export default function UtmifyGlobalPage() {
-  return <HubShell breadcrumb={['UTMIFY GERAL']}><ToolGuard tool="ofertas"><UtmifyGlobalCenter /></ToolGuard></HubShell>;
+  return (
+    <HubShell breadcrumb={['INTEGRAÇÕES', 'UTMIFY GLOBAL']}>
+      <ToolGuard tool="ofertas">
+        <UtmifyGlobalCenter />
+      </ToolGuard>
+    </HubShell>
+  );
 }

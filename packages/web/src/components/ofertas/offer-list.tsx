@@ -1,13 +1,15 @@
 'use client';
 
-import { Kpi, formatCurrency, formatRoas } from '@/components/dashboard/kpi-cards';
+import { formatCurrency, formatRoas } from '@/components/dashboard/kpi-cards';
 import { Button } from '@/components/ui/button';
 import { DataState } from '@/components/ui/data-state';
+import { DateRangeFilter } from '@/components/ui/date-range-filter';
 import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Kpi } from '@/components/ui/kpi';
 import { type OfferView, apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
+import { PERIOD_DATE_PRESETS, rollingDateRange } from '@/lib/date-range';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowRight,
@@ -26,21 +28,11 @@ import { OfferCard } from './offer-card';
 import { OfferEditDialog } from './offer-edit-dialog';
 import { OfferMemberPicker } from './offer-member-picker';
 
-function todayIso() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function nDaysAgoIso(n: number) {
-  const date = new Date();
-  date.setUTCDate(date.getUTCDate() - n);
-  return date.toISOString().slice(0, 10);
-}
-
 export function OfferList() {
   const qc = useQueryClient();
   const { user } = useAuth();
-  const [from, setFrom] = useState(() => nDaysAgoIso(6));
-  const [to, setTo] = useState(() => todayIso());
+  const [period, setPeriod] = useState(() => rollingDateRange(7));
+  const { from, to } = period;
   const [showCreate, setShowCreate] = useState(false);
   const [companyName, setCompanyName] = useState('');
   const [name, setName] = useState('');
@@ -133,30 +125,17 @@ export function OfferList() {
   return (
     <div className="space-y-7">
       <section className="space-y-4">
-        <div className="glass-card flex flex-wrap items-end gap-3 p-4">
-          <div className="space-y-1">
-            <Label className="hud-label">De</Label>
-            <Input
-              type="date"
-              value={from}
-              onChange={(event) => setFrom(event.target.value)}
-              className="h-11 w-full sm:h-9 sm:w-[150px]"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="hud-label">Até</Label>
-            <Input
-              type="date"
-              value={to}
-              onChange={(event) => setTo(event.target.value)}
-              className="h-11 w-full sm:h-9 sm:w-[150px]"
-            />
-          </div>
-          <div className="ml-auto text-right">
-            <p className="hud-label">Atualização automática</p>
-            <p className="mt-1 text-[12px] text-emerald-300">UTMify · a cada 30 minutos</p>
-          </div>
-        </div>
+        <DateRangeFilter
+          value={period}
+          onChange={setPeriod}
+          presets={PERIOD_DATE_PRESETS}
+          status={
+            <>
+              <p className="hud-label">Atualização automática</p>
+              <p className="mt-1 text-[12px] text-emerald-300">UTMify · a cada 30 minutos</p>
+            </>
+          }
+        />
 
         {summaryQuery.isLoading ? (
           <DataState variant="loading" title="Carregando resumo das ofertas…" />
@@ -200,18 +179,21 @@ export function OfferList() {
                         value={formatCurrency(totals.spend, currency)}
                         icon={<Wallet className="h-4 w-4" />}
                         tone="spend"
+                        variant="financial"
                       />
                       <Kpi
                         label={`Faturamento · ${currency}`}
                         value={formatCurrency(totals.revenue, currency)}
                         icon={<Receipt className="h-4 w-4" />}
                         tone="positive"
+                        variant="financial"
                       />
                       <Kpi
                         label={`ROAS · ${currency}`}
                         value={formatRoas(totals.roas)}
                         icon={<TrendingUp className="h-4 w-4" />}
                         tone={totals.roas !== null && totals.roas >= 1 ? 'positive' : 'warn'}
+                        variant="financial"
                       />
                     </div>
                   ))}

@@ -1,6 +1,7 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { Kpi } from '@/components/ui/kpi';
+import type { MetricsView } from '@/lib/api-client';
 import {
   CircleDollarSign,
   CreditCard,
@@ -11,12 +12,8 @@ import {
   Wallet,
   Zap,
 } from 'lucide-react';
-import type { MetricsView } from '@/lib/api-client';
 
-export function formatCurrency(
-  n: number | null | undefined,
-  currency = 'BRL',
-): string {
+export function formatCurrency(n: number | null | undefined, currency = 'BRL'): string {
   if (n === null || n === undefined || !Number.isFinite(n)) return '—';
   return n.toLocaleString('pt-BR', {
     style: 'currency',
@@ -44,47 +41,10 @@ export function formatRoas(n: number | null | undefined): string {
   return `${n.toFixed(2)}x`;
 }
 
-interface KpiProps {
-  label: string;
-  value: string;
-  hint?: string;
-  icon?: ReactNode;
-  /** Visual emphasis for revenue/sales (positive) vs spend (neutral). */
-  tone?: 'default' | 'positive' | 'spend' | 'warn';
-}
-
-export function Kpi({ label, value, hint, icon, tone = 'default' }: KpiProps) {
-  const accent =
-    tone === 'positive'
-      ? 'border-emerald-300/30 bg-emerald-300/[0.04]'
-      : tone === 'spend'
-        ? 'border-amber-300/30 bg-amber-300/[0.03]'
-        : tone === 'warn'
-          ? 'border-red-300/30 bg-red-300/[0.03]'
-          : 'border-white/[0.06] bg-white/[0.02]';
-  const iconColor =
-    tone === 'positive'
-      ? 'text-emerald-300'
-      : tone === 'spend'
-        ? 'text-amber-300'
-        : tone === 'warn'
-          ? 'text-red-300'
-          : 'text-cyan-300';
-  return (
-    <div className={`tmx-kpi-card rounded-xl border p-4 ${accent}`} data-tone={tone}>
-      <div className="flex items-center justify-between">
-        <p className="hud-label">{label}</p>
-        {icon && <span className={`shrink-0 ${iconColor}`}>{icon}</span>}
-      </div>
-      <p className="mono-num mt-3 text-[clamp(1.25rem,3vw,1.75rem)] font-semibold leading-tight tracking-[-0.04em] text-white">
-        {value}
-      </p>
-      {hint && <p className="mt-1 text-[11px] text-white/45">{hint}</p>}
-    </div>
-  );
-}
-
-export function KpiGrid({ metrics, currency = 'BRL' }: { metrics: MetricsView; currency?: string }) {
+export function KpiGrid({
+  metrics,
+  currency = 'BRL',
+}: { metrics: MetricsView; currency?: string }) {
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
       <Kpi

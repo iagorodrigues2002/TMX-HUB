@@ -13,6 +13,7 @@ import { OfferCard } from '@/components/ofertas/offer-card';
 import { OfferEditDialog } from '@/components/ofertas/offer-edit-dialog';
 import { Button } from '@/components/ui/button';
 import { DataState } from '@/components/ui/data-state';
+import { DateRangeFilter } from '@/components/ui/date-range-filter';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -24,38 +25,19 @@ import {
   canAccessOfferAi,
 } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
+import {
+  PERIOD_DATE_PRESETS,
+  SAO_PAULO_TIME_ZONE,
+  rollingDateRange,
+  singleDayRange,
+  todayIso,
+} from '@/lib/date-range';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ChevronDown, Clock3, Loader2, Pencil, Search, Target } from 'lucide-react';
 import Link from 'next/link';
 import { use, useMemo, useState } from 'react';
 
 export const dynamic = 'force-dynamic';
-
-const SAO_PAULO_TIME_ZONE = 'America/Sao_Paulo';
-
-function todayIso(): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: SAO_PAULO_TIME_ZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date());
-  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${value.year}-${value.month}-${value.day}`;
-}
-
-function nDaysAgoIso(n: number): string {
-  const d = new Date(`${todayIso()}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() - n);
-  return d.toISOString().slice(0, 10);
-}
-
-const PRESETS = [
-  { label: 'Hoje', from: () => todayIso(), to: () => todayIso() },
-  { label: '7d', from: () => nDaysAgoIso(6), to: () => todayIso() },
-  { label: '14d', from: () => nDaysAgoIso(13), to: () => todayIso() },
-  { label: '30d', from: () => nDaysAgoIso(29), to: () => todayIso() },
-];
 
 function WindowMetrics({ metrics, currency }: { metrics: MetricsView; currency: string }) {
   return (
@@ -111,15 +93,15 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
   const { user } = useAuth();
   const canManage = user?.role === 'admin';
   const canUseAi = canAccessOfferAi(user);
-  const [from, setFrom] = useState(() => nDaysAgoIso(6));
-  const [to, setTo] = useState(() => todayIso());
+  const [period, setPeriod] = useState(() => rollingDateRange(7));
+  const { from, to } = period;
   const [editing, setEditing] = useState(false);
   const [adSearch, setAdSearch] = useState('');
   const [compareLeft, setCompareLeft] = useState('');
   const [compareRight, setCompareRight] = useState('');
   const [intradayMode, setIntradayMode] = useState<'overview' | 'ads'>('overview');
-  const [intradayFrom, setIntradayFrom] = useState(() => todayIso());
-  const [intradayTo, setIntradayTo] = useState(() => todayIso());
+  const [intradayPeriod, setIntradayPeriod] = useState(() => singleDayRange(0));
+  const { from: intradayFrom, to: intradayTo } = intradayPeriod;
   const [intradayAdWindow, setIntradayAdWindow] = useState('overall');
   const [intradayAdSearch, setIntradayAdSearch] = useState('');
   const [adCompareLeft, setAdCompareLeft] = useState('');
@@ -438,49 +420,20 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
       <h2 className="mb-3 text-[16px] font-semibold text-white">Métricas</h2>
 
       {/* Filter */}
-      <div className="glass-card mb-4 flex flex-wrap items-end gap-3 p-4">
-        <div className="flex flex-wrap gap-2">
-          {PRESETS.map((p) => {
-            const active = from === p.from() && to === p.to();
-            return (
-              <Button
-                key={p.label}
-                size="sm"
-                variant={active ? 'default' : 'outline'}
-                onClick={() => {
-                  setFrom(p.from());
-                  setTo(p.to());
-                }}
-              >
-                {p.label}
-              </Button>
-            );
-          })}
-        </div>
-        <div className="ml-auto flex items-end gap-2">
-          <div className="space-y-1">
-            <Label className="hud-label">De</Label>
-            <Input
-              type="date"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              className="h-11 w-full sm:h-9 sm:w-[150px]"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="hud-label">Até</Label>
-            <Input
-              type="date"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="h-11 w-full sm:h-9 sm:w-[150px]"
-            />
-          </div>
-          {snapshotsQuery.isFetching && (
-            <Loader2 className="mb-2 h-4 w-4 animate-spin text-cyan-300" />
-          )}
-        </div>
-      </div>
+      <DateRangeFilter
+        value={period}
+        onChange={setPeriod}
+        presets={PERIOD_DATE_PRESETS}
+        max={todayIso()}
+        className="mb-4"
+        status={
+          snapshotsQuery.isFetching ? (
+            <span className="inline-flex items-center gap-2 pb-2 text-xs text-cyan-200/70">
+              <Loader2 className="h-4 w-4 animate-spin" /> Atualizando
+            </span>
+          ) : null
+        }
+      />
 
       {snapshotsQuery.isLoading ? (
         <DataState variant="loading" title="Carregando métricas da oferta…" />
@@ -710,7 +663,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
       )}
 
       <section className="mt-8 space-y-4 border-t border-cyan-300/10 pt-8">
-        <header className="flex flex-wrap items-start justify-between gap-3">
+        <header>
           <div>
             <div className="flex items-center gap-2">
               <Clock3 className="h-4 w-4 text-cyan-300" />
@@ -721,43 +674,21 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
               selecione um período pra somar vários dias
             </p>
           </div>
-          <div className="flex items-end gap-3">
-            <Label className="space-y-1">
-              <span className="hud-label">De</span>
-              <Input
-                type="date"
-                value={intradayFrom}
-                max={intradayTo}
-                onChange={(event) => {
-                  setIntradayFrom(event.target.value || todayIso());
-                  setCompareLeft('');
-                  setCompareRight('');
-                  setIntradayAdWindow('overall');
-                  setAdCompareLeft('');
-                  setAdCompareRight('');
-                }}
-                className="h-9 w-[160px]"
-              />
-            </Label>
-            <Label className="space-y-1">
-              <span className="hud-label">Até</span>
-              <Input
-                type="date"
-                value={intradayTo}
-                min={intradayFrom}
-                max={todayIso()}
-                onChange={(event) => {
-                  setIntradayTo(event.target.value || todayIso());
-                  setCompareLeft('');
-                  setCompareRight('');
-                  setIntradayAdWindow('overall');
-                  setAdCompareLeft('');
-                  setAdCompareRight('');
-                }}
-                className="h-9 w-[160px]"
-              />
-            </Label>
-            {intraday?.updatedAt && (
+        </header>
+
+        <DateRangeFilter
+          value={{ from: intradayFrom, to: intradayTo }}
+          onChange={(range) => {
+            setIntradayPeriod(range);
+            setCompareLeft('');
+            setCompareRight('');
+            setIntradayAdWindow('overall');
+            setAdCompareLeft('');
+            setAdCompareRight('');
+          }}
+          max={todayIso()}
+          status={
+            intraday?.updatedAt ? (
               <span className="hud-label pb-2.5">
                 Atualizado{' '}
                 {new Date(intraday.updatedAt).toLocaleTimeString('pt-BR', {
@@ -766,9 +697,9 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                   timeZone: SAO_PAULO_TIME_ZONE,
                 })}
               </span>
-            )}
-          </div>
-        </header>
+            ) : null
+          }
+        />
 
         <div className="inline-flex w-fit rounded-lg border border-white/10 bg-black/15 p-1">
           <button

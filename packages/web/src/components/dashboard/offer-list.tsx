@@ -1,22 +1,20 @@
 'use client';
 
-import Link from 'next/link';
-import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Activity,
-  Copy,
-  Loader2,
-  Plus,
-  Trash2,
-} from 'lucide-react';
-import { toast } from 'sonner';
-import { apiClient, authToken, type OfferView } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { type OfferView, apiClient, authToken } from '@/lib/api-client';
 import { env } from '@/lib/env';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Activity, Copy, Loader2, Plus, Trash2 } from 'lucide-react';
+import Link from 'next/link';
+import { useState } from 'react';
+import { toast } from 'sonner';
 
+/**
+ * @deprecated Legado sem imports vivos, confirmado em 2026-10-06.
+ * Use `@/components/ofertas/offer-list`.
+ */
 export function OfferList() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery<OfferView[]>({
@@ -127,8 +125,8 @@ export function OfferList() {
       ) : offers.length === 0 ? (
         <div className="glass-card p-12 text-center">
           <p className="text-[13px] text-white/55">
-            Você ainda não tem nenhuma dashboard. Crie a primeira para começar a receber
-            métricas do n8n.
+            Você ainda não tem nenhuma dashboard. Crie a primeira para começar a receber métricas do
+            n8n.
           </p>
         </div>
       ) : (

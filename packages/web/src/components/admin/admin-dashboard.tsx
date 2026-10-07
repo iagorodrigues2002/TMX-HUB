@@ -2,14 +2,34 @@
 
 import { InvitesSection } from '@/components/settings/invites-section';
 import { UsersSection } from '@/components/settings/users-section';
-import { UtmifyGlobalCenter } from '@/components/utmify/utmify-global-center';
+import { Button } from '@/components/ui/button';
+import { DateRangeFilter } from '@/components/ui/date-range-filter';
+import { Kpi } from '@/components/ui/kpi';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
+import { PERIOD_DATE_PRESETS, isDateInRange, rollingDateRange, todayIso } from '@/lib/date-range';
 import { useQuery } from '@tanstack/react-query';
-import { Activity, Cable, Clock3, Loader2, ScrollText, ShieldCheck, UserCog, Users } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import {
+  Activity,
+  Cable,
+  Clock3,
+  Loader2,
+  ScrollText,
+  ShieldCheck,
+  UserCog,
+  Users,
+} from 'lucide-react';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
+
+type AdminActivity = Awaited<
+  ReturnType<typeof apiClient.getAdminOverview>
+>['recentActivity'][number];
+type AdminView = 'overview' | 'people' | 'invites' | 'activity';
+
+const ADMIN_VIEWS = new Set<AdminView>(['overview', 'people', 'invites', 'activity']);
 
 function relativeDate(value?: string) {
   if (!value) return 'Sem atividade';
@@ -20,16 +40,50 @@ function relativeDate(value?: string) {
   return new Date(value).toLocaleDateString('pt-BR');
 }
 
+function ActivityFeed({ entries, emptyText }: { entries: AdminActivity[]; emptyText: string }) {
+  if (entries.length === 0) {
+    return <p className="p-8 text-center text-sm text-white/40">{emptyText}</p>;
+  }
+
+  return entries.map((entry) => (
+    <div
+      key={`${entry.userId}-${entry.kind}-${entry.id}`}
+      className="flex items-start gap-3 px-4 py-3"
+    >
+      <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-cyan-300/60" />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm text-white/75">{entry.label}</p>
+        <p className="text-xs text-white/40">
+          {entry.userName} · {entry.kind} · {entry.status}
+        </p>
+      </div>
+      <span className="shrink-0 text-[11px] text-white/35">{relativeDate(entry.createdAt)}</span>
+    </div>
+  ));
+}
+
 export function AdminDashboard() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const isAdmin = user?.role === 'admin';
+  const requestedView = searchParams.get('view') as AdminView | null;
+  const activeView = requestedView && ADMIN_VIEWS.has(requestedView) ? requestedView : 'overview';
+  const [activityPeriod, setActivityPeriod] = useState(() => rollingDateRange(30));
   const overview = useQuery({
     queryKey: ['admin-overview'],
     queryFn: () => apiClient.getAdminOverview(),
     enabled: isAdmin,
     refetchInterval: 30_000,
   });
+  const data = overview.data;
+  const filteredActivity = useMemo(
+    () =>
+      (data?.recentActivity ?? []).filter((entry) =>
+        isDateInRange(entry.createdAt, activityPeriod),
+      ),
+    [activityPeriod, data?.recentActivity],
+  );
 
   useEffect(() => {
     if (!loading && user && !isAdmin) router.replace('/tools');
@@ -44,7 +98,6 @@ export function AdminDashboard() {
   }
   if (!isAdmin) return null;
 
-  const data = overview.data;
   const stats = [
     { label: 'Usuários', value: data?.totals.users ?? 0, icon: Users },
     { label: 'Ativos em 30 dias', value: data?.totals.active30d ?? 0, icon: Activity },
@@ -64,32 +117,47 @@ export function AdminDashboard() {
             Acompanhe usuários, atividade recente, convites e permissões em um só lugar.
           </p>
         </div>
-        <span className="inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-300/[0.06] px-3 py-1.5 text-xs text-emerald-200">
-          <span className="status-dot" /> Atualização automática
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button asChild variant="outline" size="sm">
+            <Link href="/utmify-geral">
+              <Cable className="h-4 w-4" />
+              UTMify global
+            </Link>
+          </Button>
+          <span className="inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-300/[0.06] px-3 py-1.5 text-xs text-emerald-200">
+            <span className="status-dot" /> Atualização automática
+          </span>
+        </div>
       </header>
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map(({ label, value, icon: Icon }) => (
-          <div key={label} className="glass-card flex items-center gap-4 p-4">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-cyan-300/[0.07] text-cyan-300">
-              <Icon className="h-5 w-5" />
-            </span>
-            <div>
-              <p className="text-2xl font-semibold text-white">{value}</p>
-              <p className="text-xs text-white/45">{label}</p>
-            </div>
-          </div>
+          <Kpi
+            key={label}
+            label={label}
+            value={value.toLocaleString('pt-BR')}
+            icon={<Icon className="h-5 w-5" />}
+            variant="compact"
+          />
         ))}
       </section>
 
-      <Tabs defaultValue="overview">
+      <Tabs
+        value={activeView}
+        onValueChange={(value) => {
+          const next = value as AdminView;
+          router.replace(next === 'overview' ? '/admin' : `/admin?view=${next}`, {
+            scroll: false,
+          });
+        }}
+      >
         <TabsList className="mb-5 flex h-auto justify-start overflow-x-auto">
           <TabsTrigger value="overview">Visão geral</TabsTrigger>
-          <TabsTrigger value="users">Usuários e acessos</TabsTrigger>
+          <TabsTrigger value="people">Pessoas e acessos</TabsTrigger>
           <TabsTrigger value="invites">Convites</TabsTrigger>
-          <TabsTrigger value="activity" className="gap-2"><ScrollText className="h-4 w-4" /> Atividade</TabsTrigger>
-          <TabsTrigger value="utmify" className="gap-2"><Cable className="h-4 w-4" /> UTMify Geral</TabsTrigger>
+          <TabsTrigger value="activity" className="gap-2">
+            <ScrollText className="h-4 w-4" /> Atividade
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="overview" className="grid gap-5 xl:grid-cols-[1fr_1.2fr]">
           <section className="glass-card overflow-hidden">
@@ -117,67 +185,68 @@ export function AdminDashboard() {
             </div>
           </section>
           <section className="glass-card overflow-hidden">
-            <div className="border-b border-white/[0.06] p-4">
-              <p className="hud-label">Logs de toda a equipe</p>
+            <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] p-4">
+              <div>
+                <p className="hud-label">Atividade da equipe</p>
+                <p className="mt-1 text-xs text-white/40">As 5 ações mais recentes</p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => router.replace('/admin?view=activity', { scroll: false })}
+              >
+                Ver tudo
+              </Button>
             </div>
-            <div className="max-h-[520px] divide-y divide-white/[0.05] overflow-y-auto">
-              {(data?.recentActivity ?? []).map((entry) => (
-                <div
-                  key={`${entry.userId}-${entry.kind}-${entry.id}`}
-                  className="flex items-start gap-3 px-4 py-3"
-                >
-                  <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-cyan-300/60" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm text-white/75">{entry.label}</p>
-                    <p className="text-xs text-white/40">
-                      {entry.userName} · {entry.kind} · {entry.status}
-                    </p>
-                  </div>
-                  <span className="shrink-0 text-[11px] text-white/35">
-                    {relativeDate(entry.createdAt)}
-                  </span>
-                </div>
-              ))}
-              {(data?.recentActivity.length ?? 0) === 0 && (
-                <p className="p-8 text-center text-sm text-white/40">
-                  Nenhuma atividade registrada.
-                </p>
-              )}
+            <div className="divide-y divide-white/[0.05]">
+              <ActivityFeed
+                entries={(data?.recentActivity ?? []).slice(0, 5)}
+                emptyText="Nenhuma atividade registrada."
+              />
             </div>
           </section>
         </TabsContent>
-        <TabsContent value="users">
+        <TabsContent value="people">
           <UsersSection />
         </TabsContent>
         <TabsContent value="invites">
           <InvitesSection />
         </TabsContent>
         <TabsContent value="activity">
-          <section className="glass-card overflow-hidden">
+          <section className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] p-4">
               <div>
                 <p className="hud-label">Atividade administrativa</p>
-                <p className="mt-1 text-sm text-white/45">Ações recentes de todos os usuários do TMX.</p>
+                <p className="mt-1 text-sm text-white/45">
+                  Ações recentes de todos os usuários do TMX.
+                </p>
               </div>
-              <span className="text-xs text-white/35">Atualização automática a cada 30 segundos</span>
+              <span className="text-xs text-white/35">
+                Atualização automática a cada 30 segundos
+              </span>
             </div>
-            <div className="max-h-[680px] divide-y divide-white/[0.05] overflow-y-auto">
-              {(data?.recentActivity ?? []).map((entry) => (
-                <div key={`${entry.userId}-${entry.kind}-${entry.id}`} className="flex items-start gap-3 px-4 py-3">
-                  <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-cyan-300/60" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm text-white/75">{entry.label}</p>
-                    <p className="text-xs text-white/40">{entry.userName} · {entry.kind} · {entry.status}</p>
-                  </div>
-                  <span className="shrink-0 text-[11px] text-white/35">{relativeDate(entry.createdAt)}</span>
-                </div>
-              ))}
-              {(data?.recentActivity.length ?? 0) === 0 && <p className="p-8 text-center text-sm text-white/40">Nenhuma atividade registrada.</p>}
+            <DateRangeFilter
+              value={activityPeriod}
+              onChange={setActivityPeriod}
+              presets={PERIOD_DATE_PRESETS}
+              max={todayIso()}
+              status={
+                <>
+                  <p className="hud-label">No período</p>
+                  <p className="mt-1 text-xs text-cyan-200/75">
+                    {filteredActivity.length} registro(s)
+                  </p>
+                </>
+              }
+            />
+            <div className="glass-card max-h-[680px] divide-y divide-white/[0.05] overflow-y-auto">
+              <ActivityFeed
+                entries={filteredActivity}
+                emptyText="Nenhuma atividade registrada neste período."
+              />
             </div>
           </section>
-        </TabsContent>
-        <TabsContent value="utmify">
-          <UtmifyGlobalCenter />
         </TabsContent>
       </Tabs>
     </div>

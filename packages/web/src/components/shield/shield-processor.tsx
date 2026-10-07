@@ -1,7 +1,23 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  type NicheView,
+  type ShieldCompressionMode,
+  type ShieldJobView,
+  apiClient,
+} from '@/lib/api-client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import JSZip from 'jszip';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -14,24 +30,8 @@ import {
   Upload,
   XCircle,
 } from 'lucide-react';
-import JSZip from 'jszip';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import {
-  apiClient,
-  type NicheView,
-  type ShieldCompressionMode,
-  type ShieldJobView,
-} from '@/lib/api-client';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 
 const COMPRESSION_OPTIONS: Array<{ value: ShieldCompressionMode; label: string; hint: string }> = [
   { value: 'none', label: 'Sem compressão', hint: 'mais rápido — não re-encoda o vídeo' },
@@ -44,17 +44,12 @@ const COMPRESSION_OPTIONS: Array<{ value: ShieldCompressionMode; label: string; 
 const PARALLEL_UPLOADS = 5;
 
 /** Extensões de vídeo/áudio aceitas dentro de um ZIP (case-insensitive). */
-const ALLOWED_MEDIA_EXT = new Set([
-  'mp4', 'mov', 'avi', 'webm', 'mkv',
-  'mp3', 'wav', 'm4a', 'aac',
-]);
+const ALLOWED_MEDIA_EXT = new Set(['mp4', 'mov', 'avi', 'webm', 'mkv', 'mp3', 'wav', 'm4a', 'aac']);
 
 function isZipFile(file: File): boolean {
   const ext = file.name.split('.').pop()?.toLowerCase();
   return (
-    file.type === 'application/zip' ||
-    file.type === 'application/x-zip-compressed' ||
-    ext === 'zip'
+    file.type === 'application/zip' || file.type === 'application/x-zip-compressed' || ext === 'zip'
   );
 }
 
@@ -81,25 +76,33 @@ async function extractMediaFromZip(zipFile: File): Promise<File[]> {
     if (!ALLOWED_MEDIA_EXT.has(ext)) continue;
     const blob = await entry.async('blob');
     const mime =
-      ext === 'mp4' || ext === 'm4a' ? 'video/mp4' :
-      ext === 'mov' ? 'video/quicktime' :
-      ext === 'avi' ? 'video/x-msvideo' :
-      ext === 'webm' ? 'video/webm' :
-      ext === 'mkv' ? 'video/x-matroska' :
-      ext === 'mp3' ? 'audio/mpeg' :
-      ext === 'wav' ? 'audio/wav' :
-      ext === 'aac' ? 'audio/aac' :
-      'application/octet-stream';
+      ext === 'mp4' || ext === 'm4a'
+        ? 'video/mp4'
+        : ext === 'mov'
+          ? 'video/quicktime'
+          : ext === 'avi'
+            ? 'video/x-msvideo'
+            : ext === 'webm'
+              ? 'video/webm'
+              : ext === 'mkv'
+                ? 'video/x-matroska'
+                : ext === 'mp3'
+                  ? 'audio/mpeg'
+                  : ext === 'wav'
+                    ? 'audio/wav'
+                    : ext === 'aac'
+                      ? 'audio/aac'
+                      : 'application/octet-stream';
     out.push(new File([blob], baseName, { type: mime }));
   }
   return out;
 }
 
 interface UploadSlot {
-  id: string;             // local unique id
+  id: string; // local unique id
   file: File;
   status: 'pending' | 'uploading' | 'done' | 'failed';
-  progress: number;       // 0..100
+  progress: number; // 0..100
   jobId?: string;
   error?: string;
 }
@@ -115,6 +118,10 @@ function formatBytes(b: number): string {
   return `${(b / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
 
+/**
+ * @deprecated Legado sem imports vivos, confirmado em 2026-10-06.
+ * Use `@/components/creative-studio/creative-studio`.
+ */
 export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
   const qc = useQueryClient();
   const [slots, setSlots] = useState<UploadSlot[]>([]);
@@ -240,15 +247,23 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
               if (!ALLOWED_MEDIA_EXT.has(ext)) continue;
               const blob = await entry.async('blob');
               const mime =
-                ext === 'mp4' || ext === 'm4a' ? 'video/mp4' :
-                ext === 'mov' ? 'video/quicktime' :
-                ext === 'avi' ? 'video/x-msvideo' :
-                ext === 'webm' ? 'video/webm' :
-                ext === 'mkv' ? 'video/x-matroska' :
-                ext === 'mp3' ? 'audio/mpeg' :
-                ext === 'wav' ? 'audio/wav' :
-                ext === 'aac' ? 'audio/aac' :
-                'application/octet-stream';
+                ext === 'mp4' || ext === 'm4a'
+                  ? 'video/mp4'
+                  : ext === 'mov'
+                    ? 'video/quicktime'
+                    : ext === 'avi'
+                      ? 'video/x-msvideo'
+                      : ext === 'webm'
+                        ? 'video/webm'
+                        : ext === 'mkv'
+                          ? 'video/x-matroska'
+                          : ext === 'mp3'
+                            ? 'audio/mpeg'
+                            : ext === 'wav'
+                              ? 'audio/wav'
+                              : ext === 'aac'
+                                ? 'audio/aac'
+                                : 'application/octet-stream';
               out.push(new File([blob], baseName, { type: mime }));
             }
             if (out.length === 0) {
@@ -306,16 +321,12 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
           verifyTranscript,
         },
         (pct) => {
-          setSlots((s) =>
-            s.map((x) => (x.id === slot.id ? { ...x, progress: pct } : x)),
-          );
+          setSlots((s) => s.map((x) => (x.id === slot.id ? { ...x, progress: pct } : x)));
         },
       );
       setSlots((s) =>
         s.map((x) =>
-          x.id === slot.id
-            ? { ...x, status: 'done', progress: 100, jobId: job.id }
-            : x,
+          x.id === slot.id ? { ...x, status: 'done', progress: 100, jobId: job.id } : x,
         ),
       );
     } catch (err) {
@@ -488,7 +499,8 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
           </Select>
           {!useWhiteAudio && (
             <p className="text-[11px] text-cyan-300/70">
-              Nenhuma faixa adicional será criada ou misturada. O resultado terá apenas a inversão de fase.
+              Nenhuma faixa adicional será criada ou misturada. O resultado terá apenas a inversão
+              de fase.
             </p>
           )}
         </div>
@@ -513,13 +525,15 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
               {selectedNiche && selectedNiche.whites.length === 0 && (
                 <p className="flex items-start gap-1.5 text-[11px] text-amber-300/85">
                   <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
-                  Esse nicho ainda não tem áudios. Adicione pelo menos 1 na seção <strong>Nichos</strong>.
+                  Esse nicho ainda não tem áudios. Adicione pelo menos 1 na seção{' '}
+                  <strong>Nichos</strong>.
                 </p>
               )}
               {selectedNiche && selectedNiche.whites.length > 0 && slots.length > 1 && (
                 <p className="text-[11px] text-white/40">
                   <Shuffle className="mr-1 inline h-3 w-3 text-cyan-300/70" />
-                  Cada vídeo do batch sorteia 1 dos {selectedNiche.whites.length} áudios independentemente.
+                  Cada vídeo do batch sorteia 1 dos {selectedNiche.whites.length} áudios
+                  independentemente.
                 </p>
               )}
             </div>
@@ -569,8 +583,12 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
         </div>
 
         {/* Verify */}
-        <label className="flex items-start gap-3 text-[13px] text-white/75">
+        <label
+          htmlFor="shield-verify-transcript"
+          className="flex items-start gap-3 text-[13px] text-white/75"
+        >
           <Checkbox
+            id="shield-verify-transcript"
             checked={verifyTranscript}
             onChange={(e) => setVerifyTranscript(e.target.checked)}
             disabled={submitting}
@@ -703,11 +721,7 @@ function ShieldJobStatus({ jobId }: { jobId: string }) {
   return (
     <div
       className={`glass-card space-y-4 p-5 ${
-        status === 'failed'
-          ? 'border-rose-300/30'
-          : status === 'ready'
-            ? 'border-cyan-300/30'
-            : ''
+        status === 'failed' ? 'border-rose-300/30' : status === 'ready' ? 'border-cyan-300/30' : ''
       }`}
     >
       <div className="flex items-baseline justify-between">
@@ -746,10 +760,7 @@ function ShieldJobStatus({ jobId }: { jobId: string }) {
               <p className="text-[11px] text-white/55">
                 {formatBytes(data.output.bytes)}
                 {data.input.bytes > 0 && (
-                  <>
-                    {' '}
-                    · {Math.round((data.output.bytes / data.input.bytes) * 100)}% do original
-                  </>
+                  <> · {Math.round((data.output.bytes / data.input.bytes) * 100)}% do original</>
                 )}
               </p>
             </div>
