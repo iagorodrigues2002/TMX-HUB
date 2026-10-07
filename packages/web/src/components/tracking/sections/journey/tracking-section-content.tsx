@@ -7,7 +7,7 @@ import { TrackingLiveConsole } from '@/components/tracking/tracking-live-console
 import { TrackingPanel } from '@/components/tracking/tracking-panel';
 import { TRACKING_DASHBOARD_STALE_TIME } from '@/components/tracking/tracking-query';
 import { Button } from '@/components/ui/button';
-import { DataState } from '@/components/ui/data-state';
+import { DataState, getErrorDataStateProps } from '@/components/ui/data-state';
 import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
 import { type TrackingProductKind, type UpsellStageKey, apiClient } from '@/lib/api-client';
@@ -389,6 +389,14 @@ function VturbIntelligence({
   const pitchRate = plays ? (pitchAudience / plays) * 100 : 0;
   const curve = singleAnalytics?.engagement?.grouped_timed ?? [];
   const maxCurve = Math.max(1, ...curve.map((point) => point.total_users));
+  const queryError = analytics.error ?? players.error;
+  const queryErrorState = queryError
+    ? getErrorDataStateProps(queryError, {
+        title: 'Não foi possível carregar os dados do vTurb',
+        suggestion:
+          'Tente novamente em alguns segundos. Se persistir, verifique a chave da API em Configurações.',
+      })
+    : null;
 
   return (
     <div className="space-y-5">
@@ -742,10 +750,17 @@ function VturbIntelligence({
           Sincronizando inteligência da VSL…
         </div>
       )}
-      {analytics.isError && (
-        <div className="rounded-xl border border-rose-300/20 bg-rose-300/[0.05] p-4 text-sm text-rose-200">
-          {(analytics.error as Error).message}
-        </div>
+      {queryErrorState && (
+        <DataState
+          className="min-h-48"
+          variant="error"
+          {...queryErrorState}
+          isRetrying={analytics.isFetching || players.isFetching}
+          onRetry={() => {
+            if (analytics.isError) void analytics.refetch();
+            if (players.isError) void players.refetch();
+          }}
+        />
       )}
     </div>
   );
