@@ -1,0 +1,1 @@
+export const TRACKING_DASHBOARD_STALE_TIME = 5 * 60_000;

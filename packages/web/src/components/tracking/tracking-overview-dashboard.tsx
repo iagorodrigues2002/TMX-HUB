@@ -1,5 +1,6 @@
 'use client';
 
+import { TRACKING_DASHBOARD_STALE_TIME } from '@/components/tracking/tracking-query';
 import { DataState } from '@/components/ui/data-state';
 import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api-client';
@@ -33,6 +34,7 @@ export function TrackingOverviewDashboard() {
     queryKey: ['tracking-overview', from, to],
     queryFn: () => apiClient.getTrackingOverview(from, to),
     retry: false,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
 
   const pick = (brlMinor: string | undefined, usdMinor: string | undefined) =>

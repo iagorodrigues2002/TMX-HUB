@@ -1,6 +1,7 @@
 'use client';
 
 import { TrackingOverviewDashboard } from '@/components/tracking/tracking-overview-dashboard';
+import { TRACKING_DASHBOARD_STALE_TIME } from '@/components/tracking/tracking-query';
 import { DataState } from '@/components/ui/data-state';
 import { apiClient } from '@/lib/api-client';
 import { useQuery } from '@tanstack/react-query';
@@ -17,6 +18,7 @@ export function OverviewSection({ offerId, section }: OverviewSectionProps) {
     queryKey: ['tracking-config', offerId],
     queryFn: () => apiClient.getTrackingConfig(offerId),
     retry: false,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
 
   if (section === 'summary') {

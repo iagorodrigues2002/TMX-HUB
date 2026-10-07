@@ -5,6 +5,7 @@ import { TikTokDestinations } from '@/components/tracking/tiktok-destinations';
 import { TrackingHelp } from '@/components/tracking/tracking-help';
 import { TrackingLiveConsole } from '@/components/tracking/tracking-live-console';
 import { TrackingPanel } from '@/components/tracking/tracking-panel';
+import { TRACKING_DASHBOARD_STALE_TIME } from '@/components/tracking/tracking-query';
 import { Button } from '@/components/ui/button';
 import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
@@ -312,6 +313,7 @@ function VturbIntelligence({
     queryFn: () => apiClient.getVturbPlayers(offerId),
     enabled: Boolean(config?.analytics_token_configured),
     retry: 1,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
   const selectedPlayerId = playerId || config?.player_id || '';
   const analytics = useQuery({
@@ -319,6 +321,7 @@ function VturbIntelligence({
     queryFn: () => apiClient.getVturbAnalytics(offerId, { from, to }, selectedPlayerId),
     enabled: Boolean(config?.analytics_token_configured && selectedPlayerId),
     retry: 1,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
   const save = useMutation({
     mutationFn: () =>
@@ -680,6 +683,16 @@ export type TrackingSectionId =
   | 'fees'
   | 'help';
 
+const ADVANCED_QUERY_SECTIONS = new Set<TrackingSectionId>([
+  'domains',
+  'gateways',
+  'meta',
+  'links',
+  'ab',
+  'vturb',
+]);
+const CONFIG_QUERY_SECTIONS = new Set<TrackingSectionId>(['gateways', 'meta', 'tiktok', 'utmify']);
+
 const sections: Array<{
   id: TrackingSectionId;
   label: string;
@@ -859,17 +872,20 @@ export function TrackingSectionContent({
       setIsRefreshingTracking(false);
     }
   };
+  // TODO: replace the shared advanced payload with section-specific API endpoints.
   const advanced = useQuery({
-    queryKey: ['tracking-advanced', offerId],
+    queryKey: ['tracking-advanced', offerId, section],
     queryFn: () => apiClient.getAdvancedTracking(offerId),
+    enabled: ADVANCED_QUERY_SECTIONS.has(section),
     retry: false,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
   const upsellIntelligence = useQuery({
     queryKey: ['tracking-upsells', offerId, trackingFrom, trackingTo],
     queryFn: () => apiClient.getTrackingUpsells(offerId, { from: trackingFrom, to: trackingTo }),
     enabled: section === 'upsells',
     retry: false,
-    staleTime: 30_000,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
     refetchOnWindowFocus: false,
   });
   const upsellIdentities = useQuery({
@@ -882,7 +898,7 @@ export function TrackingSectionContent({
       }),
     enabled: section === 'upsells',
     retry: false,
-    staleTime: 30_000,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
     refetchOnWindowFocus: false,
   });
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset pagination when the offer changes.
@@ -985,8 +1001,10 @@ export function TrackingSectionContent({
   const metaDeliveries = useQuery({
     queryKey: ['tracking-meta-deliveries', offerId],
     queryFn: () => apiClient.listMetaDeliveries(offerId),
+    enabled: section === 'meta',
     refetchInterval: 30_000,
     retry: false,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
   const refresh = () => qc.invalidateQueries({ queryKey: ['tracking-advanced', offerId] });
   const reconcileInitiateCheckouts = useMutation({
@@ -1171,7 +1189,9 @@ export function TrackingSectionContent({
   const config = useQuery({
     queryKey: ['tracking-config', offerId],
     queryFn: () => apiClient.getTrackingConfig(offerId),
+    enabled: CONFIG_QUERY_SECTIONS.has(section),
     retry: false,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
   const setupTracking = useMutation({
     mutationFn: () => apiClient.setupTracking(offerId),
@@ -1190,36 +1210,46 @@ export function TrackingSectionContent({
   const utmify = useQuery({
     queryKey: ['tracking-utmify-destination', offerId],
     queryFn: () => apiClient.getTrackingUtmifyDestination(offerId),
+    enabled: section === 'utmify',
     retry: false,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
   const utmifyPixel = useQuery({
     queryKey: ['tracking-utmify-pixel', offerId],
     queryFn: () => apiClient.getTrackingUtmifyPixel(offerId),
+    enabled: section === 'utmify',
     retry: false,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
   const metaPixels = useQuery({
     queryKey: ['tracking-meta-pixels', offerId],
     queryFn: () => apiClient.listMetaPixels(offerId),
-    enabled: Boolean(config.data?.configured),
+    enabled: section === 'meta' && Boolean(config.data?.configured),
     retry: false,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
   const tiktokDestinations = useQuery({
     queryKey: ['tiktok-destinations', offerId],
     queryFn: () => apiClient.tiktokDestinations(offerId),
-    enabled: Boolean(config.data?.configured),
+    enabled: section === 'tiktok' && Boolean(config.data?.configured),
     retry: false,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
   const utmifyWebEvents = useQuery({
     queryKey: ['tracking-utmify-web-events', offerId, trackingFrom, trackingTo],
     queryFn: () => apiClient.listTrackingUtmifyWebEvents(offerId, trackingPeriod),
+    enabled: section === 'utmify',
     refetchInterval: 30_000,
     retry: false,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
   const utmifyDeliveries = useQuery({
     queryKey: ['tracking-utmify-deliveries', offerId],
     queryFn: () => apiClient.listTrackingUtmifyDeliveries(offerId),
+    enabled: section === 'utmify',
     refetchInterval: 30_000,
     retry: false,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
   const retryUtmifyWebEvent = useMutation({
     mutationFn: (deliveryId: string) => apiClient.retryTrackingUtmifyWebEvent(offerId, deliveryId),
@@ -1305,8 +1335,10 @@ export function TrackingSectionContent({
   const productKinds = useQuery({
     queryKey: ['tracking-product-kinds', offerId],
     queryFn: () => apiClient.getTrackingProductKinds(offerId),
+    enabled: section === 'utmify',
     refetchInterval: 30_000,
     retry: false,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
   const saveProductKind = useMutation({
     mutationFn: (input: {
@@ -1370,13 +1402,17 @@ export function TrackingSectionContent({
   const pushcutDestinations = useQuery({
     queryKey: ['tracking-pushcut-destinations', offerId],
     queryFn: () => apiClient.getTrackingPushcutDestinations(offerId),
+    enabled: section === 'pushcut',
     retry: false,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
   const pushcutDeliveries = useQuery({
     queryKey: ['tracking-pushcut-deliveries', offerId],
     queryFn: () => apiClient.listTrackingPushcutDeliveries(offerId),
+    enabled: section === 'pushcut',
     refetchInterval: 30_000,
     retry: false,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
   const createPushcutDestination = useMutation({
     mutationFn: () =>
@@ -1457,11 +1493,14 @@ export function TrackingSectionContent({
     queryFn: () => apiClient.getTrackingRefunds(offerId, trackingPeriod),
     enabled: section === 'refunds',
     retry: false,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
   const feeSettings = useQuery({
     queryKey: ['tracking-fee-settings', offerId],
     queryFn: () => apiClient.getTrackingFeeSettings(offerId),
+    enabled: section === 'fees',
     retry: false,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
   useEffect(() => {
     if (!feeSettings.data) return;
@@ -1633,6 +1672,7 @@ export function TrackingSectionContent({
     enabled: section === 'gateways' && Boolean(config.data?.configured),
     refetchInterval: 30_000,
     retry: false,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
   useEffect(() => {
     const connections = config.data?.vendepay?.connections ?? [];
@@ -4553,6 +4593,7 @@ function AbTestCard({
     queryKey: ['tracking-ab-metrics', offerId, test.id, from, to],
     queryFn: () => apiClient.getTrackingAbTestMetrics(offerId, test.id, { from, to }),
     refetchInterval: test.status === 'active' ? 30_000 : false,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
   const control = useMutation({
     mutationFn: (

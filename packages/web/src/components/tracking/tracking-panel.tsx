@@ -1,5 +1,6 @@
 'use client';
 
+import { TRACKING_DASHBOARD_STALE_TIME } from '@/components/tracking/tracking-query';
 import { Button } from '@/components/ui/button';
 import { DataState } from '@/components/ui/data-state';
 import { FormField } from '@/components/ui/form-field';
@@ -36,6 +37,7 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
     queryKey: ['tracking-config', offerId],
     queryFn: () => apiClient.getTrackingConfig(offerId),
     retry: false,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
   const summary = useQuery({
     queryKey: ['tracking-summary', offerId],
@@ -43,18 +45,21 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
     enabled: Boolean(config.data?.configured),
     refetchInterval: 30_000,
     retry: false,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
   const pixels = useQuery({
     queryKey: ['tracking-meta-pixels', offerId],
     queryFn: () => apiClient.listMetaPixels(offerId),
     enabled: Boolean(config.data?.configured),
     retry: false,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
   const productKinds = useQuery({
     queryKey: ['tracking-product-kinds', offerId],
     queryFn: () => apiClient.getTrackingProductKinds(offerId),
     enabled: Boolean(config.data?.configured),
     retry: false,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
   const savePixelProducts = useMutation({
     mutationFn: ({ pixelId, productIds }: { pixelId: string; productIds: string[] }) =>

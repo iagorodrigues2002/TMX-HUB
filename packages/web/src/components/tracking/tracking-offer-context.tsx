@@ -4,6 +4,7 @@ import { type OfferView, apiClient } from '@/lib/api-client';
 import { useQuery } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, createContext, useCallback, useContext, useEffect } from 'react';
+import { TRACKING_DASHBOARD_STALE_TIME } from './tracking-query';
 
 interface TrackingOfferContextValue {
   offers: OfferView[];
@@ -27,6 +28,7 @@ export function TrackingOfferProvider({ children }: { children: ReactNode }) {
     queryKey: ['tracking-offers'],
     queryFn: () => apiClient.listOffers(),
     retry: false,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
   const offers = offersQuery.data ?? [];
   const requestedOfferId = searchParams.get('offer') ?? '';

@@ -2,6 +2,7 @@
 
 import { TrackerKpiRow } from '@/components/tracking/tracker-kpi-row';
 import { TrackingCountryMap } from '@/components/tracking/tracking-country-map';
+import { TRACKING_DASHBOARD_STALE_TIME } from '@/components/tracking/tracking-query';
 import { Button } from '@/components/ui/button';
 import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
@@ -73,32 +74,42 @@ export function TrackingLiveConsole({
   const summary = useQuery({
     queryKey: ['tracking-summary', offerId, from, to],
     queryFn: () => apiClient.getTrackingSummary(offerId, period),
+    enabled: activeView !== 'attribution' && activeView !== 'infrastructure',
     refetchInterval: 30_000,
     retry: false,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
   const diagnostics = useQuery({
     queryKey: ['tracking-diagnostics', offerId],
     queryFn: () => apiClient.getTrackingDiagnostics(offerId),
+    enabled: activeView === 'infrastructure',
     refetchInterval: 30_000,
     retry: false,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
   const events = useQuery({
     queryKey: ['tracking-events', offerId, from, to],
     queryFn: () => apiClient.listTrackingEvents(offerId, 1, 50, period),
+    enabled: activeView === 'tracker',
     refetchInterval: 30_000,
     retry: false,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
   const orders = useQuery({
     queryKey: ['tracking-orders', offerId, from, to],
     queryFn: () => apiClient.listTrackingOrders(offerId, 1, 50, period),
+    enabled: activeView === 'tracker',
     refetchInterval: 30_000,
     retry: false,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
   const deliveries = useQuery({
     queryKey: ['tracking-meta-deliveries', offerId],
     queryFn: () => apiClient.listMetaDeliveries(offerId),
+    enabled: activeView === 'tracker',
     refetchInterval: 30_000,
     retry: false,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
   const pageFunnel = useQuery({
     queryKey: ['tracking-page-funnel', offerId, from, to],
@@ -106,6 +117,7 @@ export function TrackingLiveConsole({
     enabled: activeView === 'funnel',
     refetchInterval: 30_000,
     retry: false,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
   const journeys = useQuery({
     queryKey: ['tracking-journeys', offerId, from, to],
@@ -113,6 +125,7 @@ export function TrackingLiveConsole({
     enabled: activeView === 'funnel',
     refetchInterval: 30_000,
     retry: false,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
   const attribution = useQuery({
     queryKey: ['tracking-attribution', offerId, from, to],
@@ -120,6 +133,7 @@ export function TrackingLiveConsole({
     enabled: activeView === 'attribution',
     refetchInterval: 30_000,
     retry: false,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
   const countries = useQuery({
     queryKey: ['tracking-countries', offerId, from, to],
@@ -127,6 +141,7 @@ export function TrackingLiveConsole({
     enabled: activeView === 'tracker',
     refetchInterval: 30_000,
     retry: false,
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });
 
   const filteredOrders = useMemo(() => {
