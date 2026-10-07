@@ -338,7 +338,7 @@ export function UpsellAnalyzer() {
                   <th className="px-3 py-2">Etapa</th>
                   <th className="px-3 py-2">Produto · Ofertas</th>
                   <th className="px-3 py-2 text-right">Aceite</th>
-                  <th className="px-3 py-2 text-right">Rejeite</th>
+                  <th className="px-3 py-2 text-right">Rejeição</th>
                   <th className="px-3 py-2 text-right">Não viu</th>
                 </tr>
               </thead>
@@ -567,7 +567,13 @@ function FunnelRow(props: {
       </div>
       <div className="flex items-end">
         {props.onRemove && (
-          <Button type="button" variant="ghost" size="sm" onClick={props.onRemove}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-label={`Remover etapa ${props.step.name}`}
+            onClick={props.onRemove}
+          >
             <X className="h-3.5 w-3.5" />
           </Button>
         )}
