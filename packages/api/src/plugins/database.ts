@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import postgres, { type Sql } from 'postgres';
 import { env } from '../env.js';
+import { createResilientPostgresClient } from '../lib/postgres-retry.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -9,12 +10,21 @@ declare module 'fastify' {
 }
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
-  const db = env.DATABASE_URL
+  const rawDb = env.DATABASE_URL
     ? postgres(env.DATABASE_URL, {
         max: 10,
         idle_timeout: 20,
         connect_timeout: 10,
         ssl: env.NODE_ENV === 'production' ? 'require' : false,
+      })
+    : null;
+  const db = rawDb
+    ? createResilientPostgresClient(rawDb, {
+        onRetry: (error, attempt, delayMs) => {
+          const code =
+            error && typeof error === 'object' && 'code' in error ? String(error.code) : undefined;
+          app.log.warn({ code, attempt, delayMs }, 'postgres connection retry');
+        },
       })
     : null;
 
