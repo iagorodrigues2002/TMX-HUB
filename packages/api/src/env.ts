@@ -41,8 +41,13 @@ const EnvSchema = z.object({
   EXPLODELY_REQUIRE_SIGNATURE: booleanFromString.default(true),
   EXPLODELY_WEBHOOK_SECRET: z.string().optional(),
 
-  // Auth — JWT signing secret. MUST be overridden in production.
-  JWT_SECRET: z.string().default('dev-jwt-secret-change-me-in-production'),
+  // Auth — JWT signing secret. Required in every environment.
+  JWT_SECRET: z
+    .string()
+    .min(32)
+    .refine((secret) => secret !== 'dev-jwt-secret-change-me-in-production', {
+      message: 'must not use the development default',
+    }),
   // Bootstrap admin (created on first boot if no users exist).
   ADMIN_EMAIL: z.string().optional(),
   ADMIN_PASSWORD: z.string().optional(),
