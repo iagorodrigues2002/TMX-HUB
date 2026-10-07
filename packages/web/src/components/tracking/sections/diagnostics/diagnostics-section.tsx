@@ -9,6 +9,7 @@ import {
   trackingDateOffset,
 } from '@/components/tracking/tracking-period-filter';
 import { useState } from 'react';
+import styles from './diagnostics-section.module.css';
 
 export function DiagnosticsSection({
   offerId,
@@ -19,7 +20,11 @@ export function DiagnosticsSection({
   const [to, setTo] = useState(trackingDate);
 
   if (section === 'health') {
-    return <TrackingHealthCenter offerId={offerId} canManage={canManage} />;
+    return (
+      <div className={styles.healthCoverageLayout}>
+        <TrackingHealthCenter offerId={offerId} canManage={canManage} />
+      </div>
+    );
   }
   if (section === 'help') {
     return <TrackingHelp offerId={offerId} />;

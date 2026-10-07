@@ -1,0 +1,22 @@
+.healthCoverageLayout > div > section:first-child > div:last-child > div[class~="grid"] {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.healthCoverageLayout > div > section:first-child > div:last-child > div[class~="grid"] > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+@media (min-width: 768px) {
+  .healthCoverageLayout > div > section:first-child > div:last-child > div[class~="grid"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .healthCoverageLayout > div > section:first-child > div:last-child > div[class~="grid"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
