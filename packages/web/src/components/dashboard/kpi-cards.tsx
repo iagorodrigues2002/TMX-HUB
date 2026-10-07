@@ -46,7 +46,7 @@ export function KpiGrid({
   currency = 'BRL',
 }: { metrics: MetricsView; currency?: string }) {
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
       <Kpi
         label="Vendas"
         value={formatInt(metrics.sales)}

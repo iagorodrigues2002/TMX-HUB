@@ -160,7 +160,7 @@ export default function HubLandingPage() {
                         {account.ownerName}
                       </span>
                     </div>
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                       {account.offers.map((entry) => (
                         <Link
                           key={entry.offer.id}
@@ -226,7 +226,7 @@ export default function HubLandingPage() {
             Ver todas →
           </Link>
         </div>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {homeTools.map(({ id, icon: Icon, title, description, href, badge, disabled }) => (
             <ToolCard
               key={id}

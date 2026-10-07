@@ -81,7 +81,7 @@ export function Kpi({
         <p className="hud-label">{label}</p>
         {icon && <span className={cn('shrink-0', styles.icon)}>{icon}</span>}
       </div>
-      <p className="mono-num mt-3 text-[clamp(1.25rem,3vw,1.75rem)] font-semibold leading-tight tracking-[-0.04em] text-white">
+      <p className="mono-num mt-3 min-w-0 break-words text-[clamp(1.25rem,3vw,1.75rem)] font-semibold leading-tight tracking-[-0.04em] text-white">
         {value}
       </p>
       {hint && <p className="mt-1 text-[11px] text-white/45">{hint}</p>}

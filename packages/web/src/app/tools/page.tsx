@@ -25,7 +25,7 @@ export default function ToolsIndexPage() {
       </header>
 
       <section className="mt-10">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {visible.map(({ id, icon: Icon, title, description, href, badge, disabled }) => (
             <ToolCard
               key={id}
