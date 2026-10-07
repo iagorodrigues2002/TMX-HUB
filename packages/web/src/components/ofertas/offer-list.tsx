@@ -2,9 +2,11 @@
 
 import { Kpi, formatCurrency, formatRoas } from '@/components/dashboard/kpi-cards';
 import { Button } from '@/components/ui/button';
+import { DataState } from '@/components/ui/data-state';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { type OfferView, apiClient } from '@/lib/api-client';
+import { useAuth } from '@/lib/auth-context';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowRight,
@@ -22,7 +24,6 @@ import { toast } from 'sonner';
 import { OfferCard } from './offer-card';
 import { OfferEditDialog } from './offer-edit-dialog';
 import { OfferMemberPicker } from './offer-member-picker';
-import { useAuth } from '@/lib/auth-context';
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -147,43 +148,62 @@ export function OfferList() {
           </div>
         </div>
 
-        {summaryQuery.isLoading || !summary ? (
-          <div className="glass-card flex items-center justify-center p-10">
-            <Loader2 className="h-5 w-5 animate-spin text-cyan-300" />
-          </div>
+        {summaryQuery.isLoading ? (
+          <DataState variant="loading" title="Carregando resumo das ofertas…" />
+        ) : summaryQuery.isError && !summary ? (
+          <DataState
+            variant="error"
+            title="Não foi possível carregar o resumo"
+            description="A lista de conexões continua abaixo. Tente consultar as métricas novamente."
+            isRetrying={summaryQuery.isFetching}
+            onRetry={() => void summaryQuery.refetch()}
+          />
+        ) : !summary ? (
+          <DataState
+            variant="empty"
+            title="Resumo indisponível"
+            description="Ainda não há métricas consolidadas para este período."
+          />
         ) : (
           <>
             <div className="space-y-3">
               {summary.accounts.map((account) => (
-                <section key={account.ownerId} className="space-y-3 rounded-xl border border-cyan-300/[0.14] bg-cyan-300/[0.025] p-3">
+                <section
+                  key={account.ownerId}
+                  className="space-y-3 rounded-xl border border-cyan-300/[0.14] bg-cyan-300/[0.025] p-3"
+                >
                   <div className="flex items-center justify-between border-b border-cyan-300/[0.1] pb-2">
                     <div>
                       <p className="hud-label">Resumo da conta</p>
-                      <h2 className="mt-1 text-[15px] font-semibold text-white">{account.ownerName}</h2>
+                      <h2 className="mt-1 text-[15px] font-semibold text-white">
+                        {account.ownerName}
+                      </h2>
                     </div>
-                    <span className="text-[11px] text-cyan-100/65">{account.offers.length} ofertas</span>
+                    <span className="text-[11px] text-cyan-100/65">
+                      {account.offers.length} ofertas
+                    </span>
                   </div>
                   {account.currencyTotals.map(({ currency, totals }) => (
-                <div key={currency} className="grid gap-3 md:grid-cols-3">
-                  <Kpi
-                    label={`Investimento · ${currency}`}
-                    value={formatCurrency(totals.spend, currency)}
-                    icon={<Wallet className="h-4 w-4" />}
-                    tone="spend"
-                  />
-                  <Kpi
-                    label={`Faturamento · ${currency}`}
-                    value={formatCurrency(totals.revenue, currency)}
-                    icon={<Receipt className="h-4 w-4" />}
-                    tone="positive"
-                  />
-                  <Kpi
-                    label={`ROAS · ${currency}`}
-                    value={formatRoas(totals.roas)}
-                    icon={<TrendingUp className="h-4 w-4" />}
-                    tone={totals.roas !== null && totals.roas >= 1 ? 'positive' : 'warn'}
-                  />
-                </div>
+                    <div key={currency} className="grid gap-3 md:grid-cols-3">
+                      <Kpi
+                        label={`Investimento · ${currency}`}
+                        value={formatCurrency(totals.spend, currency)}
+                        icon={<Wallet className="h-4 w-4" />}
+                        tone="spend"
+                      />
+                      <Kpi
+                        label={`Faturamento · ${currency}`}
+                        value={formatCurrency(totals.revenue, currency)}
+                        icon={<Receipt className="h-4 w-4" />}
+                        tone="positive"
+                      />
+                      <Kpi
+                        label={`ROAS · ${currency}`}
+                        value={formatRoas(totals.roas)}
+                        icon={<TrendingUp className="h-4 w-4" />}
+                        tone={totals.roas !== null && totals.roas >= 1 ? 'positive' : 'warn'}
+                      />
+                    </div>
                   ))}
                 </section>
               ))}
@@ -191,52 +211,54 @@ export function OfferList() {
             <div className="space-y-6">
               {summary.accounts.map((account) => (
                 <section key={account.ownerId} className="space-y-3">
-                  <p className="px-1 text-[12px] font-medium text-cyan-100/75">Ofertas · {account.ownerName}</p>
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {account.offers.map((entry) => (
-                <Link
-                  key={entry.offer.id}
-                  href={`/ofertas/${entry.offer.id}`}
-                  className="glass-card group space-y-4 p-4 transition hover:border-cyan-300/35"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="flex items-center gap-1.5 text-[11px] text-white/45">
-                        <Building2 className="h-3.5 w-3.5" />
-                        {entry.offer.companyName ?? 'Operação'}
-                      </p>
-                      <h3 className="mt-1 truncate text-[16px] font-semibold text-white">
-                        {entry.offer.name}
-                      </h3>
-                    </div>
-                    <ArrowRight className="h-4 w-4 text-cyan-300 transition group-hover:translate-x-0.5" />
-                  </div>
-                  <dl className="grid gap-2 min-[380px]:grid-cols-3">
-                    <div>
-                      <dt className="hud-label">Investido</dt>
-                      <dd className="mt-1 font-mono text-[12px] text-amber-300">
-                        {formatCurrency(entry.totals.spend, entry.offer.currency)}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="hud-label">Faturamento</dt>
-                      <dd className="mt-1 font-mono text-[12px] text-emerald-300">
-                        {formatCurrency(entry.totals.revenue, entry.offer.currency)}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="hud-label">ROAS</dt>
-                      <dd className="mt-1 font-mono text-[12px] text-cyan-300">
-                        {formatRoas(entry.totals.roas)}
-                      </dd>
-                    </div>
-                  </dl>
-                  <p className="text-[10px] uppercase tracking-[0.13em] text-white/35">
-                    Clique para abrir os ads e seus dados
+                  <p className="px-1 text-[12px] font-medium text-cyan-100/75">
+                    Ofertas · {account.ownerName}
                   </p>
-                </Link>
-              ))}
-            </div>
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {account.offers.map((entry) => (
+                      <Link
+                        key={entry.offer.id}
+                        href={`/ofertas/${entry.offer.id}`}
+                        className="glass-card group space-y-4 p-4 transition hover:border-cyan-300/35"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="flex items-center gap-1.5 text-[11px] text-white/45">
+                              <Building2 className="h-3.5 w-3.5" />
+                              {entry.offer.companyName ?? 'Operação'}
+                            </p>
+                            <h3 className="mt-1 truncate text-[16px] font-semibold text-white">
+                              {entry.offer.name}
+                            </h3>
+                          </div>
+                          <ArrowRight className="h-4 w-4 text-cyan-300 transition group-hover:translate-x-0.5" />
+                        </div>
+                        <dl className="grid gap-2 min-[380px]:grid-cols-3">
+                          <div>
+                            <dt className="hud-label">Investido</dt>
+                            <dd className="mt-1 font-mono text-[12px] text-amber-300">
+                              {formatCurrency(entry.totals.spend, entry.offer.currency)}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="hud-label">Faturamento</dt>
+                            <dd className="mt-1 font-mono text-[12px] text-emerald-300">
+                              {formatCurrency(entry.totals.revenue, entry.offer.currency)}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="hud-label">ROAS</dt>
+                            <dd className="mt-1 font-mono text-[12px] text-cyan-300">
+                              {formatRoas(entry.totals.roas)}
+                            </dd>
+                          </div>
+                        </dl>
+                        <p className="text-[10px] uppercase tracking-[0.13em] text-white/35">
+                          Clique para abrir os ads e seus dados
+                        </p>
+                      </Link>
+                    ))}
+                  </div>
                 </section>
               ))}
             </div>
@@ -335,45 +357,63 @@ export function OfferList() {
         )}
 
         {offersQuery.isLoading ? (
-          <div className="glass-card flex items-center justify-center p-12">
-            <Loader2 className="h-5 w-5 animate-spin text-cyan-300" />
-          </div>
+          <DataState variant="loading" title="Carregando ofertas…" />
+        ) : offersQuery.isError && !offersQuery.data ? (
+          <DataState
+            variant="error"
+            title="Não foi possível carregar as ofertas"
+            description="Verifique a conexão com a API e tente novamente."
+            isRetrying={offersQuery.isFetching}
+            onRetry={() => void offersQuery.refetch()}
+          />
         ) : offers.length === 0 ? (
-          <div className="glass-card p-10 text-center text-[13px] text-white/50">
-            Cadastre sua primeira empresa e oferta para iniciar a análise.
-          </div>
+          <DataState
+            variant="empty"
+            title="Nenhuma oferta cadastrada"
+            description="Cadastre sua primeira empresa e oferta para iniciar a análise."
+          />
         ) : (
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {offers.map((offer) => (
-              <div key={offer.id} className="space-y-2">
-                <OfferCard
-                  offer={offer}
-                  {...(offer.canManage
-                    ? {
-                        onEdit: () => setEditing(offer),
-                        onDelete: () => deleteMut.mutate(offer.id),
-                      }
-                    : {})}
-                />
-                <div className="flex items-center justify-between px-1 text-[11px] text-white/45">
-                  <span>{syncLabel(offer)}</span>
-                  {offer.canManage && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => syncMut.mutate(offer.id)}
-                      disabled={syncMut.isPending || offer.syncStatus === 'syncing'}
-                    >
-                      <RefreshCw
-                        className={`h-3.5 w-3.5 ${offer.syncStatus === 'syncing' ? 'animate-spin' : ''}`}
-                      />
-                      Sincronizar
-                    </Button>
-                  )}
+          <>
+            {offersQuery.isError && (
+              <output
+                aria-live="polite"
+                className="mb-3 block rounded-xl border border-warning/25 bg-warning/[0.07] px-4 py-3 text-sm text-warning"
+              >
+                Não foi possível atualizar agora. Exibindo as últimas ofertas carregadas.
+              </output>
+            )}
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {offers.map((offer) => (
+                <div key={offer.id} className="space-y-2">
+                  <OfferCard
+                    offer={offer}
+                    {...(offer.canManage
+                      ? {
+                          onEdit: () => setEditing(offer),
+                          onDelete: () => deleteMut.mutate(offer.id),
+                        }
+                      : {})}
+                  />
+                  <div className="flex items-center justify-between px-1 text-[11px] text-white/45">
+                    <span>{syncLabel(offer)}</span>
+                    {offer.canManage && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => syncMut.mutate(offer.id)}
+                        disabled={syncMut.isPending || offer.syncStatus === 'syncing'}
+                      >
+                        <RefreshCw
+                          className={`h-3.5 w-3.5 ${offer.syncStatus === 'syncing' ? 'animate-spin' : ''}`}
+                        />
+                        Sincronizar
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          </>
         )}
       </section>
 

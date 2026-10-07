@@ -12,6 +12,7 @@ import { OfferAiAnalysis } from '@/components/ofertas/offer-ai-analysis';
 import { OfferCard } from '@/components/ofertas/offer-card';
 import { OfferEditDialog } from '@/components/ofertas/offer-edit-dialog';
 import { Button } from '@/components/ui/button';
+import { DataState } from '@/components/ui/data-state';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -295,6 +296,45 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
       .sort((a, b) => (b.right?.revenue ?? 0) - (a.right?.revenue ?? 0));
   }, [leftAdWindow, rightAdWindow, intradayAdQuery]);
 
+  if (offerQuery.isLoading) {
+    return (
+      <HubShell breadcrumb={['OFERTAS', 'CARREGANDO']}>
+        <DataState variant="loading" title="Carregando oferta…" />
+      </HubShell>
+    );
+  }
+
+  if (offerQuery.isError && !offer) {
+    return (
+      <HubShell breadcrumb={['OFERTAS', 'ERRO']}>
+        <DataState
+          variant="error"
+          title="Não foi possível carregar a oferta"
+          description="A identificação e as permissões da oferta não puderam ser confirmadas."
+          isRetrying={offerQuery.isFetching}
+          onRetry={() => void offerQuery.refetch()}
+        />
+      </HubShell>
+    );
+  }
+
+  if (offerQuery.isSuccess && !offer) {
+    return (
+      <HubShell breadcrumb={['OFERTAS', 'NÃO ENCONTRADA']}>
+        <DataState
+          variant="empty"
+          title="Oferta não encontrada"
+          description="Ela pode ter sido removida ou não estar liberada para sua conta."
+          action={
+            <Button asChild size="sm" variant="outline">
+              <Link href="/ofertas">Voltar para ofertas</Link>
+            </Button>
+          }
+        />
+      </HubShell>
+    );
+  }
+
   return (
     <HubShell breadcrumb={['OFERTAS', offerName]}>
       <div className="mb-6">
@@ -443,13 +483,31 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
       </div>
 
       {snapshotsQuery.isLoading ? (
-        <div className="glass-card flex items-center justify-center p-12">
-          <Loader2 className="h-5 w-5 animate-spin text-cyan-300" />
-        </div>
+        <DataState variant="loading" title="Carregando métricas da oferta…" />
+      ) : snapshotsQuery.isError && !data ? (
+        <DataState
+          variant="error"
+          title="Não foi possível carregar as métricas"
+          description="O cabeçalho da oferta foi preservado. Tente recarregar somente esta seção."
+          isRetrying={snapshotsQuery.isFetching}
+          onRetry={() => void snapshotsQuery.refetch()}
+        />
       ) : !data ? (
-        <p className="text-[13px] text-white/45">Sem dados.</p>
+        <DataState
+          variant="empty"
+          title="Sem métricas neste período"
+          description="Altere as datas ou aguarde a próxima sincronização UTMify."
+        />
       ) : (
         <div className="space-y-6">
+          {snapshotsQuery.isError && (
+            <output
+              aria-live="polite"
+              className="block rounded-xl border border-warning/25 bg-warning/[0.07] px-4 py-3 text-sm text-warning"
+            >
+              Não foi possível atualizar agora. Exibindo as últimas métricas carregadas.
+            </output>
+          )}
           <KpiGrid metrics={data.totals} currency={currency} />
 
           <section className="glass-card overflow-hidden p-0">
@@ -730,13 +788,21 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
         </div>
 
         {intradayQuery.isLoading ? (
-          <div className="glass-card flex items-center justify-center p-10">
-            <Loader2 className="h-5 w-5 animate-spin text-cyan-300" />
-          </div>
+          <DataState variant="loading" title="Carregando janelas intradiárias…" />
+        ) : intradayQuery.isError && !intraday ? (
+          <DataState
+            variant="error"
+            title="Não foi possível carregar as janelas intradiárias"
+            description="As demais métricas da oferta continuam disponíveis acima."
+            isRetrying={intradayQuery.isFetching}
+            onRetry={() => void intradayQuery.refetch()}
+          />
         ) : !intraday ? (
-          <div className="glass-card p-6 text-[13px] text-white/45">
-            A coleta intradiária começará na próxima sincronização UTMify.
-          </div>
+          <DataState
+            variant="empty"
+            title="Coleta intradiária ainda não iniciada"
+            description="Os dados aparecerão após a próxima sincronização UTMify."
+          />
         ) : intradayMode === 'overview' ? (
           <>
             <div className={`grid gap-4 ${isIntradayRange ? '' : 'xl:grid-cols-2'}`}>
@@ -1081,20 +1147,20 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                       </tr>
                       <tr>
                         {[
-                          'Invest.',
-                          'Vendas',
-                          'CPA',
-                          'ROAS',
-                          'Invest.',
-                          'Vendas',
-                          'CPA',
-                          'ROAS',
-                        ].map((label, index) => (
+                          { key: 'left-investment', label: 'Invest.' },
+                          { key: 'left-sales', label: 'Vendas' },
+                          { key: 'left-cpa', label: 'CPA' },
+                          { key: 'left-roas', label: 'ROAS' },
+                          { key: 'right-investment', label: 'Invest.' },
+                          { key: 'right-sales', label: 'Vendas' },
+                          { key: 'right-cpa', label: 'CPA' },
+                          { key: 'right-roas', label: 'ROAS' },
+                        ].map((column) => (
                           <th
-                            key={`${label}-${index}`}
+                            key={column.key}
                             className="border-l border-white/[0.05] px-3 py-2 text-right"
                           >
-                            {label}
+                            {column.label}
                           </th>
                         ))}
                       </tr>
