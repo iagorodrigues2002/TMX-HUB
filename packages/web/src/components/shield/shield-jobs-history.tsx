@@ -1,20 +1,12 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  CheckCircle2,
-  Download,
-  Loader2,
-  Package,
-  RefreshCw,
-  Trash2,
-  XCircle,
-} from 'lucide-react';
-import { toast } from 'sonner';
-import { apiClient, type ShieldJobView } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { type ShieldJobView, apiClient } from '@/lib/api-client';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { CheckCircle2, Download, Loader2, Package, RefreshCw, Trash2, XCircle } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { toast } from 'sonner';
 
 const MAX_BULK = 100;
 /** Cap total — ZIP vira blob na RAM do browser. Casa com cap server-side. */
@@ -75,10 +67,7 @@ export function ShieldJobsHistory() {
     [filtered, selected],
   );
 
-  const readyInFiltered = useMemo(
-    () => filtered.filter((j) => j.status === 'ready'),
-    [filtered],
-  );
+  const readyInFiltered = useMemo(() => filtered.filter((j) => j.status === 'ready'), [filtered]);
 
   const totalBytesSelected = useMemo(
     () => visibleSelected.reduce((acc, j) => acc + (j.output?.bytes ?? 0), 0),
@@ -129,9 +118,7 @@ export function ShieldJobsHistory() {
     try {
       const ids = visibleSelected.map((j) => j.id);
       const r = await apiClient.bulkDownloadShieldJobs(ids);
-      toast.success(
-        `${ids.length} arquivos baixados (${(r.bytes / 1024 / 1024).toFixed(1)} MB).`,
-      );
+      toast.success(`${ids.length} arquivos baixados (${(r.bytes / 1024 / 1024).toFixed(1)} MB).`);
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -234,11 +221,7 @@ export function ShieldJobsHistory() {
             <Button size="sm" variant="ghost" onClick={clearSelection} disabled={downloading}>
               Limpar
             </Button>
-            <Button
-              size="sm"
-              onClick={onBulkDownload}
-              disabled={downloading || exceedsBytesCap}
-            >
+            <Button size="sm" onClick={onBulkDownload} disabled={downloading || exceedsBytesCap}>
               {downloading ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
@@ -263,7 +246,7 @@ export function ShieldJobsHistory() {
       ) : (
         <div className="glass-card overflow-hidden p-0">
           <div className="overflow-x-auto">
-            <table className="w-full text-[12px]">
+            <table className="w-full min-w-[900px] text-[12px]">
               <thead className="bg-white/[0.03] text-left text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
                 <tr>
                   <th className="w-8 px-3 py-2">
@@ -382,11 +365,7 @@ function JobRow({
           {statusIcon}
           <span
             className={
-              isReady
-                ? 'text-emerald-300'
-                : status === 'failed'
-                  ? 'text-rose-300'
-                  : 'text-cyan-300'
+              isReady ? 'text-emerald-300' : status === 'failed' ? 'text-rose-300' : 'text-cyan-300'
             }
           >
             {statusText}

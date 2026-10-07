@@ -1,8 +1,5 @@
 'use client';
 
-import { Plus, Save, Trash2, Upload, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,6 +24,9 @@ import {
   listPresets,
   savePreset,
 } from '@/lib/upsell/storage';
+import { Plus, Save, Trash2, Upload, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { ResultsChart } from './results-chart';
 
 const EMPTY_COLS: ColumnMap = {
@@ -183,8 +183,7 @@ export function UpsellAnalyzer() {
       ...prev,
       { name: `Up${String(prev.length + 1).padStart(2, '0')}`, product: '', offers: [] },
     ]);
-  const removeStep = (i: number) =>
-    setSteps((prev) => prev.filter((_, idx) => idx !== i));
+  const removeStep = (i: number) => setSteps((prev) => prev.filter((_, idx) => idx !== i));
   const updateStep = (i: number, patch: Partial<FunnelStepConfig>) =>
     setSteps((prev) => prev.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
 
@@ -213,8 +212,8 @@ export function UpsellAnalyzer() {
             ))}
           </select>
           <p className="text-[12px] text-white/40">
-            Define os hints de auto-mapeamento das colunas e quais valores de status
-            contam como "aprovado" para cada plataforma.
+            Define os hints de auto-mapeamento das colunas e quais valores de status contam como
+            "aprovado" para cada plataforma.
           </p>
         </div>
 
@@ -274,7 +273,9 @@ export function UpsellAnalyzer() {
         </header>
 
         <div className="space-y-2">
-          <Label className="hud-label">Front · considerar vendas a partir de (HH:MM, opcional)</Label>
+          <Label className="hud-label">
+            Front · considerar vendas a partir de (HH:MM, opcional)
+          </Label>
           <Input
             type="text"
             value={frontConfig.startTime ?? ''}
@@ -297,7 +298,7 @@ export function UpsellAnalyzer() {
 
         {steps.map((step, i) => (
           <FunnelRow
-            key={i}
+            key={step.name}
             step={step}
             onChange={(patch) => updateStep(i, patch)}
             onRemove={steps.length > 1 ? () => removeStep(i) : undefined}
@@ -331,7 +332,7 @@ export function UpsellAnalyzer() {
           <ResultsChart results={results.steps} />
 
           <div className="overflow-x-auto rounded-md border border-white/[0.06]">
-            <table className="w-full text-[12px]">
+            <table className="w-full min-w-[640px] text-[12px]">
               <thead className="bg-white/[0.03] text-left text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
                 <tr>
                   <th className="px-3 py-2">Etapa</th>
@@ -347,7 +348,7 @@ export function UpsellAnalyzer() {
                     <td className="px-3 py-2 font-semibold uppercase tracking-[0.12em] text-white/90">
                       {s.name}
                     </td>
-                    <td className="px-3 py-2 text-white/55">
+                    <td className="min-w-64 px-3 py-2 text-white/55">
                       {s.product || '*qualquer produto*'}
                       {s.offers.length > 0 && ` · ${s.offers.join(', ')}`}
                     </td>
@@ -372,9 +373,7 @@ export function UpsellAnalyzer() {
       <section className="glass-card space-y-3 p-6">
         <header>
           <p className="hud-label">Presets</p>
-          <h2 className="mt-1 text-[14px] font-semibold text-white">
-            Salvos no seu navegador
-          </h2>
+          <h2 className="mt-1 text-[14px] font-semibold text-white">Salvos no seu navegador</h2>
         </header>
         <div className="grid gap-3 md:grid-cols-[1fr_auto_auto]">
           <Input
@@ -422,8 +421,8 @@ export function UpsellAnalyzer() {
           </Button>
         </div>
         <p className="text-[11px] text-white/40">
-          Presets guardam plataforma, mapeamento de colunas, configuração do front e dos
-          upsells. Os arquivos das planilhas precisam ser carregados de novo a cada uso.
+          Presets guardam plataforma, mapeamento de colunas, configuração do front e dos upsells. Os
+          arquivos das planilhas precisam ser carregados de novo a cada uso.
         </p>
       </section>
     </div>
@@ -530,9 +529,7 @@ function FunnelRow(props: {
   return (
     <div
       className={`grid items-end gap-3 rounded-md border p-3 md:grid-cols-[80px_1fr_1fr_auto] ${
-        isFront
-          ? 'border-cyan-300/30 bg-cyan-300/[0.03]'
-          : 'border-white/[0.06] bg-white/[0.02]'
+        isFront ? 'border-cyan-300/30 bg-cyan-300/[0.03]' : 'border-white/[0.06] bg-white/[0.02]'
       }`}
     >
       <div>
