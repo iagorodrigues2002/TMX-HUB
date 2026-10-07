@@ -20,7 +20,7 @@ const buttonVariants = cva(
   [
     'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg',
     'font-semibold tracking-[0.01em] transition-all duration-200 active:scale-[0.98]',
-    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/40 focus-visible:ring-offset-0',
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0',
     'disabled:pointer-events-none disabled:opacity-50',
     '[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
   ].join(' '),
@@ -28,7 +28,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: [
-          'border border-cyan-200/20 text-accent-on shadow-[0_0_12px_rgba(34,211,238,0.25),inset_0_1px_0_rgba(255,255,255,.28)]',
+          'border border-primary/20 text-accent-on shadow-[0_0_12px_rgba(34,211,238,0.25),inset_0_1px_0_rgba(255,255,255,.28)]',
           'hover:brightness-110 hover:shadow-[0_0_24px_rgba(34,211,238,0.42)]',
         ].join(' '),
         secondary:
@@ -39,7 +39,7 @@ const buttonVariants = cva(
           'text-muted-foreground hover:bg-accent hover:text-accent-foreground normal-case tracking-normal',
         destructive:
           'bg-danger/90 text-destructive-foreground hover:bg-danger shadow-[0_0_12px_rgba(244,63,94,0.25)]',
-        link: 'text-cyan-300 underline-offset-4 hover:underline normal-case tracking-normal',
+        link: 'text-primary underline-offset-4 hover:underline normal-case tracking-normal',
       },
       size: {
         default: 'h-10 px-4 text-[13px]',

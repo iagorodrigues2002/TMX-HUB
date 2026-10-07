@@ -59,11 +59,11 @@ export function StatusPill({ status, progress }: StatusPillProps) {
   }
 
   return (
-    <span className="inline-flex items-center gap-2 rounded-sm border border-cyan-300/25 bg-cyan-300/[0.06] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-100">
+    <span className="inline-flex items-center gap-2 rounded-sm border border-primary/25 bg-primary/[0.06] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
       <span aria-hidden className="status-dot status-dot-cyan" />
       {label}
       {typeof progress === 'number' && progress > 0 && (
-        <span className="text-cyan-200/70">{progress}%</span>
+        <span className="text-primary">{progress}%</span>
       )}
     </span>
   );

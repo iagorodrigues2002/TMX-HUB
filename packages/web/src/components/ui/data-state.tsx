@@ -41,7 +41,7 @@ export function DataState({
         aria-hidden
         className={cn(
           'h-5 w-5',
-          variant === 'loading' && 'animate-spin text-cyan-300',
+          variant === 'loading' && 'animate-spin text-primary',
           variant === 'error' && 'text-danger',
           variant === 'empty' && 'text-white/45',
         )}

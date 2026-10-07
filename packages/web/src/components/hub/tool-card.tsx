@@ -20,16 +20,17 @@ export function ToolCard({ icon, title, description, href, disabled, badge }: To
       <div className="flex items-center gap-2">
         <h3 className="text-[16px] font-semibold leading-tight text-white">{title}</h3>
         {badge && (
-          <span className="rounded-sm border border-cyan-300/30 bg-cyan-300/5 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-cyan-200/80">
+          <span className="rounded-sm border border-primary/30 bg-primary/5 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-primary">
             {badge}
           </span>
         )}
       </div>
       <p className="mt-1 text-[13px] leading-snug text-white/55">{description}</p>
       {!disabled && (
-        <p className="mt-4 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-300/80">
+        <p className="mt-4 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
           Acessar
           <svg
+            aria-hidden="true"
             viewBox="0 0 24 24"
             className="h-3 w-3"
             fill="none"

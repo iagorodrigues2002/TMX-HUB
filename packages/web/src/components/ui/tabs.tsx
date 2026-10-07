@@ -1,8 +1,8 @@
 'use client';
 
+import { cn } from '@/lib/utils';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 import * as React from 'react';
-import { cn } from '@/lib/utils';
 
 const Tabs = TabsPrimitive.Root;
 
@@ -30,7 +30,7 @@ const TabsTrigger = React.forwardRef<
     data-tabs-active-gradient=""
     className={cn(
       'inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 text-[11px] font-semibold uppercase tracking-[0.18em] transition-all',
-      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/40',
+      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
       'disabled:pointer-events-none disabled:opacity-50',
       'text-white/55 hover:text-white/80',
       'data-[state=active]:shadow-[0_0_12px_rgba(34,211,238,0.25)]',
@@ -49,7 +49,7 @@ const TabsContent = React.forwardRef<
   <TabsPrimitive.Content
     ref={ref}
     className={cn(
-      'mt-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/40',
+      'mt-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
       className,
     )}
     {...props}

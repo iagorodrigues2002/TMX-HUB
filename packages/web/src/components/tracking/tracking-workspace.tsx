@@ -55,11 +55,11 @@ function TrackingWorkspaceContent() {
   return (
     <div data-surface="tracking" className="signal-reveal space-y-4">
       <TrackingBackdrop />
-      <header className="rounded-xl border border-cyan-300/15 bg-bg-elevated/75 p-4 md:p-5">
+      <header className="rounded-xl border border-[var(--hairline-strong)] bg-bg-elevated/75 p-4 md:p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex min-w-0 gap-3">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-cyan-300/25 bg-cyan-300/[0.08]">
-              <RadioTower className="h-5 w-5 text-cyan-300" />
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-[var(--hairline-strong)] bg-[var(--hairline)]">
+              <RadioTower className="h-5 w-5 text-[var(--signal-300)]" />
             </div>
             <div className="min-w-0">
               <h1 className="text-xl font-semibold tracking-tight text-white md:text-2xl">
@@ -98,7 +98,7 @@ function TrackingWorkspaceContent() {
                 value={activeOfferId}
                 disabled={isLoading || !offers.length}
                 onChange={(event) => setActiveOfferId(event.target.value)}
-                className="h-11 w-full appearance-none rounded-md border border-white/[0.10] bg-[#06131d] px-3 pr-10 text-sm text-white outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/40"
+                className="h-11 w-full appearance-none rounded-md border border-[var(--hairline-strong)] bg-[var(--surface-inset)] px-3 pr-10 text-sm text-[var(--ink-primary)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--signal-500)]"
               >
                 {offers.map((offer) => (
                   <option key={offer.id} value={offer.id}>
@@ -148,14 +148,14 @@ function TrackingWorkspaceContent() {
                   aria-current={section === item.id ? 'page' : undefined}
                   onClick={() => navigate(view, item.id)}
                   className={cn(
-                    'flex min-h-11 min-w-44 shrink-0 items-start gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/40 xl:mb-1 xl:w-full xl:min-w-0',
+                    'flex min-h-11 min-w-44 shrink-0 items-start gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--signal-500)] xl:mb-1 xl:w-full xl:min-w-0',
                     section === item.id && 'bg-white/[0.06]',
                   )}
                 >
                   <Icon
                     className={cn(
                       'mt-0.5 h-4 w-4 shrink-0 text-white/35',
-                      section === item.id && 'text-cyan-300',
+                      section === item.id && 'text-[var(--signal-300)]',
                     )}
                   />
                   <span>

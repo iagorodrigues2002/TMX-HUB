@@ -15,13 +15,13 @@ export interface KpiProps {
 }
 
 const toneStyles: Record<KpiTone, { surface: string; icon: string }> = {
-  default: { surface: 'border-white/[0.06] bg-white/[0.02]', icon: 'text-cyan-300' },
+  default: { surface: 'border-border bg-muted', icon: 'text-primary' },
   positive: {
-    surface: 'border-emerald-300/30 bg-emerald-300/[0.04]',
-    icon: 'text-emerald-300',
+    surface: 'border-success/30 bg-success/[0.04]',
+    icon: 'text-success',
   },
-  spend: { surface: 'border-amber-300/30 bg-amber-300/[0.03]', icon: 'text-amber-300' },
-  warn: { surface: 'border-red-300/30 bg-red-300/[0.03]', icon: 'text-red-300' },
+  spend: { surface: 'border-warning/30 bg-warning/[0.03]', icon: 'text-warning' },
+  warn: { surface: 'border-danger/30 bg-danger/[0.03]', icon: 'text-danger' },
 };
 
 export function Kpi({
