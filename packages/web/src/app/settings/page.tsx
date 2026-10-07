@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 
 export default function SettingsPage() {
   return (
-    <HubShell breadcrumb={['CONFIGURAÇÕES']}>
+    <HubShell breadcrumb={['CONTA E SEGURANÇA']}>
       <SettingsClient />
     </HubShell>
   );

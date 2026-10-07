@@ -1,8 +1,7 @@
 'use client';
 
+import { AccountSecurity } from '@/components/settings/account-security';
 import { Button } from '@/components/ui/button';
-import { FormField } from '@/components/ui/form-field';
-import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -13,6 +12,11 @@ import {
 import { type OfferView, apiClient, authToken } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
 import { env } from '@/lib/env';
+import {
+  SHOW_SETTINGS_N8N_INTEGRATION,
+  SHOW_SETTINGS_OFFER_DESTINATION,
+  SHOW_SETTINGS_TMX_CONNECTION,
+} from '@/lib/ui-visibility';
 import { cn } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -23,20 +27,17 @@ import {
   KeyRound,
   Link2,
   Server,
-  Settings as SettingsIcon,
   ShieldCheck,
   Workflow,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { InvitesSection } from './invites-section';
-import { UsersSection } from './users-section';
 
-// Fallback caso a oferta selecionada não tenha dashboardId — usa o do PFL_ENG.
 const UTMIFY_DASHBOARD_ID_FALLBACK = '69f3b5692659d80c33debea2';
-
 const LOCAL_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', 'host.docker.internal'];
+const SHOW_ANY_INTEGRATION =
+  SHOW_SETTINGS_TMX_CONNECTION || SHOW_SETTINGS_OFFER_DESTINATION || SHOW_SETTINGS_N8N_INTEGRATION;
 
 function isLocalUrl(url: string): boolean {
   try {
@@ -82,7 +83,6 @@ function copy(value: string, label: string) {
 interface FieldRowProps {
   label: string;
   value: string;
-  /** Optional: actual value to copy when display value is masked. Defaults to `value`. */
   copyValue?: string;
   copyLabel?: string;
   mono?: boolean;
@@ -115,19 +115,19 @@ function FieldRow({ label, value, copyValue, copyLabel, mono, hint, warning, ok 
           onClick={() => copy(realValue, copyLabel ?? label)}
           disabled={!realValue}
         >
-          <Copy className="h-3 w-3" />
+          <Copy className="h-3 w-3" aria-hidden />
           Copiar
         </Button>
       </div>
       {warning && (
         <p className="flex items-start gap-1.5 text-[11px] text-amber-300/90">
-          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
           <span>{warning}</span>
         </p>
       )}
       {ok && (
         <p className="flex items-start gap-1.5 text-[11px] text-emerald-300/85">
-          <CheckCircle2 className="mt-0.5 h-3 w-3 shrink-0" />
+          <CheckCircle2 className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
           <span>{ok}</span>
         </p>
       )}
@@ -135,373 +135,194 @@ function FieldRow({ label, value, copyValue, copyLabel, mono, hint, warning, ok 
   );
 }
 
-export function SettingsClient() {
-  const { user, loading } = useAuth();
-  const router = useRouter();
-  const isAdmin = user?.role === 'admin';
-  useEffect(() => {
-    if (!loading && user && !isAdmin) router.replace('/tools');
-  }, [isAdmin, loading, router, user]);
+function SettingsIntegrations({ isAdmin }: { isAdmin: boolean }) {
   const apiUrl = env.NEXT_PUBLIC_API_URL;
   const apiIsLocal = isLocalUrl(apiUrl);
   const token = authToken.get() ?? '';
   const tokenExp = useMemo(() => decodeJwtExp(token || null), [token]);
   const tokenExpired = tokenExp ? tokenExp.getTime() < Date.now() : false;
+  const needsOffers = SHOW_SETTINGS_OFFER_DESTINATION || SHOW_SETTINGS_N8N_INTEGRATION;
 
   const { data: offers = [], isLoading: offersLoading } = useQuery<OfferView[]>({
     queryKey: ['offers'],
     queryFn: () => apiClient.listOffers(),
-    enabled: isAdmin,
+    enabled: isAdmin && needsOffers,
   });
 
-  const [selectedOfferId, setSelectedOfferId] = useState<string>('');
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [changingPassword, setChangingPassword] = useState(false);
-  const [passwordValidation, setPasswordValidation] = useState<'change' | 'reset' | null>(null);
-  const selectedOffer = offers.find((o) => o.id === selectedOfferId) ?? offers[0];
+  const [selectedOfferId, setSelectedOfferId] = useState('');
+  const selectedOffer = offers.find((offer) => offer.id === selectedOfferId) ?? offers[0];
   const effectiveOfferId = selectedOffer?.id ?? '';
   const utmifyDashboardId = selectedOffer?.dashboardId?.trim() || UTMIFY_DASHBOARD_ID_FALLBACK;
   const ingestUrl = effectiveOfferId ? `${apiUrl}/v1/offers/${effectiveOfferId}/ingest` : '';
-
-  const fullConfigBlock = useMemo(() => {
-    return [
-      `TMX_API_URL = ${apiUrl}`,
-      `TMX_TOKEN = ${token || '<faça login para gerar>'}`,
-      `OFFER_ID = ${effectiveOfferId || '<crie uma oferta em /ofertas>'}`,
-      `UTMIFY_DASHBOARD_ID = ${utmifyDashboardId}`,
-    ].join('\n');
-  }, [apiUrl, token, effectiveOfferId, utmifyDashboardId]);
-
+  const fullConfigBlock = useMemo(
+    () =>
+      [
+        `TMX_API_URL = ${apiUrl}`,
+        `TMX_TOKEN = ${token || '<faça login para gerar>'}`,
+        `OFFER_ID = ${effectiveOfferId || '<crie uma oferta em /ofertas>'}`,
+        `UTMIFY_DASHBOARD_ID = ${utmifyDashboardId}`,
+      ].join('\n'),
+    [apiUrl, token, effectiveOfferId, utmifyDashboardId],
+  );
   const everythingReady = !!apiUrl && !!token && !tokenExpired && !!effectiveOfferId;
-  const currentPasswordError =
-    passwordValidation === 'change' && !currentPassword ? 'Informe sua senha atual.' : null;
-  const newPasswordError =
-    passwordValidation && newPassword.length < 8
-      ? 'A nova senha precisa ter ao menos 8 caracteres.'
-      : null;
-  const confirmPasswordError =
-    passwordValidation && newPassword !== confirmPassword
-      ? 'A confirmação da nova senha não confere.'
-      : null;
-
-  const changePassword = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setPasswordValidation('change');
-    if (!currentPassword || newPassword.length < 8 || newPassword !== confirmPassword) return;
-    setChangingPassword(true);
-    try {
-      await apiClient.changePassword(currentPassword, newPassword);
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-      setPasswordValidation(null);
-      toast.success('Senha alterada. Use a nova senha no outro navegador.');
-    } catch (error) {
-      toast.error((error as Error).message);
-    } finally {
-      setChangingPassword(false);
-    }
-  };
-
-  const adminResetPassword = async () => {
-    setPasswordValidation('reset');
-    if (newPassword.length < 8 || newPassword !== confirmPassword) return;
-    setChangingPassword(true);
-    try {
-      await apiClient.adminResetOwnPassword(newPassword);
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-      setPasswordValidation(null);
-      toast.success('Senha redefinida. Use a nova senha no outro navegador.');
-    } catch (error) {
-      toast.error((error as Error).message);
-    } finally {
-      setChangingPassword(false);
-    }
-  };
-
-  if (loading || !isAdmin) return null;
 
   return (
-    <div className="space-y-8">
-      <header className="space-y-3">
-        <div className="flex items-center gap-2">
-          <SettingsIcon className="h-5 w-5 text-cyan-300" />
-          <p className="hud-label">Operator Console · Configurações</p>
-        </div>
-        <h1 className="text-3xl font-bold tracking-tight text-white">Integração & Credenciais</h1>
-        <p className="max-w-2xl text-[14px] text-white/55">
-          Tudo que você precisa pra plugar o n8n (ou qualquer outro serviço externo) na API do TMX
-          HUB. Os valores abaixo são puxados em tempo real do seu ambiente atual.
-        </p>
-      </header>
-
-      {apiIsLocal && (
+    <>
+      {SHOW_SETTINGS_TMX_CONNECTION && apiIsLocal && (
         <div className="glass-card flex items-start gap-3 border-amber-300/20 bg-amber-300/[0.04] p-4">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" aria-hidden />
           <div className="space-y-1 text-[13px]">
             <p className="font-semibold text-amber-200">
               Sua API está apontada pra um host local ({apiUrl}).
             </p>
             <p className="text-amber-100/80">
-              Se o seu n8n está no Railway (ou em qualquer servidor remoto), ele{' '}
-              <strong>não vai conseguir</strong> alcançar essa URL. Opções:
+              Serviços remotos não conseguem acessar essa URL. Use um host público ou um túnel
+              temporário antes de configurar a integração.
             </p>
-            <ul className="list-disc pl-5 text-amber-100/75">
-              <li>Deployar a API em um host público (Railway, Render, Fly).</li>
-              <li>
-                Expor temporariamente com <code className="text-amber-200">ngrok</code> ou
-                Cloudflare Tunnel.
-              </li>
-              <li>
-                Rodar o próprio n8n local também e usar{' '}
-                <code className="text-amber-200">host.docker.internal:4000</code>.
-              </li>
-            </ul>
           </div>
         </div>
       )}
 
-      {/* Card 1 — TMX HUB connection */}
-      <section className="glass-card space-y-5 p-6">
-        <div className="flex items-center gap-2">
-          <Server className="h-4 w-4 text-cyan-300" />
-          <p className="hud-label">1 · Conexão TMX HUB</p>
-        </div>
-
-        <FieldRow
-          label="TMX_API_URL"
-          value={apiUrl}
-          mono
-          hint="Lido de NEXT_PUBLIC_API_URL"
-          warning={
-            apiIsLocal ? 'URL local — não acessível do n8n remoto. Veja o aviso acima.' : undefined
-          }
-          ok={!apiIsLocal ? 'URL pública detectada — pronto pra n8n remoto.' : undefined}
-        />
-
-        <FieldRow
-          label="TMX_TOKEN"
-          value={token ? maskToken(token) : ''}
-          copyValue={token}
-          copyLabel="TMX_TOKEN"
-          mono
-          hint={
-            tokenExp ? `Expira em ${tokenExp.toLocaleString('pt-BR')}` : 'Token de sessão (JWT)'
-          }
-          warning={
-            !token
-              ? 'Você está sem token. Faça login pra gerar.'
-              : tokenExpired
-                ? 'Token expirado — faça login novamente.'
-                : undefined
-          }
-          ok={token && !tokenExpired ? 'Sessão válida.' : undefined}
-        />
-      </section>
-
-      {/* Card 2 — Offers */}
-      <section className="glass-card space-y-5 p-6">
-        <div className="flex items-center gap-2">
-          <Link2 className="h-4 w-4 text-cyan-300" />
-          <p className="hud-label">2 · Oferta de destino</p>
-        </div>
-
-        {offersLoading ? (
-          <p className="text-[13px] text-white/55">Carregando ofertas…</p>
-        ) : offers.length === 0 ? (
-          <div className="rounded-md border border-white/[0.08] bg-white/[0.02] p-4 text-[13px] text-white/65">
-            Você ainda não tem ofertas. Crie uma em{' '}
-            <a href="/ofertas" className="text-cyan-300 hover:text-cyan-200">
-              /ofertas
-            </a>{' '}
-            primeiro.
+      {SHOW_SETTINGS_TMX_CONNECTION && (
+        <section className="glass-card space-y-5 p-6">
+          <div className="flex items-center gap-2">
+            <Server className="h-4 w-4 text-cyan-300" aria-hidden />
+            <h2 className="hud-label">Conexão TMX HUB</h2>
           </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <p className="hud-label">Selecionar oferta</p>
-              <Select value={effectiveOfferId} onValueChange={(v) => setSelectedOfferId(v)}>
-                <SelectTrigger>
+          <FieldRow
+            label="TMX_API_URL"
+            value={apiUrl}
+            mono
+            hint="Lido de NEXT_PUBLIC_API_URL"
+            warning={apiIsLocal ? 'URL local — não acessível por serviços remotos.' : undefined}
+            ok={!apiIsLocal ? 'URL pública detectada.' : undefined}
+          />
+          <FieldRow
+            label="TMX_TOKEN"
+            value={token ? maskToken(token) : ''}
+            copyValue={token}
+            copyLabel="TMX_TOKEN"
+            mono
+            hint={tokenExp ? `Expira em ${tokenExp.toLocaleString('pt-BR')}` : 'Token de sessão'}
+            warning={
+              !token
+                ? 'Faça login para gerar um token.'
+                : tokenExpired
+                  ? 'Token expirado — faça login novamente.'
+                  : undefined
+            }
+            ok={token && !tokenExpired ? 'Sessão válida.' : undefined}
+          />
+        </section>
+      )}
+
+      {SHOW_SETTINGS_OFFER_DESTINATION && (
+        <section className="glass-card space-y-5 p-6">
+          <div className="flex items-center gap-2">
+            <Link2 className="h-4 w-4 text-cyan-300" aria-hidden />
+            <h2 className="hud-label">Oferta de destino</h2>
+          </div>
+          {offersLoading ? (
+            <p className="text-[13px] text-white/55">Carregando ofertas…</p>
+          ) : offers.length === 0 ? (
+            <p className="rounded-md border border-white/[0.08] bg-white/[0.02] p-4 text-[13px] text-white/65">
+              Crie uma oferta antes de configurar este destino.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              <Select value={effectiveOfferId} onValueChange={setSelectedOfferId}>
+                <SelectTrigger aria-label="Selecionar oferta">
                   <SelectValue placeholder="Escolha uma oferta…" />
                 </SelectTrigger>
                 <SelectContent>
-                  {offers.map((o) => (
-                    <SelectItem key={o.id} value={o.id}>
-                      {o.name}
+                  {offers.map((offer) => (
+                    <SelectItem key={offer.id} value={offer.id}>
+                      {offer.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              <FieldRow label="OFFER_ID" value={effectiveOfferId} copyLabel="OFFER_ID" mono />
+              <FieldRow label="Ingest URL" value={ingestUrl} copyLabel="Ingest URL" mono />
             </div>
+          )}
+        </section>
+      )}
 
-            <FieldRow label="OFFER_ID" value={effectiveOfferId} copyLabel="OFFER_ID" mono />
-            <FieldRow
-              label="Ingest URL"
-              value={ingestUrl}
-              copyLabel="Ingest URL"
-              mono
-              hint="Endpoint que o n8n vai chamar"
-            />
+      {SHOW_SETTINGS_N8N_INTEGRATION && (
+        <section className="glass-card space-y-5 p-6">
+          <div className="flex items-center gap-2">
+            <Workflow className="h-4 w-4 text-cyan-300" aria-hidden />
+            <h2 className="hud-label">Integração n8n</h2>
           </div>
-        )}
-      </section>
-
-      {/* Card 3 — n8n integration */}
-      <section className="glass-card space-y-5 p-6">
-        <div className="flex items-center gap-2">
-          <Workflow className="h-4 w-4 text-cyan-300" />
-          <p className="hud-label">3 · Integração n8n</p>
-        </div>
-
-        <div className="grid gap-3 md:grid-cols-2">
-          <Button asChild variant="default">
-            <a href="/tmx-utmify-ingest.n8n.json" download="tmx-utmify-ingest.n8n.json">
-              <Download className="h-4 w-4" />
-              Baixar workflow.json
-            </a>
-          </Button>
-
-          <Button
-            variant="outline"
-            onClick={() => copy(fullConfigBlock, 'Bloco de configuração')}
-            disabled={!everythingReady}
-          >
-            <Copy className="h-4 w-4" />
-            {everythingReady ? 'Copiar todas as 4 variáveis' : 'Falta preencher acima'}
-          </Button>
-        </div>
-
-        <FieldRow
-          label="UTMIFY_DASHBOARD_ID"
-          value={utmifyDashboardId}
-          copyLabel="UTMIFY_DASHBOARD_ID"
-          mono
-          hint={
-            selectedOffer?.dashboardId
-              ? `Lido da oferta "${selectedOffer.name}"`
-              : 'Fallback — defina por oferta em /ofertas'
-          }
-        />
-
-        <div className="space-y-2">
-          <p className="hud-label">Bloco pronto pra colar no node Config</p>
+          <div className="grid gap-3 md:grid-cols-2">
+            <Button asChild>
+              <a href="/tmx-utmify-ingest.n8n.json" download="tmx-utmify-ingest.n8n.json">
+                <Download className="h-4 w-4" aria-hidden />
+                Baixar workflow.json
+              </a>
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => copy(fullConfigBlock, 'Bloco de configuração')}
+              disabled={!everythingReady}
+            >
+              <Copy className="h-4 w-4" aria-hidden />
+              {everythingReady ? 'Copiar configuração' : 'Falta preencher acima'}
+            </Button>
+          </div>
+          <FieldRow
+            label="UTMIFY_DASHBOARD_ID"
+            value={utmifyDashboardId}
+            copyLabel="UTMIFY_DASHBOARD_ID"
+            mono
+          />
           <pre className="overflow-x-auto rounded-md border border-white/[0.08] bg-[#04101A]/60 p-4 text-[12px] leading-6 text-white/80">
             <code>{fullConfigBlock}</code>
           </pre>
-        </div>
-
-        <div className="rounded-md border border-cyan-300/15 bg-cyan-300/[0.04] p-4 text-[13px] text-white/75">
-          <p className="mb-2 flex items-center gap-2 font-semibold text-cyan-200">
-            <ShieldCheck className="h-4 w-4" />
-            Como aplicar no n8n
+          <p className="flex items-center gap-2 text-[13px] text-white/65">
+            <ShieldCheck className="h-4 w-4 text-cyan-300" aria-hidden />
+            Importe o arquivo e preencha o node de configuração com os valores acima.
           </p>
-          <ol className="list-decimal space-y-1 pl-5">
-            <li>
-              Importe o <code>tmx-utmify-ingest.n8n.json</code> no seu n8n.
-            </li>
-            <li>
-              Crie a credencial <strong>HTTP Basic Auth</strong> da UTMify (login + senha do seu
-              UTMify).
-            </li>
-            <li>
-              Abra o node <strong>⚙️ Config</strong> e crie 4 fields (Add Field) com os nomes e
-              valores do bloco acima.
-            </li>
-            <li>
-              Clique em <strong>Execute step</strong> no Config — o output deve mostrar as 4
-              variáveis. Depois rode o workflow inteiro pra validar.
-            </li>
-          </ol>
-        </div>
-      </section>
+        </section>
+      )}
 
-      <section className="glass-card flex items-start gap-3 p-5 text-[13px]">
-        <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-white/55" />
-        <div className="space-y-1 text-white/65">
-          <p className="font-medium text-white/85">Sobre o token</p>
-          <p>
-            O <code>TMX_TOKEN</code> mostrado é o JWT da sua sessão atual no navegador. Ele expira —
-            quando expirar, faça login de novo e atualize a variável no n8n. Pra produção a longo
-            prazo, considere criar um <em>service token</em> sem expiração no backend.
-          </p>
-        </div>
-      </section>
-
-      <section className="glass-card space-y-5 p-6">
-        <div className="flex items-center gap-2">
-          <KeyRound className="h-4 w-4 text-cyan-300" />
-          <p className="hud-label">Segurança da conta</p>
-        </div>
-        <div>
-          <h2 className="text-base font-semibold text-white">Alterar senha</h2>
-          <p className="mt-1 text-[13px] text-white/55">
-            A mesma senha funciona em qualquer navegador. Use a redefinição abaixo somente para
-            criar uma nova senha se você não souber a atual. A sessão atual permanece ativa.
-          </p>
-        </div>
-        <form className="grid gap-4 md:grid-cols-3" noValidate onSubmit={changePassword}>
-          <FormField id="current-password" label="Senha atual" error={currentPasswordError}>
-            <Input
-              type="password"
-              autoComplete="current-password"
-              value={currentPassword}
-              onChange={(event) => setCurrentPassword(event.target.value)}
-            />
-          </FormField>
-          <FormField
-            id="new-password"
-            label="Nova senha"
-            error={newPasswordError}
-            help="Use pelo menos 8 caracteres."
-          >
-            <Input
-              type="password"
-              autoComplete="new-password"
-              value={newPassword}
-              onChange={(event) => setNewPassword(event.target.value)}
-            />
-          </FormField>
-          <FormField
-            id="confirm-password"
-            label="Confirmar nova senha"
-            error={confirmPasswordError}
-          >
-            <Input
-              type="password"
-              autoComplete="new-password"
-              value={confirmPassword}
-              onChange={(event) => setConfirmPassword(event.target.value)}
-            />
-          </FormField>
-          <div className="md:col-span-3">
-            <Button type="submit" disabled={changingPassword}>
-              {changingPassword ? 'Alterando…' : 'Alterar senha'}
-            </Button>
-            <Button
-              type="button"
-              formNoValidate
-              variant="outline"
-              className="ml-3"
-              disabled={changingPassword}
-              onClick={() => void adminResetPassword()}
-            >
-              Definir nova senha sem a atual
-            </Button>
-            <p className="mt-3 text-xs text-amber-200/80">
-              Use esta opção somente se você não reconhece a senha atual. Ela está disponível apenas
-              para o administrador já autenticado.
-            </p>
+      {(SHOW_SETTINGS_TMX_CONNECTION || SHOW_SETTINGS_N8N_INTEGRATION) && (
+        <section className="glass-card flex items-start gap-3 p-5 text-[13px]">
+          <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-white/55" aria-hidden />
+          <div className="space-y-1 text-white/65">
+            <p className="font-medium text-white/85">Sobre o token</p>
+            <p>O token mostrado é o JWT da sessão atual e precisa ser renovado após expirar.</p>
           </div>
-        </form>
-      </section>
+        </section>
+      )}
+    </>
+  );
+}
 
-      <UsersSection />
+export function SettingsClient() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+  const isAdmin = user?.role === 'admin';
 
-      <InvitesSection />
+  useEffect(() => {
+    if (!loading && user && !isAdmin) router.replace('/tools');
+  }, [isAdmin, loading, router, user]);
+
+  if (loading || !isAdmin) return null;
+
+  return (
+    <div className="space-y-8">
+      <header className="space-y-2">
+        <h1 className="page-title">Conta e segurança</h1>
+        <p className="page-description">
+          Atualize sua senha e mantenha o acesso à sua conta protegido.
+        </p>
+      </header>
+
+      <AccountSecurity />
+
+      {SHOW_ANY_INTEGRATION && <SettingsIntegrations isAdmin={isAdmin} />}
     </div>
   );
 }
