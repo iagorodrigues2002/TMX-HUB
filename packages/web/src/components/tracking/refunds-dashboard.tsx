@@ -41,6 +41,82 @@ function dateTime(value: string) {
   }).format(new Date(value));
 }
 
+export function TrackingRefundsSummary({ offerId }: { offerId: string }) {
+  const [displayCurrency] = useDisplayCurrency();
+  const from = ago(29);
+  const to = today();
+  const report = useQuery({
+    queryKey: ['refunds-dashboard', 'tracking-summary', from, to, offerId],
+    queryFn: () => apiClient.getRefundsDashboard(from, to, offerId),
+    retry: false,
+  });
+  const value = (minor: number | string | undefined) =>
+    displayCurrency === 'USD'
+      ? formatMoney(String(Math.round(Number(minor ?? 0) / 500)), 'USD')
+      : money(minor);
+
+  if (report.isLoading) {
+    return <DataState variant="loading" title="Carregando resumo de reembolsos…" />;
+  }
+  if (report.isError || !report.data) {
+    return (
+      <DataState
+        variant="error"
+        title="Não foi possível carregar o resumo financeiro"
+        description="O relatório completo continua disponível na área de Reembolsos."
+        onRetry={() => void report.refetch()}
+        isRetrying={report.isFetching}
+        action={
+          <Button asChild variant="outline">
+            <a href="/reembolsos">Abrir relatório completo</a>
+          </Button>
+        }
+      />
+    );
+  }
+
+  return (
+    <section className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="text-base font-semibold text-white">Reembolsos e chargebacks</h2>
+          <p className="mt-1 text-sm text-white/50">
+            Últimos 30 dias da oferta ativa. Filtros e auditoria detalhada ficam no relatório.
+          </p>
+        </div>
+        <Button asChild variant="outline">
+          <a href="/reembolsos">Abrir relatório completo</a>
+        </Button>
+      </div>
+      <dl className="mt-5 grid gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border border-amber-300/15 bg-amber-300/[0.04] p-4">
+          <dt className="text-xs text-amber-100/70">Reembolsos</dt>
+          <dd className="mono-num mt-2 text-xl text-white">
+            {value(report.data.totals.refunded_brl_minor)}
+          </dd>
+          <p className="mt-1 text-xs text-white/40">{report.data.totals.refunded_orders} pedidos</p>
+        </div>
+        <div className="rounded-lg border border-danger/20 bg-danger/[0.04] p-4">
+          <dt className="text-xs text-danger">Chargebacks</dt>
+          <dd className="mono-num mt-2 text-xl text-white">
+            {value(report.data.totals.chargeback_brl_minor)}
+          </dd>
+          <p className="mt-1 text-xs text-white/40">
+            {report.data.totals.chargeback_orders} ocorrências
+          </p>
+        </div>
+        <div className="rounded-lg border border-white/[0.08] bg-black/10 p-4">
+          <dt className="text-xs text-white/50">Impacto total</dt>
+          <dd className="mono-num mt-2 text-xl text-white">
+            {value(report.data.totals.brl_minor)}
+          </dd>
+          <p className="mt-1 text-xs text-white/40">{report.data.totals.count} reversões</p>
+        </div>
+      </dl>
+    </section>
+  );
+}
+
 export function RefundsDashboard() {
   const [from, setFrom] = useState(() => ago(29));
   const [to, setTo] = useState(today);
