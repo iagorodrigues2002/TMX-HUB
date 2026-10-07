@@ -10,6 +10,7 @@ import {
   normalizeExplodely,
 } from '../integrations/explodely/normalize.js';
 import { logger } from '../lib/logger.js';
+import { createResilientPostgresClient } from '../lib/postgres-retry.js';
 import { makeRedis } from '../lib/redis.js';
 import { EXPLODELY_QUEUE_NAME, type ExplodelyJobData } from '../queues/index.js';
 import { createMetaQueue } from '../queues/meta.queue.js';
@@ -283,10 +284,12 @@ export async function processExplodelyReceipt(db: Sql, receiptId: string): Promi
 
 export function createExplodelyWorker(): Worker<ExplodelyJobData> | null {
   if (!env.DATABASE_URL) return null;
-  const db = postgres(env.DATABASE_URL, {
-    max: 3,
-    ssl: env.NODE_ENV === 'production' ? 'require' : false,
-  });
+  const db = createResilientPostgresClient(
+    postgres(env.DATABASE_URL, {
+      max: 3,
+      ssl: env.NODE_ENV === 'production' ? 'require' : false,
+    }),
+  );
   const metaQueue = createMetaQueue(env.REDIS_URL);
   const tiktokQueue = createTikTokQueue(env.REDIS_URL);
   const utmifyQueue = createUtmifyDeliveryQueue(env.REDIS_URL);
