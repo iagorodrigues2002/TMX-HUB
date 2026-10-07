@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { env } from '../env.js';
 import { normalizePaysight } from '../integrations/paysight/normalize.js';
 import { normalizeVendepay } from '../integrations/vendepay/normalize.js';
+import { collectNetworkIdentifiers } from '../lib/network-detection.js';
 import { decryptSecret, encryptSecret } from '../lib/secret-box.js';
 import { createTrackingToken, readTrackingTokenWithRotation } from '../lib/tracking-token.js';
 import { webhookPayloadForStorage } from '../lib/webhook-payload.js';
@@ -270,6 +271,7 @@ const attributionQueryKeys = new Set([
   'gbraid',
   'wbraid',
   'ttclid',
+  'twclid',
   'msclkid',
   'campaign_id',
   'campaign_name',
@@ -281,6 +283,10 @@ const attributionQueryKeys = new Set([
   'site_source_name',
   '_fbp',
   '_fbc',
+  '_ttp',
+  'fbc',
+  'fbp',
+  'ttp',
   '_fbclid_ts',
 ]);
 
@@ -740,26 +746,36 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       linkedIdentity?.projectId === project.id ? linkedIdentity.journeyId : input.journey_id;
     const country = requestCountry(req.headers);
     const source = country ? { ...input.source, country } : input.source;
+    const clickIds = collectNetworkIdentifiers(source);
     await app.db.begin(async (sql) => {
       await sql`
         INSERT INTO tracking_visitors
-          (project_id, visitor_id, first_source, last_source)
+          (project_id, visitor_id, first_source, last_source, click_ids)
         VALUES
-          (${project.id}, ${visitorId}, ${sql.json(source)}, ${sql.json(source)})
+          (${project.id}, ${visitorId}, ${sql.json(source)}, ${sql.json(source)},
+           ${sql.json(clickIds)})
         ON CONFLICT (project_id, visitor_id) DO UPDATE SET
           last_source = CASE
             WHEN EXCLUDED.last_source = '{}'::jsonb THEN tracking_visitors.last_source
             ELSE tracking_visitors.last_source || EXCLUDED.last_source
           END,
+          click_ids = CASE
+            WHEN tracking_visitors.click_ids = '{}'::jsonb THEN EXCLUDED.click_ids
+            ELSE tracking_visitors.click_ids
+          END,
           last_seen_at = now()
       `;
       await sql`
         INSERT INTO tracking_sessions
-          (project_id, session_id, visitor_id, journey_id, landing_url, referrer, source)
+          (project_id, session_id, visitor_id, journey_id, landing_url, referrer, source, click_ids)
         VALUES
           (${project.id}, ${input.session_id}, ${visitorId}, ${journeyId},
-           ${input.landing_url}, ${input.referrer || null}, ${sql.json(source)})
-        ON CONFLICT (project_id, session_id) DO UPDATE SET last_seen_at = now()
+           ${input.landing_url}, ${input.referrer || null}, ${sql.json(source)},
+           ${sql.json(clickIds)})
+        ON CONFLICT (project_id, session_id) DO UPDATE SET
+          source = tracking_sessions.source || EXCLUDED.source,
+          click_ids = tracking_sessions.click_ids || EXCLUDED.click_ids,
+          last_seen_at = now()
       `;
     });
     return {
@@ -924,6 +940,17 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const linkSource = link.traffic_source !== 'unknown' ? link.traffic_source : undefined;
     const country = requestCountry(req.headers);
     const userAgent = req.headers['user-agent'] ?? '';
+    const entrySource = {
+      ...source,
+      ...(linkSource
+        ? {
+            tmx_traffic_source: linkSource,
+            ...(source.utm_source ? {} : { utm_source: linkSource }),
+          }
+        : {}),
+      ...(country ? { country } : {}),
+    };
+    const clickIds = collectNetworkIdentifiers(entrySource);
     const previewOrBot =
       previewRequest ||
       /facebookexternalhit|facebot|meta-externalagent|meta-externalfetcher|bot|crawler|spider|preview/i.test(
@@ -933,20 +960,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       await app.db`
         INSERT INTO tracking_events
           (id, project_id, visitor_id, journey_id, event_name, event_category,
-           event_url, source, properties, client_ip, user_agent, received_at)
+           event_url, source, click_ids, properties, client_ip, user_agent, received_at)
         VALUES
           (${ulid()}, ${link.project_id}, ${visitorId}, ${journeyId}, 'AdClick', 'acquisition',
            ${`${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/c/${req.params.slug}`},
-           ${app.db.json({
-             ...source,
-             ...(linkSource
-               ? {
-                   tmx_traffic_source: linkSource,
-                   ...(source.utm_source ? {} : { utm_source: linkSource }),
-                 }
-               : {}),
-             ...(country ? { country } : {}),
-           } as never)},
+           ${app.db.json(entrySource as never)}, ${app.db.json(clickIds)},
            ${app.db.json({
              entry_link_id: link.id,
              ...(linkSource ? { traffic_source: linkSource } : {}),
@@ -956,6 +974,20 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                : {}),
            } as never)},
            ${req.ip}, ${userAgent || null}, now())
+      `;
+      await app.db`
+        INSERT INTO tracking_visitors
+          (project_id, visitor_id, first_source, last_source, click_ids)
+        VALUES
+          (${link.project_id}, ${visitorId}, ${app.db.json(entrySource as never)},
+           ${app.db.json(entrySource as never)}, ${app.db.json(clickIds)})
+        ON CONFLICT (project_id, visitor_id) DO UPDATE SET
+          last_source = tracking_visitors.last_source || EXCLUDED.last_source,
+          click_ids = CASE
+            WHEN tracking_visitors.click_ids = '{}'::jsonb THEN EXCLUDED.click_ids
+            ELSE tracking_visitors.click_ids
+          END,
+          last_seen_at = now()
       `;
     }
     const trackingToken = createTrackingToken(
@@ -1458,29 +1490,53 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       ...(vturbKey && !Object.values(event.source).includes(vturbKey) ? { vtid: vturbKey } : {}),
       ...(country ? { country } : {}),
     };
+    const clickIds = collectNetworkIdentifiers(source);
     const inserted = await app.db<{ id: string; received_at: Date }[]>`
       INSERT INTO tracking_events
         (id, project_id, visitor_id, session_id, journey_id, event_name, event_category,
-         event_url, page_title, referrer, source, properties, consent_state,
+         event_url, page_title, referrer, source, click_ids, properties, consent_state,
          client_ip, user_agent, client_at)
       VALUES
         (${event.event_id}, ${project.id}, ${event.visitor_id}, ${event.session_id ?? null},
          ${event.journey_id ?? null}, ${event.event_name}, ${event.event_category},
          ${event.event_url}, ${event.page_title ?? null}, ${event.referrer || null},
-         ${app.db.json(source)}, ${app.db.json(event.properties as never)},
+         ${app.db.json(source)}, ${app.db.json(clickIds)}, ${app.db.json(event.properties as never)},
          ${event.consent_state ?? null}, ${req.ip}, ${req.headers['user-agent'] ?? null},
          ${event.client_at ?? null})
       ON CONFLICT (project_id, id) DO NOTHING
       RETURNING id, received_at
     `;
     await app.db`
-      UPDATE tracking_visitors SET last_seen_at = now(),
+      INSERT INTO tracking_visitors
+        (project_id, visitor_id, first_source, last_source, click_ids)
+      VALUES
+        (${project.id}, ${event.visitor_id}, ${app.db.json(source)}, ${app.db.json(source)},
+         ${app.db.json(clickIds)})
+      ON CONFLICT (project_id, visitor_id) DO UPDATE SET
+        last_seen_at = now(),
         last_source = CASE
-          WHEN ${app.db.json(source)} = '{}'::jsonb THEN last_source
-          ELSE last_source || ${app.db.json(source)}
+          WHEN EXCLUDED.last_source = '{}'::jsonb THEN tracking_visitors.last_source
+          ELSE tracking_visitors.last_source || EXCLUDED.last_source
+        END,
+        click_ids = CASE
+          WHEN tracking_visitors.click_ids = '{}'::jsonb THEN EXCLUDED.click_ids
+          ELSE tracking_visitors.click_ids
         END
-      WHERE project_id = ${project.id} AND visitor_id = ${event.visitor_id}
     `;
+    if (event.session_id) {
+      await app.db`
+        INSERT INTO tracking_sessions
+          (project_id, session_id, visitor_id, journey_id, landing_url, referrer, source, click_ids)
+        VALUES
+          (${project.id}, ${event.session_id}, ${event.visitor_id}, ${event.journey_id ?? null},
+           ${event.event_url}, ${event.referrer || null}, ${app.db.json(source)},
+           ${app.db.json(clickIds)})
+        ON CONFLICT (project_id, session_id) DO UPDATE SET
+          source = tracking_sessions.source || EXCLUDED.source,
+          click_ids = tracking_sessions.click_ids || EXCLUDED.click_ids,
+          last_seen_at = now()
+      `;
+    }
     if (event.event_name === 'InitiateCheckout' && inserted[0]) {
       await enqueueInitiateCheckout(app, {
         projectId: project.id,
