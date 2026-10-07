@@ -270,29 +270,32 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         WHERE project_id = ${project.id} AND status = 'paid'
       `;
 
-      const deliveryIds: string[] = [];
-      for (const order of orders) {
-        for (const destination of destinations) {
-          const notificationName = /^upsell(?:_[2-9][0-9]*)?$/.test(order.order_kind)
-            ? destination.upsell_notification_name
-            : destination.front_notification_name;
-          if (!notificationName) continue;
-          const id = ulid();
-          const rows = await app.db<{ id: string }[]>`
-            INSERT INTO tracking_delivery_outbox
-              (id, project_id, destination_kind, destination_id, order_id, event_id, event_type,
-               funnel_name)
-            VALUES
-              (${id}, ${project.id}, 'pushcut', ${destination.id}, ${order.id},
-               ${`vendepay:${order.external_id}:paid`}, ${`order.${order.order_kind}`}, ${funnelName})
-            ON CONFLICT (destination_kind, destination_id, event_id) DO NOTHING
-            RETURNING id
-          `;
-          if (rows[0]) deliveryIds.push(rows[0].id);
-        }
-      }
+      const deliveryIds = await app.db<{ id: string }[]>`
+        INSERT INTO tracking_delivery_outbox
+          (id, project_id, destination_kind, destination_id, order_id, event_id, event_type,
+           funnel_name)
+        SELECT
+          'pushcut-history:' || destination.id || ':' || orders.id,
+          ${project.id}, 'pushcut', destination.id, orders.id,
+          'vendepay:' || orders.external_id || ':paid',
+          'order.' || orders.order_kind,
+          ${funnelName}
+        FROM tracking_orders orders
+        CROSS JOIN tracking_pushcut_destinations destination
+        WHERE orders.project_id = ${project.id}
+          AND orders.status = 'paid'
+          AND destination.project_id = ${project.id}
+          AND destination.enabled = true
+          AND CASE
+            WHEN orders.order_kind ~ '^upsell(_[2-9][0-9]*)?$'
+              THEN destination.upsell_notification_name IS NOT NULL
+            ELSE destination.front_notification_name IS NOT NULL
+          END
+        ON CONFLICT (destination_kind, destination_id, event_id) DO NOTHING
+        RETURNING id
+      `;
       await Promise.allSettled(
-        deliveryIds.map((deliveryId) => app.pushcutQueue.add('send', { deliveryId })),
+        deliveryIds.map(({ id }) => app.pushcutQueue.add('send', { deliveryId: id })),
       );
       return reply.send({
         orders_scanned: orders.length,

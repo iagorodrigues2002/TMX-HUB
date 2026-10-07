@@ -582,7 +582,19 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       WHERE o.project_id=${project.id} AND o.status IN ('abandoned','refused','failed')
         AND o.updated_at >= now()-interval '30 days' AND (NULLIF(o.buyer->>'email','') IS NOT NULL OR NULLIF(o.buyer->>'phone','') IS NOT NULL)
     `;
-    let created = 0;
+    const opportunities: Array<{
+      id: string;
+      orderId: string;
+      visitorId: string | null;
+      buyerName: string | null;
+      email: string | null;
+      phone: string | null;
+      reason: string;
+      tokenHash: string;
+      tokenEncrypted: string;
+      destinationUrl: string;
+      originalSource: string;
+    }> = [];
     let skipped = 0;
     for (const order of candidates) {
       if (!order.destination_url) {
@@ -597,12 +609,54 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         continue;
       }
       const token = randomBytes(24).toString('base64url');
-      const rows = await app.db`
-      INSERT INTO recovery_opportunities(id,project_id,order_id,visitor_id,buyer_name,email,phone,reason,recovery_token_hash,recovery_token_encrypted,destination_url,original_source)
-      VALUES(${ulid()},${project.id},${order.id},${order.visitor_id},${order.buyer.name ?? null},${order.buyer.email ?? null},${order.buyer.phone ?? null},${order.status},${hash(token)},${encryptSecret(token, env.TRACKING_ENCRYPTION_KEY)},${destination},${app.db.json(order.attribution_source as never)})
-      ON CONFLICT(project_id,order_id) DO UPDATE SET destination_url=EXCLUDED.destination_url, original_source=EXCLUDED.original_source, updated_at=now() RETURNING (xmax = 0) AS inserted`;
-      if (rows[0]?.inserted) created++;
+      opportunities.push({
+        id: ulid(),
+        orderId: order.id,
+        visitorId: order.visitor_id,
+        buyerName: order.buyer.name ?? null,
+        email: order.buyer.email ?? null,
+        phone: order.buyer.phone ?? null,
+        reason: order.status,
+        tokenHash: hash(token),
+        tokenEncrypted: encryptSecret(token, env.TRACKING_ENCRYPTION_KEY),
+        destinationUrl: destination,
+        originalSource: JSON.stringify(order.attribution_source),
+      });
     }
+    const insertedRows =
+      opportunities.length === 0
+        ? []
+        : await app.db<Array<{ inserted: boolean }>>`
+          INSERT INTO recovery_opportunities(
+            id,project_id,order_id,visitor_id,buyer_name,email,phone,reason,recovery_token_hash,
+            recovery_token_encrypted,destination_url,original_source
+          )
+          SELECT batch.id,${project.id},batch.order_id,batch.visitor_id,batch.buyer_name,
+            batch.email,batch.phone,batch.reason,batch.recovery_token_hash,
+            batch.recovery_token_encrypted,batch.destination_url,batch.original_source::jsonb
+          FROM unnest(
+            ${app.db.array(opportunities.map((opportunity) => opportunity.id))}::text[],
+            ${app.db.array(opportunities.map((opportunity) => opportunity.orderId))}::text[],
+            ${app.db.array(opportunities.map((opportunity) => opportunity.visitorId))}::text[],
+            ${app.db.array(opportunities.map((opportunity) => opportunity.buyerName))}::text[],
+            ${app.db.array(opportunities.map((opportunity) => opportunity.email))}::text[],
+            ${app.db.array(opportunities.map((opportunity) => opportunity.phone))}::text[],
+            ${app.db.array(opportunities.map((opportunity) => opportunity.reason))}::text[],
+            ${app.db.array(opportunities.map((opportunity) => opportunity.tokenHash))}::text[],
+            ${app.db.array(opportunities.map((opportunity) => opportunity.tokenEncrypted))}::text[],
+            ${app.db.array(opportunities.map((opportunity) => opportunity.destinationUrl))}::text[],
+            ${app.db.array(opportunities.map((opportunity) => opportunity.originalSource))}::text[]
+          ) AS batch(
+            id,order_id,visitor_id,buyer_name,email,phone,reason,recovery_token_hash,
+            recovery_token_encrypted,destination_url,original_source
+          )
+          ON CONFLICT(project_id,order_id) DO UPDATE SET
+            destination_url=EXCLUDED.destination_url,
+            original_source=EXCLUDED.original_source,
+            updated_at=now()
+          RETURNING (xmax = 0) AS inserted
+        `;
+    const created = insertedRows.filter((row) => row.inserted).length;
     return reply
       .code(202)
       .send({ accepted: true, candidates: candidates.length, created, skipped });
