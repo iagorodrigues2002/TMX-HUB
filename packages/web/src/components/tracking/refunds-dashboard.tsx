@@ -18,6 +18,7 @@ import {
 import { useMemo, useState } from 'react';
 
 const TZ = 'America/Sao_Paulo';
+const AUDIT_PAGE_SIZE = 50;
 function today() {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: TZ,
@@ -117,13 +118,14 @@ export function TrackingRefundsSummary({ offerId }: { offerId: string }) {
   );
 }
 
-export function RefundsDashboard() {
+export function RefundsDashboard({ initialOfferId = '' }: { initialOfferId?: string }) {
   const [from, setFrom] = useState(() => ago(29));
   const [to, setTo] = useState(today);
-  const [offerId, setOfferId] = useState('');
+  const [offerId, setOfferId] = useState(initialOfferId);
   const [product, setProduct] = useState('');
   const [vendepay, setVendepay] = useState<'' | 'mainex' | 'cobrak'>('');
   const [hoveredDay, setHoveredDay] = useState<string | null>(null);
+  const [auditPage, setAuditPage] = useState(1);
   const [displayCurrency] = useDisplayCurrency();
   const offers = useQuery({ queryKey: ['offers'], queryFn: apiClient.listOffers, retry: false });
   const report = useQuery({
@@ -149,6 +151,11 @@ export function RefundsDashboard() {
       item.connection_name !== 'VendePay Cobrak' &&
       item.count > 0,
   );
+  const auditItems = data?.items ?? [];
+  const auditPageCount = Math.max(1, Math.ceil(auditItems.length / AUDIT_PAGE_SIZE));
+  const currentAuditPage = Math.min(auditPage, auditPageCount);
+  const auditStart = (currentAuditPage - 1) * AUDIT_PAGE_SIZE;
+  const paginatedAuditItems = auditItems.slice(auditStart, auditStart + AUDIT_PAGE_SIZE);
   const pick = (value: number | string | undefined) =>
     displayCurrency === 'USD'
       ? formatMoney(String(Math.round(Number(value ?? 0) / 500)), 'USD')
@@ -185,7 +192,10 @@ export function RefundsDashboard() {
               type="date"
               value={from}
               max={to}
-              onChange={(e) => setFrom(e.target.value)}
+              onChange={(e) => {
+                setFrom(e.target.value);
+                setAuditPage(1);
+              }}
             />
           </label>
           <label htmlFor="refunds-to" className="space-y-1">
@@ -196,7 +206,10 @@ export function RefundsDashboard() {
               value={to}
               min={from}
               max={today()}
-              onChange={(e) => setTo(e.target.value)}
+              onChange={(e) => {
+                setTo(e.target.value);
+                setAuditPage(1);
+              }}
             />
           </label>
           <label htmlFor="refunds-offer" className="space-y-1">
@@ -206,7 +219,10 @@ export function RefundsDashboard() {
               aria-invalid={offers.isError}
               aria-describedby={offers.isError ? 'refund-offers-error' : undefined}
               value={offerId}
-              onChange={(e) => setOfferId(e.target.value)}
+              onChange={(e) => {
+                setOfferId(e.target.value);
+                setAuditPage(1);
+              }}
               className="h-10 w-full rounded-lg border border-cyan-100/[.16] bg-bg-elevated px-3 text-sm text-white"
             >
               <option value="">Todas as ofertas</option>
@@ -222,7 +238,10 @@ export function RefundsDashboard() {
             <select
               id="refunds-product"
               value={product}
-              onChange={(e) => setProduct(e.target.value)}
+              onChange={(e) => {
+                setProduct(e.target.value);
+                setAuditPage(1);
+              }}
               className="h-10 w-full rounded-lg border border-cyan-100/[.16] bg-bg-elevated px-3 text-sm text-white"
             >
               <option value="">Todos os produtos</option>
@@ -238,7 +257,10 @@ export function RefundsDashboard() {
             <select
               id="refunds-vendepay"
               value={vendepay}
-              onChange={(e) => setVendepay(e.target.value as '' | 'mainex' | 'cobrak')}
+              onChange={(e) => {
+                setVendepay(e.target.value as '' | 'mainex' | 'cobrak');
+                setAuditPage(1);
+              }}
               className="h-10 w-full rounded-lg border border-cyan-100/[.16] bg-bg-elevated px-3 text-sm text-white"
             >
               <option value="">Todas as VendePay</option>
@@ -267,6 +289,7 @@ export function RefundsDashboard() {
             onClick={() => {
               setFrom(today());
               setTo(today());
+              setAuditPage(1);
             }}
           >
             Hoje
@@ -277,6 +300,7 @@ export function RefundsDashboard() {
             onClick={() => {
               setFrom(ago(6));
               setTo(today());
+              setAuditPage(1);
             }}
           >
             7 dias
@@ -287,6 +311,7 @@ export function RefundsDashboard() {
             onClick={() => {
               setFrom(ago(29));
               setTo(today());
+              setAuditPage(1);
             }}
           >
             30 dias
@@ -577,7 +602,7 @@ export function RefundsDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data?.items.map((item) => (
+                  {paginatedAuditItems.map((item) => (
                     <tr key={item.id} className="border-b border-white/[.05] last:border-0">
                       <td className="py-3 font-mono text-xs text-white/55">
                         {dateTime(item.lifecycle_at)}
@@ -618,6 +643,41 @@ export function RefundsDashboard() {
                 </tbody>
               </table>
             </div>
+            {auditItems.length > AUDIT_PAGE_SIZE && (
+              <nav
+                aria-label="Paginação da auditoria de reembolsos"
+                className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/[.08] pt-4"
+              >
+                <p className="text-xs text-white/50">
+                  Exibindo {auditStart + 1}–
+                  {Math.min(auditStart + AUDIT_PAGE_SIZE, auditItems.length)} de{' '}
+                  {auditItems.length.toLocaleString('pt-BR')} pedidos
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="min-h-11"
+                    disabled={currentAuditPage === 1}
+                    onClick={() => setAuditPage((page) => Math.max(1, page - 1))}
+                  >
+                    Anterior
+                  </Button>
+                  <span className="min-w-24 text-center text-xs text-white/55" aria-live="polite">
+                    Página {currentAuditPage} de {auditPageCount}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="min-h-11"
+                    disabled={currentAuditPage === auditPageCount}
+                    onClick={() => setAuditPage((page) => Math.min(auditPageCount, page + 1))}
+                  >
+                    Próxima
+                  </Button>
+                </div>
+              </nav>
+            )}
           </section>
         </>
       )}

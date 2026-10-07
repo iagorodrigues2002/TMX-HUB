@@ -121,10 +121,11 @@ export function UtmifyGlobalCenter() {
   });
 
   const stats = config.data?.stats;
+  const hasPeriodData = Boolean(stats && (stats.orders_7d > 0 || stats.web_events_7d > 0));
   const deliveryRate =
     stats && stats.orders_7d > 0
       ? `${Math.round((stats.orders_delivered_7d / stats.orders_7d) * 100)}%`
-      : '—';
+      : '0%';
   const nameError = form.name.trim() ? null : 'Informe o nome da dashboard.';
   const tokenError =
     form.api_token.trim() || config.data?.destination?.token_configured
@@ -196,24 +197,28 @@ export function UtmifyGlobalCenter() {
             </output>
           )}
 
-          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <MetricCard icon={Database} label="Pedidos · 7 dias" value={stats?.orders_7d ?? '—'} />
-            <MetricCard
-              icon={CheckCircle2}
-              label="Entregues"
-              value={stats?.orders_delivered_7d ?? '—'}
+          {hasPeriodData && stats ? (
+            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <MetricCard icon={Database} label="Pedidos · 7 dias" value={stats.orders_7d} />
+              <MetricCard icon={CheckCircle2} label="Entregues" value={stats.orders_delivered_7d} />
+              <MetricCard
+                icon={Activity}
+                label="Eventos web"
+                value={stats.web_events_delivered_7d}
+              />
+              <MetricCard
+                icon={stats.orders_failed_7d ? TriangleAlert : ShieldCheck}
+                label="Saúde de envio"
+                value={deliveryRate}
+              />
+            </section>
+          ) : (
+            <DataState
+              variant="empty"
+              title="Sem dados no período"
+              description="Nenhum pedido ou evento web foi entregue pela UTMify Geral nos últimos 7 dias."
             />
-            <MetricCard
-              icon={Activity}
-              label="Eventos web"
-              value={stats?.web_events_delivered_7d ?? '—'}
-            />
-            <MetricCard
-              icon={stats?.orders_failed_7d ? TriangleAlert : ShieldCheck}
-              label="Saúde de envio"
-              value={deliveryRate}
-            />
-          </section>
+          )}
 
           <form
             className="rounded-2xl border border-cyan-300/15 bg-bg-elevated/90 p-5 sm:p-6"
