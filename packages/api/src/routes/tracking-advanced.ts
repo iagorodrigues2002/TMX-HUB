@@ -838,6 +838,17 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       let found = 0;
       let stored = 0;
       let candidatesTested = 0;
+      const identitiesByOrder = new Map<
+        string,
+        {
+          id: string;
+          visitorId: string;
+          vendidHash: string;
+          vendidEncrypted: string;
+          sourceOrderId: string;
+          connectionId: string;
+        }
+      >();
       for (const receipt of receipts) {
         const normalized = normalizeVendepay(receipt.payload);
         if (normalized.kind !== 'processable') continue;
@@ -881,21 +892,55 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         found += 1;
         const hash = createHash('sha256').update(vendid).digest('hex');
         const identityVisitorId = order.visitor_id ?? `vendepay:${event.transactionId}`;
-        await app.db`
-          DELETE FROM tracking_upsell_identities
-          WHERE project_id=${p.id} AND source_order_id=${order.id} AND vendid_hash<>${hash}
-        `;
-        await app.db`
-          INSERT INTO tracking_upsell_identities
-            (id,project_id,visitor_id,vendid_hash,vendid_encrypted,source_order_id,
-             vendepay_connection_id)
-          VALUES(${ulid()},${p.id},${identityVisitorId},${hash},
-            ${encryptSecret(vendid, env.TRACKING_ENCRYPTION_KEY)},${order.id},${receipt.connection_id})
-          ON CONFLICT(project_id,vendid_hash) DO UPDATE SET
-            visitor_id=EXCLUDED.visitor_id,source_order_id=EXCLUDED.source_order_id,
-            vendepay_connection_id=EXCLUDED.vendepay_connection_id,last_seen_at=now()
-        `;
+        identitiesByOrder.set(order.id, {
+          id: ulid(),
+          visitorId: identityVisitorId,
+          vendidHash: hash,
+          vendidEncrypted: encryptSecret(vendid, env.TRACKING_ENCRYPTION_KEY),
+          sourceOrderId: order.id,
+          connectionId: receipt.connection_id,
+        });
         stored += 1;
+      }
+      const identities = [
+        ...new Map(
+          [...identitiesByOrder.values()].map((identity) => [identity.vendidHash, identity]),
+        ).values(),
+      ];
+      if (identities.length > 0) {
+        await app.db.begin(async (sql) => {
+          await sql`
+            DELETE FROM tracking_upsell_identities existing
+            USING unnest(
+              ${sql.array(identities.map((identity) => identity.sourceOrderId))}::text[],
+              ${sql.array(identities.map((identity) => identity.vendidHash))}::text[]
+            ) AS refreshed(source_order_id, vendid_hash)
+            WHERE existing.project_id=${p.id}
+              AND existing.source_order_id=refreshed.source_order_id
+              AND existing.vendid_hash<>refreshed.vendid_hash
+          `;
+          await sql`
+            INSERT INTO tracking_upsell_identities
+              (id,project_id,visitor_id,vendid_hash,vendid_encrypted,source_order_id,
+               vendepay_connection_id)
+            SELECT batch.id, ${p.id}, batch.visitor_id, batch.vendid_hash,
+              batch.vendid_encrypted, batch.source_order_id, batch.vendepay_connection_id
+            FROM unnest(
+              ${sql.array(identities.map((identity) => identity.id))}::text[],
+              ${sql.array(identities.map((identity) => identity.visitorId))}::text[],
+              ${sql.array(identities.map((identity) => identity.vendidHash))}::text[],
+              ${sql.array(identities.map((identity) => identity.vendidEncrypted))}::text[],
+              ${sql.array(identities.map((identity) => identity.sourceOrderId))}::text[],
+              ${sql.array(identities.map((identity) => identity.connectionId))}::text[]
+            ) AS batch(
+              id, visitor_id, vendid_hash, vendid_encrypted, source_order_id,
+              vendepay_connection_id
+            )
+            ON CONFLICT(project_id,vendid_hash) DO UPDATE SET
+              visitor_id=EXCLUDED.visitor_id,source_order_id=EXCLUDED.source_order_id,
+              vendepay_connection_id=EXCLUDED.vendepay_connection_id,last_seen_at=now()
+          `;
+        });
       }
       return {
         inspected: receipts.length,
@@ -1196,53 +1241,52 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!app.db) return reply.code(503).send(databaseUnavailable);
       if (!p) return reply.code(409).send({ error: 'tracking_not_configured' });
 
-      const result = await app.db.begin(async (sql) => {
-        const orders = await sql<Array<{ id: string; external_id: string; event_at: Date }>>`
+      const [result = { orders: 0, pixels: 0, delivery_ids: [] }] = await app.db<
+        Array<{ orders: number; pixels: number; delivery_ids: string[] }>
+      >`
+        WITH orders AS MATERIALIZED (
           SELECT id, external_id, COALESCE(paid_at, occurred_at) AS event_at
           FROM tracking_orders
           WHERE project_id = ${p.id} AND status = 'paid' AND order_kind = 'front'
-          ORDER BY occurred_at ASC
-        `;
-        const pixels = await sql<Array<{ id: string }>>`
+        ), pixels AS MATERIALIZED (
           SELECT id FROM meta_pixels
           WHERE project_id = ${p.id} AND enabled = true
-          ORDER BY created_at ASC
-        `;
-        const deliveries: Array<{ id: string }> = [];
-        for (const order of orders) {
-          for (const pixel of pixels) {
-            const rows = await sql<{ id: string }[]>`
-              INSERT INTO meta_deliveries AS existing
-                (id, project_id, pixel_id, order_id, event_id, event_name, event_at,
-                 outgoing_event_id)
-              VALUES
-                (${ulid()}, ${p.id}, ${pixel.id}, ${order.id},
-                 ${`vendepay:${order.external_id}:purchase`}, 'Purchase', ${order.event_at}, NULL)
-              ON CONFLICT (pixel_id, event_id) DO UPDATE SET
-                order_id = EXCLUDED.order_id,
-                event_name = 'Purchase',
-                event_at = EXCLUDED.event_at,
-                state = 'pending',
-                attempts = 0,
-                last_error = NULL
-              WHERE existing.state <> 'delivered'
-              RETURNING id
-            `;
-            if (rows[0]) deliveries.push(rows[0]);
-          }
-        }
-        return { orders: orders.length, pixels: pixels.length, deliveries };
-      });
+        ), deliveries AS (
+          INSERT INTO meta_deliveries AS existing
+            (id, project_id, pixel_id, order_id, event_id, event_name, event_at,
+             outgoing_event_id)
+          SELECT
+            'meta-reconcile:' || pixel.id || ':' || orders.id,
+            ${p.id}, pixel.id, orders.id,
+            'vendepay:' || orders.external_id || ':purchase',
+            'Purchase', orders.event_at, NULL
+          FROM orders
+          CROSS JOIN pixels pixel
+          ON CONFLICT (pixel_id, event_id) DO UPDATE SET
+            order_id = EXCLUDED.order_id,
+            event_name = 'Purchase',
+            event_at = EXCLUDED.event_at,
+            state = 'pending',
+            attempts = 0,
+            last_error = NULL
+          WHERE existing.state <> 'delivered'
+          RETURNING id
+        )
+        SELECT
+          (SELECT count(*)::integer FROM orders) AS orders,
+          (SELECT count(*)::integer FROM pixels) AS pixels,
+          COALESCE((SELECT array_agg(id) FROM deliveries), ARRAY[]::text[]) AS delivery_ids
+      `;
 
       await Promise.allSettled(
-        result.deliveries.map(({ id }) =>
+        result.delivery_ids.map((id) =>
           app.metaQueue.add('send', { deliveryId: id }, { jobId: `${id}-reconcile-${Date.now()}` }),
         ),
       );
       return reply.code(202).send({
         orders_found: result.orders,
         pixels_enabled: result.pixels,
-        purchases_queued: result.deliveries.length,
+        purchases_queued: result.delivery_ids.length,
       });
     },
   );
