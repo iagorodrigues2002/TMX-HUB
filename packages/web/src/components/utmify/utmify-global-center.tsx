@@ -2,8 +2,8 @@
 
 import { Button } from '@/components/ui/button';
 import { DataState } from '@/components/ui/data-state';
+import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { apiClient } from '@/lib/api-client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -18,7 +18,7 @@ import {
   ShieldCheck,
   TriangleAlert,
 } from 'lucide-react';
-import { type ReactNode, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 const DEFAULT_FORM = {
@@ -241,7 +241,7 @@ export function UtmifyGlobalCenter() {
             </div>
 
             <div className="mt-5 grid gap-4 md:grid-cols-2">
-              <ConfigField
+              <FormField
                 id="utmify-global-name"
                 label="Nome da dashboard"
                 error={attemptedSave ? nameError : null}
@@ -255,8 +255,8 @@ export function UtmifyGlobalCenter() {
                   }
                   onChange={(event) => setForm({ ...form, name: event.target.value })}
                 />
-              </ConfigField>
-              <ConfigField
+              </FormField>
+              <FormField
                 id="utmify-global-token"
                 label="API Token"
                 help={
@@ -279,8 +279,8 @@ export function UtmifyGlobalCenter() {
                   }
                   onChange={(event) => setForm({ ...form, api_token: event.target.value })}
                 />
-              </ConfigField>
-              <ConfigField
+              </FormField>
+              <FormField
                 id="utmify-global-pixel"
                 label="Pixel ID geral"
                 help="Opcional. Use 24 caracteres hexadecimais."
@@ -298,8 +298,8 @@ export function UtmifyGlobalCenter() {
                   }
                   onChange={(event) => setForm({ ...form, pixel_id: event.target.value })}
                 />
-              </ConfigField>
-              <ConfigField
+              </FormField>
+              <FormField
                 id="utmify-global-endpoint"
                 label="Endpoint de pedidos"
                 error={attemptedSave ? endpointError : null}
@@ -314,7 +314,7 @@ export function UtmifyGlobalCenter() {
                   }
                   onChange={(event) => setForm({ ...form, endpoint_url: event.target.value })}
                 />
-              </ConfigField>
+              </FormField>
             </div>
 
             <div className="mt-4 flex flex-wrap justify-end gap-2">
@@ -432,32 +432,6 @@ export function UtmifyGlobalCenter() {
             </p>
           </section>
         </>
-      ) : null}
-    </div>
-  );
-}
-
-interface ConfigFieldProps {
-  id: string;
-  label: string;
-  help?: string;
-  error?: string | null;
-  children: ReactNode;
-}
-
-function ConfigField({ id, label, help, error, children }: ConfigFieldProps) {
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      {children}
-      {error ? (
-        <p id={`${id}-error`} role="alert" className="text-xs text-danger">
-          {error}
-        </p>
-      ) : help ? (
-        <p id={`${id}-help`} className="text-xs leading-5 text-white/45">
-          {help}
-        </p>
       ) : null}
     </div>
   );

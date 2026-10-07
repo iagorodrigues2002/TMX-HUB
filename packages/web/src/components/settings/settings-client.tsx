@@ -1,6 +1,8 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { FormField } from '@/components/ui/form-field';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -157,6 +159,7 @@ export function SettingsClient() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordValidation, setPasswordValidation] = useState<'change' | 'reset' | null>(null);
   const selectedOffer = offers.find((o) => o.id === selectedOfferId) ?? offers[0];
   const effectiveOfferId = selectedOffer?.id ?? '';
   const utmifyDashboardId = selectedOffer?.dashboardId?.trim() || UTMIFY_DASHBOARD_ID_FALLBACK;
@@ -172,23 +175,28 @@ export function SettingsClient() {
   }, [apiUrl, token, effectiveOfferId, utmifyDashboardId]);
 
   const everythingReady = !!apiUrl && !!token && !tokenExpired && !!effectiveOfferId;
+  const currentPasswordError =
+    passwordValidation === 'change' && !currentPassword ? 'Informe sua senha atual.' : null;
+  const newPasswordError =
+    passwordValidation && newPassword.length < 8
+      ? 'A nova senha precisa ter ao menos 8 caracteres.'
+      : null;
+  const confirmPasswordError =
+    passwordValidation && newPassword !== confirmPassword
+      ? 'A confirmação da nova senha não confere.'
+      : null;
 
   const changePassword = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (newPassword.length < 8) {
-      toast.error('A nova senha precisa ter ao menos 8 caracteres.');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      toast.error('A confirmação da nova senha não confere.');
-      return;
-    }
+    setPasswordValidation('change');
+    if (!currentPassword || newPassword.length < 8 || newPassword !== confirmPassword) return;
     setChangingPassword(true);
     try {
       await apiClient.changePassword(currentPassword, newPassword);
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
+      setPasswordValidation(null);
       toast.success('Senha alterada. Use a nova senha no outro navegador.');
     } catch (error) {
       toast.error((error as Error).message);
@@ -198,20 +206,15 @@ export function SettingsClient() {
   };
 
   const adminResetPassword = async () => {
-    if (newPassword.length < 8) {
-      toast.error('A nova senha precisa ter ao menos 8 caracteres.');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      toast.error('A confirmação da nova senha não confere.');
-      return;
-    }
+    setPasswordValidation('reset');
+    if (newPassword.length < 8 || newPassword !== confirmPassword) return;
     setChangingPassword(true);
     try {
       await apiClient.adminResetOwnPassword(newPassword);
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
+      setPasswordValidation(null);
       toast.success('Senha redefinida. Use a nova senha no outro navegador.');
     } catch (error) {
       toast.error((error as Error).message);
@@ -436,32 +439,61 @@ export function SettingsClient() {
         <div>
           <h2 className="text-base font-semibold text-white">Alterar senha</h2>
           <p className="mt-1 text-[13px] text-white/55">
-            A mesma senha funciona em qualquer navegador. Use a redefinição abaixo somente para criar
-            uma nova senha se você não souber a atual. A sessão atual permanece ativa.
+            A mesma senha funciona em qualquer navegador. Use a redefinição abaixo somente para
+            criar uma nova senha se você não souber a atual. A sessão atual permanece ativa.
           </p>
         </div>
-        <form className="grid gap-4 md:grid-cols-3" onSubmit={changePassword}>
-          <label className="space-y-2 text-sm text-white/75">
-            Senha atual
-            <input type="password" autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} className="w-full rounded-md border border-white/[0.12] bg-black/20 px-3 py-2 text-white outline-none focus:border-cyan-300/60" />
-          </label>
-          <label className="space-y-2 text-sm text-white/75">
-            Nova senha
-            <input required minLength={8} type="password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} className="w-full rounded-md border border-white/[0.12] bg-black/20 px-3 py-2 text-white outline-none focus:border-cyan-300/60" />
-          </label>
-          <label className="space-y-2 text-sm text-white/75">
-            Confirmar nova senha
-            <input required minLength={8} type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className="w-full rounded-md border border-white/[0.12] bg-black/20 px-3 py-2 text-white outline-none focus:border-cyan-300/60" />
-          </label>
+        <form className="grid gap-4 md:grid-cols-3" noValidate onSubmit={changePassword}>
+          <FormField id="current-password" label="Senha atual" error={currentPasswordError}>
+            <Input
+              type="password"
+              autoComplete="current-password"
+              value={currentPassword}
+              onChange={(event) => setCurrentPassword(event.target.value)}
+            />
+          </FormField>
+          <FormField
+            id="new-password"
+            label="Nova senha"
+            error={newPasswordError}
+            help="Use pelo menos 8 caracteres."
+          >
+            <Input
+              type="password"
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+            />
+          </FormField>
+          <FormField
+            id="confirm-password"
+            label="Confirmar nova senha"
+            error={confirmPasswordError}
+          >
+            <Input
+              type="password"
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+            />
+          </FormField>
           <div className="md:col-span-3">
             <Button type="submit" disabled={changingPassword}>
               {changingPassword ? 'Alterando…' : 'Alterar senha'}
             </Button>
-            <Button type="button" formNoValidate variant="outline" className="ml-3" disabled={changingPassword} onClick={adminResetPassword}>
+            <Button
+              type="button"
+              formNoValidate
+              variant="outline"
+              className="ml-3"
+              disabled={changingPassword}
+              onClick={() => void adminResetPassword()}
+            >
               Definir nova senha sem a atual
             </Button>
             <p className="mt-3 text-xs text-amber-200/80">
-              Use esta opção somente se você não reconhece a senha atual. Ela está disponível apenas para o administrador já autenticado.
+              Use esta opção somente se você não reconhece a senha atual. Ela está disponível apenas
+              para o administrador já autenticado.
             </p>
           </div>
         </form>

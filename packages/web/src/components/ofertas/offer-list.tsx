@@ -3,6 +3,7 @@
 import { Kpi, formatCurrency, formatRoas } from '@/components/dashboard/kpi-cards';
 import { Button } from '@/components/ui/button';
 import { DataState } from '@/components/ui/data-state';
+import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { type OfferView, apiClient } from '@/lib/api-client';
@@ -48,6 +49,7 @@ export function OfferList() {
   const [utmifyPassword, setUtmifyPassword] = useState('');
   const [editing, setEditing] = useState<OfferView | null>(null);
   const [memberIds, setMemberIds] = useState<string[]>([]);
+  const [createAttempted, setCreateAttempted] = useState(false);
 
   const usersQuery = useQuery({
     queryKey: ['users-list'],
@@ -87,6 +89,7 @@ export function OfferList() {
       setUtmifyLogin('');
       setUtmifyPassword('');
       setMemberIds([]);
+      setCreateAttempted(false);
       toast.success('Oferta criada. A primeira sincronização já começou.');
     },
     onError: (error) => toast.error((error as Error).message),
@@ -118,6 +121,13 @@ export function OfferList() {
 
   const canCreate =
     companyName.trim() && name.trim() && dashboardId.trim() && utmifyLogin.trim() && utmifyPassword;
+  const createErrors = {
+    companyName: companyName.trim() ? null : 'Informe o nome da empresa.',
+    name: name.trim() ? null : 'Informe o nome da oferta.',
+    dashboardId: dashboardId.trim() ? null : 'Informe o ID da dashboard.',
+    utmifyLogin: utmifyLogin.trim() ? null : 'Informe o login da UTMify.',
+    utmifyPassword: utmifyPassword ? null : 'Informe a senha da UTMify.',
+  };
   const summary = summaryQuery.data;
 
   return (
@@ -288,6 +298,7 @@ export function OfferList() {
           <form
             onSubmit={(event) => {
               event.preventDefault();
+              setCreateAttempted(true);
               if (canCreate) createMut.mutate();
             }}
             className="glass-card space-y-4 p-5"
@@ -299,29 +310,45 @@ export function OfferList() {
               </p>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
-              <Field label="Empresa">
+              <FormField
+                id="offer-company"
+                label="Empresa"
+                error={createAttempted ? createErrors.companyName : null}
+              >
                 <Input
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
                   placeholder="Ex: Empresa 1"
                 />
-              </Field>
-              <Field label="Nome da oferta">
+              </FormField>
+              <FormField
+                id="offer-name"
+                label="Nome da oferta"
+                error={createAttempted ? createErrors.name : null}
+              >
                 <Input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Ex: PFL Brasil"
                 />
-              </Field>
-              <Field label="Login UTMify">
+              </FormField>
+              <FormField
+                id="offer-utmify-login"
+                label="Login UTMify"
+                error={createAttempted ? createErrors.utmifyLogin : null}
+              >
                 <Input
                   value={utmifyLogin}
                   onChange={(e) => setUtmifyLogin(e.target.value)}
                   autoComplete="username"
                   placeholder="seu@email.com"
                 />
-              </Field>
-              <Field label="Senha UTMify">
+              </FormField>
+              <FormField
+                id="offer-utmify-password"
+                label="Senha UTMify"
+                error={createAttempted ? createErrors.utmifyPassword : null}
+              >
                 <Input
                   type="password"
                   value={utmifyPassword}
@@ -329,15 +356,19 @@ export function OfferList() {
                   autoComplete="new-password"
                   placeholder="••••••••"
                 />
-              </Field>
-              <Field label="ID da dashboard">
+              </FormField>
+              <FormField
+                id="offer-dashboard-id"
+                label="ID da dashboard"
+                error={createAttempted ? createErrors.dashboardId : null}
+              >
                 <Input
                   value={dashboardId}
                   onChange={(e) => setDashboardId(e.target.value)}
                   className="font-mono text-[12px]"
                   placeholder="6a2182d753f10e2ba0fb2ed2"
                 />
-              </Field>
+              </FormField>
             </div>
             {user?.role === 'admin' && (
               <OfferMemberPicker
@@ -348,7 +379,7 @@ export function OfferList() {
               />
             )}
             <div className="flex justify-end">
-              <Button type="submit" disabled={!canCreate || createMut.isPending}>
+              <Button type="submit" disabled={createMut.isPending}>
                 {createMut.isPending && <Loader2 className="h-4 w-4 animate-spin" />}Criar e
                 sincronizar
               </Button>
@@ -420,15 +451,6 @@ export function OfferList() {
       {editing && (
         <OfferEditDialog offer={editing} open onOpenChange={(open) => !open && setEditing(null)} />
       )}
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <Label>{label}</Label>
-      {children}
     </div>
   );
 }
