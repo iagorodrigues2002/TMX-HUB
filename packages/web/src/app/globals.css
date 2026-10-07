@@ -595,32 +595,54 @@ html[data-theme="light"] [class*="bg-[#0" i] {
  * Shared UI motion — short compositor-only feedback for transient surfaces.
  * --------------------------------------------------------------------- */
 .tmx-dialog-overlay {
-  animation-duration: 120ms;
+  animation-duration: 180ms;
   animation-fill-mode: both;
-  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .tmx-dialog-overlay[data-state="open"] {
   animation-name: tmx-dialog-overlay-in;
+  animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
 }
 
 .tmx-dialog-overlay[data-state="closed"] {
   animation-name: tmx-dialog-overlay-out;
+  animation-timing-function: cubic-bezier(0.4, 0, 1, 1);
 }
 
 .tmx-dialog-content {
-  animation-duration: 150ms;
+  --tmx-dialog-translate-x: -50%;
+  --tmx-dialog-translate-y: -50%;
+  --tmx-dialog-enter-y: 4px;
+  --tmx-dialog-enter-scale: 0.985;
+  transform: translate(var(--tmx-dialog-translate-x), var(--tmx-dialog-translate-y));
+  animation-duration: 220ms;
   animation-fill-mode: both;
-  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
   will-change: opacity, transform;
 }
 
 .tmx-dialog-content[data-state="open"] {
   animation-name: tmx-dialog-content-in;
+  animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
 }
 
 .tmx-dialog-content[data-state="closed"] {
   animation-name: tmx-dialog-content-out;
+  animation-timing-function: cubic-bezier(0.4, 0, 1, 1);
+}
+
+.tmx-command-palette {
+  --tmx-dialog-translate-y: 0%;
+  --tmx-dialog-enter-y: 0px;
+  --tmx-dialog-enter-scale: 0.96;
+  transform-origin: top center;
+  animation-duration: 180ms;
+}
+
+.tmx-sidebar-dialog {
+  --tmx-dialog-translate-x: 0%;
+  --tmx-dialog-translate-y: 0%;
+  --tmx-dialog-enter-y: 0px;
+  --tmx-dialog-enter-scale: 1;
 }
 
 @keyframes tmx-dialog-overlay-in {
@@ -644,31 +666,59 @@ html[data-theme="light"] [class*="bg-[#0" i] {
 @keyframes tmx-dialog-content-in {
   from {
     opacity: 0;
-    transform: translate(-50%, -50%) translate3d(0, 4px, 0) scale(0.985);
+    transform: translate(var(--tmx-dialog-translate-x), var(--tmx-dialog-translate-y))
+      translate3d(0, var(--tmx-dialog-enter-y), 0) scale(var(--tmx-dialog-enter-scale));
   }
   to {
     opacity: 1;
-    transform: translate(-50%, -50%) translate3d(0, 0, 0) scale(1);
+    transform: translate(var(--tmx-dialog-translate-x), var(--tmx-dialog-translate-y))
+      translate3d(0, 0, 0) scale(1);
   }
 }
 
 @keyframes tmx-dialog-content-out {
   from {
     opacity: 1;
-    transform: translate(-50%, -50%) translate3d(0, 0, 0) scale(1);
+    transform: translate(var(--tmx-dialog-translate-x), var(--tmx-dialog-translate-y))
+      translate3d(0, 0, 0) scale(1);
   }
   to {
     opacity: 0;
-    transform: translate(-50%, -50%) translate3d(0, 4px, 0) scale(0.985);
+    transform: translate(var(--tmx-dialog-translate-x), var(--tmx-dialog-translate-y))
+      translate3d(0, var(--tmx-dialog-enter-y), 0) scale(var(--tmx-dialog-enter-scale));
   }
+}
+
+.tmx-sidebar {
+  width: 15rem;
+  transition: width 180ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tmx-sidebar[data-collapsed="true"] {
+  width: 4rem;
+}
+
+.tmx-sidebar-label {
+  position: absolute;
+  right: 10px;
+  left: 36px;
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity 160ms ease-out, transform 160ms ease-out;
+}
+
+.tmx-sidebar[data-collapsed="true"] .tmx-sidebar-label {
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(2px);
+  transition-timing-function: ease-in;
 }
 
 .tmx-select-content {
   --tmx-select-x: 0;
   --tmx-select-y: 0;
-  animation-duration: 110ms;
+  animation-duration: 160ms;
   animation-fill-mode: both;
-  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
   will-change: opacity, transform;
 }
 
@@ -694,10 +744,12 @@ html[data-theme="light"] [class*="bg-[#0" i] {
 
 .tmx-select-content[data-state="open"] {
   animation-name: tmx-select-content-in;
+  animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
 }
 
 .tmx-select-content[data-state="closed"] {
   animation-name: tmx-select-content-out;
+  animation-timing-function: cubic-bezier(0.4, 0, 1, 1);
 }
 
 @keyframes tmx-select-content-in {
@@ -723,11 +775,11 @@ html[data-theme="light"] [class*="bg-[#0" i] {
 }
 
 .tmx-tabs-content[data-state="active"] {
-  animation: tmx-tabs-content-in 110ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: tmx-tabs-content-in 160ms cubic-bezier(0, 0, 0.2, 1) both;
 }
 
 .tmx-tracking-section-transition {
-  animation: tmx-tracking-section-in 120ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: tmx-tracking-section-in 180ms cubic-bezier(0, 0, 0.2, 1) both;
 }
 
 @keyframes tmx-tabs-content-in {

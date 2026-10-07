@@ -279,7 +279,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           event.preventDefault();
           inputRef.current?.focus();
         }}
-        className="top-[12vh] max-h-[min(72vh,680px)] max-w-2xl translate-y-0 gap-0 overflow-hidden border-border/60 bg-popover p-0 sm:p-0"
+        className="tmx-command-palette top-[12vh] max-h-[min(72vh,680px)] max-w-2xl gap-0 overflow-hidden border-border/60 bg-popover p-0 sm:p-0"
       >
         <DialogHeader className="sr-only">
           <DialogTitle>Buscar ou executar</DialogTitle>

@@ -83,10 +83,10 @@ function DesktopItem({
           href={item.href}
           aria-current={active ? 'page' : undefined}
           aria-label={collapsed ? item.label : undefined}
-          className={cn('nav-item min-w-0 flex-1', collapsed && 'justify-center px-0')}
+          className={cn('nav-item relative min-w-0 flex-1', collapsed && 'justify-center px-0')}
         >
           <Icon className="h-4 w-4 shrink-0" aria-hidden />
-          {!collapsed && <span className="truncate">{item.label}</span>}
+          <span className="tmx-sidebar-label truncate">{item.label}</span>
         </Link>
         {!collapsed && visibleChildren.length > 0 && (
           <button
@@ -238,8 +238,7 @@ export function Sidebar({ collapsed, mobileOpen, onMobileOpenChange }: SidebarPr
         aria-label="Navegação principal"
         data-collapsed={collapsed}
         className={cn(
-          'hidden shrink-0 flex-col border-r border-border/60 bg-background/88 px-2 py-3 backdrop-blur-xl xl:flex',
-          collapsed ? 'w-16' : 'w-60',
+          'tmx-sidebar hidden shrink-0 flex-col border-r border-border/60 bg-background/88 px-2 py-3 backdrop-blur-xl xl:flex',
         )}
       >
         {!collapsed && (
@@ -268,7 +267,7 @@ export function Sidebar({ collapsed, mobileOpen, onMobileOpenChange }: SidebarPr
       </aside>
 
       <Dialog open={mobileOpen} onOpenChange={onMobileOpenChange}>
-        <DialogContent className="bottom-0 left-0 top-0 h-dvh max-h-none w-[min(88vw,360px)] max-w-none translate-x-0 translate-y-0 rounded-none border-y-0 border-l-0 border-r border-border/60 bg-background p-4 sm:h-dvh sm:w-[360px] sm:max-w-none sm:p-4 xl:hidden">
+        <DialogContent className="tmx-sidebar-dialog bottom-0 left-0 top-0 h-dvh max-h-none w-[min(88vw,360px)] max-w-none rounded-none border-y-0 border-l-0 border-r border-border/60 bg-background p-4 sm:h-dvh sm:w-[360px] sm:max-w-none sm:p-4 xl:hidden">
           <DialogHeader className="border-b border-border/60 pb-3 pr-12">
             <DialogTitle>TMX HUB</DialogTitle>
             <DialogDescription>Navegue pelas áreas disponíveis.</DialogDescription>

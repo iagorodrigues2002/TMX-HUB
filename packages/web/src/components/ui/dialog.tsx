@@ -34,7 +34,7 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        'tmx-dialog-content fixed left-[50%] top-[50%] z-50 grid max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto overscroll-contain rounded-xl border border-border bg-popover/95 p-4 text-popover-foreground shadow-card backdrop-blur-xl sm:max-h-[calc(100dvh-3rem)] sm:w-[calc(100%-3rem)] sm:p-6',
+        'tmx-dialog-content fixed left-[50%] top-[50%] z-50 grid max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] max-w-lg gap-4 overflow-y-auto overscroll-contain rounded-xl border border-border bg-popover/95 p-4 text-popover-foreground shadow-card backdrop-blur-xl sm:max-h-[calc(100dvh-3rem)] sm:w-[calc(100%-3rem)] sm:p-6',
         className,
       )}
       {...props}
