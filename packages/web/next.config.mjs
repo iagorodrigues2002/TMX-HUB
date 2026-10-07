@@ -9,6 +9,9 @@ const apiProxyTarget =
 const nextConfig = {
   reactStrictMode: true,
   typedRoutes: false,
+  distDir:
+    process.env.NEXT_DIST_DIR ??
+    (process.env.NODE_ENV === 'production' ? '.next-build' : '.next-dev'),
   transpilePackages: ['@page-cloner/shared'],
   // Standalone output for slim production Docker images.
   output: 'standalone',
