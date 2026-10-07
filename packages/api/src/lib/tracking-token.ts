@@ -49,3 +49,15 @@ export function readTrackingToken(token: string, secret: string): TrackingTokenP
     return null;
   }
 }
+
+export function readTrackingTokenWithRotation(
+  token: string,
+  currentSecret: string,
+  previousSecret?: string,
+): { payload: TrackingTokenPayload; matched: 'current' | 'previous' } | null {
+  const current = readTrackingToken(token, currentSecret);
+  if (current) return { payload: current, matched: 'current' };
+  if (!previousSecret) return null;
+  const previous = readTrackingToken(token, previousSecret);
+  return previous ? { payload: previous, matched: 'previous' } : null;
+}

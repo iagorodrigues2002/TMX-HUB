@@ -78,6 +78,7 @@ function loggerOptions(pretty: boolean): LoggerOptions {
         'headers["set-cookie"]',
         'env.S3_SECRET_KEY',
         'env.WEBHOOK_SECRET',
+        'env.WEBHOOK_SECRET_PREV',
       ],
       censor: REDACTED,
     },
