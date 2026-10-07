@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import { env } from './env.js';
 import { normalizeVendepay } from './integrations/vendepay/normalize.js';
 import { logger } from './lib/logger.js';
+import analyticsCachePlugin from './plugins/analytics-cache.js';
 import authPlugin from './plugins/auth.js';
 import corsPlugin from './plugins/cors.js';
 import databasePlugin from './plugins/database.js';
@@ -46,6 +47,7 @@ export async function buildApp() {
   // Order matters: queue first (decorates app.redis), then storage (uses redis),
   // then auth (decorates app.userStore + activityStore + requireAuth).
   await app.register(queuePlugin);
+  await app.register(analyticsCachePlugin);
   await app.register(databasePlugin);
   await app.register(storagePlugin);
   await app.register(authPlugin);

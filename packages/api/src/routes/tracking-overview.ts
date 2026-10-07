@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { convertToBrlMinor, getBrlRate } from '../services/exchange-rate.js';
@@ -68,29 +69,39 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       }
       const offerIds = offers.map((offer) => offer.id);
       const offerMeta = new Map(
-        offers.map((offer) => [
-          offer.id,
-          { name: offer.name, ownerId: offer.userId },
-        ] as const),
+        offers.map((offer) => [offer.id, { name: offer.name, ownerId: offer.userId }] as const),
       );
+      const scope = createHash('sha256')
+        .update(`${req.user.sub}:${offerIds.slice().sort().join(',')}`)
+        .digest('base64url');
 
-      const rows = await app.db<
-        Array<{
-          offer_id: string;
-          paid_orders: number;
-          paid_revenue_brl_minor: string;
-          failed_orders: number;
-          failed_revenue_brl_minor: string;
-          refunded_orders: number;
-          refunded_revenue_brl_minor: string;
-          chargeback_orders: number;
-          chargeback_revenue_brl_minor: string;
-          vendepay_fee_pct: string | null;
-          extra_fee_minor: string | null;
-          extra_fee_currency: string | null;
-          reserve_pct: string | null;
-        }>
-      >`
+      return app.analyticsCache.getOrSet(
+        {
+          endpoint: 'dashboard',
+          offerId: scope,
+          from: fromDate,
+          to: toDate,
+          ttlSeconds: 30,
+          tags: offerIds,
+        },
+        async () => {
+          const rows = await app.db!<
+            Array<{
+              offer_id: string;
+              paid_orders: number;
+              paid_revenue_brl_minor: string;
+              failed_orders: number;
+              failed_revenue_brl_minor: string;
+              refunded_orders: number;
+              refunded_revenue_brl_minor: string;
+              chargeback_orders: number;
+              chargeback_revenue_brl_minor: string;
+              vendepay_fee_pct: string | null;
+              extra_fee_minor: string | null;
+              extra_fee_currency: string | null;
+              reserve_pct: string | null;
+            }>
+          >`
       SELECT
         p.offer_id,
         (SELECT count(*)::int FROM tracking_orders o
@@ -184,185 +195,199 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       WHERE p.offer_id = ANY(${offerIds}) AND p.enabled = true
     `;
 
-      const usdRate = await getBrlRate('USD', app.db);
-      const toUsdMinor = (brlMinor: number) => (usdRate ? Math.round(brlMinor / usdRate) : 0);
+          const usdRate = await getBrlRate('USD', app.db!);
+          const toUsdMinor = (brlMinor: number) => (usdRate ? Math.round(brlMinor / usdRate) : 0);
 
-      const perOffer = await Promise.all(
-        rows.map(async (row) => {
-          const feePct = Number(row.vendepay_fee_pct ?? DEFAULT_FEE_SETTINGS.vendepay_fee_pct);
-          const extraFeeMinor = Number(row.extra_fee_minor ?? DEFAULT_FEE_SETTINGS.extra_fee_minor);
-          const extraFeeCurrency =
-            row.extra_fee_currency ?? DEFAULT_FEE_SETTINGS.extra_fee_currency;
-          const reservePct = Number(row.reserve_pct ?? DEFAULT_FEE_SETTINGS.reserve_pct);
-          const extraFeeConversion = await convertToBrlMinor(
-            extraFeeMinor,
-            extraFeeCurrency,
-            app.db!,
+          const perOffer = await Promise.all(
+            rows.map(async (row) => {
+              const feePct = Number(row.vendepay_fee_pct ?? DEFAULT_FEE_SETTINGS.vendepay_fee_pct);
+              const extraFeeMinor = Number(
+                row.extra_fee_minor ?? DEFAULT_FEE_SETTINGS.extra_fee_minor,
+              );
+              const extraFeeCurrency =
+                row.extra_fee_currency ?? DEFAULT_FEE_SETTINGS.extra_fee_currency;
+              const reservePct = Number(row.reserve_pct ?? DEFAULT_FEE_SETTINGS.reserve_pct);
+              const extraFeeConversion = await convertToBrlMinor(
+                extraFeeMinor,
+                extraFeeCurrency,
+                app.db!,
+              );
+              const extraFeeBrlMinor = (extraFeeConversion?.brlMinor ?? 0) * row.paid_orders;
+              const grossBrlMinor = Number(row.paid_revenue_brl_minor);
+              const failedBrlMinor = Number(row.failed_revenue_brl_minor);
+              const refundedBrlMinor = Number(row.refunded_revenue_brl_minor);
+              const chargebackBrlMinor = Number(row.chargeback_revenue_brl_minor);
+              const feeVendepayBrlMinor = Math.round((grossBrlMinor * feePct) / 100);
+              const reserveBrlMinor = Math.round((grossBrlMinor * reservePct) / 100);
+              const feesBrlMinor = feeVendepayBrlMinor + extraFeeBrlMinor;
+              const refundChargebackFeeCount = row.refunded_orders + row.chargeback_orders;
+              const refundChargebackFeeUsdMinor =
+                refundChargebackFeeCount * REFUND_CHARGEBACK_FEE_USD_MINOR;
+              const refundChargebackFeeConversion = await convertToBrlMinor(
+                refundChargebackFeeUsdMinor,
+                'USD',
+                app.db!,
+              );
+              const refundChargebackFeeBrlMinor = refundChargebackFeeConversion?.brlMinor ?? 0;
+              // "Total" assumes the reserve is already released; "available"
+              // subtracts it too, since Vendepay is still holding it back.
+              // total = available + reserve — the reserve is never double-counted.
+              const netTotalBrlMinor =
+                grossBrlMinor -
+                refundedBrlMinor -
+                chargebackBrlMinor -
+                feesBrlMinor -
+                refundChargebackFeeBrlMinor;
+              const netAvailableBrlMinor = netTotalBrlMinor - reserveBrlMinor;
+              return {
+                offer_id: row.offer_id,
+                offer_name: offerMeta.get(row.offer_id)?.name ?? row.offer_id,
+                owner_id: offerMeta.get(row.offer_id)?.ownerId ?? '',
+                paid_orders: row.paid_orders,
+                gross_revenue_brl_minor: String(grossBrlMinor),
+                gross_revenue_usd_minor: String(toUsdMinor(grossBrlMinor)),
+                failed_orders: row.failed_orders,
+                failed_revenue_brl_minor: String(failedBrlMinor),
+                failed_revenue_usd_minor: String(toUsdMinor(failedBrlMinor)),
+                refunded_orders: row.refunded_orders,
+                refunded_revenue_brl_minor: String(refundedBrlMinor),
+                refunded_revenue_usd_minor: String(toUsdMinor(refundedBrlMinor)),
+                chargeback_orders: row.chargeback_orders,
+                chargeback_revenue_brl_minor: String(chargebackBrlMinor),
+                chargeback_revenue_usd_minor: String(toUsdMinor(chargebackBrlMinor)),
+                fees_brl_minor: String(feesBrlMinor),
+                fees_usd_minor: String(toUsdMinor(feesBrlMinor)),
+                refund_chargeback_fee_count: refundChargebackFeeCount,
+                refund_chargeback_fee_brl_minor: String(refundChargebackFeeBrlMinor),
+                refund_chargeback_fee_usd_minor: String(refundChargebackFeeUsdMinor),
+                reserve_brl_minor: String(reserveBrlMinor),
+                reserve_usd_minor: String(toUsdMinor(reserveBrlMinor)),
+                net_revenue_brl_minor: String(netTotalBrlMinor),
+                net_revenue_usd_minor: String(toUsdMinor(netTotalBrlMinor)),
+                net_available_brl_minor: String(netAvailableBrlMinor),
+                net_available_usd_minor: String(toUsdMinor(netAvailableBrlMinor)),
+              };
+            }),
           );
-          const extraFeeBrlMinor = (extraFeeConversion?.brlMinor ?? 0) * row.paid_orders;
-          const grossBrlMinor = Number(row.paid_revenue_brl_minor);
-          const failedBrlMinor = Number(row.failed_revenue_brl_minor);
-          const refundedBrlMinor = Number(row.refunded_revenue_brl_minor);
-          const chargebackBrlMinor = Number(row.chargeback_revenue_brl_minor);
-          const feeVendepayBrlMinor = Math.round((grossBrlMinor * feePct) / 100);
-          const reserveBrlMinor = Math.round((grossBrlMinor * reservePct) / 100);
-          const feesBrlMinor = feeVendepayBrlMinor + extraFeeBrlMinor;
-          const refundChargebackFeeCount = row.refunded_orders + row.chargeback_orders;
-          const refundChargebackFeeUsdMinor =
-            refundChargebackFeeCount * REFUND_CHARGEBACK_FEE_USD_MINOR;
-          const refundChargebackFeeConversion = await convertToBrlMinor(
-            refundChargebackFeeUsdMinor,
-            'USD',
-            app.db!,
+
+          perOffer.sort(
+            (a, b) => Number(b.net_revenue_brl_minor) - Number(a.net_revenue_brl_minor),
           );
-          const refundChargebackFeeBrlMinor = refundChargebackFeeConversion?.brlMinor ?? 0;
-          // "Total" assumes the reserve is already released; "available"
-          // subtracts it too, since Vendepay is still holding it back.
-          // total = available + reserve — the reserve is never double-counted.
-          const netTotalBrlMinor =
-            grossBrlMinor -
-            refundedBrlMinor -
-            chargebackBrlMinor -
-            feesBrlMinor -
-            refundChargebackFeeBrlMinor;
-          const netAvailableBrlMinor = netTotalBrlMinor - reserveBrlMinor;
+
+          const emptyTotals = () => ({
+            paid_orders: 0,
+            gross_revenue_brl_minor: 0,
+            failed_orders: 0,
+            failed_revenue_brl_minor: 0,
+            refunded_orders: 0,
+            refunded_revenue_brl_minor: 0,
+            chargeback_orders: 0,
+            chargeback_revenue_brl_minor: 0,
+            fees_brl_minor: 0,
+            refund_chargeback_fee_count: 0,
+            refund_chargeback_fee_brl_minor: 0,
+            reserve_brl_minor: 0,
+            net_revenue_brl_minor: 0,
+            net_available_brl_minor: 0,
+          });
+          const aggregate = (accountOffers: typeof perOffer) =>
+            accountOffers.reduce(
+              (acc, offer) => ({
+                paid_orders: acc.paid_orders + offer.paid_orders,
+                gross_revenue_brl_minor:
+                  acc.gross_revenue_brl_minor + Number(offer.gross_revenue_brl_minor),
+                failed_orders: acc.failed_orders + offer.failed_orders,
+                failed_revenue_brl_minor:
+                  acc.failed_revenue_brl_minor + Number(offer.failed_revenue_brl_minor),
+                refunded_orders: acc.refunded_orders + offer.refunded_orders,
+                refunded_revenue_brl_minor:
+                  acc.refunded_revenue_brl_minor + Number(offer.refunded_revenue_brl_minor),
+                chargeback_orders: acc.chargeback_orders + offer.chargeback_orders,
+                chargeback_revenue_brl_minor:
+                  acc.chargeback_revenue_brl_minor + Number(offer.chargeback_revenue_brl_minor),
+                fees_brl_minor: acc.fees_brl_minor + Number(offer.fees_brl_minor),
+                refund_chargeback_fee_count:
+                  acc.refund_chargeback_fee_count + offer.refund_chargeback_fee_count,
+                refund_chargeback_fee_brl_minor:
+                  acc.refund_chargeback_fee_brl_minor +
+                  Number(offer.refund_chargeback_fee_brl_minor),
+                reserve_brl_minor: acc.reserve_brl_minor + Number(offer.reserve_brl_minor),
+                net_revenue_brl_minor:
+                  acc.net_revenue_brl_minor + Number(offer.net_revenue_brl_minor),
+                net_available_brl_minor:
+                  acc.net_available_brl_minor + Number(offer.net_available_brl_minor),
+              }),
+              emptyTotals(),
+            );
+
+          const ownerIds = [...new Set(perOffer.map((offer) => offer.owner_id))];
+          const ownerUsers = await Promise.all(
+            ownerIds.map(async (id) => [id, await app.userStore.maybeGetById(id)] as const),
+          );
+          const ownerNames = new Map(
+            ownerUsers.map(([id, user]) => [id, user?.name || 'Conta indisponível'] as const),
+          );
+          const byOwner = new Map<string, typeof perOffer>();
+          for (const offer of perOffer) {
+            const group = byOwner.get(offer.owner_id) ?? [];
+            group.push(offer);
+            byOwner.set(offer.owner_id, group);
+          }
+          const totalsWire = (totals: ReturnType<typeof emptyTotals>) => ({
+            paid_orders: totals.paid_orders,
+            gross_revenue_brl_minor: String(totals.gross_revenue_brl_minor),
+            gross_revenue_usd_minor: String(toUsdMinor(totals.gross_revenue_brl_minor)),
+            failed_orders: totals.failed_orders,
+            failed_revenue_brl_minor: String(totals.failed_revenue_brl_minor),
+            failed_revenue_usd_minor: String(toUsdMinor(totals.failed_revenue_brl_minor)),
+            refunded_orders: totals.refunded_orders,
+            refunded_revenue_brl_minor: String(totals.refunded_revenue_brl_minor),
+            refunded_revenue_usd_minor: String(toUsdMinor(totals.refunded_revenue_brl_minor)),
+            chargeback_orders: totals.chargeback_orders,
+            chargeback_revenue_brl_minor: String(totals.chargeback_revenue_brl_minor),
+            chargeback_revenue_usd_minor: String(toUsdMinor(totals.chargeback_revenue_brl_minor)),
+            fees_brl_minor: String(totals.fees_brl_minor),
+            fees_usd_minor: String(toUsdMinor(totals.fees_brl_minor)),
+            refund_chargeback_fee_count: totals.refund_chargeback_fee_count,
+            refund_chargeback_fee_brl_minor: String(totals.refund_chargeback_fee_brl_minor),
+            refund_chargeback_fee_usd_minor: String(
+              totals.refund_chargeback_fee_count * REFUND_CHARGEBACK_FEE_USD_MINOR,
+            ),
+            reserve_brl_minor: String(totals.reserve_brl_minor),
+            reserve_usd_minor: String(toUsdMinor(totals.reserve_brl_minor)),
+            net_revenue_brl_minor: String(totals.net_revenue_brl_minor),
+            net_revenue_usd_minor: String(toUsdMinor(totals.net_revenue_brl_minor)),
+            net_available_brl_minor: String(totals.net_available_brl_minor),
+            net_available_usd_minor: String(toUsdMinor(totals.net_available_brl_minor)),
+          });
+          const accounts = [...byOwner.entries()]
+            .map(([ownerId, accountOffers]) => ({
+              owner_id: ownerId,
+              owner_name:
+                ownerId === req.user!.sub
+                  ? 'Minha conta'
+                  : (ownerNames.get(ownerId) ?? 'Conta compartilhada'),
+              is_current_user: ownerId === req.user!.sub,
+              offers: accountOffers,
+              totals: totalsWire(aggregate(accountOffers)),
+            }))
+            .sort(
+              (a, b) =>
+                Number(b.totals.net_revenue_brl_minor) - Number(a.totals.net_revenue_brl_minor),
+            );
+
           return {
-            offer_id: row.offer_id,
-            offer_name: offerMeta.get(row.offer_id)?.name ?? row.offer_id,
-            owner_id: offerMeta.get(row.offer_id)?.ownerId ?? '',
-            paid_orders: row.paid_orders,
-            gross_revenue_brl_minor: String(grossBrlMinor),
-            gross_revenue_usd_minor: String(toUsdMinor(grossBrlMinor)),
-            failed_orders: row.failed_orders,
-            failed_revenue_brl_minor: String(failedBrlMinor),
-            failed_revenue_usd_minor: String(toUsdMinor(failedBrlMinor)),
-            refunded_orders: row.refunded_orders,
-            refunded_revenue_brl_minor: String(refundedBrlMinor),
-            refunded_revenue_usd_minor: String(toUsdMinor(refundedBrlMinor)),
-            chargeback_orders: row.chargeback_orders,
-            chargeback_revenue_brl_minor: String(chargebackBrlMinor),
-            chargeback_revenue_usd_minor: String(toUsdMinor(chargebackBrlMinor)),
-            fees_brl_minor: String(feesBrlMinor),
-            fees_usd_minor: String(toUsdMinor(feesBrlMinor)),
-            refund_chargeback_fee_count: refundChargebackFeeCount,
-            refund_chargeback_fee_brl_minor: String(refundChargebackFeeBrlMinor),
-            refund_chargeback_fee_usd_minor: String(refundChargebackFeeUsdMinor),
-            reserve_brl_minor: String(reserveBrlMinor),
-            reserve_usd_minor: String(toUsdMinor(reserveBrlMinor)),
-            net_revenue_brl_minor: String(netTotalBrlMinor),
-            net_revenue_usd_minor: String(toUsdMinor(netTotalBrlMinor)),
-            net_available_brl_minor: String(netAvailableBrlMinor),
-            net_available_usd_minor: String(toUsdMinor(netAvailableBrlMinor)),
+            from: fromDate,
+            to: toDate,
+            time_zone: 'America/Sao_Paulo',
+            offers: perOffer,
+            // Kept null for backwards compatibility. Clients must use accounts;
+            // a cross-account grand total would defeat data separation.
+            accounts,
+            totals: null,
           };
-        }),
+        },
       );
-
-      perOffer.sort((a, b) => Number(b.net_revenue_brl_minor) - Number(a.net_revenue_brl_minor));
-
-      const emptyTotals = () => ({
-        paid_orders: 0,
-        gross_revenue_brl_minor: 0,
-        failed_orders: 0,
-        failed_revenue_brl_minor: 0,
-        refunded_orders: 0,
-        refunded_revenue_brl_minor: 0,
-        chargeback_orders: 0,
-        chargeback_revenue_brl_minor: 0,
-        fees_brl_minor: 0,
-        refund_chargeback_fee_count: 0,
-        refund_chargeback_fee_brl_minor: 0,
-        reserve_brl_minor: 0,
-        net_revenue_brl_minor: 0,
-        net_available_brl_minor: 0,
-      });
-      const aggregate = (accountOffers: typeof perOffer) => accountOffers.reduce(
-        (acc, offer) => ({
-          paid_orders: acc.paid_orders + offer.paid_orders,
-          gross_revenue_brl_minor:
-            acc.gross_revenue_brl_minor + Number(offer.gross_revenue_brl_minor),
-          failed_orders: acc.failed_orders + offer.failed_orders,
-          failed_revenue_brl_minor:
-            acc.failed_revenue_brl_minor + Number(offer.failed_revenue_brl_minor),
-          refunded_orders: acc.refunded_orders + offer.refunded_orders,
-          refunded_revenue_brl_minor:
-            acc.refunded_revenue_brl_minor + Number(offer.refunded_revenue_brl_minor),
-          chargeback_orders: acc.chargeback_orders + offer.chargeback_orders,
-          chargeback_revenue_brl_minor:
-            acc.chargeback_revenue_brl_minor + Number(offer.chargeback_revenue_brl_minor),
-          fees_brl_minor: acc.fees_brl_minor + Number(offer.fees_brl_minor),
-          refund_chargeback_fee_count:
-            acc.refund_chargeback_fee_count + offer.refund_chargeback_fee_count,
-          refund_chargeback_fee_brl_minor:
-            acc.refund_chargeback_fee_brl_minor + Number(offer.refund_chargeback_fee_brl_minor),
-          reserve_brl_minor: acc.reserve_brl_minor + Number(offer.reserve_brl_minor),
-          net_revenue_brl_minor: acc.net_revenue_brl_minor + Number(offer.net_revenue_brl_minor),
-          net_available_brl_minor:
-            acc.net_available_brl_minor + Number(offer.net_available_brl_minor),
-        }),
-        emptyTotals(),
-      );
-
-      const ownerIds = [...new Set(perOffer.map((offer) => offer.owner_id))];
-      const ownerUsers = await Promise.all(
-        ownerIds.map(async (id) => [id, await app.userStore.maybeGetById(id)] as const),
-      );
-      const ownerNames = new Map(
-        ownerUsers.map(([id, user]) => [id, user?.name || 'Conta indisponível'] as const),
-      );
-      const byOwner = new Map<string, typeof perOffer>();
-      for (const offer of perOffer) {
-        const group = byOwner.get(offer.owner_id) ?? [];
-        group.push(offer);
-        byOwner.set(offer.owner_id, group);
-      }
-      const totalsWire = (totals: ReturnType<typeof emptyTotals>) => ({
-        paid_orders: totals.paid_orders,
-        gross_revenue_brl_minor: String(totals.gross_revenue_brl_minor),
-        gross_revenue_usd_minor: String(toUsdMinor(totals.gross_revenue_brl_minor)),
-        failed_orders: totals.failed_orders,
-        failed_revenue_brl_minor: String(totals.failed_revenue_brl_minor),
-        failed_revenue_usd_minor: String(toUsdMinor(totals.failed_revenue_brl_minor)),
-        refunded_orders: totals.refunded_orders,
-        refunded_revenue_brl_minor: String(totals.refunded_revenue_brl_minor),
-        refunded_revenue_usd_minor: String(toUsdMinor(totals.refunded_revenue_brl_minor)),
-        chargeback_orders: totals.chargeback_orders,
-        chargeback_revenue_brl_minor: String(totals.chargeback_revenue_brl_minor),
-        chargeback_revenue_usd_minor: String(toUsdMinor(totals.chargeback_revenue_brl_minor)),
-        fees_brl_minor: String(totals.fees_brl_minor),
-        fees_usd_minor: String(toUsdMinor(totals.fees_brl_minor)),
-        refund_chargeback_fee_count: totals.refund_chargeback_fee_count,
-        refund_chargeback_fee_brl_minor: String(totals.refund_chargeback_fee_brl_minor),
-        refund_chargeback_fee_usd_minor: String(
-          totals.refund_chargeback_fee_count * REFUND_CHARGEBACK_FEE_USD_MINOR,
-        ),
-        reserve_brl_minor: String(totals.reserve_brl_minor),
-        reserve_usd_minor: String(toUsdMinor(totals.reserve_brl_minor)),
-        net_revenue_brl_minor: String(totals.net_revenue_brl_minor),
-        net_revenue_usd_minor: String(toUsdMinor(totals.net_revenue_brl_minor)),
-        net_available_brl_minor: String(totals.net_available_brl_minor),
-        net_available_usd_minor: String(toUsdMinor(totals.net_available_brl_minor)),
-      });
-      const accounts = [...byOwner.entries()]
-        .map(([ownerId, accountOffers]) => ({
-          owner_id: ownerId,
-          owner_name:
-            ownerId === req.user!.sub ? 'Minha conta' : (ownerNames.get(ownerId) ?? 'Conta compartilhada'),
-          is_current_user: ownerId === req.user!.sub,
-          offers: accountOffers,
-          totals: totalsWire(aggregate(accountOffers)),
-        }))
-        .sort((a, b) => Number(b.totals.net_revenue_brl_minor) - Number(a.totals.net_revenue_brl_minor));
-
-      return reply.send({
-        from: fromDate,
-        to: toDate,
-        time_zone: 'America/Sao_Paulo',
-        offers: perOffer,
-        // Kept null for backwards compatibility. Clients must use accounts;
-        // a cross-account grand total would defeat data separation.
-        accounts,
-        totals: null,
-      });
     },
   );
 };

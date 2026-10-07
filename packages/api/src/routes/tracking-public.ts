@@ -26,6 +26,11 @@ import {
 } from '../services/vendepay-replay.js';
 import { findVturbConversionKeyInUrl } from '../services/vturb.js';
 
+const invalidateOfferAnalytics = (app: FastifyInstance, offerId: string) =>
+  app.hasDecorator('invalidateAnalyticsCache')
+    ? app.invalidateAnalyticsCache({ offerId })
+    : Promise.resolve();
+
 const EventSchema = z.object({
   public_key: z.string().min(16).max(128),
   event_id: z.string().min(8).max(128),
@@ -1478,8 +1483,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const parsed = EventSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ accepted: false });
     const event = parsed.data;
-    const [project] = await app.db<{ id: string; enabled: boolean }[]>`
-      SELECT id, enabled FROM tracking_projects WHERE public_key = ${event.public_key}
+    const [project] = await app.db<{ id: string; offer_id: string; enabled: boolean }[]>`
+      SELECT id, offer_id, enabled FROM tracking_projects WHERE public_key = ${event.public_key}
     `;
     if (!project?.enabled) return reply.code(404).send({ accepted: false });
     const country = requestCountry(req.headers);
@@ -1545,6 +1550,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         eventAt: inserted[0].received_at,
       });
     }
+    if (inserted[0]) await invalidateOfferAnalytics(app, project.offer_id);
     return reply.code(202).send({ accepted: true });
   });
 
@@ -2089,6 +2095,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           tiktokDeliveryIds: tiktokDeliveryIds.map((row) => row.id),
         };
       });
+      if (outcome.inserted) {
+        await invalidateOfferAnalytics(app, connection.offer_id);
+      }
       await Promise.allSettled(
         outcome.deliveryIds.map((deliveryId) => app.metaQueue.add('send', { deliveryId })),
       );
@@ -2349,6 +2358,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         const tiktok = tiktokRows.map((row) => row.id);
         return { duplicate: false, meta, utmify, tiktok };
       });
+      if (!outcome.duplicate) {
+        await invalidateOfferAnalytics(app, connection.offer_id);
+      }
       await Promise.allSettled(
         outcome.meta.map((id) => app.metaQueue.add('send', { deliveryId: id })),
       );
