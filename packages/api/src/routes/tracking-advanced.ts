@@ -27,6 +27,20 @@ const databaseUnavailable = {
   detail: 'A infraestrutura de tracking está temporariamente indisponível.',
 };
 
+export function mergeAdvancedGateways<
+  TGateway extends Record<string, unknown>,
+  TVendepayConnection extends Record<string, unknown>,
+>(gateways: TGateway[], vendepayConnections: TVendepayConnection[]) {
+  return [
+    ...gateways.filter((gateway) => gateway.provider !== 'vendepay'),
+    ...vendepayConnections.map((connection) => ({
+      ...connection,
+      provider: 'vendepay' as const,
+      managed: true as const,
+    })),
+  ];
+}
+
 const DomainSchema = z.object({
   hostname: z
     .string()
@@ -198,14 +212,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       configured: true,
       public_key: p.public_key,
       domains,
-      gateways: [
-        ...gateways,
-        ...vendepayConnections.map((connection) => ({
-          ...connection,
-          provider: 'vendepay',
-          managed: true,
-        })),
-      ],
+      gateways: mergeAdvancedGateways(gateways, vendepayConnections),
       meta_rules: rules[0] ?? { attributed_only: true, minimum_amount_minor: 0 },
       ab_tests: tests.map((test) => ({
         ...test,
