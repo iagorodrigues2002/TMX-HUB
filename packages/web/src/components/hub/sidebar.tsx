@@ -47,6 +47,7 @@ function itemIsActive(item: NavItem, pathname: string, search: string) {
 
 function visibleForUser(item: NavItem, user: ReturnType<typeof useAuth>['user']) {
   if (item.hidden || !user) return false;
+  if (item.href.includes('[id]')) return false;
   if (item.roles && !item.roles.includes(user.role)) return false;
   if (item.requiresTool && !canAccessTool(user, item.requiresTool)) return false;
   return true;
