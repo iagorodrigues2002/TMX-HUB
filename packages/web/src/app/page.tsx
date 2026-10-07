@@ -21,7 +21,7 @@ export default function HubLandingPage() {
 
   return (
     <HubShell>
-      <header className="tmx-command-hero rounded-2xl border border-cyan-300/15 p-5 sm:p-7 md:p-8">
+      <header className="tmx-command-hero animate-[tmx-reveal_240ms_cubic-bezier(0,0,0.2,1)_both] rounded-2xl border border-cyan-300/15 p-5 motion-reduce:animate-none sm:p-7 md:p-8">
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <p className="hud-label">Operator Console</p>
           <span className="flex items-center gap-2 rounded-full border border-emerald-300/15 bg-emerald-300/[0.05] px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-emerald-200/70">

@@ -331,7 +331,7 @@ function Dataset({ dataset }: { dataset: OverviewDataset }) {
       className="space-y-4 rounded-xl border border-cyan-300/[0.14] bg-cyan-300/[0.025] p-3 sm:p-4"
       data-overview-dataset={dataset.key}
     >
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-cyan-300/[0.1] px-1 pb-3">
+      <header className="animate-[tmx-reveal_220ms_cubic-bezier(0,0,0.2,1)_50ms_both] flex flex-wrap items-center justify-between gap-3 border-b border-cyan-300/[0.1] px-1 pb-3 motion-reduce:animate-none">
         <div>
           <p className="hud-label">Escopo dos dados</p>
           <h3 className="mt-1 text-base font-semibold text-white">{dataset.label}</h3>
@@ -342,28 +342,32 @@ function Dataset({ dataset }: { dataset: OverviewDataset }) {
         </p>
       </header>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+      <div className="animate-[tmx-reveal_220ms_cubic-bezier(0,0,0.2,1)_100ms_both] grid grid-cols-2 gap-3 motion-reduce:animate-none lg:grid-cols-3">
         <Kpi
           label="Cliques"
           value={formatInt(dataset.clicks)}
+          countUp={{ value: dataset.clicks, format: formatInt }}
           hint="Tráfego de mídia"
           icon={<MousePointerClick className="h-4 w-4" />}
         />
         <Kpi
           label="PageView"
           value={formatInt(dataset.pageViews)}
+          countUp={{ value: dataset.pageViews, format: formatInt }}
           hint="Visualizações rastreadas"
           icon={<Eye className="h-4 w-4" />}
         />
         <Kpi
           label="Initiate Checkout"
           value={formatInt(dataset.totals.ic)}
+          countUp={{ value: dataset.totals.ic, format: formatInt }}
           hint="Checkouts iniciados"
           icon={<CreditCard className="h-4 w-4" />}
         />
         <Kpi
           label="Vendas"
           value={formatCompactNumber(dataset.totals.sales)}
+          countUp={{ value: dataset.totals.sales, format: formatCompactNumber }}
           hint="Pedidos pagos"
           icon={<ShoppingCart className="h-4 w-4" />}
           tone="positive"
@@ -371,6 +375,10 @@ function Dataset({ dataset }: { dataset: OverviewDataset }) {
         <Kpi
           label="Receita"
           value={formatCurrency(dataset.totals.revenue, 'BRL')}
+          countUp={{
+            value: dataset.totals.revenue,
+            format: (value) => formatCurrency(value, 'BRL'),
+          }}
           hint="Receita bruta paga"
           icon={<Receipt className="h-4 w-4" />}
           tone="positive"
@@ -378,12 +386,17 @@ function Dataset({ dataset }: { dataset: OverviewDataset }) {
         <Kpi
           label="Taxa de conversão"
           value={formatConversionRate(dataset.conversionRate)}
+          countUp={
+            dataset.conversionRate === null
+              ? undefined
+              : { value: dataset.conversionRate, format: formatConversionRate }
+          }
           hint="Vendas / PageView"
           icon={<Percent className="h-4 w-4" />}
         />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="animate-[tmx-reveal_220ms_cubic-bezier(0,0,0.2,1)_150ms_both] grid gap-4 motion-reduce:animate-none xl:grid-cols-2">
         <RevenueChart
           title="Série diária"
           description="Receita por dia; o rodapé de cada barra mostra as vendas."
@@ -505,7 +518,7 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
 
   return (
     <div className="space-y-5" data-overview-dashboard data-overview-scope={scope}>
-      <section className="rounded-lg border border-white/[0.08] bg-white/[0.025] p-4 sm:p-5">
+      <section className="animate-[tmx-reveal_220ms_cubic-bezier(0,0,0.2,1)_both] rounded-lg border border-white/[0.08] bg-white/[0.025] p-4 motion-reduce:animate-none sm:p-5">
         <div className="flex flex-wrap items-center gap-3">
           <div className="grid h-10 w-10 place-items-center rounded-lg border border-cyan-300/25 bg-cyan-300/[0.08]">
             <LayoutDashboard aria-hidden className="h-4.5 w-4.5 text-cyan-300" />
