@@ -605,6 +605,25 @@ html[data-theme="light"] [class*="bg-[#0" i] {
 }
 
 /* ----------------------------------------------------------------------
+ * Route transition — compositor-only entry feedback on navigation.
+ * --------------------------------------------------------------------- */
+@keyframes page-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-transition {
+  animation: page-fade-in 180ms ease-out both;
+  will-change: opacity, transform;
+}
+
+/* ----------------------------------------------------------------------
  * Shared UI motion — short compositor-only feedback for transient surfaces.
  * --------------------------------------------------------------------- */
 .tmx-dialog-overlay {
@@ -1141,6 +1160,10 @@ html[data-theme="light"] [class*="bg-[#0" i] {
     animation: none !important;
     opacity: 0;
     transform: none;
+  }
+
+  .page-transition {
+    animation: none;
   }
 
   .tmx-check-path,
