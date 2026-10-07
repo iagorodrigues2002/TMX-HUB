@@ -11,6 +11,7 @@ import type {
   InspectResult,
   Link,
   Problem,
+  TikTokDestinationInput as SharedTikTokDestinationInput,
   UpdateFormRequest,
   UpdateLinkRequest,
   VslJob,
@@ -1367,12 +1368,7 @@ export type GoogleAdsValidation = {
   detail: string;
   synthetic?: boolean;
 };
-export type TikTokDestinationInput = {
-  name: string;
-  pixel_code: string;
-  access_token: string;
-  enabled: boolean;
-};
+export type TikTokDestinationInput = SharedTikTokDestinationInput;
 export type TikTokDestination = Omit<TikTokDestinationInput, 'access_token'> & {
   id: string;
   created_at: string;
@@ -1406,12 +1402,12 @@ export const apiClient = {
   deleteTikTokDestination: (offerId: string, id: string) =>
     request<void>(`/v1/offers/${offerId}/tracking/tiktok/destinations/${id}`, { method: 'DELETE' }),
   testTikTokDestination: (
-    offerId: string,
+    _offerId: string,
     id: string,
-    input: { test_event_code: string; event_url?: string; email?: string; phone?: string },
+    input: { test_event_code?: string; event_url?: string; email?: string; phone?: string },
   ) =>
     request<{ delivery_id: string; status: string; detail: string }>(
-      `/v1/offers/${offerId}/tracking/tiktok/destinations/${id}/test`,
+      `/v1/tracking/destinations/tiktok/${id}/test`,
       { method: 'POST', body: input },
     ),
   tiktokDelivery: (offerId: string, id: string) =>

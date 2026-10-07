@@ -16,6 +16,25 @@ export const BuildStatusSchema = z.enum(['queued', 'building', 'ready', 'failed'
 
 export const TrackingGatewayProviderSchema = z.enum(['paysight', 'explodely']);
 
+export const TikTokDestinationSchema = z
+  .object({
+    name: z.string().trim().min(1).max(100),
+    // Pixel codes are opaque TikTok identifiers. Restricting them to a guessed
+    // numeric format would reject valid pixels.
+    pixel_code: z
+      .string()
+      .trim()
+      .min(6)
+      .max(128)
+      .regex(/^[A-Za-z0-9_-]+$/),
+    access_token: z.string().trim().min(16).max(4096),
+    test_event_code: z.string().trim().min(1).max(256).nullable().optional().default(null),
+    enabled: z.boolean().optional().default(true),
+  })
+  .strict();
+
+export type TikTokDestinationInput = z.infer<typeof TikTokDestinationSchema>;
+
 export const ExplodelyGatewaySettingsSchema = z
   .object({
     vendor_id: z.string().trim().min(1, 'Informe o vendor_id da Explodely.').max(256),

@@ -97,7 +97,7 @@ export function createTikTokWorker(): Worker<TikTokJobData> | null {
         user_agent: string | null;
       }>
     >`
-      SELECT d.id,d.event_id,d.event_name,d.test_event_code,d.test_context,d.attempts,
+      SELECT d.id,d.event_id,d.event_name,COALESCE(d.test_event_code,dest.test_event_code) test_event_code,d.test_context,d.attempts,
              dest.pixel_code,dest.access_token_encrypted,d.order_id,
              o.external_id,o.amount_minor,o.currency,o.amount_brl_minor,o.product,COALESCE(o.buyer,'{}'::jsonb) buyer,o.paid_at,o.visitor_id,
              COALESCE(event.event_url, latest.event_url) event_url,

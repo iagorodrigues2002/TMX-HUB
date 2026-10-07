@@ -8,7 +8,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
-const empty: TikTokDestinationInput = { name: '', pixel_code: '', access_token: '', enabled: true };
+const TIKTOK_TEST_EVENTS_DOCS =
+  'https://business-api.tiktok.com/portal/docs?id=1799004129683458#item-link-Verify%20TikTok%20Events%20API%20Setup';
+const empty: TikTokDestinationInput = {
+  name: '',
+  pixel_code: '',
+  access_token: '',
+  test_event_code: null,
+  enabled: true,
+};
 type TikTokTestContext = { code: string; eventUrl: string; email: string; phone: string };
 const emptyTest: TikTokTestContext = { code: '', eventUrl: '', email: '', phone: '' };
 
@@ -40,7 +48,12 @@ export function TikTokDestinations({ offerId }: { offerId: string }) {
       );
   }, [delivery.data?.delivery.state]);
   const save = useMutation({
-    mutationFn: () => apiClient.saveTikTokDestination(offerId, form, editing?.id),
+    mutationFn: () =>
+      apiClient.saveTikTokDestination(
+        offerId,
+        { ...form, test_event_code: form.test_event_code?.trim() || null },
+        editing?.id,
+      ),
     onSuccess: () => {
       setForm(empty);
       setEditing(null);
@@ -62,12 +75,18 @@ export function TikTokDestinations({ offerId }: { offerId: string }) {
       }),
     onSuccess: (result) => {
       setTestDelivery(result.delivery_id);
-      toast.message('Teste enviado. Aguardando confirmação da Events API…');
+      toast.success('Evento enviado. Aguardando confirmação da Events API…');
     },
   });
   const edit = (d: TikTokDestination) => {
     setEditing(d);
-    setForm({ name: d.name, pixel_code: d.pixel_code, access_token: '', enabled: d.enabled });
+    setForm({
+      name: d.name,
+      pixel_code: d.pixel_code,
+      access_token: '',
+      test_event_code: d.test_event_code,
+      enabled: d.enabled,
+    });
   };
   return (
     <section className="space-y-5" aria-label="Destinos TikTok Ads">
@@ -91,11 +110,12 @@ export function TikTokDestinations({ offerId }: { offerId: string }) {
           {destinations.data.destinations.map((d) => (
             <article key={d.id} className="rounded-xl border border-white/10 p-4">
               {(() => {
-                const context = testContext[d.id] ?? emptyTest;
+                const savedTestContext = { ...emptyTest, code: d.test_event_code ?? '' };
+                const context = testContext[d.id] ?? savedTestContext;
                 const setContext = (patch: Partial<TikTokTestContext>) =>
                   setTestContext((current) => ({
                     ...current,
-                    [d.id]: { ...(current[d.id] ?? emptyTest), ...patch },
+                    [d.id]: { ...(current[d.id] ?? savedTestContext), ...patch },
                   }));
                 return (
                   <>
@@ -126,15 +146,28 @@ export function TikTokDestinations({ offerId }: { offerId: string }) {
                     </div>
                     <div className="mt-4 rounded-lg border border-cyan-300/15 bg-cyan-300/[0.03] p-3">
                       <label htmlFor={`tiktok-test-code-${d.id}`} className="text-xs text-white/65">
-                        Código de teste do TikTok Events Manager
+                        Test Event Code
                         <Input
                           id={`tiktok-test-code-${d.id}`}
                           value={context.code}
                           onChange={(e) => setContext({ code: e.target.value })}
-                          placeholder="Cole o Test Event Code"
+                          placeholder="Ex.: TMX_TEST_123"
                           className="mt-2"
                         />
                       </label>
+                      <p className="mt-2 text-xs leading-5 text-white/55">
+                        Opcional. Cole o código criado no TikTok Events Manager &gt; Test Events pra
+                        validar eventos em modo teste.{' '}
+                        <a
+                          href={TIKTOK_TEST_EVENTS_DOCS}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-medium text-cyan-200 underline decoration-cyan-200/40 underline-offset-4 hover:text-cyan-100"
+                        >
+                          Ver documentação do TikTok
+                        </a>
+                        .
+                      </p>
                       <div className="mt-3 grid gap-3 md:grid-cols-3">
                         <label
                           htmlFor={`tiktok-event-url-${d.id}`}
@@ -183,10 +216,10 @@ export function TikTokDestinations({ offerId }: { offerId: string }) {
                       </p>
                       <Button
                         className="mt-2"
-                        disabled={!context.code.trim() || test.isPending}
+                        disabled={!d.enabled || !context.code.trim() || test.isPending}
                         onClick={() => test.mutate({ id: d.id, context })}
                       >
-                        {test.isPending ? 'Enviando…' : 'Testar sem venda real'}
+                        {test.isPending ? 'Enviando…' : 'Enviar evento de teste'}
                       </Button>
                     </div>
                   </>
@@ -225,7 +258,7 @@ export function TikTokDestinations({ offerId }: { offerId: string }) {
         <h3 className="font-medium">
           {editing ? 'Editar pixel TikTok' : 'Adicionar pixel TikTok'}
         </h3>
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2">
           <label htmlFor="tiktok-destination-name" className="text-sm">
             Nome interno
             <Input
@@ -259,6 +292,32 @@ export function TikTokDestinations({ offerId }: { offerId: string }) {
               className="mt-2 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             />
           </label>
+          <div>
+            <label htmlFor="tiktok-test-event-code" className="text-sm">
+              Test Event Code
+            </label>
+            <Input
+              id="tiktok-test-event-code"
+              value={form.test_event_code ?? ''}
+              onChange={(e) => setForm({ ...form, test_event_code: e.target.value || null })}
+              placeholder="Ex.: TMX_TEST_123"
+              className="mt-2"
+              aria-describedby="tiktok-test-event-code-help"
+            />
+            <p id="tiktok-test-event-code-help" className="mt-2 text-xs leading-5 text-white/55">
+              Opcional. Cole o código criado no TikTok Events Manager &gt; Test Events pra validar
+              eventos em modo teste.{' '}
+              <a
+                href={TIKTOK_TEST_EVENTS_DOCS}
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-cyan-200 underline decoration-cyan-200/40 underline-offset-4 hover:text-cyan-100"
+              >
+                Ver documentação do TikTok
+              </a>
+              .
+            </p>
+          </div>
         </div>
         <label className="flex items-center gap-2 text-sm">
           <input
@@ -268,21 +327,39 @@ export function TikTokDestinations({ offerId }: { offerId: string }) {
           />{' '}
           Ativar envio de novas compras front
         </label>
-        <Button type="submit" disabled={save.isPending}>
-          {save.isPending ? 'Salvando…' : 'Salvar pixel'}
-        </Button>
-        {editing && (
+        <div className="flex flex-wrap gap-2">
+          <Button type="submit" disabled={save.isPending}>
+            {save.isPending ? 'Salvando…' : 'Salvar pixel'}
+          </Button>
           <Button
             type="button"
-            className="ml-2"
-            onClick={() => {
-              setEditing(null);
-              setForm(empty);
-            }}
+            variant="outline"
+            disabled={
+              !editing || !editing.enabled || !form.test_event_code?.trim() || test.isPending
+            }
+            onClick={() =>
+              editing &&
+              test.mutate({
+                id: editing.id,
+                context: { ...emptyTest, code: form.test_event_code?.trim() ?? '' },
+              })
+            }
           >
-            Cancelar
+            {test.isPending ? 'Enviando…' : 'Enviar evento de teste'}
           </Button>
-        )}
+          {editing && (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setEditing(null);
+                setForm(empty);
+              }}
+            >
+              Cancelar
+            </Button>
+          )}
+        </div>
       </form>
       {(save.isError || test.isError) && (
         <p role="alert" className="text-sm text-rose-200">

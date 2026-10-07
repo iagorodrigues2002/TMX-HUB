@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { ExplodelyGatewaySettingsSchema, TrackingGatewayProviderSchema } from '../src/schemas.js';
+import {
+  ExplodelyGatewaySettingsSchema,
+  TikTokDestinationSchema,
+  TrackingGatewayProviderSchema,
+} from '../src/schemas.js';
 
 describe('tracking gateway schemas', () => {
   it('lists Explodely as a universal gateway provider', () => {
@@ -25,5 +29,22 @@ describe('tracking gateway schemas', () => {
         amount_scale: 25,
       }).success,
     ).toBe(false);
+  });
+
+  it('accepts an optional nullable TikTok Test Event Code', () => {
+    const destination = {
+      name: 'TikTok principal',
+      pixel_code: 'C123ABC',
+      access_token: 'token-with-at-least-16-characters',
+      enabled: true,
+    };
+
+    expect(TikTokDestinationSchema.parse(destination)).toMatchObject({
+      ...destination,
+      test_event_code: null,
+    });
+    expect(
+      TikTokDestinationSchema.parse({ ...destination, test_event_code: ' TMX_TEST_123 ' }),
+    ).toMatchObject({ test_event_code: 'TMX_TEST_123' });
   });
 });

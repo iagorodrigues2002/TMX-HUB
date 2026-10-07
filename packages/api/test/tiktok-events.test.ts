@@ -37,6 +37,7 @@ describe('TikTok Events API payload', () => {
     expect(event.page.referrer).toBe('https://www.tiktok.com/');
     expect(event.user.email).toBe(createHash('sha256').update('buyer@example.com').digest('hex'));
     expect(event.properties).toMatchObject({ value: 99.9, currency: 'USD', order_id: 'order-1' });
+    expect(event.properties).not.toHaveProperty('test_event_code');
   });
 
   it('loads the browser Pixel only when a TikTok destination is active', () => {

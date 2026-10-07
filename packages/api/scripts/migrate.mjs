@@ -92,6 +92,7 @@ const migrations = [
   '081_offer_member_roles.sql',
   '082_vendepay_replay_terminal.sql',
   '083_network_click_ids.sql',
+  '085_tiktok_test_event_code.sql',
 ];
 
 await sql`
