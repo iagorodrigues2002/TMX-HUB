@@ -202,13 +202,17 @@ function TrackingWorkspaceContent() {
               }
             />
           ) : (
-            <TrackingAdvancedCenter
+            <div
               key={`${activeOffer.id}:${view}:${section}`}
-              offerId={activeOffer.id}
-              canManage={canManage}
-              view={view}
-              section={section}
-            />
+              className="tmx-tracking-section-transition"
+            >
+              <TrackingAdvancedCenter
+                offerId={activeOffer.id}
+                canManage={canManage}
+                view={view}
+                section={section}
+              />
+            </div>
           )}
         </main>
       </div>

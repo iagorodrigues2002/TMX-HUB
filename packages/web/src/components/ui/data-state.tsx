@@ -34,8 +34,10 @@ export function DataState({
       aria-live="polite"
       className={cn(
         'glass-card flex min-h-32 flex-col items-center justify-center gap-3 p-6 text-center',
+        variant === 'loading' && 'tmx-data-state-loading',
         className,
       )}
+      data-variant={variant}
     >
       <Icon
         aria-hidden

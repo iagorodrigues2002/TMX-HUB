@@ -592,6 +592,208 @@ html[data-theme="light"] [class*="bg-[#0" i] {
 }
 
 /* ----------------------------------------------------------------------
+ * Shared UI motion — short compositor-only feedback for transient surfaces.
+ * --------------------------------------------------------------------- */
+.tmx-dialog-overlay {
+  animation-duration: 120ms;
+  animation-fill-mode: both;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tmx-dialog-overlay[data-state="open"] {
+  animation-name: tmx-dialog-overlay-in;
+}
+
+.tmx-dialog-overlay[data-state="closed"] {
+  animation-name: tmx-dialog-overlay-out;
+}
+
+.tmx-dialog-content {
+  animation-duration: 150ms;
+  animation-fill-mode: both;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+
+.tmx-dialog-content[data-state="open"] {
+  animation-name: tmx-dialog-content-in;
+}
+
+.tmx-dialog-content[data-state="closed"] {
+  animation-name: tmx-dialog-content-out;
+}
+
+@keyframes tmx-dialog-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes tmx-dialog-overlay-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes tmx-dialog-content-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) translate3d(0, 4px, 0) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes tmx-dialog-content-out {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) translate3d(0, 4px, 0) scale(0.985);
+  }
+}
+
+.tmx-select-content {
+  --tmx-select-x: 0;
+  --tmx-select-y: 0;
+  animation-duration: 110ms;
+  animation-fill-mode: both;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+
+.tmx-select-content[data-side="bottom"] {
+  --tmx-select-y: -2px;
+  transform-origin: top;
+}
+
+.tmx-select-content[data-side="left"] {
+  --tmx-select-x: 2px;
+  transform-origin: right;
+}
+
+.tmx-select-content[data-side="right"] {
+  --tmx-select-x: -2px;
+  transform-origin: left;
+}
+
+.tmx-select-content[data-side="top"] {
+  --tmx-select-y: 2px;
+  transform-origin: bottom;
+}
+
+.tmx-select-content[data-state="open"] {
+  animation-name: tmx-select-content-in;
+}
+
+.tmx-select-content[data-state="closed"] {
+  animation-name: tmx-select-content-out;
+}
+
+@keyframes tmx-select-content-in {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--tmx-select-x), var(--tmx-select-y), 0) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes tmx-select-content-out {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(var(--tmx-select-x), var(--tmx-select-y), 0) scale(0.98);
+  }
+}
+
+.tmx-tabs-content[data-state="active"] {
+  animation: tmx-tabs-content-in 110ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.tmx-tracking-section-transition {
+  animation: tmx-tracking-section-in 120ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes tmx-tabs-content-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes tmx-tracking-section-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 3px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.tmx-data-state-loading {
+  overflow: hidden;
+}
+
+.tmx-data-state-loading::after {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: "";
+  background: linear-gradient(
+    100deg,
+    transparent 25%,
+    color-mix(in srgb, var(--color-primary) 12%, transparent) 50%,
+    transparent 75%
+  );
+  transform: translate3d(-100%, 0, 0);
+  animation: tmx-data-state-shimmer 1300ms cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: transform;
+}
+
+@keyframes tmx-data-state-shimmer {
+  to {
+    transform: translate3d(100%, 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .tmx-data-state-loading::after {
+    animation: none !important;
+    opacity: 0;
+    transform: none;
+  }
+}
+
+/* ----------------------------------------------------------------------
  * Tracking module — cyber-organic tokens and primitives
  *
  * Everything under [data-surface="tracking"] uses these tokens so the rest
