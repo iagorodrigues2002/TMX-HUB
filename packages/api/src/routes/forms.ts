@@ -2,6 +2,7 @@ import type { Form, FormMode } from '@page-cloner/shared';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { isValidPrefixedUlid, isValidUlid } from '../lib/ids.js';
+import { requireOwnership } from '../lib/ownership-check.js';
 import {
   BadRequestError,
   NotFoundError,
@@ -54,6 +55,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const { id } = IdParamSchema.parse(req.params);
     if (!isValidUlid(id)) throw new BadRequestError('Invalid clone id.');
 
+    await requireOwnership(app.redis, 'clone', id, req.user!.sub);
     const meta = await app.jobStore.getCloneMeta(id);
     const query = ListQuerySchema.parse(req.query);
 
@@ -82,6 +84,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!isValidUlid(id)) throw new BadRequestError('Invalid clone id.');
     if (!isValidPrefixedUlid(formId, 'frm')) throw new BadRequestError('Invalid form id.');
 
+    await requireOwnership(app.redis, 'clone', id, req.user!.sub);
     const meta = await app.jobStore.getCloneMeta(id);
     const ifMatch = req.headers['if-match'];
     if (typeof ifMatch === 'string' && ifMatch !== meta.etag) {

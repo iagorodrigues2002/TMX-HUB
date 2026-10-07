@@ -2,6 +2,7 @@ import { CreateVslJobRequestSchema } from '@page-cloner/shared';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { ulid } from 'ulid';
 import { isValidUlid } from '../lib/ids.js';
+import { assignOwnership, requireOwnership } from '../lib/ownership-check.js';
 import { BadRequestError, zodToProblem } from '../lib/problem.js';
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
@@ -12,6 +13,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
     const id = ulid();
     const meta = await app.vslJobStore.create({ id, url: parsed.data.url });
+    await assignOwnership(app.redis, 'vsl', id, req.user!.sub);
 
     await app.vslQueue.add('vsl', { jobId: id, url: parsed.data.url }, { jobId: id });
 
@@ -32,6 +34,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get<{ Params: { id: string } }>('/vsl-jobs/:id', async (req, reply) => {
     const { id } = req.params;
     if (!isValidUlid(id)) throw new BadRequestError('Invalid job id format.');
+    await requireOwnership(app.redis, 'vsl', id, req.user!.sub);
     const meta = await app.vslJobStore.get(id);
 
     // Surface presigned download URLs only when ready.
@@ -79,9 +82,7 @@ function toWire(meta: VslJobMetadata, _storage: StorageService): Record<string, 
     white_filename: meta.whiteFilename,
     white_storage_key: meta.whiteStorageKey,
     white_bytes: meta.whiteBytes,
-    error: meta.errorCode
-      ? { code: meta.errorCode, message: meta.errorMessage ?? '' }
-      : undefined,
+    error: meta.errorCode ? { code: meta.errorCode, message: meta.errorMessage ?? '' } : undefined,
     created_at: meta.createdAt,
     updated_at: meta.updatedAt,
   };

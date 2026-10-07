@@ -2,6 +2,7 @@ import { CreateFunnelJobRequestSchema } from '@page-cloner/shared';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { ulid } from 'ulid';
 import { isValidUlid } from '../lib/ids.js';
+import { assignOwnership, requireOwnership } from '../lib/ownership-check.js';
 import { BadRequestError, zodToProblem } from '../lib/problem.js';
 import type { FunnelJobMetadata } from '../services/funnel-job-store.js';
 
@@ -19,9 +20,7 @@ function toWire(meta: FunnelJobMetadata, downloadUrl?: string) {
     storage_key: meta.storageKey,
     expires_at: meta.expiresAt,
     download_url: downloadUrl,
-    error: meta.errorCode
-      ? { code: meta.errorCode, message: meta.errorMessage ?? '' }
-      : undefined,
+    error: meta.errorCode ? { code: meta.errorCode, message: meta.errorMessage ?? '' } : undefined,
     created_at: meta.createdAt,
     updated_at: meta.updatedAt,
   };
@@ -39,6 +38,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       maxDepth: parsed.data.max_depth,
       maxPages: parsed.data.max_pages,
     });
+    await assignOwnership(app.redis, 'funnel', id, req.user!.sub);
     await app.funnelQueue.add('funnel', { jobId: id, url: parsed.data.url }, { jobId: id });
 
     if (req.user) {
@@ -57,6 +57,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get<{ Params: { id: string } }>('/funnel-jobs/:id', async (req, reply) => {
     const { id } = req.params;
     if (!isValidUlid(id)) throw new BadRequestError('Invalid job id format.');
+    await requireOwnership(app.redis, 'funnel', id, req.user!.sub);
     const meta = await app.funnelJobStore.get(id);
     let downloadUrl: string | undefined;
     if (meta.status === 'ready' && meta.storageKey) {

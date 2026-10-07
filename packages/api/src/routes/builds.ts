@@ -1,12 +1,8 @@
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { isValidPrefixedUlid, isValidUlid, newBuildId } from '../lib/ids.js';
-import {
-  BadRequestError,
-  ConflictError,
-  NotFoundError,
-  zodToProblem,
-} from '../lib/problem.js';
+import { requireOwnership } from '../lib/ownership-check.js';
+import { BadRequestError, ConflictError, NotFoundError, zodToProblem } from '../lib/problem.js';
 import type { BuildMetadata } from '../services/job-store.js';
 
 const CloneIdParam = z.object({ id: z.string() });
@@ -55,6 +51,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const { id } = CloneIdParam.parse(req.params);
     if (!isValidUlid(id)) throw new BadRequestError('Invalid clone id.');
 
+    await requireOwnership(app.redis, 'clone', id, req.user!.sub);
     const cloneMeta = await app.jobStore.getCloneMeta(id);
     if (cloneMeta.status !== 'ready') {
       throw new ConflictError(
@@ -93,6 +90,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!isValidUlid(id)) throw new BadRequestError('Invalid clone id.');
     if (!isValidPrefixedUlid(buildId, 'bld')) throw new BadRequestError('Invalid build id.');
 
+    await requireOwnership(app.redis, 'clone', id, req.user!.sub);
     const meta = await app.jobStore.getBuildMeta(buildId);
     if (meta.cloneId !== id) throw new NotFoundError(`Build ${buildId} not found for clone ${id}.`);
 
@@ -110,7 +108,6 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     }
     return reply.header('etag', etag).send(out);
   });
-
 };
 
 export default plugin;

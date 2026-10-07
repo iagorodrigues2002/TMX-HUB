@@ -3,6 +3,7 @@ import { CloneOptionsSchema, CreateCloneRequestSchema } from '@page-cloner/share
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { isValidUlid, newJobId } from '../lib/ids.js';
+import { assignOwnership, requireOwnership } from '../lib/ownership-check.js';
 import { BadRequestError, ConflictError, zodToProblem } from '../lib/problem.js';
 import type { CloneMetadata } from '../services/job-store.js';
 
@@ -123,6 +124,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       options,
       ...(options.webhookUrl ? { webhookUrl: options.webhookUrl } : {}),
     });
+    await assignOwnership(app.redis, 'clone', jobId, req.user!.sub);
 
     await app.renderQueue.add(
       'render',
@@ -156,6 +158,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const { id } = IdParamSchema.parse(req.params);
     if (!isValidUlid(id)) throw new BadRequestError('Invalid clone id format.');
 
+    await requireOwnership(app.redis, 'clone', id, req.user!.sub);
     const meta = await app.jobStore.getCloneMeta(id);
     const ifNoneMatch = req.headers['if-none-match'];
     if (typeof ifNoneMatch === 'string' && ifNoneMatch === meta.etag) {
@@ -172,6 +175,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const { id } = IdParamSchema.parse(req.params);
     if (!isValidUlid(id)) throw new BadRequestError('Invalid clone id format.');
 
+    await requireOwnership(app.redis, 'clone', id, req.user!.sub);
     const meta = await app.jobStore.maybeGetCloneMeta(id);
     if (!meta) {
       // Spec allows 204 for already-deleted resources.
