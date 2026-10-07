@@ -38,9 +38,11 @@ export async function buildApp() {
     loggerInstance: logger,
     bodyLimit: 5 * 1024 * 1024,
     trustProxy: true,
-    disableRequestLogging: false,
+    disableRequestLogging: process.env.NODE_ENV === 'production',
   });
 
+  // TODO(perf): Register @fastify/compress with Brotli/gzip and a 1 KiB threshold
+  // once the dependency is approved for this package.
   // Order matters: queue first (decorates app.redis), then storage (uses redis),
   // then auth (decorates app.userStore + activityStore + requireAuth).
   await app.register(queuePlugin);

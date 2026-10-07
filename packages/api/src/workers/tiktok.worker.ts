@@ -166,7 +166,7 @@ export function createTikTokWorker(): Worker<TikTokJobData> | null {
       if (!response.ok || (parsed.code !== undefined && parsed.code !== 0))
         throw new Error(`TikTok HTTP ${response.status}: ${parsed.message ?? raw.slice(0, 500)}`);
       await db`UPDATE tracking_tiktok_deliveries SET state='delivered',response_status=${response.status},response=${db.json({ provider: parsed, payload: { event: payload.data[0]?.event, event_id: payload.data[0]?.event_id, pixel_code: payload.event_source_id, test: Boolean(row.test_event_code) } } as never)},last_error=NULL,delivered_at=now() WHERE id=${row.id}`;
-      logger.info(
+      logger.debug(
         { deliveryId: row.id, requestId: parsed.request_id },
         'tiktok events api delivery succeeded',
       );

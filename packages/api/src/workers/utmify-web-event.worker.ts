@@ -103,7 +103,7 @@ export function createUtmifyWebEventWorker(): Worker<UtmifyWebEventJobData> | nu
               response = ${db.json(result as never)}, last_error = NULL, delivered_at = now()
           WHERE id = ${row.id}
         `;
-        logger.info(
+        logger.debug(
           { deliveryId: row.id, eventId: event._id, leadId: lead._id },
           'utmify web event delivered',
         );

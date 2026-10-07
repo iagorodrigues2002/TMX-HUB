@@ -304,7 +304,7 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
             response = ${db.json(responseResult as never)}, last_error = NULL, delivered_at = now()
           WHERE id = ${row.id}
         `;
-        logger.info(
+        logger.debug(
           {
             deliveryId: row.id,
             eventId: row.outgoing_event_id ?? row.event_id,

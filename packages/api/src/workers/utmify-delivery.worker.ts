@@ -131,7 +131,7 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
               last_error = 'Status cancelled não é aceito pela UTMify (aceita apenas waiting_payment, paid, refused, refunded, chargedback).'
           WHERE id = ${row.id}
         `;
-      logger.info(
+      logger.debug(
         { deliveryId: row.id, transactionId: row.external_id },
         'utmify delivery skipped: cancelled status not accepted by UTMify',
       );
@@ -237,7 +237,7 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
               response = ${db.json(result as never)}, last_error = NULL, delivered_at = now()
           WHERE id = ${row.id}
         `;
-      logger.info(
+      logger.debug(
         {
           deliveryId: row.id,
           transactionId: row.external_id,

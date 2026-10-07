@@ -101,7 +101,7 @@ export function runPhaseCancelFfmpeg(args: PhaseCancelFfmpegArgs, log: Logger): 
       args.output,
     ];
 
-    log.info({ cmd: 'ffmpeg', args: ffArgs.join(' ') }, 'spawning ffmpeg');
+    log.debug({ cmd: 'ffmpeg', args: ffArgs.join(' ') }, 'spawning ffmpeg');
     const proc = spawn('ffmpeg', ffArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
 
     let stderr = '';
