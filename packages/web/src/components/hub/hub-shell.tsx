@@ -1,7 +1,7 @@
 'use client';
 
 import { AuthGate } from '@/components/auth/auth-gate';
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { FinancialPrivacyMask } from './financial-privacy-mask';
 import { MicroFooter } from './micro-footer';
 import { Sidebar } from './sidebar';
@@ -17,6 +17,21 @@ interface HubShellProps {
 }
 
 export function HubShell({ children, breadcrumb, topbarRight, fullBleed }: HubShellProps) {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  useEffect(() => {
+    setSidebarCollapsed(window.localStorage.getItem('tmx-ui.sidebar.collapsed') === 'true');
+  }, []);
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed((current) => {
+      const next = !current;
+      window.localStorage.setItem('tmx-ui.sidebar.collapsed', String(next));
+      return next;
+    });
+  };
+
   // The right slot defaults to the user menu; pages that need extra actions
   // (e.g. cloner editor) pass their own elements which we render BEFORE it.
   const right = (
@@ -34,9 +49,19 @@ export function HubShell({ children, breadcrumb, topbarRight, fullBleed }: HubSh
         Pular para o conteúdo
       </a>
       <div className="flex h-dvh flex-col overflow-hidden">
-        <Topbar breadcrumb={breadcrumb} right={right} />
+        <Topbar
+          breadcrumb={breadcrumb}
+          right={right}
+          sidebarCollapsed={sidebarCollapsed}
+          onToggleSidebar={toggleSidebar}
+          onOpenMobileNavigation={() => setMobileNavOpen(true)}
+        />
         <div className="flex flex-1 overflow-hidden">
-          <Sidebar />
+          <Sidebar
+            collapsed={sidebarCollapsed}
+            mobileOpen={mobileNavOpen}
+            onMobileOpenChange={setMobileNavOpen}
+          />
           {fullBleed ? (
             <div id="conteudo-principal" className="min-w-0 flex-1 overflow-hidden">
               {children}

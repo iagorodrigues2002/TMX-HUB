@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
+import { Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
@@ -8,18 +10,51 @@ interface TopbarProps {
   breadcrumb?: string[];
   /** Right-side slot (status pill, build button, action buttons). */
   right?: ReactNode;
+  sidebarCollapsed: boolean;
+  onToggleSidebar: () => void;
+  onOpenMobileNavigation: () => void;
 }
 
-export function Topbar({ breadcrumb, right }: TopbarProps) {
+export function Topbar({
+  breadcrumb,
+  right,
+  sidebarCollapsed,
+  onToggleSidebar,
+  onOpenMobileNavigation,
+}: TopbarProps) {
   return (
     <header
-      className="tmx-topbar flex h-16 shrink-0 items-center gap-2 border-b border-cyan-100/[0.09] bg-[#061119]/88 px-3 shadow-[0_10px_35px_rgba(0,0,0,.18)] backdrop-blur-2xl sm:gap-4 sm:px-6"
+      className="tmx-topbar flex h-14 shrink-0 items-center gap-2 border-b border-border/60 bg-background/92 px-2 backdrop-blur-xl sm:px-3"
       style={{ position: 'sticky', top: 0, zIndex: 30 }}
     >
-      <Link href="/" className="group flex min-w-0 shrink-0 items-center gap-2 sm:gap-3">
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        onClick={onOpenMobileNavigation}
+        aria-label="Abrir navegação"
+        className="h-11 w-11 lg:hidden"
+      >
+        <Menu className="h-4 w-4" />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        onClick={onToggleSidebar}
+        aria-label={sidebarCollapsed ? 'Expandir barra lateral' : 'Recolher barra lateral'}
+        className="hidden lg:inline-flex"
+      >
+        {sidebarCollapsed ? (
+          <PanelLeftOpen className="h-4 w-4" />
+        ) : (
+          <PanelLeftClose className="h-4 w-4" />
+        )}
+      </Button>
+      <Link href="/" className="group flex min-w-0 shrink-0 items-center gap-2">
         <span
           aria-hidden
-          className="grid h-8 w-8 place-items-center rounded-md border border-cyan-300/30 shadow-glow"
+          className="grid h-8 w-8 place-items-center rounded-md border border-border/60 bg-muted"
           style={{
             background: 'linear-gradient(135deg, rgba(20,184,166,0.25), rgba(34,211,238,0.05))',
           }}
@@ -38,7 +73,7 @@ export function Topbar({ breadcrumb, right }: TopbarProps) {
           </svg>
         </span>
         <span className="flex flex-col leading-tight">
-          <span className="text-[18px] font-bold tracking-tight text-white sm:text-[20px]">
+          <span className="text-base font-bold tracking-tight text-foreground">
             TMX{' '}
             <span
               className="bg-clip-text text-transparent"
@@ -50,9 +85,7 @@ export function Topbar({ breadcrumb, right }: TopbarProps) {
               HUB
             </span>
           </span>
-          <span className="hidden text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55 sm:block">
-            TERMINAL DE CONTROLE
-          </span>
+          <span className="hidden text-[11px] text-muted-foreground sm:block">Operação</span>
         </span>
       </Link>
 
