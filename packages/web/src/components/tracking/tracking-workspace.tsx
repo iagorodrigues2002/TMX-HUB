@@ -132,32 +132,6 @@ function TrackingWorkspaceContent() {
         </div>
       </header>
 
-      <nav
-        aria-label="Áreas de rastreamento"
-        className="rounded-lg border border-white/[0.08] bg-black/15 p-2"
-      >
-        <div className="flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {TRACKING_NAV.map((area) => {
-            const Icon = area.icon;
-            return (
-              <button
-                key={area.id}
-                type="button"
-                aria-current={view === area.id ? 'page' : undefined}
-                onClick={() => navigate(area.id)}
-                className={cn(
-                  'flex min-h-11 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium text-white/50 transition-colors hover:bg-white/[0.04] hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/40',
-                  view === area.id && 'bg-cyan-300/[0.10] text-cyan-100',
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {area.label}
-              </button>
-            );
-          })}
-        </div>
-      </nav>
-
       <div className="grid min-w-0 gap-4 xl:grid-cols-[230px_minmax(0,1fr)]">
         <aside className="h-fit rounded-lg border border-white/[0.08] bg-black/15 p-2 xl:sticky xl:top-20">
           <div className="px-2 py-2">

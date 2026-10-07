@@ -5,21 +5,11 @@ import { UsersSection } from '@/components/settings/users-section';
 import { Button } from '@/components/ui/button';
 import { DateRangeFilter } from '@/components/ui/date-range-filter';
 import { Kpi } from '@/components/ui/kpi';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
 import { PERIOD_DATE_PRESETS, isDateInRange, rollingDateRange, todayIso } from '@/lib/date-range';
 import { useQuery } from '@tanstack/react-query';
-import {
-  Activity,
-  Cable,
-  Clock3,
-  Loader2,
-  ScrollText,
-  ShieldCheck,
-  UserCog,
-  Users,
-} from 'lucide-react';
+import { Activity, Cable, Clock3, Loader2, ShieldCheck, UserCog, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
@@ -142,24 +132,8 @@ export function AdminDashboard() {
         ))}
       </section>
 
-      <Tabs
-        value={activeView}
-        onValueChange={(value) => {
-          const next = value as AdminView;
-          router.replace(next === 'overview' ? '/admin' : `/admin?view=${next}`, {
-            scroll: false,
-          });
-        }}
-      >
-        <TabsList className="mb-5 flex h-auto justify-start overflow-x-auto">
-          <TabsTrigger value="overview">Visão geral</TabsTrigger>
-          <TabsTrigger value="people">Pessoas e acessos</TabsTrigger>
-          <TabsTrigger value="invites">Convites</TabsTrigger>
-          <TabsTrigger value="activity" className="gap-2">
-            <ScrollText className="h-4 w-4" /> Atividade
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="overview" className="grid gap-5 xl:grid-cols-[1fr_1.2fr]">
+      {activeView === 'overview' && (
+        <div className="grid gap-5 xl:grid-cols-[1fr_1.2fr]">
           <section className="glass-card overflow-hidden">
             <div className="border-b border-white/[0.06] p-4">
               <p className="hud-label">Usuários ativos</p>
@@ -206,49 +180,43 @@ export function AdminDashboard() {
               />
             </div>
           </section>
-        </TabsContent>
-        <TabsContent value="people">
-          <UsersSection />
-        </TabsContent>
-        <TabsContent value="invites">
-          <InvitesSection />
-        </TabsContent>
-        <TabsContent value="activity">
-          <section className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] p-4">
-              <div>
-                <p className="hud-label">Atividade administrativa</p>
-                <p className="mt-1 text-sm text-white/45">
-                  Ações recentes de todos os usuários do TMX.
+        </div>
+      )}
+      {activeView === 'people' && <UsersSection />}
+      {activeView === 'invites' && <InvitesSection />}
+      {activeView === 'activity' && (
+        <section className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] p-4">
+            <div>
+              <p className="hud-label">Atividade administrativa</p>
+              <p className="mt-1 text-sm text-white/45">
+                Ações recentes de todos os usuários do TMX.
+              </p>
+            </div>
+            <span className="text-xs text-white/35">Atualização automática a cada 30 segundos</span>
+          </div>
+          <DateRangeFilter
+            value={activityPeriod}
+            onChange={setActivityPeriod}
+            presets={PERIOD_DATE_PRESETS}
+            max={todayIso()}
+            status={
+              <>
+                <p className="hud-label">No período</p>
+                <p className="mt-1 text-xs text-cyan-200/75">
+                  {filteredActivity.length} registro(s)
                 </p>
-              </div>
-              <span className="text-xs text-white/35">
-                Atualização automática a cada 30 segundos
-              </span>
-            </div>
-            <DateRangeFilter
-              value={activityPeriod}
-              onChange={setActivityPeriod}
-              presets={PERIOD_DATE_PRESETS}
-              max={todayIso()}
-              status={
-                <>
-                  <p className="hud-label">No período</p>
-                  <p className="mt-1 text-xs text-cyan-200/75">
-                    {filteredActivity.length} registro(s)
-                  </p>
-                </>
-              }
+              </>
+            }
+          />
+          <div className="glass-card max-h-[680px] divide-y divide-white/[0.05] overflow-y-auto">
+            <ActivityFeed
+              entries={filteredActivity}
+              emptyText="Nenhuma atividade registrada neste período."
             />
-            <div className="glass-card max-h-[680px] divide-y divide-white/[0.05] overflow-y-auto">
-              <ActivityFeed
-                entries={filteredActivity}
-                emptyText="Nenhuma atividade registrada neste período."
-              />
-            </div>
-          </section>
-        </TabsContent>
-      </Tabs>
+          </div>
+        </section>
+      )}
     </div>
   );
 }
