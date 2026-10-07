@@ -1,0 +1,30 @@
+{
+  "public_key": "TEST_PUBLIC_KEY_REPLACE_ME",
+  "event_id": "TEST-E2E-PAGEVIEW-001",
+  "visitor_id": "TEST-E2E-VISITOR-0001",
+  "session_id": "TEST-E2E-SESSION-0001",
+  "journey_id": "TEST-E2E-JOURNEY-0001",
+  "event_name": "PageView",
+  "event_category": "page",
+  "event_url": "https://e2e.invalid/landing?utm_source=e2e",
+  "page_title": "TMX E2E Landing",
+  "referrer": "https://e2e.invalid/ad",
+  "source": {
+    "src": "TEST-E2E-VISITOR-0001",
+    "utm_source": "e2e",
+    "utm_medium": "automation",
+    "utm_campaign": "tmx-e2e",
+    "utm_content": "pageview",
+    "utm_term": "tracking",
+    "fbclid": "TEST-FBCLID-PV-001",
+    "_fbp": "fb.1.1791374400000.TESTFBP001",
+    "_fbc": "fb.1.1791374400000.TEST-FBCLID-PV-001",
+    "gclid": "TEST-GCLID-PV-001",
+    "ttclid": "TEST-TTCLID-PV-001"
+  },
+  "properties": {
+    "path": "/landing?utm_source=e2e"
+  },
+  "consent_state": "granted",
+  "client_at": "2026-10-07T12:00:00.000Z"
+}

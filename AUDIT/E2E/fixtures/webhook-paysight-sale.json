@@ -1,0 +1,37 @@
+[
+  {
+    "transactionId": "TEST-E2E-PS-001",
+    "eventId": "TEST-E2E-PS-EVT-SALE-001",
+    "event": "payment.approved",
+    "status": "approved",
+    "success": true,
+    "approved_at": "2026-10-07T12:20:00.000Z",
+    "payment_method": "credit_card",
+    "customer": {
+      "name": "Comprador E2E",
+      "firstName": "Comprador",
+      "lastName": "E2E",
+      "email": "test@buyer.local",
+      "phone": "+5511999990001",
+      "country": "BR",
+      "postal_code": "01310930",
+      "ip": "192.0.2.10"
+    },
+    "product": {
+      "id": "TEST-PRODUCT-FRONT",
+      "name": "Produto E2E Sintetico",
+      "price_cents": 4700,
+      "currency": "BRL"
+    },
+    "metadata": {
+      "src": "TEST-E2E-VISITOR-0001",
+      "utm_source": "e2e",
+      "utm_medium": "automation",
+      "utm_campaign": "tmx-e2e",
+      "utm_content": "paysight-sale",
+      "fbclid": "TEST-FBCLID-PS-001",
+      "gclid": "TEST-GCLID-PS-001",
+      "ttclid": "TEST-TTCLID-PS-001"
+    }
+  }
+]

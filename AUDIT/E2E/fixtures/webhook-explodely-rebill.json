@@ -1,0 +1,18 @@
+{
+  "type": "rebill",
+  "orderid": "TEST-E2E-EXP-REBILL-001",
+  "mainorderid": "TEST-E2E-EXP-001",
+  "vendor_id": "TEST-EXPLODELY-VENDOR",
+  "amount": "47.00",
+  "currency": "BRL",
+  "saletimedate": "2026-10-07T12:50:00.000Z",
+  "customerName": "Comprador E2E",
+  "customerEmail": "test@buyer.local",
+  "customerPhone": "+5511999990001",
+  "zipcode": "01310930",
+  "country": "BR",
+  "ipadd": "192.0.2.10",
+  "productId": "TEST-PRODUCT-RECURRING",
+  "productName": "Produto E2E Recorrente",
+  "tracking_id": "TEST-E2E-VISITOR-0001"
+}

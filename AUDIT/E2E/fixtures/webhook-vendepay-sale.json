@@ -1,0 +1,32 @@
+{
+  "id": "TEST-E2E-VDP-EVT-SALE-001",
+  "checkoutId": "TEST-E2E-VDP-001",
+  "event": "compra.aprovada",
+  "status": 6,
+  "valorPago": "47.00",
+  "moeda": "BRL",
+  "trackeamentoId": "TEST-E2E-VISITOR-0001",
+  "metodoPagamento": 3,
+  "produtoId": "TEST-PRODUCT-FRONT",
+  "nomeProduto": "Produto E2E Sintetico",
+  "comprador": {
+    "nome": "Comprador E2E",
+    "email": "test@buyer.local",
+    "telefone": "+5511999990001"
+  },
+  "endereco": {
+    "cep": "01310930",
+    "pais": "BR"
+  },
+  "urlParams": {
+    "src": "TEST-E2E-VISITOR-0001",
+    "utm_source": "e2e",
+    "utm_medium": "automation",
+    "utm_campaign": "tmx-e2e",
+    "utm_content": "vendepay-sale",
+    "fbclid": "TEST-FBCLID-VDP-001",
+    "gclid": "TEST-GCLID-VDP-001",
+    "ttclid": "TEST-TTCLID-VDP-001"
+  },
+  "createdAt": "2026-10-07T12:00:00.000Z"
+}
