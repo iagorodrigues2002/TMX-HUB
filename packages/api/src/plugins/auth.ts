@@ -48,7 +48,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           passwordHash,
           role: 'admin',
         });
-        app.log.info({ email: env.ADMIN_EMAIL }, 'bootstrap admin created');
+        app.log.info('bootstrap admin created');
       } catch (err) {
         app.log.warn({ err }, 'failed to bootstrap admin (likely race)');
       }
