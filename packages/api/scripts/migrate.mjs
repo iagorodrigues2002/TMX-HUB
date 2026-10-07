@@ -82,11 +82,13 @@ const migrations = [
   '067_rename_vendepay_accounts.sql',
   '068_utmify_global_offer_routing.sql',
   '069_upsell_intelligence_performance.sql',
-  '070_explodely_gateway.sql',
-  '071_tracking_perf_indices.sql',
-  '072_google_ads_oauth_tenant_binding.sql',
-  '073_tracking_retention_and_consents.sql',
-  '074_offer_member_roles.sql',
+  '077_explodely_gateway.sql',
+  '078_tracking_perf_indices.sql',
+  '079_google_ads_oauth_tenant_binding.sql',
+  '080_tracking_retention_and_consents.sql',
+  '081_offer_member_roles.sql',
+  '082_vendepay_replay_terminal.sql',
+  '083_network_click_ids.sql',
 ];
 
 await sql`
