@@ -38,8 +38,11 @@ const EnvSchema = z.object({
   BROWSER_POOL_SIZE: numberFromString.default(3),
 
   WEBHOOK_SECRET: z.string().default('dev-webhook-secret-change-me-in-production'),
+  WEBHOOK_SECRET_PREV: z.string().min(1).optional(),
   EXPLODELY_REQUIRE_SIGNATURE: booleanFromString.default(true),
   EXPLODELY_WEBHOOK_SECRET: z.string().optional(),
+  // Opt-in because historical webhook replay may depend on the original PII.
+  WEBHOOK_PAYLOAD_SCRUB: booleanFromString.default(false),
 
   // Auth — JWT signing secret. Required in every environment.
   JWT_SECRET: z
