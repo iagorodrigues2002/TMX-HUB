@@ -7,6 +7,7 @@ import { TrackingLiveConsole } from '@/components/tracking/tracking-live-console
 import { TrackingPanel } from '@/components/tracking/tracking-panel';
 import { TRACKING_DASHBOARD_STALE_TIME } from '@/components/tracking/tracking-query';
 import { Button } from '@/components/ui/button';
+import { DataState } from '@/components/ui/data-state';
 import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
 import { type TrackingProductKind, type UpsellStageKey, apiClient } from '@/lib/api-client';
@@ -1796,6 +1797,36 @@ export function TrackingSectionContent({
   useEffect(() => {
     setSelectedVendepayConnectionName(selectedVendepayConnection?.name ?? '');
   }, [selectedVendepayConnection?.name]);
+
+  const destinationLoadingTitle =
+    section === 'meta' && (config.isPending || advanced.isPending || metaDeliveries.isPending)
+      ? 'Carregando destino Meta…'
+      : section === 'tiktok-ads' && config.isPending
+        ? 'Carregando destino TikTok Ads…'
+        : section === 'utmify' &&
+            (config.isPending ||
+              utmify.isPending ||
+              utmifyPixel.isPending ||
+              utmifyWebEvents.isPending ||
+              utmifyDeliveries.isPending ||
+              productKinds.isPending)
+          ? 'Carregando destino UTMify…'
+          : section === 'pushcut' && (pushcutDestinations.isPending || pushcutDeliveries.isPending)
+            ? 'Carregando destinos Pushcut…'
+            : section === 'vturb' && advanced.isPending
+              ? 'Carregando destino VTurb…'
+              : null;
+
+  if (destinationLoadingTitle) {
+    return (
+      <DataState
+        className="min-h-[28rem]"
+        variant="loading"
+        title={destinationLoadingTitle}
+        description="A estrutura desta seção será mantida enquanto os dados são preparados."
+      />
+    );
+  }
 
   return (
     <div className="space-y-5">

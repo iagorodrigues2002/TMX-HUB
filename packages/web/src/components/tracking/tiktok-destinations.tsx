@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient, type TikTokDestination, type TikTokDestinationInput } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
+import { DataState } from '@/components/ui/data-state';
 import { Input } from '@/components/ui/input';
+import { type TikTokDestination, type TikTokDestinationInput, apiClient } from '@/lib/api-client';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 const empty: TikTokDestinationInput = { name: '', pixel_code: '', access_token: '', enabled: true };
@@ -75,12 +76,12 @@ export function TikTokDestinations({ offerId }: { offerId: string }) {
         <p className="mt-1 text-white/60">
           O TMX instala o Pixel no navegador para PageView e InitiateCheckout, e envia somente
           compras front aprovadas pela Events API. O clique <code>ttclid</code>, quando presente,
-          segue com a venda sem redirect. Upsells permanecem no financeiro e não inflam a
-          otimização de CPA.
+          segue com a venda sem redirect. Upsells permanecem no financeiro e não inflam a otimização
+          de CPA.
         </p>
       </div>
       {destinations.isPending ? (
-        <p>Carregando pixels TikTok…</p>
+        <DataState className="min-h-64" variant="loading" title="Carregando pixels TikTok…" />
       ) : destinations.isError ? (
         <p role="alert" className="text-rose-200">
           Não foi possível carregar os pixels TikTok.
@@ -96,62 +97,100 @@ export function TikTokDestinations({ offerId }: { offerId: string }) {
                     ...current,
                     [d.id]: { ...(current[d.id] ?? emptyTest), ...patch },
                   }));
-                return <>
-              <div className="flex flex-wrap justify-between gap-3">
-                <div>
-                  <h3 className="font-medium">{d.name}</h3>
-                  <p className="mt-1 font-mono text-xs text-white/55">Pixel {d.pixel_code}</p>
-                </div>
-                <span className={d.enabled ? 'text-xs text-emerald-200' : 'text-xs text-amber-200'}>
-                  {d.enabled ? 'Ativo' : 'Pausado'}
-                </span>
-              </div>
-              <p className="mt-3 text-xs text-white/50">
-                7 dias: {d.delivered_7d}/{d.deliveries_7d} entregas · última confirmação:{' '}
-                {d.last_delivered_at
-                  ? new Date(d.last_delivered_at).toLocaleString('pt-BR')
-                  : 'nenhuma'}
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button onClick={() => edit(d)}>Editar</Button>
-                <Button disabled={remove.isPending} onClick={() => remove.mutate(d.id)}>
-                  Remover
-                </Button>
-              </div>
-              <div className="mt-4 rounded-lg border border-cyan-300/15 bg-cyan-300/[0.03] p-3">
-                <label className="text-xs text-white/65">
-                  Código de teste do TikTok Events Manager
-                  <Input
-                    value={context.code}
-                    onChange={(e) => setContext({ code: e.target.value })}
-                    placeholder="Cole o Test Event Code"
-                    className="mt-2"
-                  />
-                </label>
-                <div className="mt-3 grid gap-3 md:grid-cols-3">
-                  <label className="text-xs text-white/65">
-                    URL real da página (recomendado)
-                    <Input value={context.eventUrl} onChange={(e) => setContext({ eventUrl: e.target.value })} placeholder="https://sua-pagina.com/vsl" className="mt-2" />
-                  </label>
-                  <label className="text-xs text-white/65">
-                    Email de teste (opcional)
-                    <Input type="email" value={context.email} onChange={(e) => setContext({ email: e.target.value })} placeholder="seu@email.com" className="mt-2" />
-                  </label>
-                  <label className="text-xs text-white/65">
-                    Telefone de teste (opcional)
-                    <Input value={context.phone} onChange={(e) => setContext({ phone: e.target.value })} placeholder="+55 11 99999-9999" className="mt-2" />
-                  </label>
-                </div>
-                <p className="mt-2 text-[11px] leading-4 text-white/45">Email e telefone são enviados apenas como SHA-256 para validar o matching; use dados seus e somente se quiser conferir esses campos no Events Manager.</p>
-                <Button
-                  className="mt-2"
-                  disabled={!context.code.trim() || test.isPending}
-                  onClick={() => test.mutate({ id: d.id, context })}
-                >
-                  {test.isPending ? 'Enviando…' : 'Testar sem venda real'}
-                </Button>
-              </div>
-                </>;
+                return (
+                  <>
+                    <div className="flex flex-wrap justify-between gap-3">
+                      <div>
+                        <h3 className="font-medium">{d.name}</h3>
+                        <p className="mt-1 font-mono text-xs text-white/55">Pixel {d.pixel_code}</p>
+                      </div>
+                      <span
+                        className={
+                          d.enabled ? 'text-xs text-emerald-200' : 'text-xs text-amber-200'
+                        }
+                      >
+                        {d.enabled ? 'Ativo' : 'Pausado'}
+                      </span>
+                    </div>
+                    <p className="mt-3 text-xs text-white/50">
+                      7 dias: {d.delivered_7d}/{d.deliveries_7d} entregas · última confirmação:{' '}
+                      {d.last_delivered_at
+                        ? new Date(d.last_delivered_at).toLocaleString('pt-BR')
+                        : 'nenhuma'}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button onClick={() => edit(d)}>Editar</Button>
+                      <Button disabled={remove.isPending} onClick={() => remove.mutate(d.id)}>
+                        Remover
+                      </Button>
+                    </div>
+                    <div className="mt-4 rounded-lg border border-cyan-300/15 bg-cyan-300/[0.03] p-3">
+                      <label htmlFor={`tiktok-test-code-${d.id}`} className="text-xs text-white/65">
+                        Código de teste do TikTok Events Manager
+                        <Input
+                          id={`tiktok-test-code-${d.id}`}
+                          value={context.code}
+                          onChange={(e) => setContext({ code: e.target.value })}
+                          placeholder="Cole o Test Event Code"
+                          className="mt-2"
+                        />
+                      </label>
+                      <div className="mt-3 grid gap-3 md:grid-cols-3">
+                        <label
+                          htmlFor={`tiktok-event-url-${d.id}`}
+                          className="text-xs text-white/65"
+                        >
+                          URL real da página (recomendado)
+                          <Input
+                            id={`tiktok-event-url-${d.id}`}
+                            value={context.eventUrl}
+                            onChange={(e) => setContext({ eventUrl: e.target.value })}
+                            placeholder="https://sua-pagina.com/vsl"
+                            className="mt-2"
+                          />
+                        </label>
+                        <label
+                          htmlFor={`tiktok-test-email-${d.id}`}
+                          className="text-xs text-white/65"
+                        >
+                          Email de teste (opcional)
+                          <Input
+                            id={`tiktok-test-email-${d.id}`}
+                            type="email"
+                            value={context.email}
+                            onChange={(e) => setContext({ email: e.target.value })}
+                            placeholder="seu@email.com"
+                            className="mt-2"
+                          />
+                        </label>
+                        <label
+                          htmlFor={`tiktok-test-phone-${d.id}`}
+                          className="text-xs text-white/65"
+                        >
+                          Telefone de teste (opcional)
+                          <Input
+                            id={`tiktok-test-phone-${d.id}`}
+                            value={context.phone}
+                            onChange={(e) => setContext({ phone: e.target.value })}
+                            placeholder="+55 11 99999-9999"
+                            className="mt-2"
+                          />
+                        </label>
+                      </div>
+                      <p className="mt-2 text-[11px] leading-4 text-white/45">
+                        Email e telefone são enviados apenas como SHA-256 para validar o matching;
+                        use dados seus e somente se quiser conferir esses campos no Events Manager.
+                      </p>
+                      <Button
+                        className="mt-2"
+                        disabled={!context.code.trim() || test.isPending}
+                        onClick={() => test.mutate({ id: d.id, context })}
+                      >
+                        {test.isPending ? 'Enviando…' : 'Testar sem venda real'}
+                      </Button>
+                    </div>
+                  </>
+                );
               })()}
             </article>
           ))}
@@ -161,10 +200,7 @@ export function TikTokDestinations({ offerId }: { offerId: string }) {
         </div>
       )}
       {testDelivery && (
-        <div
-          role="status"
-          className="rounded-xl border border-cyan-300/20 bg-cyan-300/5 p-4 text-sm"
-        >
+        <output className="block rounded-xl border border-cyan-300/20 bg-cyan-300/5 p-4 text-sm">
           <p className="font-medium">Teste Events API</p>
           <p className="mt-1">
             {delivery.isPending
@@ -177,7 +213,7 @@ export function TikTokDestinations({ offerId }: { offerId: string }) {
             Use este mesmo código na aba <em>Test Events</em> do Events Manager. O teste não cria
             compra nem altera métricas da campanha.
           </p>
-        </div>
+        </output>
       )}
       <form
         className="space-y-4 rounded-xl border border-white/10 p-4"
@@ -190,9 +226,10 @@ export function TikTokDestinations({ offerId }: { offerId: string }) {
           {editing ? 'Editar pixel TikTok' : 'Adicionar pixel TikTok'}
         </h3>
         <div className="grid gap-4 md:grid-cols-3">
-          <label className="text-sm">
+          <label htmlFor="tiktok-destination-name" className="text-sm">
             Nome interno
             <Input
+              id="tiktok-destination-name"
               required
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -200,9 +237,10 @@ export function TikTokDestinations({ offerId }: { offerId: string }) {
               className="mt-2"
             />
           </label>
-          <label className="text-sm">
+          <label htmlFor="tiktok-pixel-code" className="text-sm">
             Pixel Code
             <Input
+              id="tiktok-pixel-code"
               required
               value={form.pixel_code}
               onChange={(e) => setForm({ ...form, pixel_code: e.target.value })}
