@@ -44,9 +44,11 @@ export const TOOL_CATALOG: readonly ToolCatalogEntry[] = [
     badge: 'Beta',
     showOnHome: true,
   }),
-  catalogTool('tool-upsell', 'Calcule aceite, rejeite e não visualização em funis de upsell.', {
-    showOnHome: true,
-  }),
+  catalogTool(
+    'tool-upsell',
+    'Analise taxas de aceite, rejeição e visualização nos funis de upsell.',
+    { showOnHome: true },
+  ),
   catalogTool(
     'tool-webhook',
     'Edite e simule webhooks de plataformas de pagamento sem realizar uma venda.',

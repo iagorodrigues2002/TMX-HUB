@@ -194,7 +194,7 @@ export const NAV_ITEMS: NavItem[] = [
         icon: ChartNoAxesCombined,
         group: 'Ferramentas',
         requiresTool: 'upsell-analyzer',
-        keywords: ['analisar upsell'],
+        keywords: ['upsell analyzer', 'analisar upsell', 'taxa de aceite', 'pós-compra'],
       },
       {
         id: 'tool-webhook',
