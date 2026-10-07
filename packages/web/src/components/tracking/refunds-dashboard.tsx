@@ -602,37 +602,51 @@ export function RefundsDashboard({ initialOfferId = '' }: { initialOfferId?: str
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedAuditItems.map((item) => (
-                    <tr key={item.id} className="border-b border-white/[.05] last:border-0">
-                      <td className="py-3 font-mono text-xs text-white/55">
-                        {dateTime(item.lifecycle_at)}
-                      </td>
-                      <td className="py-3">
-                        <p className="text-white/85">{item.offer_name}</p>
-                        <p className="text-xs text-white/40">{item.product_name}</p>
-                      </td>
-                      <td className="py-3 text-xs text-cyan-100/70">{item.connection_name}</td>
-                      <td className="py-3 font-mono text-xs text-white/60">{item.external_id}</td>
-                      <td className="py-3">
-                        <p className="text-white/75">{item.buyer?.name || '—'}</p>
-                        <p className="text-xs text-white/35">{item.buyer?.email || '—'}</p>
-                      </td>
-                      <td className="py-3">
-                        <span
-                          className={
-                            item.status === 'chargeback'
-                              ? 'rounded-full border border-danger/20 bg-danger/[.08] px-2 py-1 text-[10px] uppercase text-danger'
-                              : 'rounded-full border border-amber-300/20 bg-amber-400/[.08] px-2 py-1 text-[10px] uppercase text-amber-100'
-                          }
-                        >
-                          {item.status === 'chargeback' ? 'Chargeback' : 'Reembolso'}
-                        </span>
-                      </td>
-                      <td className="mono-num py-3 text-right tabular-nums text-danger">
-                        {pick(item.brl_minor)}
-                      </td>
-                    </tr>
-                  ))}
+                  {paginatedAuditItems.map((item) => {
+                    const itemStatus = String(item.status);
+                    const isPending = itemStatus === 'pending';
+
+                    return (
+                      <tr
+                        key={item.id}
+                        className="animate-[tmx-tabs-content-in_180ms_ease-out_both] border-b border-white/[.05] last:border-0 motion-reduce:animate-none"
+                      >
+                        <td className="py-3 font-mono text-xs text-white/55">
+                          {dateTime(item.lifecycle_at)}
+                        </td>
+                        <td className="py-3">
+                          <p className="text-white/85">{item.offer_name}</p>
+                          <p className="text-xs text-white/40">{item.product_name}</p>
+                        </td>
+                        <td className="py-3 text-xs text-cyan-100/70">{item.connection_name}</td>
+                        <td className="py-3 font-mono text-xs text-white/60">{item.external_id}</td>
+                        <td className="py-3">
+                          <p className="text-white/75">{item.buyer?.name || '—'}</p>
+                          <p className="text-xs text-white/35">{item.buyer?.email || '—'}</p>
+                        </td>
+                        <td className="py-3">
+                          <span
+                            className={`${
+                              itemStatus === 'chargeback'
+                                ? 'rounded-full border border-danger/20 bg-danger/[.08] px-2 py-1 text-[10px] uppercase text-danger'
+                                : isPending
+                                  ? 'rounded-full border border-cyan-300/25 bg-cyan-300/[.08] px-2 py-1 text-[10px] uppercase text-cyan-100'
+                                  : 'rounded-full border border-amber-300/20 bg-amber-400/[.08] px-2 py-1 text-[10px] uppercase text-amber-100'
+                            } ${isPending ? 'animate-pulse [animation-duration:2.4s] motion-reduce:animate-none' : ''}`}
+                          >
+                            {itemStatus === 'chargeback'
+                              ? 'Chargeback'
+                              : isPending
+                                ? 'Pendente'
+                                : 'Reembolso'}
+                          </span>
+                        </td>
+                        <td className="mono-num py-3 text-right tabular-nums text-danger">
+                          {pick(item.brl_minor)}
+                        </td>
+                      </tr>
+                    );
+                  })}
                   {!data?.items.length && (
                     <tr>
                       <td colSpan={7}>

@@ -20,6 +20,12 @@ type AdminActivity = Awaited<
 type AdminView = 'overview' | 'people' | 'invites' | 'activity';
 
 const ADMIN_VIEWS = new Set<AdminView>(['overview', 'people', 'invites', 'activity']);
+const ADMIN_TABS: ReadonlyArray<{ view: AdminView; label: string; href: string }> = [
+  { view: 'overview', label: 'Visão geral', href: '/admin' },
+  { view: 'people', label: 'Pessoas', href: '/admin?view=people' },
+  { view: 'invites', label: 'Convites', href: '/admin?view=invites' },
+  { view: 'activity', label: 'Atividade', href: '/admin?view=activity' },
+];
 
 function relativeDate(value?: string) {
   if (!value) return 'Sem atividade';
@@ -31,14 +37,23 @@ function relativeDate(value?: string) {
 }
 
 function ActivityFeed({ entries, emptyText }: { entries: AdminActivity[]; emptyText: string }) {
+  const [revealed, setRevealed] = useState(false);
+
+  useEffect(() => {
+    setRevealed(false);
+    const frame = requestAnimationFrame(() => setRevealed(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
   if (entries.length === 0) {
     return <p className="p-8 text-center text-sm text-white/40">{emptyText}</p>;
   }
 
-  return entries.map((entry) => (
+  return entries.slice(0, 10).map((entry, index) => (
     <div
       key={`${entry.userId}-${entry.kind}-${entry.id}`}
-      className="flex items-start gap-3 px-4 py-3"
+      className={`flex items-start gap-3 px-4 py-3 transition-[opacity,transform] duration-[160ms] ease-out motion-reduce:translate-x-0 motion-reduce:opacity-100 motion-reduce:transition-none ${revealed ? 'translate-x-0 opacity-100' : '-translate-x-2 opacity-0'}`}
+      style={{ transitionDelay: `${index * 30}ms` }}
     >
       <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-cyan-300/60" />
       <div className="min-w-0 flex-1">
@@ -59,6 +74,7 @@ export function AdminDashboard() {
   const isAdmin = user?.role === 'admin';
   const requestedView = searchParams.get('view') as AdminView | null;
   const activeView = requestedView && ADMIN_VIEWS.has(requestedView) ? requestedView : 'overview';
+  const activeTabIndex = ADMIN_TABS.findIndex((tab) => tab.view === activeView);
   const [activityPeriod, setActivityPeriod] = useState(() => rollingDateRange(30));
   const overview = useQuery({
     queryKey: ['admin-overview'],
@@ -120,6 +136,28 @@ export function AdminDashboard() {
         </div>
       </header>
 
+      <nav
+        aria-label="Seções administrativas"
+        className="relative grid grid-cols-4 border-b border-white/[0.08]"
+      >
+        {ADMIN_TABS.map((tab) => (
+          <Link
+            key={tab.view}
+            href={tab.href}
+            aria-current={activeView === tab.view ? 'page' : undefined}
+            scroll={false}
+            className={`flex min-h-11 items-center justify-center px-2 text-center text-xs font-semibold transition-colors duration-[180ms] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-300/60 ${activeView === tab.view ? 'text-cyan-200' : 'text-white/45 hover:text-white/75'}`}
+          >
+            {tab.label}
+          </Link>
+        ))}
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute bottom-0 left-0 h-0.5 w-1/4 bg-cyan-300 shadow-[0_0_8px_rgba(34,211,238,0.55)] transition-transform duration-[180ms] ease-out motion-reduce:transition-none"
+          style={{ transform: `translate3d(${activeTabIndex * 100}%, 0, 0)` }}
+        />
+      </nav>
+
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map(({ label, value, icon: Icon }) => (
           <Kpi
@@ -140,7 +178,10 @@ export function AdminDashboard() {
             </div>
             <div className="divide-y divide-white/[0.05]">
               {(data?.users ?? []).map((entry) => (
-                <div key={entry.id} className="flex items-center gap-3 px-4 py-3">
+                <div
+                  key={entry.id}
+                  className="flex items-center gap-3 border-l border-transparent px-4 py-3 transition-[border-color,background-color] duration-[180ms] hover:border-cyan-300/45 hover:bg-cyan-300/[0.025] motion-reduce:transition-none"
+                >
                   <span className="grid h-9 w-9 place-items-center rounded-full bg-white/[0.05] text-xs font-semibold text-white/70">
                     {entry.name.slice(0, 2).toUpperCase()}
                   </span>
