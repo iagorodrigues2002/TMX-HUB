@@ -232,7 +232,7 @@ export async function processExplodelyReceipt(db: Sql, receiptId: string): Promi
 
     if (!order) return emptyDeliveries();
     const deliveries = emptyDeliveries();
-    for (const destination of await sql<Array<{ id: string }>>`
+    const utmifyDestinations = await sql<Array<{ id: string }>>`
       SELECT id FROM tracking_utmify_destinations
       WHERE enabled=true AND (project_id=${connection.project_id} OR (
         scope='global' AND COALESCE((
@@ -240,43 +240,58 @@ export async function processExplodelyReceipt(db: Sql, receiptId: string): Promi
           WHERE project_id=${connection.project_id}
         ),true)=true
       ))
-    `) {
-      const [row] = await sql<Array<{ id: string }>>`
+    `;
+    if (utmifyDestinations.length > 0) {
+      const rows = await sql<Array<{ id: string }>>`
         INSERT INTO tracking_delivery_outbox
           (id,project_id,destination_kind,destination_id,order_id,event_id,event_type,state)
-        VALUES(${ulid()},${connection.project_id},'utmify',${destination.id},${order.id},
-          ${eventId},${`order.${order.status}`},${order.status === 'cancelled' ? 'skipped' : 'pending'})
+        SELECT batch.id,${connection.project_id},'utmify',batch.destination_id,${order.id},
+          ${eventId},${`order.${order.status}`},${order.status === 'cancelled' ? 'skipped' : 'pending'}
+        FROM unnest(
+          ${sql.array(utmifyDestinations.map(() => ulid()))}::text[],
+          ${sql.array(utmifyDestinations.map((destination) => destination.id))}::text[]
+        ) AS batch(id, destination_id)
         ON CONFLICT(destination_kind,destination_id,event_id) DO NOTHING RETURNING id
       `;
-      if (row) deliveries.utmify.push(row.id);
+      deliveries.utmify.push(...rows.map((row) => row.id));
     }
     if (order.status !== 'paid' || order.order_kind !== 'front') return deliveries;
-    for (const pixel of await sql<Array<{ id: string }>>`
+    const pixels = await sql<Array<{ id: string }>>`
       SELECT id FROM meta_pixels
       WHERE project_id=${connection.project_id} AND enabled=true
         AND (NOT EXISTS (SELECT 1 FROM meta_pixel_products WHERE pixel_id=meta_pixels.id)
           OR ${typeof event.product.id === 'string' ? event.product.id : null}::text IN (
             SELECT product_id FROM meta_pixel_products WHERE pixel_id=meta_pixels.id
           ))
-    `) {
-      const [row] = await sql<Array<{ id: string }>>`
+    `;
+    if (pixels.length > 0) {
+      const rows = await sql<Array<{ id: string }>>`
         INSERT INTO meta_deliveries(id,project_id,pixel_id,order_id,event_id)
-        VALUES(${ulid()},${connection.project_id},${pixel.id},${order.id},${eventId})
+        SELECT batch.id,${connection.project_id},batch.pixel_id,${order.id},${eventId}
+        FROM unnest(
+          ${sql.array(pixels.map(() => ulid()))}::text[],
+          ${sql.array(pixels.map((pixel) => pixel.id))}::text[]
+        ) AS batch(id, pixel_id)
         ON CONFLICT(pixel_id,event_id) DO NOTHING RETURNING id
       `;
-      if (row) deliveries.meta.push(row.id);
+      deliveries.meta.push(...rows.map((row) => row.id));
     }
-    for (const destination of await sql<Array<{ id: string }>>`
+    const tikTokDestinations = await sql<Array<{ id: string }>>`
       SELECT id FROM tracking_tiktok_destinations
       WHERE project_id=${connection.project_id} AND enabled=true
-    `) {
-      const [row] = await sql<Array<{ id: string }>>`
+    `;
+    if (tikTokDestinations.length > 0) {
+      const rows = await sql<Array<{ id: string }>>`
         INSERT INTO tracking_tiktok_deliveries
           (id,project_id,destination_id,order_id,event_id,event_name)
-        VALUES(${ulid()},${connection.project_id},${destination.id},${order.id},${eventId},'Purchase')
+        SELECT batch.id,${connection.project_id},batch.destination_id,${order.id},${eventId},'Purchase'
+        FROM unnest(
+          ${sql.array(tikTokDestinations.map(() => ulid()))}::text[],
+          ${sql.array(tikTokDestinations.map((destination) => destination.id))}::text[]
+        ) AS batch(id, destination_id)
         ON CONFLICT(destination_id,event_id) DO NOTHING RETURNING id
       `;
-      if (row) deliveries.tiktok.push(row.id);
+      deliveries.tiktok.push(...rows.map((row) => row.id));
     }
     return deliveries;
   });

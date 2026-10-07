@@ -1936,32 +1936,34 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
               ),true)=true
             ))
         `;
-        const utmifyDeliveryIds: string[] = [];
-        for (const destination of utmify) {
-          const id = ulid();
-          const rows = await sql<{ id: string }[]>`
+        const utmifyDeliveryIds =
+          utmify.length === 0
+            ? []
+            : await sql<{ id: string }[]>`
             INSERT INTO tracking_delivery_outbox
               (id, project_id, destination_kind, destination_id, order_id, event_id, event_type,
                state, last_error)
-            VALUES
-              (${id}, ${connection.project_id}, 'utmify', ${destination.id}, ${order.id},
+            SELECT batch.id, ${connection.project_id}, 'utmify', batch.destination_id, ${order.id},
                ${`vendepay:${event.transactionId}:${event.status}`}, ${`order.${event.status}`},
                ${skipsUtmify ? 'skipped' : 'pending'},
                ${
                  skipsUtmify
                    ? 'Cancelamento/abandono não é aceito pela UTMify; evento mantido apenas no TMX.'
                    : null
-               })
+               }
+            FROM unnest(
+              ${sql.array(utmify.map(() => ulid()))}::text[],
+              ${sql.array(utmify.map((destination) => destination.id))}::text[]
+            ) AS batch(id, destination_id)
             ON CONFLICT (destination_kind, destination_id, event_id) DO NOTHING
             RETURNING id
           `;
-          if (rows[0] && !skipsUtmify) utmifyDeliveryIds.push(rows[0].id);
-        }
+        const queuedUtmifyDeliveryIds = skipsUtmify ? [] : utmifyDeliveryIds.map((row) => row.id);
         if (order.status !== 'paid') {
           return {
             inserted: true,
             deliveryIds: [],
-            utmifyDeliveryIds,
+            utmifyDeliveryIds: queuedUtmifyDeliveryIds,
             pushcutDeliveryIds: [],
             tiktokDeliveryIds: [],
           };
@@ -1980,28 +1982,31 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           FROM tracking_pushcut_destinations
           WHERE project_id = ${connection.project_id} AND enabled = true
         `;
-        const pushcutDeliveryIds: string[] = [];
-        for (const destination of pushcutDestinations) {
+        const eligiblePushcutDestinations = pushcutDestinations.filter((destination) => {
           const notificationName = /^upsell(?:_[2-9][0-9]*)?$/.test(order.order_kind)
             ? destination.upsell_notification_name
             : destination.front_notification_name;
           // Destination opted out of upsell alerts (upsell_notification_name
           // is null) — nothing to enqueue for it on an upsell order.
-          if (!notificationName) continue;
-          const id = ulid();
-          const rows = await sql<{ id: string }[]>`
+          return Boolean(notificationName);
+        });
+        const pushcutDeliveryIds =
+          eligiblePushcutDestinations.length === 0
+            ? []
+            : await sql<{ id: string }[]>`
             INSERT INTO tracking_delivery_outbox
               (id, project_id, destination_kind, destination_id, order_id, event_id, event_type,
                funnel_name)
-            VALUES
-              (${id}, ${connection.project_id}, 'pushcut', ${destination.id}, ${order.id},
+            SELECT batch.id, ${connection.project_id}, 'pushcut', batch.destination_id, ${order.id},
                ${`vendepay:${event.transactionId}:${event.status}`}, ${`order.${order.order_kind}`},
-               ${funnelName})
+               ${funnelName}
+            FROM unnest(
+              ${sql.array(eligiblePushcutDestinations.map(() => ulid()))}::text[],
+              ${sql.array(eligiblePushcutDestinations.map((destination) => destination.id))}::text[]
+            ) AS batch(id, destination_id)
             ON CONFLICT (destination_kind, destination_id, event_id) DO NOTHING
             RETURNING id
           `;
-          if (rows[0]) pushcutDeliveryIds.push(rows[0].id);
-        }
         // Meta pixels are intentionally front-only. Upsells remain available
         // in TMX, UTMify and Pushcut, but must never populate or optimize any
         // Meta pixel connected to this offer.
@@ -2009,8 +2014,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           return {
             inserted: true,
             deliveryIds: [],
-            utmifyDeliveryIds,
-            pushcutDeliveryIds,
+            utmifyDeliveryIds: queuedUtmifyDeliveryIds,
+            pushcutDeliveryIds: pushcutDeliveryIds.map((row) => row.id),
             tiktokDeliveryIds: [],
           };
         }
@@ -2027,8 +2032,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           return {
             inserted: true,
             deliveryIds: [],
-            utmifyDeliveryIds,
-            pushcutDeliveryIds,
+            utmifyDeliveryIds: queuedUtmifyDeliveryIds,
+            pushcutDeliveryIds: pushcutDeliveryIds.map((row) => row.id),
             tiktokDeliveryIds: [],
           };
         }
@@ -2038,20 +2043,21 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             AND (NOT EXISTS (SELECT 1 FROM meta_pixel_products mpp WHERE mpp.pixel_id=meta_pixels.id)
               OR ${event.product.id ?? null}::text IN (SELECT mpp.product_id FROM meta_pixel_products mpp WHERE mpp.pixel_id=meta_pixels.id))
         `;
-        const deliveryIds: string[] = [];
-        for (const pixel of pixels) {
-          const deliveryId = ulid();
-          const deliveries = await sql<{ id: string }[]>`
+        const deliveryIds =
+          pixels.length === 0
+            ? []
+            : await sql<{ id: string }[]>`
             INSERT INTO meta_deliveries
               (id, project_id, pixel_id, order_id, event_id)
-            VALUES
-              (${deliveryId}, ${connection.project_id}, ${pixel.id}, ${order.id},
-               ${`vendepay:${event.transactionId}:purchase`})
+            SELECT batch.id, ${connection.project_id}, batch.pixel_id, ${order.id},
+              ${`vendepay:${event.transactionId}:purchase`}
+            FROM unnest(
+              ${sql.array(pixels.map(() => ulid()))}::text[],
+              ${sql.array(pixels.map((pixel) => pixel.id))}::text[]
+            ) AS batch(id, pixel_id)
             ON CONFLICT (pixel_id, event_id) DO NOTHING
             RETURNING id
           `;
-          if (deliveries[0]) deliveryIds.push(deliveries[0].id);
-        }
         // TikTok uses a separate durable delivery table because its Events API
         // has different credentials, payload and retry semantics. As with
         // Meta, only the approved front purchase feeds campaign optimization;
@@ -2060,25 +2066,27 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           SELECT id FROM tracking_tiktok_destinations
           WHERE project_id=${connection.project_id} AND enabled=true
         `;
-        const tiktokDeliveryIds: string[] = [];
-        for (const destination of tikTokDestinations) {
-          const deliveryId = ulid();
-          const deliveries = await sql<{ id: string }[]>`
+        const tiktokDeliveryIds =
+          tikTokDestinations.length === 0
+            ? []
+            : await sql<{ id: string }[]>`
             INSERT INTO tracking_tiktok_deliveries
               (id,project_id,destination_id,order_id,event_id,event_name)
-            VALUES(${deliveryId},${connection.project_id},${destination.id},${order.id},
-              ${`vendepay:${event.transactionId}:tiktok:purchase`},'Purchase')
+            SELECT batch.id,${connection.project_id},batch.destination_id,${order.id},
+              ${`vendepay:${event.transactionId}:tiktok:purchase`},'Purchase'
+            FROM unnest(
+              ${sql.array(tikTokDestinations.map(() => ulid()))}::text[],
+              ${sql.array(tikTokDestinations.map((destination) => destination.id))}::text[]
+            ) AS batch(id, destination_id)
             ON CONFLICT(destination_id,event_id) DO NOTHING
             RETURNING id
           `;
-          if (deliveries[0]) tiktokDeliveryIds.push(deliveries[0].id);
-        }
         return {
           inserted: true,
-          deliveryIds,
-          utmifyDeliveryIds,
-          pushcutDeliveryIds,
-          tiktokDeliveryIds,
+          deliveryIds: deliveryIds.map((row) => row.id),
+          utmifyDeliveryIds: queuedUtmifyDeliveryIds,
+          pushcutDeliveryIds: pushcutDeliveryIds.map((row) => row.id),
+          tiktokDeliveryIds: tiktokDeliveryIds.map((row) => row.id),
         };
       });
       await Promise.allSettled(
@@ -2284,8 +2292,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         `;
         await sql`UPDATE tracking_gateway_webhook_receipts SET state='processed',order_id=${order!.id},processed_at=now() WHERE id=${receiptId}`;
         await sql`UPDATE tracking_gateway_connections SET last_webhook_at=now(),updated_at=now() WHERE id=${connection.id}`;
-        const utmify: string[] = [];
-        for (const destination of await sql<Array<{ id: string }>>`
+        const utmifyDestinations = await sql<Array<{ id: string }>>`
           SELECT id FROM tracking_utmify_destinations
           WHERE enabled=true AND (project_id=${connection.project_id} OR (
             scope='global' AND COALESCE((
@@ -2293,33 +2300,53 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
               WHERE r.project_id=${connection.project_id}
             ),true)=true
           ))
-        `) {
-          const [row] = await sql<Array<{ id: string }>>`
+        `;
+        const utmifyRows =
+          utmifyDestinations.length === 0
+            ? []
+            : await sql<Array<{ id: string }>>`
             INSERT INTO tracking_delivery_outbox(id,project_id,destination_kind,destination_id,order_id,event_id,event_type,state)
-            VALUES(${ulid()},${connection.project_id},'utmify',${destination.id},${order!.id},${`paysight:${event.transactionId}:${event.status}`},${`order.${event.status}`},${event.status === 'cancelled' || event.status === 'abandoned' ? 'skipped' : 'pending'})
+            SELECT batch.id,${connection.project_id},'utmify',batch.destination_id,${order!.id},${`paysight:${event.transactionId}:${event.status}`},${`order.${event.status}`},${event.status === 'cancelled' || event.status === 'abandoned' ? 'skipped' : 'pending'}
+            FROM unnest(
+              ${sql.array(utmifyDestinations.map(() => ulid()))}::text[],
+              ${sql.array(utmifyDestinations.map((destination) => destination.id))}::text[]
+            ) AS batch(id, destination_id)
             ON CONFLICT(destination_kind,destination_id,event_id) DO NOTHING RETURNING id`;
-          if (row) utmify.push(row.id);
-        }
+        const utmify = utmifyRows.map((row) => row.id);
         if (order!.status !== 'paid' || order!.order_kind !== 'front')
           return { duplicate: false, meta: [] as string[], utmify, tiktok: [] as string[] };
-        const meta: string[] = [];
-        for (const pixel of await sql<
+        const pixels = await sql<
           Array<{ id: string }>
-        >`SELECT id FROM meta_pixels WHERE project_id=${connection.project_id} AND enabled=true AND (NOT EXISTS (SELECT 1 FROM meta_pixel_products mpp WHERE mpp.pixel_id=meta_pixels.id) OR ${event.product.id ?? null}::text IN (SELECT mpp.product_id FROM meta_pixel_products mpp WHERE mpp.pixel_id=meta_pixels.id))`) {
-          const [row] = await sql<
-            Array<{ id: string }>
-          >`INSERT INTO meta_deliveries(id,project_id,pixel_id,order_id,event_id) VALUES(${ulid()},${connection.project_id},${pixel.id},${order!.id},${`paysight:${event.transactionId}:purchase`}) ON CONFLICT(pixel_id,event_id) DO NOTHING RETURNING id`;
-          if (row) meta.push(row.id);
-        }
-        const tiktok: string[] = [];
-        for (const destination of await sql<
+        >`SELECT id FROM meta_pixels WHERE project_id=${connection.project_id} AND enabled=true AND (NOT EXISTS (SELECT 1 FROM meta_pixel_products mpp WHERE mpp.pixel_id=meta_pixels.id) OR ${event.product.id ?? null}::text IN (SELECT mpp.product_id FROM meta_pixel_products mpp WHERE mpp.pixel_id=meta_pixels.id))`;
+        const metaRows =
+          pixels.length === 0
+            ? []
+            : await sql<
+                Array<{ id: string }>
+              >`INSERT INTO meta_deliveries(id,project_id,pixel_id,order_id,event_id)
+            SELECT batch.id,${connection.project_id},batch.pixel_id,${order!.id},${`paysight:${event.transactionId}:purchase`}
+            FROM unnest(
+              ${sql.array(pixels.map(() => ulid()))}::text[],
+              ${sql.array(pixels.map((pixel) => pixel.id))}::text[]
+            ) AS batch(id, pixel_id)
+            ON CONFLICT(pixel_id,event_id) DO NOTHING RETURNING id`;
+        const meta = metaRows.map((row) => row.id);
+        const tikTokDestinations = await sql<
           Array<{ id: string }>
-        >`SELECT id FROM tracking_tiktok_destinations WHERE project_id=${connection.project_id} AND enabled=true`) {
-          const [row] = await sql<
-            Array<{ id: string }>
-          >`INSERT INTO tracking_tiktok_deliveries(id,project_id,destination_id,order_id,event_id,event_name) VALUES(${ulid()},${connection.project_id},${destination.id},${order!.id},${`paysight:${event.transactionId}:tiktok:purchase`},'Purchase') ON CONFLICT(destination_id,event_id) DO NOTHING RETURNING id`;
-          if (row) tiktok.push(row.id);
-        }
+        >`SELECT id FROM tracking_tiktok_destinations WHERE project_id=${connection.project_id} AND enabled=true`;
+        const tiktokRows =
+          tikTokDestinations.length === 0
+            ? []
+            : await sql<
+                Array<{ id: string }>
+              >`INSERT INTO tracking_tiktok_deliveries(id,project_id,destination_id,order_id,event_id,event_name)
+            SELECT batch.id,${connection.project_id},batch.destination_id,${order!.id},${`paysight:${event.transactionId}:tiktok:purchase`},'Purchase'
+            FROM unnest(
+              ${sql.array(tikTokDestinations.map(() => ulid()))}::text[],
+              ${sql.array(tikTokDestinations.map((destination) => destination.id))}::text[]
+            ) AS batch(id, destination_id)
+            ON CONFLICT(destination_id,event_id) DO NOTHING RETURNING id`;
+        const tiktok = tiktokRows.map((row) => row.id);
         return { duplicate: false, meta, utmify, tiktok };
       });
       await Promise.allSettled(
