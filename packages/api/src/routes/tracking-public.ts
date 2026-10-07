@@ -1,14 +1,19 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { Readable } from 'node:stream';
 import type { FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { ulid } from 'ulid';
 import { z } from 'zod';
 import { env } from '../env.js';
-import { normalizeVendepay } from '../integrations/vendepay/normalize.js';
 import { normalizePaysight } from '../integrations/paysight/normalize.js';
-import { encryptSecret } from '../lib/secret-box.js';
+import { normalizeVendepay } from '../integrations/vendepay/normalize.js';
+import { decryptSecret, encryptSecret } from '../lib/secret-box.js';
 import { createTrackingToken, readTrackingToken } from '../lib/tracking-token.js';
 import { convertToBrlMinor } from '../services/exchange-rate.js';
-import { buildTikTokPixelScript, buildTrackerScript, buildVturbBridgeScriptV2 } from '../services/tracker-script.js';
+import {
+  buildTikTokPixelScript,
+  buildTrackerScript,
+  buildVturbBridgeScriptV2,
+} from '../services/tracker-script.js';
 import { checkUpsellCompatibility } from '../services/upsell-compatibility.js';
 import { findVturbConversionKeyInUrl } from '../services/vturb.js';
 
@@ -80,6 +85,92 @@ type EntryRedirectRequest = FastifyRequest<{
 }>;
 
 const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex');
+
+const rawWebhookBodies = new WeakMap<FastifyRequest, Buffer>();
+
+async function captureRawWebhookBody(
+  request: FastifyRequest,
+  _reply: FastifyReply,
+  payload: Readable,
+) {
+  const chunks: Buffer[] = [];
+  for await (const chunk of payload) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  const rawBody = Buffer.concat(chunks);
+  rawWebhookBodies.set(request, rawBody);
+  return Readable.from(rawBody);
+}
+
+function webhookSignatureRequired() {
+  // Compatibility default for local/dev; production should set this to true.
+  return /^(1|true)$/i.test(process.env.WEBHOOK_SIGNATURE_REQUIRED?.trim() ?? 'false');
+}
+
+function webhookSignatureIsValid(
+  rawBody: Buffer,
+  suppliedSignature: string | string[] | undefined,
+  secret: string,
+) {
+  const supplied = Array.isArray(suppliedSignature) ? suppliedSignature[0] : suppliedSignature;
+  if (!supplied) return false;
+  const candidate = supplied
+    .trim()
+    .replace(/^sha256=/i, '')
+    .toLowerCase();
+  if (!/^[a-f0-9]{64}$/.test(candidate)) return false;
+  const expected = createHmac('sha256', secret).update(rawBody).digest();
+  return timingSafeEqual(expected, Buffer.from(candidate, 'hex'));
+}
+
+function verifyGatewayWebhook(input: {
+  provider: 'vendepay' | 'paysight';
+  request: FastifyRequest;
+  encryptedSecret: string | null | undefined;
+}) {
+  const suppliedSignature =
+    input.request.headers[`x-${input.provider}-signature`] ?? input.request.headers['x-signature'];
+  if (!input.encryptedSecret) {
+    if (webhookSignatureRequired()) {
+      input.request.log.error(
+        { provider: input.provider },
+        'Webhook signature is required but the connection has no signing secret',
+      );
+      return { accepted: false as const, error: 'signature_not_configured' };
+    }
+    input.request.log.warn(
+      { provider: input.provider, signature_present: Boolean(suppliedSignature) },
+      'Webhook accepted without HMAC because the connection has no signing secret',
+    );
+    return { accepted: true as const, secret: null };
+  }
+  if (!env.TRACKING_ENCRYPTION_KEY) {
+    input.request.log.error(
+      { provider: input.provider },
+      'Webhook signing secret cannot be decrypted because TRACKING_ENCRYPTION_KEY is unset',
+    );
+    return { accepted: false as const, error: 'signature_unavailable' };
+  }
+  let secret: string;
+  try {
+    secret = decryptSecret(input.encryptedSecret, env.TRACKING_ENCRYPTION_KEY);
+  } catch (error) {
+    input.request.log.error(
+      { error, provider: input.provider },
+      'Webhook signing secret could not be decrypted',
+    );
+    return { accepted: false as const, error: 'signature_unavailable' };
+  }
+  const rawBody = rawWebhookBodies.get(input.request);
+  if (!rawBody || !webhookSignatureIsValid(rawBody, suppliedSignature, secret)) {
+    input.request.log.warn(
+      { provider: input.provider, signature_present: Boolean(suppliedSignature) },
+      'Webhook rejected because its HMAC signature is invalid',
+    );
+    return { accepted: false as const, error: 'invalid_signature' };
+  }
+  return { accepted: true as const, secret };
+}
 
 async function provisionYoutubeRewardsAccount(input: {
   offer: 'PJR_ENG' | 'PJR_ESP';
@@ -558,8 +649,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           buildTrackerScript(
             req.query.key,
             pixels.map((pixel) => pixel.pixel_id),
-          ) + buildTikTokPixelScript(tikTokPixels.map((pixel) => pixel.pixel_code))
-            + (vturb ? buildVturbBridgeScriptV2(req.query.key, vturb.conversion_param) : ''),
+          ) +
+            buildTikTokPixelScript(tikTokPixels.map((pixel) => pixel.pixel_code)) +
+            (vturb ? buildVturbBridgeScriptV2(req.query.key, vturb.conversion_param) : ''),
         )
     );
   });
@@ -1335,7 +1427,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
   app.post<{ Querystring: { token?: string } }>(
     '/webhooks/vendepay',
-    { bodyLimit: 256 * 1024, logLevel: 'silent' },
+    { bodyLimit: 256 * 1024, logLevel: 'silent', preParsing: captureRawWebhookBody },
     async (req, reply) => {
       if (!app.db || !req.query.token) return reply.code(404).send({ accepted: false });
       const candidate = tokenHash(req.query.token);
@@ -1346,9 +1438,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           token_hash: string;
           offer_id: string;
           name: string;
+          signing_secret_encrypted: string | null;
         }>
       >`
-        SELECT vc.id, vc.project_id, vc.token_hash, tp.offer_id, vc.name
+        SELECT vc.id, vc.project_id, vc.token_hash, tp.offer_id, vc.name,
+               vc.signing_secret_encrypted
         FROM vendepay_connections vc
         JOIN tracking_projects tp ON tp.id = vc.project_id
         WHERE vc.token_hash = ${candidate} AND vc.enabled = true
@@ -1356,6 +1450,25 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       `;
       const connection = connections[0];
       if (!connection) return reply.code(404).send({ accepted: false });
+
+      // Prefer the generic gateway record when one exists, while retaining
+      // compatibility with the legacy VendePay connection model currently
+      // used by the admin routes.
+      const [gatewaySigning] = await app.db<Array<{ signing_secret_encrypted: string | null }>>`
+        SELECT signing_secret_encrypted
+        FROM tracking_gateway_connections
+        WHERE provider='vendepay' AND project_id=${connection.project_id} AND enabled=true
+        LIMIT 1
+      `;
+      const signature = verifyGatewayWebhook({
+        provider: 'vendepay',
+        request: req,
+        encryptedSecret:
+          gatewaySigning?.signing_secret_encrypted ?? connection.signing_secret_encrypted,
+      });
+      if (!signature.accepted) {
+        return reply.code(401).send({ accepted: false, error: signature.error });
+      }
 
       const normalized = normalizeVendepay(req.body);
       const receiptId = ulid();
@@ -1873,7 +1986,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           ),
         );
       }
-      return reply.code(outcome.inserted ? 202 : 200).send({
+      return reply.code(200).send({
         accepted: true,
         receipt_id: receiptId,
         meta_deliveries: outcome.deliveryIds.length,
@@ -1890,25 +2003,57 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   // connection model so enabling them cannot alter VendePay ingestion.
   app.post<{ Querystring: { token?: string } }>(
     '/webhooks/paysight',
-    { bodyLimit: 256 * 1024, logLevel: 'silent' },
+    { bodyLimit: 256 * 1024, logLevel: 'silent', preParsing: captureRawWebhookBody },
     async (req, reply) => {
       if (!app.db || !req.query.token) return reply.code(404).send({ accepted: false });
       const candidate = createHash('sha256').update(req.query.token).digest('hex');
-      const [connection] = await app.db<Array<{ id: string; project_id: string; offer_id: string }>>`
-        SELECT g.id,g.project_id,p.offer_id
+      const [connection] = await app.db<
+        Array<{
+          id: string;
+          project_id: string;
+          offer_id: string;
+          signing_secret_encrypted: string | null;
+        }>
+      >`
+        SELECT g.id,g.project_id,p.offer_id,g.signing_secret_encrypted
         FROM tracking_gateway_connections g
         JOIN tracking_projects p ON p.id=g.project_id
         WHERE g.provider='paysight' AND g.enabled=true AND g.webhook_token_hash=${candidate}
         LIMIT 1
       `;
       if (!connection) return reply.code(404).send({ accepted: false });
+      const signature = verifyGatewayWebhook({
+        provider: 'paysight',
+        request: req,
+        encryptedSecret: connection.signing_secret_encrypted,
+      });
+      if (!signature.accepted) {
+        return reply.code(401).send({ accepted: false, error: signature.error });
+      }
       if (Array.isArray(req.body) && req.body.length > 1) {
         // Paysight batches transactions. Re-enter the same idempotent handler
         // per element so each transaction gets its own durable receipt/order.
         const results = await Promise.all(
-          req.body.map((payload) => app.inject({ method: 'POST', url: req.raw.url, payload })),
+          req.body.map((payload) => {
+            const rawPayload = JSON.stringify(payload);
+            return app.inject({
+              method: 'POST',
+              url: req.raw.url,
+              headers: {
+                'content-type': 'application/json',
+                ...(signature.secret
+                  ? {
+                      'x-paysight-signature': createHmac('sha256', signature.secret)
+                        .update(rawPayload)
+                        .digest('hex'),
+                    }
+                  : {}),
+              },
+              payload: rawPayload,
+            });
+          }),
         );
-        return reply.code(202).send({ accepted: true, received: results.length });
+        return reply.code(200).send({ accepted: true, received: results.length });
       }
       // Paysight delivers a batch (array) even when it contains one event.
       // The durable receipt is per transaction, never per HTTP batch.
@@ -1923,7 +2068,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           VALUES(${receiptId},${connection.id},${normalized.dedupeKey},${app.db.json(payload as never)},'quarantined',${app.db.json(normalized.diagnostics)})
           ON CONFLICT(gateway_connection_id,dedupe_key) DO NOTHING
         `;
-        return reply.code(202).send({ accepted: true, state: 'quarantined' });
+        return reply.code(200).send({ accepted: true, state: 'quarantined' });
       }
       const event = normalized.event;
       const outcome = await app.db.begin(async (sql) => {
@@ -1933,7 +2078,13 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           VALUES(${receiptId},${connection.id},${normalized.dedupeKey},${sql.json(payload as never)},'received')
           ON CONFLICT(gateway_connection_id,dedupe_key) DO NOTHING RETURNING id
         `;
-        if (!receipt[0]) return { duplicate: true, meta: [] as string[], utmify: [] as string[], tiktok: [] as string[] };
+        if (!receipt[0])
+          return {
+            duplicate: true,
+            meta: [] as string[],
+            utmify: [] as string[],
+            tiktok: [] as string[],
+          };
         const [visitor] = event.trackingSrc
           ? await sql<Array<{ visitor_id: string }>>`
               SELECT visitor_id FROM tracking_visitors
@@ -1942,14 +2093,22 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             `
           : [];
         const [productKind] = event.product.id
-          ? await sql<Array<{ kind: string }>>`SELECT kind FROM tracking_product_kinds WHERE project_id=${connection.project_id} AND product_id=${event.product.id} LIMIT 1`
+          ? await sql<
+              Array<{ kind: string }>
+            >`SELECT kind FROM tracking_product_kinds WHERE project_id=${connection.project_id} AND product_id=${event.product.id} LIMIT 1`
           : [];
         const [visitorSource] = visitor
-          ? await sql<Array<{ first_source: Record<string,string>; last_source: Record<string,string> }>>`
+          ? await sql<
+              Array<{ first_source: Record<string, string>; last_source: Record<string, string> }>
+            >`
               SELECT first_source,last_source FROM tracking_visitors WHERE project_id=${connection.project_id} AND visitor_id=${visitor.visitor_id} LIMIT 1
             `
           : [];
-        const attribution = { ...(visitorSource?.first_source ?? {}), ...(visitorSource?.last_source ?? {}), ...event.source };
+        const attribution = {
+          ...(visitorSource?.first_source ?? {}),
+          ...(visitorSource?.last_source ?? {}),
+          ...event.source,
+        };
         const [order] = await sql<Array<{ id: string; status: string; order_kind: string }>>`
           INSERT INTO tracking_orders
             (id,project_id,provider,external_id,status,amount_minor,currency,visitor_id,buyer,raw_status,occurred_at,paid_at,payment_method,product,attribution_source,order_kind,refunded_at,chargeback_at,gateway_connection_id)
@@ -1978,29 +2137,44 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             ),true)=true
           ))
         `) {
-          const [row] = await sql<Array<{ id:string }>>`
+          const [row] = await sql<Array<{ id: string }>>`
             INSERT INTO tracking_delivery_outbox(id,project_id,destination_kind,destination_id,order_id,event_id,event_type,state)
             VALUES(${ulid()},${connection.project_id},'utmify',${destination.id},${order!.id},${`paysight:${event.transactionId}:${event.status}`},${`order.${event.status}`},${event.status === 'cancelled' || event.status === 'abandoned' ? 'skipped' : 'pending'})
             ON CONFLICT(destination_kind,destination_id,event_id) DO NOTHING RETURNING id`;
           if (row) utmify.push(row.id);
         }
-        if (order!.status !== 'paid' || order!.order_kind !== 'front') return { duplicate:false, meta:[] as string[],utmify,tiktok:[] as string[] };
+        if (order!.status !== 'paid' || order!.order_kind !== 'front')
+          return { duplicate: false, meta: [] as string[], utmify, tiktok: [] as string[] };
         const meta: string[] = [];
-        for (const pixel of await sql<Array<{ id:string }>>`SELECT id FROM meta_pixels WHERE project_id=${connection.project_id} AND enabled=true AND (NOT EXISTS (SELECT 1 FROM meta_pixel_products mpp WHERE mpp.pixel_id=meta_pixels.id) OR ${event.product.id ?? null}::text IN (SELECT mpp.product_id FROM meta_pixel_products mpp WHERE mpp.pixel_id=meta_pixels.id))`) {
-          const [row] = await sql<Array<{ id:string }>>`INSERT INTO meta_deliveries(id,project_id,pixel_id,order_id,event_id) VALUES(${ulid()},${connection.project_id},${pixel.id},${order!.id},${`paysight:${event.transactionId}:purchase`}) ON CONFLICT(pixel_id,event_id) DO NOTHING RETURNING id`;
+        for (const pixel of await sql<
+          Array<{ id: string }>
+        >`SELECT id FROM meta_pixels WHERE project_id=${connection.project_id} AND enabled=true AND (NOT EXISTS (SELECT 1 FROM meta_pixel_products mpp WHERE mpp.pixel_id=meta_pixels.id) OR ${event.product.id ?? null}::text IN (SELECT mpp.product_id FROM meta_pixel_products mpp WHERE mpp.pixel_id=meta_pixels.id))`) {
+          const [row] = await sql<
+            Array<{ id: string }>
+          >`INSERT INTO meta_deliveries(id,project_id,pixel_id,order_id,event_id) VALUES(${ulid()},${connection.project_id},${pixel.id},${order!.id},${`paysight:${event.transactionId}:purchase`}) ON CONFLICT(pixel_id,event_id) DO NOTHING RETURNING id`;
           if (row) meta.push(row.id);
         }
         const tiktok: string[] = [];
-        for (const destination of await sql<Array<{ id:string }>>`SELECT id FROM tracking_tiktok_destinations WHERE project_id=${connection.project_id} AND enabled=true`) {
-          const [row] = await sql<Array<{ id:string }>>`INSERT INTO tracking_tiktok_deliveries(id,project_id,destination_id,order_id,event_id,event_name) VALUES(${ulid()},${connection.project_id},${destination.id},${order!.id},${`paysight:${event.transactionId}:tiktok:purchase`},'Purchase') ON CONFLICT(destination_id,event_id) DO NOTHING RETURNING id`;
+        for (const destination of await sql<
+          Array<{ id: string }>
+        >`SELECT id FROM tracking_tiktok_destinations WHERE project_id=${connection.project_id} AND enabled=true`) {
+          const [row] = await sql<
+            Array<{ id: string }>
+          >`INSERT INTO tracking_tiktok_deliveries(id,project_id,destination_id,order_id,event_id,event_name) VALUES(${ulid()},${connection.project_id},${destination.id},${order!.id},${`paysight:${event.transactionId}:tiktok:purchase`},'Purchase') ON CONFLICT(destination_id,event_id) DO NOTHING RETURNING id`;
           if (row) tiktok.push(row.id);
         }
-        return { duplicate:false,meta,utmify,tiktok };
+        return { duplicate: false, meta, utmify, tiktok };
       });
-      await Promise.allSettled(outcome.meta.map((id) => app.metaQueue.add('send',{ deliveryId:id })));
-      await Promise.allSettled(outcome.utmify.map((id) => app.utmifyDeliveryQueue.add('send',{ deliveryId:id })));
-      await Promise.allSettled(outcome.tiktok.map((id) => app.tiktokQueue.add('send',{ deliveryId:id })));
-      return reply.code(202).send({ accepted:true, duplicate:outcome.duplicate });
+      await Promise.allSettled(
+        outcome.meta.map((id) => app.metaQueue.add('send', { deliveryId: id })),
+      );
+      await Promise.allSettled(
+        outcome.utmify.map((id) => app.utmifyDeliveryQueue.add('send', { deliveryId: id })),
+      );
+      await Promise.allSettled(
+        outcome.tiktok.map((id) => app.tiktokQueue.add('send', { deliveryId: id })),
+      );
+      return reply.code(200).send({ accepted: true, duplicate: outcome.duplicate });
     },
   );
 
@@ -2010,13 +2184,39 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     async (req, reply) => {
       if (!app.db || !req.query.token) return reply.code(404).send({ accepted: false });
       const candidate = tokenHash(req.query.token);
-      const [connection] = await app.db<Array<{ id: string }>>`
-        SELECT id
+      const [connection] = await app.db<
+        Array<{
+          id: string;
+          project_id: string;
+          signing_secret_encrypted: string | null;
+        }>
+      >`
+        SELECT id,project_id,signing_secret_encrypted
         FROM vendepay_connections
         WHERE token_hash = ${candidate} AND enabled = true
         LIMIT 1
       `;
       if (!connection) return reply.code(404).send({ accepted: false });
+      const [gatewaySigning] = await app.db<Array<{ signing_secret_encrypted: string | null }>>`
+        SELECT signing_secret_encrypted
+        FROM tracking_gateway_connections
+        WHERE provider='vendepay' AND project_id=${connection.project_id} AND enabled=true
+        LIMIT 1
+      `;
+      const encryptedSigningSecret =
+        gatewaySigning?.signing_secret_encrypted ?? connection.signing_secret_encrypted;
+      if (encryptedSigningSecret && !env.TRACKING_ENCRYPTION_KEY) {
+        return reply.code(503).send({ accepted: false, error: 'signature_unavailable' });
+      }
+      let signingSecret: string | null = null;
+      if (encryptedSigningSecret && env.TRACKING_ENCRYPTION_KEY) {
+        try {
+          signingSecret = decryptSecret(encryptedSigningSecret, env.TRACKING_ENCRYPTION_KEY);
+        } catch (error) {
+          req.log.error({ error }, 'VendePay replay signing secret could not be decrypted');
+          return reply.code(503).send({ accepted: false, error: 'signature_unavailable' });
+        }
+      }
 
       const receipts = await app.db<Array<{ id: string; payload: unknown }>>`
         SELECT id, payload
@@ -2031,13 +2231,29 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       let failed = 0;
       for (const receipt of receipts) {
         if (normalizeVendepay(receipt.payload).kind !== 'processable') {
+          await app.db`
+            UPDATE webhook_receipts
+            SET state='terminal', processed_at=COALESCE(processed_at,now())
+            WHERE id=${receipt.id} AND state='quarantined'
+          `;
           stillQuarantined += 1;
           continue;
         }
+        const rawPayload = JSON.stringify(receipt.payload);
         const response = await app.inject({
           method: 'POST',
           url: `/v1/webhooks/vendepay?token=${encodeURIComponent(req.query.token)}`,
-          payload: receipt.payload as Record<string, unknown>,
+          headers: {
+            'content-type': 'application/json',
+            ...(signingSecret
+              ? {
+                  'x-vendepay-signature': createHmac('sha256', signingSecret)
+                    .update(rawPayload)
+                    .digest('hex'),
+                }
+              : {}),
+          },
+          payload: rawPayload,
         });
         if (response.statusCode >= 200 && response.statusCode < 300) replayed += 1;
         else failed += 1;
