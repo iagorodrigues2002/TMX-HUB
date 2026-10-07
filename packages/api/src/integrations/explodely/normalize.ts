@@ -137,7 +137,12 @@ export function normalizeExplodely(
     'tid',
     'tracking_id',
     'trackingId',
+    'vtid',
     'sck',
+    'sid',
+    'subid',
+    'xcod',
+    ...Array.from({ length: 20 }, (_, index) => `sub${index + 1}`),
     'sessionId',
     'clickId',
     'utm_source',
@@ -171,7 +176,8 @@ export function normalizeExplodely(
     const value = textAt(root, `custom${index}`);
     if (value) source[`custom${index}`] = value;
   }
-  const trackingSrc = source.src ?? source.tid ?? source.tracking_id ?? source.trackingId;
+  const trackingSrc =
+    source.src ?? source.tid ?? source.tracking_id ?? source.trackingId ?? source.vtid;
   if (trackingSrc) source.src = trackingSrc;
   const fbc = source.fbc ?? source._fbc;
   const fbp = source.fbp ?? source._fbp;

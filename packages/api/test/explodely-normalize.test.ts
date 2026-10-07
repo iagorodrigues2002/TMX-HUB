@@ -58,6 +58,7 @@ describe('normalizeExplodely', () => {
       fbc: 'fb.1.1.click',
       fbp: 'fb.1.1.browser',
       ttclid: 'ttclid-1',
+      vtid: 'v3_player_variant',
       custom1: 'saved',
     });
     expect(normalized.kind).toBe('processable');
@@ -69,6 +70,7 @@ describe('normalizeExplodely', () => {
       _fbc: 'fb.1.1.click',
       _fbp: 'fb.1.1.browser',
       ttclid: 'ttclid-1',
+      vtid: 'v3_player_variant',
       custom1: 'saved',
     });
   });
