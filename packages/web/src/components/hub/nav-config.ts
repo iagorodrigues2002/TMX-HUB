@@ -1,0 +1,392 @@
+import type { ToolKey } from '@/lib/api-client';
+import type { LucideIcon } from 'lucide-react';
+import {
+  Activity,
+  BellRing,
+  Blocks,
+  Bot,
+  Boxes,
+  Bug,
+  ChartNoAxesCombined,
+  CircleGauge,
+  CodeXml,
+  CreditCard,
+  FileDown,
+  FlaskConical,
+  Globe2,
+  Home,
+  KeyRound,
+  Link2,
+  ListChecks,
+  Megaphone,
+  Network,
+  RadioTower,
+  ReceiptText,
+  RefreshCcw,
+  RotateCcw,
+  Route,
+  ShieldCheck,
+  Sparkles,
+  Split,
+  Target,
+  Users,
+  Video,
+  Webhook,
+  Wrench,
+} from 'lucide-react';
+
+export type NavRole = 'admin' | 'user';
+
+export type NavGroup =
+  | 'Visão geral'
+  | 'Ofertas'
+  | 'Rastreamento'
+  | 'Ferramentas'
+  | 'Integrações'
+  | 'Admin';
+
+export interface NavItem {
+  id: string;
+  label: string;
+  href: string;
+  icon: LucideIcon;
+  group: NavGroup;
+  roles?: NavRole[];
+  requiresTool?: ToolKey;
+  keywords?: string[];
+  hidden?: boolean;
+  children?: NavItem[];
+}
+
+const trackingTool: Pick<NavItem, 'requiresTool'> = { requiresTool: 'ofertas' };
+
+export const NAV_ITEMS: NavItem[] = [
+  {
+    id: 'overview',
+    label: 'Visão geral',
+    href: '/',
+    icon: Home,
+    group: 'Visão geral',
+    keywords: ['início', 'dashboard', 'resumo'],
+  },
+  {
+    id: 'offers',
+    label: 'Ofertas',
+    href: '/ofertas',
+    icon: Target,
+    group: 'Ofertas',
+    requiresTool: 'ofertas',
+    keywords: ['produtos', 'campanhas'],
+    children: [
+      {
+        id: 'offers-all',
+        label: 'Todas as ofertas',
+        href: '/ofertas',
+        icon: Boxes,
+        group: 'Ofertas',
+        requiresTool: 'ofertas',
+      },
+      {
+        id: 'offer-detail',
+        label: 'Detalhe da oferta',
+        href: '/ofertas/[id]',
+        icon: CircleGauge,
+        group: 'Ofertas',
+        requiresTool: 'ofertas',
+        keywords: ['métricas', 'anúncios'],
+      },
+      {
+        id: 'refunds',
+        label: 'Reembolsos',
+        href: '/reembolsos',
+        icon: RotateCcw,
+        group: 'Ofertas',
+        requiresTool: 'ofertas',
+        keywords: ['chargeback', 'financeiro'],
+      },
+      {
+        id: 'recovery',
+        label: 'TMX Recovery',
+        href: '/recovery',
+        icon: RefreshCcw,
+        group: 'Ofertas',
+        requiresTool: 'ofertas',
+        hidden: true,
+      },
+    ],
+  },
+  {
+    id: 'tracking',
+    label: 'Rastreamento',
+    href: '/tracking',
+    icon: RadioTower,
+    group: 'Rastreamento',
+    ...trackingTool,
+    keywords: ['tracking', 'eventos', 'conversões'],
+    children: [
+      {
+        id: 'tracking-overview',
+        label: 'Visão geral',
+        href: '/tracking?view=overview',
+        icon: ChartNoAxesCombined,
+        group: 'Rastreamento',
+        ...trackingTool,
+      },
+      {
+        id: 'tracking-journey',
+        label: 'Jornada',
+        href: '/tracking?view=journey',
+        icon: Route,
+        group: 'Rastreamento',
+        ...trackingTool,
+        keywords: ['funil', 'eventos ao vivo', 'campanhas', 'upsells', 'retenção'],
+      },
+      {
+        id: 'tracking-capture',
+        label: 'Captura',
+        href: '/tracking?view=capture',
+        icon: CodeXml,
+        group: 'Rastreamento',
+        ...trackingTool,
+        keywords: ['instalação', 'domínios', 'links', 'teste a/b'],
+      },
+      {
+        id: 'tracking-diagnostics',
+        label: 'Diagnóstico',
+        href: '/tracking?view=diagnostics',
+        icon: Bug,
+        group: 'Rastreamento',
+        ...trackingTool,
+        keywords: ['saúde', 'testes', 'alertas'],
+      },
+    ],
+  },
+  {
+    id: 'tools',
+    label: 'Ferramentas',
+    href: '/tools',
+    icon: Wrench,
+    group: 'Ferramentas',
+    keywords: ['utilitários'],
+    children: [
+      {
+        id: 'tool-page-cloner',
+        label: 'Page Cloner',
+        href: '/tools/cloner',
+        icon: Blocks,
+        group: 'Ferramentas',
+        requiresTool: 'cloner',
+        keywords: ['clonar página'],
+      },
+      {
+        id: 'tool-vsl',
+        label: 'VSL Downloader',
+        href: '/tools/vsl',
+        icon: FileDown,
+        group: 'Ferramentas',
+        requiresTool: 'vsl',
+        keywords: ['baixar vídeo'],
+      },
+      {
+        id: 'tool-upsell',
+        label: 'Upsell Analyzer',
+        href: '/tools/upsell-analyzer',
+        icon: ChartNoAxesCombined,
+        group: 'Ferramentas',
+        requiresTool: 'upsell-analyzer',
+        keywords: ['analisar upsell'],
+      },
+      {
+        id: 'tool-webhook',
+        label: 'Webhook Tester',
+        href: '/tools/webhook-tester',
+        icon: Webhook,
+        group: 'Ferramentas',
+        requiresTool: 'webhook-tester',
+        keywords: ['testar webhook'],
+      },
+      {
+        id: 'tool-funnel-clone',
+        label: 'Funnel Full Clone',
+        href: '/tools/funnel-clone',
+        icon: Network,
+        group: 'Ferramentas',
+        requiresTool: 'funnel-clone',
+        keywords: ['clonar funil'],
+      },
+      {
+        id: 'tool-video-studio',
+        label: 'Video Studio',
+        href: '/tools/video-shield',
+        icon: Video,
+        group: 'Ferramentas',
+        requiresTool: 'video-shield',
+        keywords: ['creative studio', 'processar vídeo'],
+      },
+    ],
+  },
+  {
+    id: 'integrations',
+    label: 'Integrações',
+    href: '/tracking?view=destinations',
+    icon: Split,
+    group: 'Integrações',
+    ...trackingTool,
+    keywords: ['destinos', 'conexões'],
+    children: [
+      {
+        id: 'integration-payments',
+        label: 'Pagamentos e webhooks',
+        href: '/tracking?view=destinations&section=payments',
+        icon: CreditCard,
+        group: 'Integrações',
+        ...trackingTool,
+        keywords: ['vendepay', 'paysight', 'gateway'],
+      },
+      {
+        id: 'integration-meta',
+        label: 'Meta',
+        href: '/tracking?view=destinations&section=meta',
+        icon: Megaphone,
+        group: 'Integrações',
+        ...trackingTool,
+        keywords: ['pixel', 'capi', 'facebook'],
+      },
+      {
+        id: 'integration-utmify',
+        label: 'UTMify',
+        href: '/tracking?view=destinations&section=utmify',
+        icon: Link2,
+        group: 'Integrações',
+        ...trackingTool,
+      },
+      {
+        id: 'integration-google',
+        label: 'Google Ads',
+        href: '/tracking?view=destinations&section=google-ads',
+        icon: Globe2,
+        group: 'Integrações',
+        ...trackingTool,
+      },
+      {
+        id: 'integration-tiktok',
+        label: 'TikTok Ads',
+        href: '/tracking?view=destinations&section=tiktok-ads',
+        icon: Sparkles,
+        group: 'Integrações',
+        ...trackingTool,
+      },
+      {
+        id: 'integration-vturb',
+        label: 'vTurb',
+        href: '/tracking?view=destinations&section=vturb',
+        icon: Video,
+        group: 'Integrações',
+        ...trackingTool,
+      },
+      {
+        id: 'integration-pushcut',
+        label: 'Alertas Pushcut',
+        href: '/tracking?view=destinations&section=pushcut',
+        icon: BellRing,
+        group: 'Integrações',
+        ...trackingTool,
+      },
+      {
+        id: 'meta-control',
+        label: 'Controle de contas',
+        href: '/contas-meta',
+        icon: CircleGauge,
+        group: 'Integrações',
+        roles: ['admin'],
+        hidden: true,
+      },
+      {
+        id: 'settings-tmx-connection',
+        label: 'Conexão TMX HUB',
+        href: '/settings#tmx-connection',
+        icon: KeyRound,
+        group: 'Integrações',
+        roles: ['admin'],
+        hidden: true,
+      },
+      {
+        id: 'settings-offer-destination',
+        label: 'Oferta de destino',
+        href: '/settings#offer-destination',
+        icon: Target,
+        group: 'Integrações',
+        roles: ['admin'],
+        hidden: true,
+      },
+      {
+        id: 'settings-n8n',
+        label: 'Integração n8n',
+        href: '/settings#n8n',
+        icon: Bot,
+        group: 'Integrações',
+        roles: ['admin'],
+        hidden: true,
+      },
+    ],
+  },
+  {
+    id: 'admin',
+    label: 'Admin',
+    href: '/admin',
+    icon: ShieldCheck,
+    group: 'Admin',
+    roles: ['admin'],
+    keywords: ['administração'],
+    children: [
+      {
+        id: 'admin-overview',
+        label: 'Visão geral',
+        href: '/admin',
+        icon: CircleGauge,
+        group: 'Admin',
+        roles: ['admin'],
+      },
+      {
+        id: 'admin-people',
+        label: 'Pessoas e acessos',
+        href: '/admin?view=people',
+        icon: Users,
+        group: 'Admin',
+        roles: ['admin'],
+        keywords: ['usuários', 'permissões'],
+      },
+      {
+        id: 'admin-invites',
+        label: 'Convites',
+        href: '/admin?view=invites',
+        icon: ListChecks,
+        group: 'Admin',
+        roles: ['admin'],
+      },
+      {
+        id: 'admin-activity',
+        label: 'Atividade',
+        href: '/logs',
+        icon: Activity,
+        group: 'Admin',
+        roles: ['admin'],
+        requiresTool: 'logs',
+        keywords: ['logs', 'histórico'],
+      },
+      {
+        id: 'account-security',
+        label: 'Conta e segurança',
+        href: '/settings',
+        icon: KeyRound,
+        group: 'Admin',
+        roles: ['admin'],
+        keywords: ['perfil', 'senha'],
+      },
+    ],
+  },
+];
+
+export function flattenNavItems(items: NavItem[] = NAV_ITEMS): NavItem[] {
+  return items.flatMap((item) => [item, ...flattenNavItems(item.children ?? [])]);
+}
