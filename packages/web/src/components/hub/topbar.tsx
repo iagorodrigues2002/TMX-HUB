@@ -1,18 +1,142 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Menu, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react';
 import Link from 'next/link';
+import { usePathname, useSearchParams } from 'next/navigation';
 import type { ReactNode } from 'react';
+import { NAV_ITEMS, type NavItem, flattenNavItems } from './nav-config';
+import { OfferContextSwitcher } from './offer-context-switcher';
 
 interface TopbarProps {
-  /** Optional breadcrumb segments after the brand. e.g. ['CLONER'] or ['CLONER', 'JOB ABC123']. */
   breadcrumb?: string[];
-  /** Right-side slot (status pill, build button, action buttons). */
   right?: ReactNode;
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
   onOpenMobileNavigation: () => void;
+  onOpenCommandPalette?: () => void;
+}
+
+interface BreadcrumbItem {
+  label: string;
+  href?: string;
+}
+
+const ROOT_PATHS = new Set(['/', '/ofertas', '/tracking', '/tools', '/admin']);
+
+function normalizeLabel(label: string) {
+  if (label !== label.toUpperCase()) return label;
+  return label
+    .toLocaleLowerCase('pt-BR')
+    .replace(/(^|\s)\p{L}/gu, (letter) => letter.toLocaleUpperCase('pt-BR'));
+}
+
+function hrefMatches(item: NavItem, pathname: string, search: URLSearchParams) {
+  const [itemPath, itemQuery] = item.href.split('?');
+  if (itemPath?.includes('[id]')) {
+    const pattern = new RegExp(`^${itemPath.replace('[id]', '[^/]+')}$`);
+    return pattern.test(pathname);
+  }
+  if (itemPath !== pathname && !pathname.startsWith(`${itemPath}/`)) return false;
+  if (!itemQuery) return true;
+  const expected = new URLSearchParams(itemQuery);
+  return Array.from(expected.entries()).every(([key, value]) => search.get(key) === value);
+}
+
+function navTrail(pathname: string, search: URLSearchParams): NavItem[] {
+  for (const root of NAV_ITEMS) {
+    const child = (root.children ?? [])
+      .filter((item) => !item.hidden && hrefMatches(item, pathname, search))
+      .sort((a, b) => b.href.length - a.href.length)[0];
+    if (child) return [root, child];
+  }
+
+  const root = NAV_ITEMS.find((item) => !item.hidden && hrefMatches(item, pathname, search));
+  return root ? [root] : [];
+}
+
+function deriveBreadcrumbs(
+  pathname: string,
+  search: URLSearchParams,
+  override?: string[],
+): BreadcrumbItem[] {
+  const plainRoot = ROOT_PATHS.has(pathname) && search.size === 0;
+  if (plainRoot) return [];
+
+  const trail = navTrail(pathname, search);
+  const crumbs: BreadcrumbItem[] = trail.map((item) => ({
+    label: item.label,
+    href: item.href.includes('[id]') ? undefined : item.href,
+  }));
+
+  if (trail.at(-1)?.href.includes('[id]') && override?.at(-1)) {
+    crumbs[crumbs.length - 1] = { label: normalizeLabel(override.at(-1) ?? '') };
+  } else if (override && override.length > trail.length) {
+    const dynamicLabel = normalizeLabel(override.at(-1) ?? '');
+    const knownLabels = new Set(flattenNavItems().map((item) => item.label.toLowerCase()));
+    if (!knownLabels.has(dynamicLabel.toLowerCase())) crumbs.push({ label: dynamicLabel });
+  }
+
+  if (crumbs.length === 0 && override && override.length > 1) {
+    return override.map((label, index) => ({
+      label: normalizeLabel(label),
+      href: index === 0 ? `/${pathname.split('/').filter(Boolean)[0] ?? ''}` : undefined,
+    }));
+  }
+
+  return crumbs.map((crumb, index) =>
+    index === crumbs.length - 1 ? { label: crumb.label } : crumb,
+  );
+}
+
+function Breadcrumbs({ items }: { items: BreadcrumbItem[] }) {
+  if (items.length < 2) return null;
+  const parent = items.at(-2);
+  const current = items.at(-1);
+
+  return (
+    <nav aria-label="Breadcrumb" className="min-w-0">
+      <div className="flex min-w-0 items-center gap-1.5 text-[13px] md:hidden">
+        {parent?.href && (
+          <Link
+            href={parent.href}
+            className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+          >
+            ← {parent.label}
+          </Link>
+        )}
+        <span aria-hidden className="text-muted-foreground/50">
+          /
+        </span>
+        <span aria-current="page" className="truncate font-medium text-foreground">
+          {current?.label}
+        </span>
+      </div>
+      <ol className="hidden min-w-0 items-center gap-1.5 text-[13px] md:flex">
+        {items.map((item, index) => (
+          <li key={`${item.label}-${index}`} className="flex min-w-0 items-center gap-1.5">
+            {index > 0 && (
+              <span aria-hidden className="text-muted-foreground/40">
+                /
+              </span>
+            )}
+            {item.href ? (
+              <Link
+                href={item.href}
+                className="truncate text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {item.label}
+              </Link>
+            ) : (
+              <span aria-current="page" className="truncate font-medium text-foreground">
+                {item.label}
+              </span>
+            )}
+          </li>
+        ))}
+      </ol>
+    </nav>
+  );
 }
 
 export function Topbar({
@@ -21,12 +145,14 @@ export function Topbar({
   sidebarCollapsed,
   onToggleSidebar,
   onOpenMobileNavigation,
+  onOpenCommandPalette,
 }: TopbarProps) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const breadcrumbs = deriveBreadcrumbs(pathname, searchParams, breadcrumb);
+
   return (
-    <header
-      className="tmx-topbar flex h-14 shrink-0 items-center gap-2 border-b border-border/60 bg-background/92 px-2 backdrop-blur-xl sm:px-3"
-      style={{ position: 'sticky', top: 0, zIndex: 30 }}
-    >
+    <header className="tmx-topbar relative z-30 flex h-14 shrink-0 items-center gap-1.5 border-b border-border/60 bg-background/92 px-2 backdrop-blur-xl sm:gap-2 sm:px-3">
       <Button
         type="button"
         variant="ghost"
@@ -51,18 +177,20 @@ export function Topbar({
           <PanelLeftClose className="h-4 w-4" />
         )}
       </Button>
-      <Link href="/" className="group flex min-w-0 shrink-0 items-center gap-2">
+
+      <Link
+        href="/"
+        aria-label="Ir para a visão geral"
+        className="flex shrink-0 items-center gap-2"
+      >
         <span
           aria-hidden
           className="grid h-8 w-8 place-items-center rounded-md border border-border/60 bg-muted"
-          style={{
-            background: 'linear-gradient(135deg, rgba(20,184,166,0.25), rgba(34,211,238,0.05))',
-          }}
         >
           <svg
             aria-hidden="true"
             viewBox="0 0 24 24"
-            className="h-4 w-4 text-cyan-300"
+            className="h-4 w-4 text-primary"
             fill="none"
             stroke="currentColor"
             strokeWidth="2.2"
@@ -72,45 +200,37 @@ export function Topbar({
             <path d="M3 12h4l3-9 4 18 3-9h4" />
           </svg>
         </span>
-        <span className="flex flex-col leading-tight">
-          <span className="text-base font-bold tracking-tight text-foreground">
-            TMX{' '}
-            <span
-              className="bg-clip-text text-transparent"
-              style={{
-                backgroundImage:
-                  'linear-gradient(90deg, var(--accent-from) 0%, var(--accent-to) 100%)',
-              }}
-            >
-              HUB
-            </span>
-          </span>
-          <span className="hidden text-[11px] text-muted-foreground sm:block">Operação</span>
+        <span className="hidden text-sm font-bold tracking-tight text-foreground xl:inline">
+          TMX HUB
         </span>
       </Link>
 
-      {breadcrumb && breadcrumb.length > 0 && (
-        <nav
-          aria-label="Breadcrumb"
-          className="hidden items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-white/40 md:flex"
+      <div className="hidden h-5 w-px bg-border/60 md:block" aria-hidden />
+      <div className="min-w-0 flex-1">
+        <Breadcrumbs items={breadcrumbs} />
+      </div>
+
+      <OfferContextSwitcher />
+
+      {onOpenCommandPalette && (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onOpenCommandPalette}
+          aria-label="Abrir busca e comandos"
+          className="h-9 w-9 shrink-0 justify-center border-border/60 bg-muted/60 px-0 font-normal text-muted-foreground sm:w-auto sm:min-w-[180px] sm:justify-between sm:px-3"
         >
-          <span aria-hidden className="text-white/40">
-            /
+          <span className="flex items-center gap-2">
+            <Search className="h-3.5 w-3.5" aria-hidden />
+            <span className="hidden sm:inline">Buscar ou executar…</span>
           </span>
-          {breadcrumb.map((crumb, i) => (
-            <span key={crumb} className="flex items-center gap-2">
-              <span className={i === breadcrumb.length - 1 ? 'text-white/70' : ''}>{crumb}</span>
-              {i < breadcrumb.length - 1 && (
-                <span aria-hidden className="text-white/25">
-                  ›
-                </span>
-              )}
-            </span>
-          ))}
-        </nav>
+          <kbd className="hidden rounded border border-border/60 bg-background px-1.5 py-0.5 text-[11px] sm:inline">
+            ⌘K
+          </kbd>
+        </Button>
       )}
 
-      <div className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-2">{right}</div>
+      <div className="flex shrink-0 items-center gap-1">{right}</div>
     </header>
   );
 }
