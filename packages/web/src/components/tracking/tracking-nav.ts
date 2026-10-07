@@ -124,13 +124,13 @@ export const TRACKING_NAV: TrackingNavArea[] = [
   {
     id: 'capture',
     label: 'Captura',
-    description: 'Instalação, pixels e origens first-party.',
+    description: 'Instalação e origens first-party.',
     icon: CodeXml,
     sections: [
       {
         id: 'code-pixels',
-        label: 'Código e pixels',
-        description: 'Instalação e Meta Pixels em uma única superfície.',
+        label: 'Código de instalação',
+        description: 'Script first-party e parâmetros para anúncios.',
         icon: Braces,
       },
       {
@@ -150,7 +150,7 @@ export const TRACKING_NAV: TrackingNavArea[] = [
       {
         id: 'meta',
         label: 'Meta',
-        description: 'Regras, entregas CAPI e reconciliação.',
+        description: 'Pixels, regras, entregas CAPI e reconciliação.',
         icon: Facebook,
       },
       {

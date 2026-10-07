@@ -153,11 +153,11 @@ export const NAV_ITEMS: NavItem[] = [
       {
         id: 'tracking-capture',
         label: 'Captura',
-        href: '/tracking?view=capture',
+        href: '/tracking?view=capture&section=code-pixels',
         icon: CodeXml,
         group: 'Rastreamento',
         ...trackingTool,
-        keywords: ['instalação', 'domínios', 'links', 'teste a/b'],
+        keywords: ['instalação', 'script', 'código', 'domínios'],
       },
       {
         id: 'tracking-diagnostics',
@@ -259,7 +259,7 @@ export const NAV_ITEMS: NavItem[] = [
         icon: Megaphone,
         group: 'Integrações',
         ...trackingTool,
-        keywords: ['pixel', 'capi', 'facebook'],
+        keywords: ['meta pixel', 'pixel', 'capi', 'facebook'],
       },
       {
         id: 'integration-utmify',

@@ -1,5 +1,6 @@
 'use client';
 
+import { MetaPixelsPanel } from '@/components/tracking/sections/destinations/meta-pixels-panel';
 import {
   TrackingSectionContent,
   type TrackingSectionId,
@@ -20,10 +21,13 @@ export function DestinationsSection({
   section,
 }: { offerId: string; canManage: boolean; section: string }) {
   return (
-    <TrackingSectionContent
-      offerId={offerId}
-      canManage={canManage}
-      section={DESTINATION_SECTION[section] ?? 'meta'}
-    />
+    <div className="space-y-5">
+      {section === 'meta' && <MetaPixelsPanel offerId={offerId} canManage={canManage} />}
+      <TrackingSectionContent
+        offerId={offerId}
+        canManage={canManage}
+        section={DESTINATION_SECTION[section] ?? 'meta'}
+      />
+    </div>
   );
 }
