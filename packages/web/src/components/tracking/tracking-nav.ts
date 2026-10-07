@@ -278,6 +278,9 @@ export function resolveTrackingSection(view: TrackingView, value: string | null)
  * every current navigation surface uses the canonical view and section IDs.
  */
 export function resolveTrackingLocation(viewValue: string | null, sectionValue: string | null) {
+  if (viewValue === 'destinations' && sectionValue === 'tiktok') {
+    return { view: 'destinations' as const, section: 'tiktok-ads' };
+  }
   if (viewValue === 'journey' && sectionValue === 'upsells') {
     return { view: 'upsell-intelligence' as const, section: 'upsell-intelligence' };
   }
