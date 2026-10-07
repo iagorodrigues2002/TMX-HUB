@@ -1,9 +1,9 @@
 'use client';
 
 import { TrackerKpiRow } from '@/components/tracking/tracker-kpi-row';
-import { TrackingCountryMap } from '@/components/tracking/tracking-country-map';
 import { TRACKING_DASHBOARD_STALE_TIME } from '@/components/tracking/tracking-query';
 import { Button } from '@/components/ui/button';
+import { DataState } from '@/components/ui/data-state';
 import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
@@ -21,7 +21,18 @@ import {
   Users,
   XCircle,
 } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { useMemo, useState } from 'react';
+
+const TrackingCountryMap = dynamic(
+  () =>
+    import('@/components/tracking/tracking-country-map').then(
+      (module) => module.TrackingCountryMap,
+    ),
+  {
+    loading: () => <DataState className="min-h-64" variant="loading" title="Carregando mapa…" />,
+  },
+);
 
 type View = 'tracker' | 'funnel' | 'attribution' | 'infrastructure';
 

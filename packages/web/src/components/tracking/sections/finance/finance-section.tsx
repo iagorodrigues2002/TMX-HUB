@@ -1,11 +1,20 @@
 'use client';
 
-import { DiagnosticsSection } from '@/components/tracking/sections/diagnostics/diagnostics-section';
 import { GatewaysSection } from '@/components/tracking/sections/finance/gateways-section';
 import {
   TrackingSectionContent,
   type TrackingSectionId,
 } from '@/components/tracking/sections/journey/tracking-section-content';
+import { DataState } from '@/components/ui/data-state';
+import dynamic from 'next/dynamic';
+
+const DiagnosticsSection = dynamic(
+  () =>
+    import('@/components/tracking/sections/diagnostics/diagnostics-section').then(
+      (module) => module.DiagnosticsSection,
+    ),
+  { loading: () => <DataState variant="loading" title="Carregando diagnóstico…" /> },
+);
 
 const FINANCE_SECTION: Record<string, TrackingSectionId> = {
   payments: 'gateways',
