@@ -28,17 +28,10 @@ const EnvSchema = z.object({
   S3_ENDPOINT: z.string().default('http://localhost:9000'),
   S3_REGION: z.string().default('us-east-1'),
   S3_BUCKET: z.string().default('clones'),
-  // REQUIRED_IN_PRODUCTION: must be at least 16 chars and not the MinIO default.
-  S3_ACCESS_KEY: z
-    .string()
-    .min(16)
-    .refine((s) => s !== 'minioadmin', { message: 'S3_ACCESS_KEY must not use the MinIO default' })
-    .default('minioadmin-change-me-now'),
-  S3_SECRET_KEY: z
-    .string()
-    .min(16)
-    .refine((s) => s !== 'minioadmin', { message: 'S3_SECRET_KEY must not use the MinIO default' })
-    .default('minioadmin-change-me-now'),
+  // Production validation below rejects short/default credentials. Development
+  // keeps the docker-compose MinIO defaults so a local checkout can boot.
+  S3_ACCESS_KEY: z.string().default('minioadmin'),
+  S3_SECRET_KEY: z.string().default('minioadmin'),
   S3_FORCE_PATH_STYLE: booleanFromString.default(true),
 
   MAX_RENDER_TIMEOUT_MS: numberFromString.default(90_000),
@@ -98,6 +91,18 @@ const EnvSchema = z.object({
   // AssemblyAI — used by /v1/shield-jobs to verify the protected output is
   // un-transcribable. Optional; if missing, verification is silently skipped.
   ASSEMBLYAI_API_KEY: z.string().optional(),
+}).superRefine((value, ctx) => {
+  if (value.NODE_ENV !== 'production') return;
+
+  for (const key of ['S3_ACCESS_KEY', 'S3_SECRET_KEY'] as const) {
+    if (value[key].length < 16 || value[key] === 'minioadmin') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [key],
+        message: `${key} must be at least 16 characters and must not use the MinIO default`,
+      });
+    }
+  }
 });
 
 export type Env = z.infer<typeof EnvSchema>;
