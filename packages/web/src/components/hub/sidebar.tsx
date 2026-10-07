@@ -238,7 +238,7 @@ export function Sidebar({ collapsed, mobileOpen, onMobileOpenChange }: SidebarPr
         aria-label="Navegação principal"
         data-collapsed={collapsed}
         className={cn(
-          'hidden shrink-0 flex-col border-r border-border/60 bg-background/88 px-2 py-3 backdrop-blur-xl lg:flex',
+          'hidden shrink-0 flex-col border-r border-border/60 bg-background/88 px-2 py-3 backdrop-blur-xl xl:flex',
           collapsed ? 'w-16' : 'w-60',
         )}
       >
@@ -268,7 +268,7 @@ export function Sidebar({ collapsed, mobileOpen, onMobileOpenChange }: SidebarPr
       </aside>
 
       <Dialog open={mobileOpen} onOpenChange={onMobileOpenChange}>
-        <DialogContent className="bottom-0 left-0 top-0 h-dvh max-h-none w-[min(88vw,360px)] max-w-none translate-x-0 translate-y-0 rounded-none border-y-0 border-l-0 border-r border-border/60 bg-background p-4 sm:h-dvh sm:w-[360px] sm:max-w-none sm:p-4 lg:hidden">
+        <DialogContent className="bottom-0 left-0 top-0 h-dvh max-h-none w-[min(88vw,360px)] max-w-none translate-x-0 translate-y-0 rounded-none border-y-0 border-l-0 border-r border-border/60 bg-background p-4 sm:h-dvh sm:w-[360px] sm:max-w-none sm:p-4 xl:hidden">
           <DialogHeader className="border-b border-border/60 pb-3 pr-12">
             <DialogTitle>TMX HUB</DialogTitle>
             <DialogDescription>Navegue pelas áreas disponíveis.</DialogDescription>

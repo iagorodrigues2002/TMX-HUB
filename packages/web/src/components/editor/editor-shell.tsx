@@ -25,7 +25,7 @@ interface EditorShellProps {
   right: ReactNode;
 }
 
-const DESKTOP_EDITOR_QUERY = '(min-width: 1024px)';
+const DESKTOP_EDITOR_QUERY = '(min-width: 1440px)';
 
 function subscribeToDesktopLayout(callback: () => void) {
   const mediaQuery = window.matchMedia(DESKTOP_EDITOR_QUERY);
@@ -60,7 +60,7 @@ export function EditorShell({ jobId, job, left, center, right }: EditorShellProp
             <Button asChild variant="outline" size="sm" className="gap-1.5">
               <a href={job.url} target="_blank" rel="noreferrer">
                 <ExternalLink className="h-3.5 w-3.5" />
-                Origem
+                <span className="hidden xl:inline">Origem</span>
               </a>
             </Button>
           )}

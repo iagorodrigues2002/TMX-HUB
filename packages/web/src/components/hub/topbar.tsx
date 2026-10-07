@@ -159,7 +159,7 @@ export function Topbar({
         size="icon"
         onClick={onOpenMobileNavigation}
         aria-label="Abrir navegação"
-        className="h-11 w-11 lg:hidden"
+        className="h-11 w-11 xl:hidden"
       >
         <Menu className="h-4 w-4" />
       </Button>
@@ -169,7 +169,7 @@ export function Topbar({
         size="icon"
         onClick={onToggleSidebar}
         aria-label={sidebarCollapsed ? 'Expandir barra lateral' : 'Recolher barra lateral'}
-        className="hidden lg:inline-flex"
+        className="hidden xl:inline-flex"
       >
         {sidebarCollapsed ? (
           <PanelLeftOpen className="h-4 w-4" />
@@ -218,13 +218,13 @@ export function Topbar({
           variant="outline"
           onClick={onOpenCommandPalette}
           aria-label="Abrir busca e comandos"
-          className="h-9 w-9 shrink-0 justify-center border-border/60 bg-muted/60 px-0 font-normal text-muted-foreground sm:w-auto sm:min-w-[180px] sm:justify-between sm:px-3"
+          className="h-9 w-9 shrink-0 justify-center border-border/60 bg-muted/60 px-0 font-normal text-muted-foreground xl:w-auto xl:min-w-[180px] xl:justify-between xl:px-3"
         >
           <span className="flex items-center gap-2">
             <Search className="h-3.5 w-3.5" aria-hidden />
-            <span className="hidden sm:inline">Buscar ou executar…</span>
+            <span className="hidden xl:inline">Buscar ou executar…</span>
           </span>
-          <kbd className="hidden rounded border border-border/60 bg-background px-1.5 py-0.5 text-[11px] sm:inline">
+          <kbd className="hidden rounded border border-border/60 bg-background px-1.5 py-0.5 text-[11px] xl:inline">
             ⌘K
           </kbd>
         </Button>
