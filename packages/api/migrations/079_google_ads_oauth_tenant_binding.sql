@@ -8,6 +8,9 @@ UPDATE tracking_google_ads_oauth_connections
 SET user_id = connected_by
 WHERE user_id IS NULL;
 
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '30s';
+
 ALTER TABLE tracking_google_ads_oauth_connections
   ALTER COLUMN user_id SET NOT NULL;
 
