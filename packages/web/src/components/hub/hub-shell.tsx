@@ -8,7 +8,7 @@ import { MicroFooter } from './micro-footer';
 import { OfferContextProvider } from './offer-context-switcher';
 import { Sidebar } from './sidebar';
 import { Topbar } from './topbar';
-import { InterfaceThemeProvider, UserMenu } from './user-menu';
+import { UserMenu } from './user-menu';
 
 interface HubShellProps {
   children: ReactNode;
@@ -45,49 +45,47 @@ export function HubShell({ children, breadcrumb, topbarRight, fullBleed }: HubSh
   );
   return (
     <AuthGate>
-      <InterfaceThemeProvider>
-        <OfferContextProvider>
-          <a
-            href="#conteudo-principal"
-            className="fixed left-4 top-3 z-[100] -translate-y-20 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition focus:translate-y-0"
-          >
-            Pular para o conteúdo
-          </a>
-          <div className="flex h-dvh flex-col overflow-hidden">
-            <Topbar
-              breadcrumb={breadcrumb}
-              right={right}
-              sidebarCollapsed={sidebarCollapsed}
-              onToggleSidebar={toggleSidebar}
-              onOpenMobileNavigation={() => setMobileNavOpen(true)}
-              onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+      <OfferContextProvider>
+        <a
+          href="#conteudo-principal"
+          className="fixed left-4 top-3 z-[100] -translate-y-20 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition focus:translate-y-0"
+        >
+          Pular para o conteúdo
+        </a>
+        <div className="flex h-dvh flex-col overflow-hidden">
+          <Topbar
+            breadcrumb={breadcrumb}
+            right={right}
+            sidebarCollapsed={sidebarCollapsed}
+            onToggleSidebar={toggleSidebar}
+            onOpenMobileNavigation={() => setMobileNavOpen(true)}
+            onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+          />
+          <div className="flex flex-1 overflow-hidden">
+            <Sidebar
+              collapsed={sidebarCollapsed}
+              mobileOpen={mobileNavOpen}
+              onMobileOpenChange={setMobileNavOpen}
             />
-            <div className="flex flex-1 overflow-hidden">
-              <Sidebar
-                collapsed={sidebarCollapsed}
-                mobileOpen={mobileNavOpen}
-                onMobileOpenChange={setMobileNavOpen}
-              />
-              {fullBleed ? (
-                <div id="conteudo-principal" className="min-w-0 flex-1 overflow-hidden">
-                  {children}
-                </div>
-              ) : (
-                <main
-                  id="conteudo-principal"
-                  className="min-w-0 flex-1 scroll-smooth overflow-x-hidden overflow-y-auto p-4 pb-8"
-                >
-                  <div className="mx-auto w-full max-w-[1440px]">{children}</div>
-                  <MicroFooter />
-                </main>
-              )}
-            </div>
-            <FinancialPrivacyMask />
-            <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />
-            {fullBleed && <MicroFooter />}
+            {fullBleed ? (
+              <div id="conteudo-principal" className="min-w-0 flex-1 overflow-hidden">
+                {children}
+              </div>
+            ) : (
+              <main
+                id="conteudo-principal"
+                className="min-w-0 flex-1 scroll-smooth overflow-x-hidden overflow-y-auto p-4 pb-8"
+              >
+                <div className="mx-auto w-full max-w-[1440px]">{children}</div>
+                <MicroFooter />
+              </main>
+            )}
           </div>
-        </OfferContextProvider>
-      </InterfaceThemeProvider>
+          <FinancialPrivacyMask />
+          <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />
+          {fullBleed && <MicroFooter />}
+        </div>
+      </OfferContextProvider>
     </AuthGate>
   );
 }

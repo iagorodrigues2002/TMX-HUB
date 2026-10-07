@@ -1,5 +1,6 @@
 'use client';
 
+import { useInterfaceTheme } from '@/components/theme-provider';
 import { Button } from '@/components/ui/button';
 import { DataState } from '@/components/ui/data-state';
 import {
@@ -20,7 +21,6 @@ import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner';
 import { type NavItem, flattenNavItems } from './nav-config';
 import { OPEN_OFFER_SWITCHER_EVENT, useOfferContext } from './offer-context-switcher';
-import { useInterfaceTheme } from './user-menu';
 
 interface CommandPaletteProps {
   open: boolean;

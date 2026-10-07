@@ -5,14 +5,7 @@ import * as React from 'react';
 
 const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div
-      ref={ref}
-      className={cn(
-        'relative overflow-hidden rounded-2xl border border-cyan-100/[0.12] bg-[linear-gradient(145deg,rgba(12,32,43,.9),rgba(5,17,25,.88))] text-white shadow-[inset_0_1px_0_rgba(255,255,255,.025),0_22px_60px_rgba(0,0,0,.3)] backdrop-blur-xl',
-        className,
-      )}
-      {...props}
-    />
+    <div ref={ref} className={cn('glass-card text-card-foreground', className)} {...props} />
   ),
 );
 Card.displayName = 'Card';
@@ -28,7 +21,7 @@ const CardTitle = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivE
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn('font-semibold leading-none tracking-tight text-white', className)}
+      className={cn('font-semibold leading-none tracking-tight text-foreground', className)}
       {...props}
     />
   ),
@@ -37,7 +30,11 @@ CardTitle.displayName = 'CardTitle';
 
 const CardDescription = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn('text-[13px] leading-6 text-white/65', className)} {...props} />
+    <div
+      ref={ref}
+      className={cn('text-[13px] leading-6 text-muted-foreground', className)}
+      {...props}
+    />
   ),
 );
 CardDescription.displayName = 'CardDescription';

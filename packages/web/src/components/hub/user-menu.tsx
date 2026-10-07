@@ -1,5 +1,6 @@
 'use client';
 
+import { useInterfaceTheme } from '@/components/theme-provider';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -14,51 +15,6 @@ import { useAuth } from '@/lib/auth-context';
 import { usePrivacy } from '@/lib/privacy-context';
 import { Eye, EyeOff, KeyRound, LogOut, Moon, Sun } from 'lucide-react';
 import Link from 'next/link';
-import { type ReactNode, createContext, useContext, useEffect, useState } from 'react';
-
-type InterfaceTheme = 'dark' | 'light';
-
-interface InterfaceThemeContextValue {
-  theme: InterfaceTheme;
-  toggleTheme: () => void;
-}
-
-const InterfaceThemeContext = createContext<InterfaceThemeContextValue | null>(null);
-const THEME_STORAGE_KEY = 'tmx-ui.theme';
-
-export function InterfaceThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<InterfaceTheme>('dark');
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
-    setTheme(saved === 'light' ? 'light' : 'dark');
-    setHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    document.documentElement.dataset.theme = theme;
-    document.documentElement.style.colorScheme = theme;
-    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
-  }, [hydrated, theme]);
-
-  return (
-    <InterfaceThemeContext
-      value={{ theme, toggleTheme: () => setTheme((v) => (v === 'dark' ? 'light' : 'dark')) }}
-    >
-      {children}
-    </InterfaceThemeContext>
-  );
-}
-
-export function useInterfaceTheme() {
-  const context = useContext(InterfaceThemeContext);
-  if (!context) {
-    throw new Error('useInterfaceTheme must be used inside InterfaceThemeProvider');
-  }
-  return context;
-}
 
 export function UserMenu() {
   const { user, logout } = useAuth();
