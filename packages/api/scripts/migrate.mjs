@@ -125,13 +125,33 @@ for (const name of migrations) {
   if (applied) continue;
 
   const migration = await readFile(new URL(`../migrations/${name}`, import.meta.url), 'utf8');
-  await sql.begin(async (tx) => {
-    await tx.unsafe(migration);
-    await tx`
+  const runsConcurrently = /^\s*--\s*@concurrent\b/.test(migration);
+
+  if (runsConcurrently) {
+    // PostgreSQL forbids CREATE INDEX CONCURRENTLY inside a transaction. Run
+    // each top-level statement separately; IF NOT EXISTS makes retries safe if
+    // the process stops before the migration is recorded in the ledger.
+    const statements = migration
+      .split(/;\s*(?:\r?\n|$)/)
+      .map((statement) => statement.trim())
+      .filter(Boolean);
+
+    for (const statement of statements) {
+      await sql.unsafe(statement);
+    }
+    await sql`
       INSERT INTO app_schema_migrations (name)
       VALUES (${name})
     `;
-  });
+  } else {
+    await sql.begin(async (tx) => {
+      await tx.unsafe(migration);
+      await tx`
+        INSERT INTO app_schema_migrations (name)
+        VALUES (${name})
+      `;
+    });
+  }
   console.log(`Migration ${name} aplicada.`);
 }
 await sql.end();
