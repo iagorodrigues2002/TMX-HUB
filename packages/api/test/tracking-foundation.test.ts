@@ -51,6 +51,8 @@ describe('reliable tracking foundation', () => {
     expect(script).toContain('tmx_source_url');
     expect(script).toContain('_fbp');
     expect(script).toContain('_fbc');
+    expect(script).toContain('/v1/consent/record');
+    expect(script).toContain('window.tmx.consent');
   });
 
   it('bridges the VTurb SmartPlayer conversion key into checkout links', () => {

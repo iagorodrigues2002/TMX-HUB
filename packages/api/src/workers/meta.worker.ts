@@ -245,6 +245,9 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
         if (country && /^[a-z]{2}$/i.test(country)) {
           userData.country = [hash(country)];
         }
+        // TODO(LGPD consent gate): before outbound delivery, load
+        // tracking_consents for the visitor. For denied consent, keep only the
+        // hashed email identifier and omit phone, IP, UA, cookies and URL.
         const payload: Record<string, unknown> = {
           data: [
             {

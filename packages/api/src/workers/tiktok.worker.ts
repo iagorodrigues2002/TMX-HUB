@@ -117,6 +117,9 @@ export function createTikTokWorker(): Worker<TikTokJobData> | null {
     const currency = row.amount_brl_minor != null ? 'BRL' : row.currency;
     if (!row.test_event_code && (!row.order_id || !minor || !currency || !row.paid_at))
       throw new Error('TikTok: compra aprovada sem valor, moeda ou data.');
+    // TODO(LGPD consent gate): before outbound delivery, load
+    // tracking_consents for the visitor. For denied consent, keep only the
+    // hashed email identifier and omit phone, IP, UA, cookies and URL.
     const payload = buildTikTokPayload({
       pixelCode: row.pixel_code,
       eventId: row.event_id,
