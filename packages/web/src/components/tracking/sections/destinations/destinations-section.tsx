@@ -1,6 +1,8 @@
 'use client';
 
+import { GoogleAdsSection } from '@/components/tracking/sections/destinations/google-ads-section';
 import { MetaPixelsPanel } from '@/components/tracking/sections/destinations/meta-pixels-panel';
+import { TikTokSection } from '@/components/tracking/sections/destinations/tiktok-section';
 import {
   TrackingSectionContent,
   type TrackingSectionId,
@@ -23,11 +25,17 @@ export function DestinationsSection({
   return (
     <div className="space-y-5">
       {section === 'meta' && <MetaPixelsPanel offerId={offerId} canManage={canManage} />}
-      <TrackingSectionContent
-        offerId={offerId}
-        canManage={canManage}
-        section={DESTINATION_SECTION[section] ?? 'meta'}
-      />
+      {section === 'google-ads' ? (
+        <GoogleAdsSection offerId={offerId} />
+      ) : section === 'tiktok-ads' ? (
+        <TikTokSection offerId={offerId} />
+      ) : (
+        <TrackingSectionContent
+          offerId={offerId}
+          canManage={canManage}
+          section={DESTINATION_SECTION[section] ?? 'meta'}
+        />
+      )}
     </div>
   );
 }
