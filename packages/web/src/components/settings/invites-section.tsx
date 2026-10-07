@@ -1,13 +1,13 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Copy, Loader2, Mail, Plus, Trash2, UserPlus } from 'lucide-react';
-import { toast } from 'sonner';
-import { apiClient, type InviteView, type ToolKey } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { type InviteView, type ToolKey, apiClient } from '@/lib/api-client';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Copy, Loader2, Mail, Plus, Trash2, UserPlus } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { toast } from 'sonner';
 
 function inviteUrl(token: string): string {
   if (typeof window === 'undefined') return `/register?invite=${token}`;
@@ -281,7 +281,7 @@ export function InvitesSection() {
               key={inv.token}
               invite={inv}
               onRevoke={() => {
-                if (confirm(`Revogar convite ${inv.email || inv.token.slice(0, 8) + '…'}?`)) {
+                if (confirm(`Revogar convite ${inv.email || `${inv.token.slice(0, 8)}…`}?`)) {
                   revokeMut.mutate(inv.token);
                 }
               }}
@@ -306,10 +306,10 @@ function InviteRow({
 
   return (
     <li className="rounded-md border border-white/[0.06] bg-black/15 p-3">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex items-center gap-2">
-            <p className="text-[13px] font-semibold text-white">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="min-w-0 flex-1 truncate text-[13px] font-semibold text-white">
               {invite.email || invite.name || 'Convite sem destinatário'}
             </p>
             <span
@@ -340,7 +340,7 @@ function InviteRow({
             {invite.invitedBy && <> · por {invite.invitedBy}</>}
           </p>
         </div>
-        <div className="flex shrink-0 flex-col gap-1">
+        <div className="flex w-full shrink-0 flex-row gap-1 sm:w-auto sm:flex-col">
           <Button size="sm" variant="outline" onClick={() => copyText(url, 'Link')}>
             <Copy className="h-3 w-3" />
             Copiar

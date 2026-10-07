@@ -1,12 +1,12 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { type AuthUser, type ToolKey, apiClient } from '@/lib/api-client';
+import { useAuth } from '@/lib/auth-context';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Crown, Loader2, Pencil, Save, Shield, Trash2, Users as UsersIcon, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { apiClient, type AuthUser, type ToolKey } from '@/lib/api-client';
-import { useAuth } from '@/lib/auth-context';
-import { Button } from '@/components/ui/button';
 
 type AccessScope = 'full' | 'video-shield' | 'custom';
 
@@ -189,7 +189,9 @@ export function UsersSection() {
                         </span>
                       )}
                     </div>
-                    <p className="text-[11px] text-white/55">{u.email}</p>
+                    <p className="truncate text-[11px] text-white/55" title={u.email}>
+                      {u.email}
+                    </p>
                     <p className="text-[10px] text-white/40">
                       registrado em {formatDate(u.createdAt)}
                     </p>
