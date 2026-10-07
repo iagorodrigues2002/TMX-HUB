@@ -17,7 +17,6 @@ import {
   apiClient,
 } from '@/lib/api-client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import JSZip from 'jszip';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -63,6 +62,7 @@ function extOf(name: string): string {
  * prontos pra entrar como slots normais.
  */
 async function extractMediaFromZip(zipFile: File): Promise<File[]> {
+  const { default: JSZip } = await import('jszip');
   const buf = await zipFile.arrayBuffer();
   const zip = await JSZip.loadAsync(buf);
   const out: File[] = [];
@@ -232,6 +232,7 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
 
     setExtractingZips((n) => n + zipFiles.length);
     try {
+      const { default: JSZip } = await import('jszip');
       const results = await Promise.allSettled(
         zipFiles.map(async (zip) => {
           try {

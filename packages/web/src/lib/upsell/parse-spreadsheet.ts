@@ -1,5 +1,3 @@
-import * as XLSX from 'xlsx';
-
 export interface ParsedSheet {
   /** Header row, in original order. */
   columns: string[];
@@ -14,6 +12,7 @@ export interface ParsedSheet {
  * normalizes values to trimmed strings so downstream comparison is simple.
  */
 export async function parseSpreadsheet(file: File): Promise<ParsedSheet> {
+  const XLSX = await import('xlsx');
   const buf = await file.arrayBuffer();
   // raw: false → XLSX formats numbers/dates to display strings (matches what
   // the user sees in Excel). cellDates ensures Date objects get a string repr.
