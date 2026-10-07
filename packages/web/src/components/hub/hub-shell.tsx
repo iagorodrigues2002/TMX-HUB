@@ -2,6 +2,7 @@
 
 import { AuthGate } from '@/components/auth/auth-gate';
 import { type ReactNode, useEffect, useState } from 'react';
+import { CommandPalette } from './command-palette';
 import { FinancialPrivacyMask } from './financial-privacy-mask';
 import { MicroFooter } from './micro-footer';
 import { OfferContextProvider } from './offer-context-switcher';
@@ -20,6 +21,7 @@ interface HubShellProps {
 export function HubShell({ children, breadcrumb, topbarRight, fullBleed }: HubShellProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
   useEffect(() => {
     setSidebarCollapsed(window.localStorage.getItem('tmx-ui.sidebar.collapsed') === 'true');
@@ -58,6 +60,7 @@ export function HubShell({ children, breadcrumb, topbarRight, fullBleed }: HubSh
               sidebarCollapsed={sidebarCollapsed}
               onToggleSidebar={toggleSidebar}
               onOpenMobileNavigation={() => setMobileNavOpen(true)}
+              onOpenCommandPalette={() => setCommandPaletteOpen(true)}
             />
             <div className="flex flex-1 overflow-hidden">
               <Sidebar
@@ -80,6 +83,7 @@ export function HubShell({ children, breadcrumb, topbarRight, fullBleed }: HubSh
               )}
             </div>
             <FinancialPrivacyMask />
+            <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />
             {fullBleed && <MicroFooter />}
           </div>
         </OfferContextProvider>
