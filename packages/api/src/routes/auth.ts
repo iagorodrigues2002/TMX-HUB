@@ -288,7 +288,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           : {}),
       });
 
-      const acceptUrl = `${env.INVITE_ACCEPT_URL_BASE}/${invite.token}`;
+      const acceptUrl = `${env.INVITE_ACCEPT_URL_BASE}?invite=${invite.token}`;
       const inviterName = me?.name ?? req.user.sub;
       const roleLabel = 'Membro';
       const expiresIn = `${days} ${days === 1 ? 'dia' : 'dias'}`;
@@ -352,7 +352,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
       const me = await app.userStore.maybeGetById(req.user.sub);
       const inviterName = me?.name ?? req.user.sub;
-      const acceptUrl = `${env.INVITE_ACCEPT_URL_BASE}/${invite.token}`;
+      const acceptUrl = `${env.INVITE_ACCEPT_URL_BASE}?invite=${invite.token}`;
       const expiresAt = new Date(invite.expiresAt);
       const daysLeft = Math.max(
         1,

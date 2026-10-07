@@ -85,8 +85,9 @@ const EnvSchema = z.object({
   BREVO_API_KEY: z.string().optional(),
   BREVO_SENDER_EMAIL: z.string().email().default('convites@theminex.com'),
   BREVO_SENDER_NAME: z.string().default('TMX Hub'),
-  // Base URL for the invite accept link — e.g. https://app.theminex.com/invite
-  INVITE_ACCEPT_URL_BASE: z.string().default('http://localhost:3100/invite'),
+  // Base URL for the invite accept link — e.g. https://app.theminex.com/register
+  // The token is appended as ?invite=TOKEN (register page reads window.location.search).
+  INVITE_ACCEPT_URL_BASE: z.string().default('http://localhost:3100/register'),
 
   // AssemblyAI — used by /v1/shield-jobs to verify the protected output is
   // un-transcribable. Optional; if missing, verification is silently skipped.
