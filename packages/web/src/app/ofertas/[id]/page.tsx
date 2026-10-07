@@ -330,15 +330,15 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
         </Button>
       </div>
 
-      <header className="mb-6 flex items-start justify-between gap-4">
-        <div className="space-y-2">
+      <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1 space-y-2">
           <div className="flex items-center gap-2">
             <Target className="h-5 w-5 text-cyan-300" />
             <p className="hud-label">Oferta</p>
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-white">{offerName}</h1>
+          <h1 className="break-words text-3xl font-bold tracking-tight text-white">{offerName}</h1>
           {offer?.dashboardId && canManage && (
-            <p className="font-mono text-xs text-white/40">
+            <p className="break-all font-mono text-xs text-white/40">
               utmify dashboardId: {offer.dashboardId} · moeda: {currency}
             </p>
           )}
@@ -489,7 +489,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-xs">
+                <table className="w-full min-w-[900px] text-xs">
                   <thead className="bg-white/[0.03] text-left text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
                     <tr>
                       <th className="px-3 py-2">Anúncio</th>
@@ -553,7 +553,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-xs">
+                <table className="w-full min-w-[860px] text-xs">
                   <thead className="bg-white/[0.03] text-left text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
                     <tr>
                       <th className="px-3 py-2">Data</th>
@@ -612,7 +612,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                 </span>
               </header>
               <div className="overflow-x-auto">
-                <table className="w-full text-xs">
+                <table className="w-full min-w-[760px] text-xs">
                   <thead className="bg-white/[0.03] text-left text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
                     <tr>
                       <th className="px-3 py-2">Adset</th>
@@ -952,7 +952,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
 
             {filteredIntradayAds.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="w-full text-xs">
+                <table className="w-full min-w-[900px] text-xs">
                   <thead className="bg-white/[0.03] text-left text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
                     <tr>
                       <th className="px-4 py-3">Anúncio</th>
@@ -1053,7 +1053,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
 
               {leftAdWindow?.adsAvailable && rightAdWindow?.adsAvailable ? (
                 <div className="overflow-x-auto border-t border-white/[0.05]">
-                  <table className="w-full text-xs">
+                  <table className="w-full min-w-[980px] text-xs">
                     <thead className="bg-white/[0.03] text-[10px] font-semibold uppercase tracking-[0.14em] text-white/50">
                       <tr>
                         <th rowSpan={2} className="px-4 py-3 text-left">
