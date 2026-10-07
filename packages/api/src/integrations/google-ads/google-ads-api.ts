@@ -4,6 +4,9 @@ import { GOOGLE_ADS_SCOPE, type GoogleOAuthConfig } from './oauth.js';
 const TokenResponse = z.object({ access_token: z.string().min(1), token_type: z.string().min(1) });
 const AccountsResponse = z.object({ resourceNames: z.array(z.string()).default([]) });
 
+export const GOOGLE_ADS_API_VERSION = 'v25';
+const GOOGLE_ADS_API_BASE_URL = `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}`;
+
 export type GoogleAdsAccount = {
   customer_id: string;
   name: string;
@@ -15,8 +18,10 @@ export async function refreshGoogleAccessToken(config: GoogleOAuthConfig, refres
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      grant_type: 'refresh_token', client_id: config.clientId,
-      client_secret: config.clientSecret, refresh_token: refreshToken,
+      grant_type: 'refresh_token',
+      client_id: config.clientId,
+      client_secret: config.clientSecret,
+      refresh_token: refreshToken,
     }),
     signal: AbortSignal.timeout(15_000),
   });
@@ -43,22 +48,38 @@ function googleAdsHeaders(accessToken: string, loginCustomerId?: string) {
 export async function listGoogleAdsAccounts(input: {
   accessToken: string;
 }) {
-  const rootsResponse = await fetch('https://googleads.googleapis.com/v22/customers:listAccessibleCustomers', {
-    headers: googleAdsHeaders(input.accessToken), signal: AbortSignal.timeout(20_000),
-  });
+  const rootsResponse = await fetch(
+    `${GOOGLE_ADS_API_BASE_URL}/customers:listAccessibleCustomers`,
+    {
+      headers: googleAdsHeaders(input.accessToken),
+      signal: AbortSignal.timeout(20_000),
+    },
+  );
   const roots = AccountsResponse.safeParse(await rootsResponse.json().catch(() => null));
   if (!rootsResponse.ok || !roots.success) throw new Error('google_ads_accounts_unavailable');
-  const rootIds = roots.data.resourceNames.map(v => v.match(/^customers\/(\d{10})$/)?.[1]).filter((v): v is string => Boolean(v));
+  const rootIds = roots.data.resourceNames
+    .map((v) => v.match(/^customers\/(\d{10})$/)?.[1])
+    .filter((v): v is string => Boolean(v));
   const accounts = new Map<string, GoogleAdsAccount>();
 
   async function searchCustomer(customerId: string, loginCustomerId?: string) {
-    const response = await fetch(`https://googleads.googleapis.com/v22/customers/${customerId}/googleAds:searchStream`, {
-      method: 'POST', headers: googleAdsHeaders(input.accessToken, loginCustomerId),
-      body: JSON.stringify({
-        query: 'SELECT customer_client.id, customer_client.descriptive_name, customer_client.manager, customer_client.status FROM customer_client WHERE customer_client.status = \'ENABLED\'',
-      }), signal: AbortSignal.timeout(20_000),
-    });
-    const payload = await response.json().catch(() => null) as Array<{ results?: Array<{ customerClient?: { id?: string; descriptiveName?: string; manager?: boolean } }> }> | null;
+    const response = await fetch(
+      `${GOOGLE_ADS_API_BASE_URL}/customers/${customerId}/googleAds:searchStream`,
+      {
+        method: 'POST',
+        headers: googleAdsHeaders(input.accessToken, loginCustomerId),
+        body: JSON.stringify({
+          query:
+            "SELECT customer_client.id, customer_client.descriptive_name, customer_client.manager, customer_client.status FROM customer_client WHERE customer_client.status = 'ENABLED'",
+        }),
+        signal: AbortSignal.timeout(20_000),
+      },
+    );
+    const payload = (await response.json().catch(() => null)) as Array<{
+      results?: Array<{
+        customerClient?: { id?: string; descriptiveName?: string; manager?: boolean };
+      }>;
+    }> | null;
     return { ok: response.ok && Array.isArray(payload), payload };
   }
 
@@ -75,11 +96,16 @@ export async function listGoogleAdsAccounts(input: {
       accounts.set(rootId, { customer_id: rootId, name: `Conta ${rootId}`, manager: false });
       continue;
     }
-    for (const batch of result.payload ?? []) for (const row of batch.results ?? []) {
-      const account = row.customerClient;
-      if (!account?.id || !/^\d{10}$/.test(account.id)) continue;
-      accounts.set(account.id, { customer_id: account.id, name: account.descriptiveName?.trim() || `Conta ${account.id}`, manager: Boolean(account.manager) });
-    }
+    for (const batch of result.payload ?? [])
+      for (const row of batch.results ?? []) {
+        const account = row.customerClient;
+        if (!account?.id || !/^\d{10}$/.test(account.id)) continue;
+        accounts.set(account.id, {
+          customer_id: account.id,
+          name: account.descriptiveName?.trim() || `Conta ${account.id}`,
+          manager: Boolean(account.manager),
+        });
+      }
   }
   return [...accounts.values()].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
 }
