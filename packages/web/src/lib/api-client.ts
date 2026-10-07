@@ -2026,7 +2026,7 @@ export const apiClient = {
     });
   },
 
-  async listVendepayReceipts(id: string): Promise<{
+  async listVendepayReceipts(id: string, connectionId?: string): Promise<{
     receipts: Array<{
       id: string;
       connection_id: string;
@@ -2043,7 +2043,17 @@ export const apiClient = {
       product?: Record<string, string>;
     }>;
   }> {
-    return request(`/v1/offers/${id}/tracking/vendepay/receipts`);
+    const query = connectionId ? `?connection_id=${encodeURIComponent(connectionId)}` : '';
+    return request(`/v1/offers/${id}/tracking/vendepay/receipts${query}`);
+  },
+
+  async backfillTrackingReversals(id: string): Promise<{
+    inspected: number;
+    recognized: number;
+    updated: number;
+    missing_order: number;
+  }> {
+    return request(`/v1/offers/${id}/tracking/orders/backfill-reversals`, { method: 'POST' });
   },
 
   async getTrackingSummary(

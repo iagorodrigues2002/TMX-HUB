@@ -1541,11 +1541,26 @@ export function TrackingAdvancedCenter({
     onError: (error) => toast.error((error as Error).message),
   });
   const vendepayReceipts = useQuery({
-    queryKey: ['tracking-vendepay-receipts', offerId],
-    queryFn: () => apiClient.listVendepayReceipts(offerId),
-    enabled: section === 'gateways' && Boolean(config.data?.configured),
+    queryKey: ['tracking-vendepay-receipts', offerId, selectedVendepayConnectionId],
+    queryFn: () => apiClient.listVendepayReceipts(offerId, selectedVendepayConnectionId || undefined),
+    enabled:
+      section === 'gateways' &&
+      Boolean(config.data?.configured) &&
+      Boolean(selectedVendepayConnectionId),
     refetchInterval: 30_000,
     retry: false,
+  });
+  const backfillReversals = useMutation({
+    mutationFn: () => apiClient.backfillTrackingReversals(offerId),
+    onSuccess: (result) => {
+      void qc.invalidateQueries({ queryKey: ['tracking-vendepay-receipts', offerId] });
+      void qc.invalidateQueries({ queryKey: ['tracking-summary', offerId] });
+      void qc.invalidateQueries({ queryKey: ['tracking-refunds', offerId] });
+      toast.success(
+        `${result.updated} reversão(ões) atualizada(s) de ${result.recognized} evento(s) reconhecido(s).`,
+      );
+    },
+    onError: (error) => toast.error((error as Error).message),
   });
   useEffect(() => {
     const connections = config.data?.vendepay?.connections ?? [];
@@ -2898,7 +2913,22 @@ export function TrackingAdvancedCenter({
                 </div>
               )}
               <div className="mt-6">
-                <p className="hud-label">Últimos webhooks da Vendepay</p>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="hud-label">Últimos webhooks da Vendepay</p>
+                    <p className="mt-1 text-xs text-white/40">
+                      Exibindo somente {selectedVendepayConnection?.name ?? 'a conta selecionada'}.
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={backfillReversals.isPending}
+                    onClick={() => backfillReversals.mutate()}
+                  >
+                    {backfillReversals.isPending ? 'Reprocessando…' : 'Reprocessar reembolsos e chargebacks'}
+                  </Button>
+                </div>
                 <div className="mt-3 space-y-2">
                   {(vendepayReceipts.data?.receipts ?? []).slice(0, 20).map((receipt) => (
                     <div

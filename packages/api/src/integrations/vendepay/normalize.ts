@@ -147,7 +147,11 @@ const normalizeStatus = (raw = ''): VendepayStatus => {
   )
     return 'refused';
   if (['refunded', 'refund', 'reembolsado'].includes(status)) return 'refunded';
-  if (['chargeback', 'dispute'].includes(status)) return 'chargeback';
+  // VendePay's transaction ledger labels this lifecycle event simply as
+  // "Charge" (with the human description "Taxa de chargeback"). Treat it
+  // exactly like the explicit webhook spellings so the original order is
+  // updated instead of remaining with an unknown status.
+  if (['chargeback', 'charge', 'dispute'].includes(status)) return 'chargeback';
   if (['cancelled', 'canceled', 'cancelado'].includes(status)) return 'cancelled';
   if (['carrinho.abandonado', 'carrinho_abandonado', 'abandonado'].includes(status))
     return 'abandoned';

@@ -276,6 +276,21 @@ describe('normalizeVendepay', () => {
     },
   );
 
+  it.each(['Charge', 'charge', 'chargeback', 'dispute'])(
+    'normaliza o evento %s da Vendepay como chargeback',
+    (type) => {
+      const result = normalizeVendepay({
+        transaction_id: `chargeback-${type}`,
+        type,
+        amount: '24.64',
+        currency: 'USD',
+      });
+      expect(result.kind).toBe('processable');
+      if (result.kind !== 'processable') return;
+      expect(result.event.status).toBe('chargeback');
+    },
+  );
+
   it('coloca payload sem transação em quarentena', () => {
     const result = normalizeVendepay({ event: 'something', status: 'unknown' });
     expect(result.kind).toBe('quarantined');
