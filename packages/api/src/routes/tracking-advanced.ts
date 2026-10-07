@@ -106,17 +106,38 @@ const EntryLinkAbSchema = z.object({
     )
     .length(2),
 });
-const VturbConfigSchema = z.object({
-  enabled: z.boolean(),
-  analytics_api_token: z.string().trim().min(20).max(512).optional(),
-  endpoint_url: z.string().url().max(2048).optional().or(z.literal('')),
-  player_id: z.string().trim().max(128).optional().nullable(),
-  conversion_param: z
-    .string()
-    .trim()
-    .regex(/^[a-zA-Z0-9_]{1,32}$/)
-    .default('vtid'),
-});
+const VturbConfigSchema = z
+  .object({
+    enabled: z.boolean(),
+    analytics_api_token: z.string().trim().min(20).max(512).optional(),
+    endpoint_url: z.string().url().max(2048).optional().or(z.literal('')),
+    player_id: z.string().trim().max(128).optional().nullable(),
+    comparison_group_id: z.string().trim().max(128).optional().nullable(),
+    conversion_param: z
+      .string()
+      .trim()
+      .regex(/^[a-zA-Z0-9_]{1,32}$/)
+      .default('vtid'),
+  })
+  .refine((value) => !(value.player_id && value.comparison_group_id), {
+    message: 'Selecione uma VSL ou um teste A/B, nunca os dois.',
+    path: ['comparison_group_id'],
+  });
+type VturbPlayer = { id: string; name: string; pitch_time: number; duration: number };
+type VturbComparisonGroup = {
+  id: string;
+  name: string;
+  player_ids: string[];
+  players: Array<{
+    player_id: string;
+    traffic_percentage: number;
+    started_at: string | null;
+    locked: boolean;
+  }>;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+};
 const ProductKindSchema = z.object({
   product_id: z.string().trim().min(1).max(256),
   kind: z.string().regex(/^(front|upsell|upsell_[2-9][0-9]*)$/),
@@ -189,7 +210,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         FROM tracking_entry_links
         WHERE project_id=${p.id}
         ORDER BY created_at DESC`,
-        app.db`SELECT enabled, endpoint_url, player_id, conversion_param,
+        app.db`SELECT enabled, endpoint_url, player_id, comparison_group_id, conversion_param,
                     (analytics_token_encrypted IS NOT NULL) AS analytics_token_configured,
                     last_validated_at,last_error,updated_at
                FROM vturb_integrations WHERE project_id=${p.id}`,
@@ -236,12 +257,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (value.endpoint_url) {
         const endpoint = new URL(value.endpoint_url);
         if (endpoint.protocol !== 'https:' || endpoint.hostname !== 'tracker.vturb.com')
-          return reply
-            .code(422)
-            .send({
-              error: 'vturb_endpoint_invalid',
-              detail: 'Use o webhook HTTPS gerado em tracker.vturb.com.',
-            });
+          return reply.code(422).send({
+            error: 'vturb_endpoint_invalid',
+            detail: 'Use o webhook HTTPS gerado em tracker.vturb.com.',
+          });
       }
       const [existing] = await app.db<Array<{ analytics_token_encrypted: string | null }>>`
         SELECT analytics_token_encrypted FROM vturb_integrations WHERE project_id=${p.id}
@@ -251,30 +270,36 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       const encryptedToken = value.analytics_api_token
         ? encryptSecret(value.analytics_api_token, env.TRACKING_ENCRYPTION_KEY)
         : existing!.analytics_token_encrypted;
-      let players: Array<{ id: string; name: string; pitch_time: number; duration: number }> = [];
+      let players: VturbPlayer[] = [];
+      let comparisonGroups: VturbComparisonGroup[] = [];
       try {
-        players = await vturbAnalyticsRequest(
-          value.analytics_api_token ?? decryptSecret(encryptedToken!, env.TRACKING_ENCRYPTION_KEY),
-          '/players/list?timezone=America%2FSao_Paulo',
-        );
+        const token =
+          value.analytics_api_token ?? decryptSecret(encryptedToken!, env.TRACKING_ENCRYPTION_KEY);
+        [players, comparisonGroups] = await Promise.all([
+          vturbAnalyticsRequest<VturbPlayer[]>(token, '/players/list?timezone=America%2FSao_Paulo'),
+          vturbAnalyticsRequest<VturbComparisonGroup[]>(token, '/comparison_groups/list', {}),
+        ]);
       } catch (error) {
-        return reply
-          .code(422)
-          .send({
-            error: 'vturb_validation_failed',
-            detail: error instanceof Error ? error.message : String(error),
-          });
+        return reply.code(422).send({
+          error: 'vturb_validation_failed',
+          detail: error instanceof Error ? error.message : String(error),
+        });
       }
       if (value.player_id && !players.some((player) => player.id === value.player_id))
         return reply.code(422).send({ error: 'vturb_player_not_found' });
+      if (
+        value.comparison_group_id &&
+        !comparisonGroups.some((group) => group.id === value.comparison_group_id)
+      )
+        return reply.code(422).send({ error: 'vturb_comparison_group_not_found' });
       await app.db`
-        INSERT INTO vturb_integrations(project_id,enabled,endpoint_url,analytics_token_encrypted,player_id,conversion_param,last_validated_at,last_error)
-        VALUES(${p.id},${value.enabled},${value.endpoint_url || null},${encryptedToken},${value.player_id || null},${value.conversion_param ?? 'vtid'},now(),NULL)
+        INSERT INTO vturb_integrations(project_id,enabled,endpoint_url,analytics_token_encrypted,player_id,comparison_group_id,conversion_param,last_validated_at,last_error)
+        VALUES(${p.id},${value.enabled},${value.endpoint_url || null},${encryptedToken},${value.player_id || null},${value.comparison_group_id || null},${value.conversion_param ?? 'vtid'},now(),NULL)
         ON CONFLICT(project_id) DO UPDATE SET enabled=EXCLUDED.enabled,endpoint_url=EXCLUDED.endpoint_url,
-          analytics_token_encrypted=EXCLUDED.analytics_token_encrypted,player_id=EXCLUDED.player_id,
+          analytics_token_encrypted=EXCLUDED.analytics_token_encrypted,player_id=EXCLUDED.player_id,comparison_group_id=EXCLUDED.comparison_group_id,
           conversion_param=EXCLUDED.conversion_param,last_validated_at=now(),last_error=NULL,updated_at=now()
       `;
-      return { ok: true, players };
+      return { ok: true, players, comparison_groups: comparisonGroups };
     },
   );
 
@@ -284,46 +309,89 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!p || !env.TRACKING_ENCRYPTION_KEY)
       return reply.code(404).send({ error: 'vturb_not_configured' });
     const [integration] = await app.db<
-      Array<{ analytics_token_encrypted: string | null; player_id: string | null }>
+      Array<{
+        analytics_token_encrypted: string | null;
+        player_id: string | null;
+        comparison_group_id: string | null;
+      }>
     >`
-      SELECT analytics_token_encrypted,player_id FROM vturb_integrations WHERE project_id=${p.id}
+      SELECT analytics_token_encrypted,player_id,comparison_group_id FROM vturb_integrations WHERE project_id=${p.id}
     `;
-    if (!integration?.analytics_token_encrypted) return { players: [], selected_player_id: null };
+    if (!integration?.analytics_token_encrypted)
+      return {
+        players: [],
+        comparison_groups: [],
+        selected_player_id: null,
+        selected_comparison_group_id: null,
+      };
     const token = decryptSecret(integration.analytics_token_encrypted, env.TRACKING_ENCRYPTION_KEY);
-    const players = await vturbAnalyticsRequest(
-      token,
-      '/players/list?timezone=America%2FSao_Paulo',
-    );
-    return { players, selected_player_id: integration.player_id };
+    const [players, comparisonGroups] = await Promise.all([
+      vturbAnalyticsRequest<VturbPlayer[]>(token, '/players/list?timezone=America%2FSao_Paulo'),
+      vturbAnalyticsRequest<VturbComparisonGroup[]>(token, '/comparison_groups/list', {}),
+    ]);
+    return {
+      players,
+      comparison_groups: comparisonGroups,
+      selected_player_id: integration.player_id,
+      selected_comparison_group_id: integration.comparison_group_id,
+    };
   });
 
   app.get<{
     Params: { id: string };
-    Querystring: { from?: string; to?: string; player_id?: string };
+    Querystring: { from?: string; to?: string; player_id?: string; comparison_group_id?: string };
   }>('/offers/:id/tracking/vturb/analytics', async (req, reply) => {
     const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin');
     if (!app.db) return reply.code(503).send(databaseUnavailable);
     if (!p || !env.TRACKING_ENCRYPTION_KEY)
       return reply.code(404).send({ error: 'vturb_not_configured' });
     const [integration] = await app.db<
-      Array<{ analytics_token_encrypted: string | null; player_id: string | null }>
+      Array<{
+        analytics_token_encrypted: string | null;
+        player_id: string | null;
+        comparison_group_id: string | null;
+      }>
     >`
-        SELECT analytics_token_encrypted,player_id FROM vturb_integrations WHERE project_id=${p.id}
+        SELECT analytics_token_encrypted,player_id,comparison_group_id FROM vturb_integrations WHERE project_id=${p.id}
       `;
     if (!integration?.analytics_token_encrypted)
       return reply.code(422).send({ error: 'vturb_api_token_required' });
     const token = decryptSecret(integration.analytics_token_encrypted, env.TRACKING_ENCRYPTION_KEY);
-    const players = await vturbAnalyticsRequest<
-      Array<{ id: string; name: string; pitch_time: number; duration: number }>
-    >(token, '/players/list?timezone=America%2FSao_Paulo');
-    const playerId = req.query.player_id || integration.player_id;
-    const player = players.find((item) => item.id === playerId);
-    if (!player) return reply.code(422).send({ error: 'vturb_player_required' });
+    const [players, comparisonGroups] = await Promise.all([
+      vturbAnalyticsRequest<VturbPlayer[]>(token, '/players/list?timezone=America%2FSao_Paulo'),
+      vturbAnalyticsRequest<VturbComparisonGroup[]>(token, '/comparison_groups/list', {}),
+    ]);
     const validDate = (value: string | undefined, fallback: string) =>
       /^\d{4}-\d{2}-\d{2}$/.test(value ?? '') ? value! : fallback;
     const today = saoPauloParts(new Date()).date;
     const from = validDate(req.query.from, today);
     const to = validDate(req.query.to, today);
+    const comparisonGroupId = req.query.comparison_group_id || integration.comparison_group_id;
+    if (comparisonGroupId) {
+      const comparisonGroup = comparisonGroups.find((group) => group.id === comparisonGroupId);
+      if (!comparisonGroup)
+        return reply.code(422).send({ error: 'vturb_comparison_group_not_found' });
+      const items = comparisonGroup.player_ids.slice(0, 2).map((player_id) => ({
+        player_id,
+        start_date: `${from} 00:00:00`,
+        end_date: `${to} 23:59:59`,
+      }));
+      if (!items.length) return reply.code(422).send({ error: 'vturb_comparison_group_empty' });
+      const stats = await vturbAnalyticsRequest<Record<string, unknown>>(
+        token,
+        '/comparison_groups/stats',
+        { comparison_group_id: comparisonGroup.id, items, timezone: 'America/Sao_Paulo' },
+      );
+      return {
+        kind: 'comparison_group' as const,
+        comparison_group: comparisonGroup,
+        period: { from, to },
+        stats,
+      };
+    }
+    const playerId = req.query.player_id || integration.player_id;
+    const player = players.find((item) => item.id === playerId);
+    if (!player) return reply.code(422).send({ error: 'vturb_player_required' });
     const body = {
       player_id: player.id,
       start_date: `${from} 00:00:00`,
@@ -451,41 +519,39 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get<{
     Params: { id: string };
     Querystring: { from?: string; to?: string; all?: string; limit?: string; offset?: string };
-  }>(
-    '/offers/:id/tracking/upsell-identities',
-    async (req, reply) => {
-      const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin');
-      if (!app.db) return reply.code(503).send(databaseUnavailable);
-      if (!p) return { items: [], total: 0, limit: 50, offset: 0 };
-      if (!env.TRACKING_ENCRYPTION_KEY) {
-        return reply.code(503).send({ error: 'tracking_encryption_unavailable' });
-      }
-      const today = saoPauloParts(new Date()).date;
-      const fromDate = /^\d{4}-\d{2}-\d{2}$/.test(req.query.from ?? '') ? req.query.from! : today;
-      const toDate = /^\d{4}-\d{2}-\d{2}$/.test(req.query.to ?? '') ? req.query.to! : fromDate;
-      const fromInstant = new Date(saoPauloDayRange(fromDate).from);
-      const toInstant = new Date(saoPauloDayRange(toDate).to);
-      const allHistory = req.query.all === 'true';
-      const requestedLimit = Number(req.query.limit ?? 50);
-      const requestedOffset = Number(req.query.offset ?? 0);
-      const limit = Number.isFinite(requestedLimit)
-        ? Math.min(100, Math.max(10, Math.floor(requestedLimit)))
-        : 50;
-      const offset = Number.isFinite(requestedOffset) ? Math.max(0, Math.floor(requestedOffset)) : 0;
-      const [approvedReceipts, stages, manualResults, totals] = await Promise.all([
-        app.db<
-          Array<{
-            id: string;
-            visitor_id: string | null;
-            external_id: string;
-            paid_at: Date;
-            connection_id: string | null;
-            connection_name: string;
-            confirmed_vendid_encrypted: string | null;
-            has_upsell: boolean;
-            purchased_stage_keys: string[];
-          }>
-        >`
+  }>('/offers/:id/tracking/upsell-identities', async (req, reply) => {
+    const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin');
+    if (!app.db) return reply.code(503).send(databaseUnavailable);
+    if (!p) return { items: [], total: 0, limit: 50, offset: 0 };
+    if (!env.TRACKING_ENCRYPTION_KEY) {
+      return reply.code(503).send({ error: 'tracking_encryption_unavailable' });
+    }
+    const today = saoPauloParts(new Date()).date;
+    const fromDate = /^\d{4}-\d{2}-\d{2}$/.test(req.query.from ?? '') ? req.query.from! : today;
+    const toDate = /^\d{4}-\d{2}-\d{2}$/.test(req.query.to ?? '') ? req.query.to! : fromDate;
+    const fromInstant = new Date(saoPauloDayRange(fromDate).from);
+    const toInstant = new Date(saoPauloDayRange(toDate).to);
+    const allHistory = req.query.all === 'true';
+    const requestedLimit = Number(req.query.limit ?? 50);
+    const requestedOffset = Number(req.query.offset ?? 0);
+    const limit = Number.isFinite(requestedLimit)
+      ? Math.min(100, Math.max(10, Math.floor(requestedLimit)))
+      : 50;
+    const offset = Number.isFinite(requestedOffset) ? Math.max(0, Math.floor(requestedOffset)) : 0;
+    const [approvedReceipts, stages, manualResults, totals] = await Promise.all([
+      app.db<
+        Array<{
+          id: string;
+          visitor_id: string | null;
+          external_id: string;
+          paid_at: Date;
+          connection_id: string | null;
+          connection_name: string;
+          confirmed_vendid_encrypted: string | null;
+          has_upsell: boolean;
+          purchased_stage_keys: string[];
+        }>
+      >`
           SELECT o.id,o.visitor_id,o.external_id,o.paid_at,
                  o.vendepay_connection_id AS connection_id,
                  COALESCE(vc.name,'Vendepay') AS connection_name,
@@ -540,87 +606,86 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           ORDER BY o.paid_at DESC,o.updated_at DESC
           LIMIT ${limit} OFFSET ${offset}
         `,
-        app.db<
-          Array<{
-            id: string;
-            stage_key: string;
-            name: string;
-            slug: string;
-            destination_url: string;
-            connection_destinations: Record<string, string> | null;
-          }>
-        >`
+      app.db<
+        Array<{
+          id: string;
+          stage_key: string;
+          name: string;
+          slug: string;
+          destination_url: string;
+          connection_destinations: Record<string, string> | null;
+        }>
+      >`
           SELECT id,stage_key,name,slug,destination_url,connection_destinations
           FROM tracking_upsell_stages
           WHERE project_id=${p.id} AND enabled=true
           ORDER BY substring(stage_key from '[0-9]+')::int
         `,
-        app.db<
-          Array<{
-            order_id: string;
-            stage_id: string;
-            result: 'worked' | 'failed';
-            checked_at: Date;
-          }>
-        >`
+      app.db<
+        Array<{
+          order_id: string;
+          stage_id: string;
+          result: 'worked' | 'failed';
+          checked_at: Date;
+        }>
+      >`
           SELECT order_id,stage_id,result,checked_at
           FROM tracking_upsell_manual_test_results
           WHERE project_id=${p.id}
         `,
-        app.db<Array<{ total: number }>>`
+      app.db<Array<{ total: number }>>`
           SELECT count(*)::int AS total
           FROM tracking_orders
           WHERE project_id=${p.id} AND order_kind='front' AND paid_at IS NOT NULL
             AND (${allHistory} OR (paid_at >= ${fromInstant} AND paid_at < ${toInstant}))
         `,
-      ]);
-      reply.header('cache-control', 'no-store');
-      const resultByOrderStage = new Map(
-        manualResults.map((result) => [`${result.order_id}:${result.stage_id}`, result] as const),
-      );
-      const items = approvedReceipts.map((receipt) => {
-        let vendid: string | undefined;
-        if (receipt.confirmed_vendid_encrypted) {
-          try {
-            vendid = decryptSecret(receipt.confirmed_vendid_encrypted, env.TRACKING_ENCRYPTION_KEY!);
-          } catch {
-            vendid = undefined;
-          }
+    ]);
+    reply.header('cache-control', 'no-store');
+    const resultByOrderStage = new Map(
+      manualResults.map((result) => [`${result.order_id}:${result.stage_id}`, result] as const),
+    );
+    const items = approvedReceipts.map((receipt) => {
+      let vendid: string | undefined;
+      if (receipt.confirmed_vendid_encrypted) {
+        try {
+          vendid = decryptSecret(receipt.confirmed_vendid_encrypted, env.TRACKING_ENCRYPTION_KEY!);
+        } catch {
+          vendid = undefined;
         }
-        const vendidConfirmed = Boolean(vendid);
-        const displayId = vendid ?? receipt.external_id;
-        return {
-          id: receipt.id,
-          visitor_id: receipt.visitor_id ?? '',
-          vendid: displayId,
-          vendid_confirmed: vendidConfirmed,
-          approved_at: receipt.paid_at,
-          connection_name: receipt.connection_name,
-          has_upsell: receipt.has_upsell,
-          first_seen_at: receipt.paid_at,
-          last_seen_at: receipt.paid_at,
-          links: vendidConfirmed
-            ? stages.map((stage) => {
-                const validatedLink = new URL(upsellUrl(stage.slug));
-                validatedLink.searchParams.set('vendaId', displayId);
-                const manualResult = resultByOrderStage.get(`${receipt.id}:${stage.id}`);
-                return {
-                  stage_id: stage.id,
-                  stage_key: stage.stage_key,
-                  name: stage.name,
-                  already_purchased: receipt.purchased_stage_keys.includes(stage.stage_key),
-                  url: validatedLink.toString(),
-                  force_url: null,
-                  manual_result: manualResult?.result ?? null,
-                  manual_checked_at: manualResult?.checked_at ?? null,
-                };
-              })
-            : [],
-        };
-        });
-      return { items, total: totals[0]?.total ?? 0, limit, offset };
-    },
-  );
+      }
+      const vendidConfirmed = Boolean(vendid);
+      const displayId = vendid ?? receipt.external_id;
+      return {
+        id: receipt.id,
+        visitor_id: receipt.visitor_id ?? '',
+        vendid: displayId,
+        vendid_confirmed: vendidConfirmed,
+        approved_at: receipt.paid_at,
+        connection_name: receipt.connection_name,
+        has_upsell: receipt.has_upsell,
+        first_seen_at: receipt.paid_at,
+        last_seen_at: receipt.paid_at,
+        links: vendidConfirmed
+          ? stages.map((stage) => {
+              const validatedLink = new URL(upsellUrl(stage.slug));
+              validatedLink.searchParams.set('vendaId', displayId);
+              const manualResult = resultByOrderStage.get(`${receipt.id}:${stage.id}`);
+              return {
+                stage_id: stage.id,
+                stage_key: stage.stage_key,
+                name: stage.name,
+                already_purchased: receipt.purchased_stage_keys.includes(stage.stage_key),
+                url: validatedLink.toString(),
+                force_url: null,
+                manual_result: manualResult?.result ?? null,
+                manual_checked_at: manualResult?.checked_at ?? null,
+              };
+            })
+          : [],
+      };
+    });
+    return { items, total: totals[0]?.total ?? 0, limit, offset };
+  });
 
   app.put<{
     Params: { id: string; orderId: string; stageId: string };

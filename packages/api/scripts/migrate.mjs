@@ -84,6 +84,7 @@ const migrations = [
   '069_upsell_intelligence_performance.sql',
   '070_repair_vendepay_lifecycle_labels.sql',
   '071_rws_ttk_explodely_vendepay_compat.sql',
+  '072_vturb_comparison_groups.sql',
 ];
 
 await sql`
