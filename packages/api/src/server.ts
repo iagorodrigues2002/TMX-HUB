@@ -30,6 +30,7 @@ import { createTikTokWorker } from './workers/tiktok.worker.js';
 import { createUtmifyDeliveryWorker } from './workers/utmify-delivery.worker.js';
 import { createUtmifyWebEventWorker } from './workers/utmify-web-event.worker.js';
 import { createVslWorker } from './workers/vsl.worker.js';
+import { createVendepayWebhookWorker } from './workers/vendepay-webhook.worker.js';
 
 // TODO(auth): Authentication is intentionally skipped for the MVP.
 // The OpenAPI spec declares bearerAuth/apiKeyAuth, but no enforcement happens
@@ -374,6 +375,7 @@ async function main() {
   const metaWorker = createMetaWorker();
   const utmifyWebEventWorker = createUtmifyWebEventWorker();
   const pushcutDeliveryWorker = createPushcutDeliveryWorker();
+  const vendepayWebhookWorker = createVendepayWebhookWorker(app);
   const missingEnv = {
     DATABASE_URL: Boolean(env.DATABASE_URL),
     TRACKING_ENCRYPTION_KEY: Boolean(env.TRACKING_ENCRYPTION_KEY),
@@ -409,6 +411,30 @@ async function main() {
       { DATABASE_URL: missingEnv.DATABASE_URL },
       'explodely worker did not start — webhooks will remain received',
     );
+
+  // Receipt persistence is the durable boundary. Queue work is recoverable,
+  // so a Redis outage cannot force VendePay to keep an HTTP request open.
+  const recoverVendepayWebhookReceipts = async () => {
+    if (!app.db) return;
+    const pending = await app.db<Array<{ id: string }>>`
+      SELECT id FROM webhook_receipts
+      WHERE state IN ('received','failed') AND processed_at IS NULL
+      ORDER BY received_at ASC
+      LIMIT 250
+    `;
+    const slot = Math.floor(Date.now() / 300_000);
+    await Promise.allSettled(
+      pending.map(({ id }) =>
+        app.vendepayWebhookQueue.add('recover', { receiptId: id }, { jobId: `${id}:recover:${slot}` }),
+      ),
+    );
+  };
+  await recoverVendepayWebhookReceipts();
+  const vendepayWebhookRecoveryTimer = setInterval(() => {
+    void recoverVendepayWebhookReceipts().catch((error) =>
+      app.log.error({ error }, 'Vendepay webhook receipt recovery failed'),
+    );
+  }, 30_000);
   // Disabled intentionally: this legacy dashboard importer authenticates with
   // the operator's UTMify login/password once per configured offer. Besides
   // being unnecessary for server-side order/event delivery (which uses the
@@ -423,6 +449,7 @@ async function main() {
     try {
       clearInterval(trackingRecoveryTimer);
       clearTimeout(trackingRecoveryStartupTimer);
+      clearInterval(vendepayWebhookRecoveryTimer);
       app.utmifySync.stop();
       // Stop accepting new requests first.
       await app.close();
@@ -439,6 +466,7 @@ async function main() {
       await pushcutDeliveryWorker?.close();
       await tikTokWorker?.close();
       await explodelyWorker?.close();
+      await vendepayWebhookWorker.close();
       app.log.info('shutdown complete');
       process.exit(0);
     } catch (err) {

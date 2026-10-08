@@ -10,6 +10,7 @@ export const UTMIFY_WEB_EVENT_QUEUE_NAME = 'utmify-web-event-queue';
 export const PUSHCUT_QUEUE_NAME = 'pushcut-delivery-queue';
 export const TIKTOK_QUEUE_NAME = 'tiktok-events-queue';
 export const EXPLODELY_QUEUE_NAME = 'explodely-webhook-queue';
+export const VENDEPAY_WEBHOOK_QUEUE_NAME = 'vendepay-webhook-queue';
 
 export interface RenderJobData {
   jobId: string;
@@ -59,5 +60,8 @@ export interface TikTokJobData {
   deliveryId: string;
 }
 export interface ExplodelyJobData {
+  receiptId: string;
+}
+export interface VendepayWebhookJobData {
   receiptId: string;
 }

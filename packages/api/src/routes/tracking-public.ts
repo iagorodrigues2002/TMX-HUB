@@ -1563,9 +1563,60 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       config: { rateLimit: WEBHOOK_RATE_LIMIT },
     },
     async (req, reply) => {
-      if (!app.db || !req.query.token) return reply.code(404).send({ accepted: false });
-      const candidate = tokenHash(req.query.token);
-      const connections = await app.db<
+      if (!app.db) return reply.code(404).send({ accepted: false });
+      const workerReceiptHeader = req.headers['x-tmx-vendepay-receipt'];
+      const workerSignatureHeader = req.headers['x-tmx-vendepay-signature'];
+      const workerReceiptId = typeof workerReceiptHeader === 'string' ? workerReceiptHeader : null;
+      const workerSignature = typeof workerSignatureHeader === 'string' ? workerSignatureHeader : null;
+      const isInternal = workerReceiptId !== null && workerSignature !== null;
+      if (isInternal) {
+        const expected = createHmac('sha256', env.WEBHOOK_SECRET)
+          .update(`vendepay-receipt:${workerReceiptId}`)
+          .digest();
+        const supplied = Buffer.from(workerSignature!, 'hex');
+        if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
+          return reply.code(404).send({ accepted: false });
+        }
+      } else if (!req.query.token) {
+        return reply.code(404).send({ accepted: false });
+      }
+
+      type VendepayConnection = {
+        id: string;
+        project_id: string;
+        token_hash: string;
+        offer_id: string;
+        name: string;
+        payload_adapter: 'vendepay' | 'explodely';
+        signing_secret_encrypted: string | null;
+      };
+      let connection: VendepayConnection | undefined;
+      let payload: unknown = req.body;
+      let receiptId: string;
+      if (isInternal) {
+        const [receipt] = await app.db<
+          Array<VendepayConnection & { receipt_id: string; payload: unknown; processing_payload_encrypted: string | null }>
+        >`
+          SELECT vc.id,vc.project_id,vc.token_hash,tp.offer_id,vc.name,vc.payload_adapter,
+                 vc.signing_secret_encrypted,wr.id AS receipt_id,wr.payload,wr.processing_payload_encrypted
+          FROM webhook_receipts wr
+          JOIN vendepay_connections vc ON vc.id=wr.connection_id
+          JOIN tracking_projects tp ON tp.id=vc.project_id
+          WHERE wr.id=${workerReceiptId} AND vc.enabled=true
+          LIMIT 1
+        `;
+        if (!receipt) return reply.code(404).send({ accepted: false });
+        connection = receipt;
+        receiptId = receipt.receipt_id;
+        if (receipt.processing_payload_encrypted) {
+          if (!env.TRACKING_ENCRYPTION_KEY) throw new Error('missing encryption key for webhook receipt');
+          payload = JSON.parse(decryptSecret(receipt.processing_payload_encrypted, env.TRACKING_ENCRYPTION_KEY));
+        } else {
+          payload = receipt.payload;
+        }
+      } else {
+        const candidate = tokenHash(req.query.token!);
+        const connections = await app.db<
         Array<{
           id: string;
           project_id: string;
@@ -1583,34 +1634,66 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         WHERE vc.token_hash = ${candidate} AND vc.enabled = true
         LIMIT 1
       `;
-      const connection = connections[0];
+        connection = connections[0];
+        receiptId = ulid();
+      }
       if (!connection) return reply.code(404).send({ accepted: false });
 
-      // Prefer the generic gateway record when one exists, while retaining
-      // compatibility with the legacy VendePay connection model currently
-      // used by the admin routes.
-      const [gatewaySigning] = await app.db<Array<{ signing_secret_encrypted: string | null }>>`
-        SELECT signing_secret_encrypted
-        FROM tracking_gateway_connections
-        WHERE provider='vendepay' AND project_id=${connection.project_id} AND enabled=true
-        LIMIT 1
-      `;
-      const signature = verifyGatewayWebhook({
-        provider: 'vendepay',
-        request: req,
-        encryptedSecret:
-          gatewaySigning?.signing_secret_encrypted ?? connection.signing_secret_encrypted,
-      });
-      if (!signature.accepted) {
-        return reply.code(401).send({ accepted: false, error: signature.error });
+      if (!isInternal) {
+        // Prefer the generic gateway record when one exists, while retaining
+        // compatibility with the legacy VendePay connection model currently
+        // used by the admin routes.
+        const [gatewaySigning] = await app.db<Array<{ signing_secret_encrypted: string | null }>>`
+          SELECT signing_secret_encrypted
+          FROM tracking_gateway_connections
+          WHERE provider='vendepay' AND project_id=${connection.project_id} AND enabled=true
+          LIMIT 1
+        `;
+        const signature = verifyGatewayWebhook({
+          provider: 'vendepay',
+          request: req,
+          encryptedSecret:
+            gatewaySigning?.signing_secret_encrypted ?? connection.signing_secret_encrypted,
+        });
+        if (!signature.accepted) {
+          return reply.code(401).send({ accepted: false, error: signature.error });
+        }
       }
 
       const normalized = normalizeVendepayWebhook(
-        req.body,
+        payload,
         connection.payload_adapter === 'explodely',
       );
-      const receiptPayload = webhookPayloadForStorage(req.body, env.WEBHOOK_PAYLOAD_SCRUB);
-      const receiptId = ulid();
+      if (!isInternal) {
+        const receiptPayload = webhookPayloadForStorage(payload, env.WEBHOOK_PAYLOAD_SCRUB);
+        const processingPayloadEncrypted = env.TRACKING_ENCRYPTION_KEY
+          ? encryptSecret(JSON.stringify(payload), env.TRACKING_ENCRYPTION_KEY)
+          : null;
+        if (env.WEBHOOK_PAYLOAD_SCRUB && !processingPayloadEncrypted) {
+          req.log.error({ receiptId }, 'cannot durably queue scrubbed Vendepay webhook without encryption');
+          return reply.code(503).send({ accepted: false });
+        }
+        const receipts = await app.db<{ id: string }[]>`
+          INSERT INTO webhook_receipts
+            (id,connection_id,dedupe_key,payload,processing_payload_encrypted,state,diagnostics)
+          VALUES(${receiptId},${connection.id},${normalized.dedupeKey},${app.db.json(receiptPayload as never)},
+            ${processingPayloadEncrypted},${normalized.kind === 'processable' ? 'received' : normalized.kind},
+            ${app.db.json(normalized.kind === 'quarantined' ? normalized.diagnostics : [])})
+          ON CONFLICT(connection_id,dedupe_key) DO NOTHING
+          RETURNING id
+        `;
+        if (!receipts[0]) return reply.code(200).send({ accepted: true, duplicate: true });
+        if (normalized.kind !== 'processable') {
+          return reply.code(202).send({ accepted: true, state: normalized.kind });
+        }
+        // PostgreSQL retains the durable receipt. If Redis is unavailable, the
+        // recovery sweep adds the job later without asking VendePay to retry.
+        void app.vendepayWebhookQueue
+          .add('process', { receiptId }, { jobId: receiptId })
+          .catch((error) => req.log.error({ error, receiptId }, 'failed to enqueue Vendepay webhook'));
+        return reply.code(202).send({ accepted: true, receipt_id: receiptId, state: 'received' });
+      }
+      if (normalized.kind !== 'processable') return reply.code(202).send({ accepted: true });
       // Offers live in Redis (OfferStore), not Postgres — resolve the funnel
       // name here (route has app.offerStore) so it can be persisted onto the
       // Pushcut outbox row for the worker (Postgres-only, no Redis access)
@@ -1645,17 +1728,14 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       const ingestConvertedAt = ingestBrlMinor != null ? new Date() : null;
       const outcome = await app.db.begin(async (sql) => {
         const receipts = await sql<{ id: string }[]>`
-          INSERT INTO webhook_receipts
-            (id, connection_id, dedupe_key, payload, state, diagnostics)
-          VALUES
-            (${receiptId}, ${connection.id}, ${normalized.dedupeKey}, ${sql.json(receiptPayload as never)},
-             ${normalized.kind}, ${sql.json(normalized.kind === 'quarantined' ? normalized.diagnostics : [])})
-          ON CONFLICT (connection_id, dedupe_key) DO NOTHING
-          RETURNING id
+          SELECT id FROM webhook_receipts
+          WHERE id=${receiptId} AND connection_id=${connection.id}
+            AND state IN ('received','failed') AND processed_at IS NULL
+          FOR UPDATE
         `;
-        if (receipts.length === 0 || normalized.kind !== 'processable') {
+        if (receipts.length === 0) {
           return {
-            inserted: receipts.length > 0,
+            inserted: false,
             deliveryIds: [] as string[],
             utmifyDeliveryIds: [] as string[],
             pushcutDeliveryIds: [] as string[],
@@ -1894,7 +1974,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         }
         await sql`
           UPDATE webhook_receipts
-          SET order_id = ${order.id}, processed_at = now()
+          SET state='processed',order_id=${order.id},processed_at=now(),diagnostics='[]'::jsonb
           WHERE id = ${receiptId}
         `;
         if (order.status === 'paid') {
