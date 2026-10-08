@@ -21,6 +21,8 @@ RUN echo "$TMX_BUILD_REV" > /tmp/tmx-build-revision
 COPY packages/shared ./packages/shared
 COPY packages/web ./packages/web
 ENV NEXT_TELEMETRY_DISABLED=1
+# Keep the Docker artifact paths below aligned with Next's configurable distDir.
+ENV NEXT_DIST_DIR=.next
 # NEXT_PUBLIC_* values are baked into the client bundle at build time.
 # Railway passes service env vars as build args automatically.
 ARG NEXT_PUBLIC_API_URL
