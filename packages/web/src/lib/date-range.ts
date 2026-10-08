@@ -56,6 +56,16 @@ export function previousMonthRange(anchor = todayIso()): DateRange {
   };
 }
 
+export function selectedMonthRange(month: string, anchor = todayIso()): DateRange | null {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || month > anchor.slice(0, 7)) return null;
+  const [year, monthNumber] = month.split('-').map(Number);
+  return {
+    from: `${month}-01`,
+    to: month === anchor.slice(0, 7) ? anchor
+      : new Date(Date.UTC(year!, monthNumber!, 0, 12)).toISOString().slice(0, 10),
+  };
+}
+
 const MONTH_DATE_PRESETS: readonly DateRangePreset[] = [
   { id: 'current-month', label: 'Este mês', getRange: () => currentMonthRange() },
   { id: 'previous-month', label: 'Mês passado', getRange: () => previousMonthRange() },

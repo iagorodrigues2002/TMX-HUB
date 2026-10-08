@@ -1,7 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
-import { currentMonthRange, previousMonthRange, DASHBOARD_DATE_PRESETS, PERIOD_DATE_PRESETS } from '../../web/src/lib/date-range.js';
+import { currentMonthRange, previousMonthRange, selectedMonthRange, DASHBOARD_DATE_PRESETS, PERIOD_DATE_PRESETS } from '../../web/src/lib/date-range.js';
 
 describe('calendar month presets', () => {
+  it('selects a specific month without future days', () => {
+    expect(selectedMonthRange('2026-09', '2026-10-08')).toEqual({ from: '2026-09-01', to: '2026-09-30' });
+    expect(selectedMonthRange('2026-10', '2026-10-08')).toEqual({ from: '2026-10-01', to: '2026-10-08' });
+    expect(selectedMonthRange('2024-02', '2026-10-08')?.to).toBe('2024-02-29');
+    expect(selectedMonthRange('2026-11', '2026-10-08')).toBeNull();
+    expect(selectedMonthRange('2026-13', '2026-10-08')).toBeNull();
+  });
   it('uses month start through today', () => {
     expect(currentMonthRange('2026-10-08')).toEqual({ from: '2026-10-01', to: '2026-10-08' });
   });

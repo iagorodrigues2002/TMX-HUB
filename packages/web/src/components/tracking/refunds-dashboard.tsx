@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { DataState } from '@/components/ui/data-state';
 import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api-client';
+import { selectedMonthRange } from '@/lib/date-range';
 import { formatMoney, useDisplayCurrency } from '@/lib/currency-preference';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -184,7 +185,19 @@ export function RefundsDashboard({ initialOfferId = '' }: { initialOfferId?: str
             Horário de São Paulo
           </span>
         </div>
-        <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <label htmlFor="refunds-month" className="space-y-1">
+            <span className="hud-label">Selecionar mês</span>
+            <Input id="refunds-month" type="month" max={today().slice(0, 7)}
+              value={from.endsWith('-01') && selectedMonthRange(from.slice(0, 7))?.to === to ? from.slice(0, 7) : ''}
+              onChange={(event) => {
+                const range = selectedMonthRange(event.target.value);
+                if (!range) return;
+                setFrom(range.from);
+                setTo(range.to);
+                setAuditPage(1);
+              }} />
+          </label>
           <label htmlFor="refunds-from" className="space-y-1">
             <span className="hud-label">De</span>
             <Input
