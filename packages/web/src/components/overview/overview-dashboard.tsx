@@ -10,6 +10,7 @@ import {
   type IntradayRangeSummaryView,
   type MetricsView,
   type OfferSnapshotsView,
+  type TrackingOverviewOffer,
   apiClient,
 } from '@/lib/api-client';
 import {
@@ -29,6 +30,7 @@ import {
   ShoppingCart,
 } from 'lucide-react';
 import { useState } from 'react';
+import { overviewFinancials } from '@/lib/overview-financial';
 
 type OverviewDashboardProps =
   | {
@@ -77,6 +79,7 @@ interface OverviewDataset {
   conversionRate: number | null;
   daily: ChartPoint[];
   intraday: ChartPoint[];
+  finance: { fees: number; reserve: number; net: number; available: number; refunds: number; penalties: number } | null;
 }
 
 interface DatasetAccumulator {
@@ -154,6 +157,7 @@ function buildDatasets(
   snapshots: Array<OfferSnapshotsView | undefined>,
   summaries: Array<TrackingSummaryView | undefined>,
   intraday: Array<IntradayRangeSummaryView | undefined>,
+  finances: TrackingOverviewOffer[] | undefined,
 ): OverviewDataset[] {
   const groups = new Map<string, DatasetAccumulator>();
 
@@ -215,11 +219,16 @@ function buildDatasets(
   });
 
   return [...groups.values()].map((group) => {
+    const offerIds = offers.filter(offer =>
+      (scope === 'offer' ? offer.id : `${offer.ownerId}:${snapshots[offers.indexOf(offer)]?.offer.currency ?? offer.currency}`) === group.key,
+    ).map(offer => offer.id);
+    const finance = overviewFinancials(offerIds, finances);
     const totals = computedMetrics(group.totals);
     const pageViewConversion = group.pageViews > 0 ? group.totals.sales / group.pageViews : null;
 
     return {
       key: group.key,
+      finance,
       label: group.ownerName,
       currency: 'BRL',
       offerCount: group.offerNames.length,
@@ -373,7 +382,7 @@ function Dataset({ dataset }: { dataset: OverviewDataset }) {
           tone="positive"
         />
         <Kpi
-          label="Receita"
+          label="Receita bruta"
           value={formatCurrency(dataset.totals.revenue, 'BRL')}
           countUp={{
             value: dataset.totals.revenue,
@@ -395,6 +404,22 @@ function Dataset({ dataset }: { dataset: OverviewDataset }) {
           icon={<Percent className="h-4 w-4" />}
         />
       </div>
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3" aria-label="Taxas e receita líquida">
+        {[
+          ['Taxas do gateway', dataset.finance?.fees, 'Percentual + tarifa por transação'],
+          ['Reembolsos e chargebacks', dataset.finance?.refunds, 'Devoluções registradas no período'],
+          ['Encargos de devolução', dataset.finance?.penalties, 'Conforme modelo financeiro configurado'],
+          ['Receita líquida estimada', dataset.finance?.net, 'Após taxas, devoluções e encargos; antes da reserva'],
+          ['Reserva retida estimada', dataset.finance?.reserve, 'Retenção temporária; não é despesa definitiva'],
+          ['Após retenção da reserva', dataset.finance?.available, 'Estimativa; não representa saldo liberado para saque'],
+        ].map(([label, value, hint]) => (
+          <Kpi key={String(label)} label={String(label)}
+            value={typeof value === 'number' ? formatCurrency(value, 'BRL') : '—'}
+            hint={String(hint)} icon={<Receipt className="h-4 w-4" />} />
+        ))}
+      </div>
+      <p className="text-xs text-white/45">Taxas e retenções calculadas pelo modelo financeiro do TMX. A cotação e as tarifas efetivamente liquidadas pelo gateway podem diferir.</p>
 
       <div className="animate-[tmx-reveal_220ms_cubic-bezier(0,0,0.2,1)_150ms_both] grid gap-4 motion-reduce:animate-none xl:grid-cols-2">
         <RevenueChart
@@ -443,6 +468,12 @@ function OverviewLoadingSkeleton() {
 export function OverviewDashboard(props: OverviewDashboardProps) {
   const { scope, initialPeriod } = props;
   const [period, setPeriod] = useState<DateRange>(() => initialPeriod ?? rollingDateRange(7));
+  const financialQuery = useQuery({
+    queryKey: ['overview-financial', period.from, period.to],
+    queryFn: () => apiClient.getTrackingOverview(period.from, period.to),
+    staleTime: TRACKING_DASHBOARD_STALE_TIME,
+    retry: false,
+  });
   const dashboard = useQuery({
     queryKey: ['dashboard-summary', period.from, period.to],
     queryFn: () => apiClient.getDashboardSummary(period),
@@ -495,8 +526,9 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
     snapshotQueries.map((query) => query.data),
     trackingQueries.map((query) => query.data),
     intradayQueries.map((query) => query.data),
+    financialQuery.data?.offers,
   );
-  const detailQueries = [...snapshotQueries, ...trackingQueries, ...intradayQueries];
+  const detailQueries = [...snapshotQueries, ...trackingQueries, ...intradayQueries, financialQuery];
   const isLoading =
     (scope === 'account' && dashboard.isLoading) || detailQueries.some((query) => query.isLoading);
   const isFetching = dashboard.isFetching || detailQueries.some((query) => query.isFetching);
