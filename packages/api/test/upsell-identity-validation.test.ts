@@ -1,10 +1,15 @@
 import { describe,it,expect,vi } from 'vitest';
-import { validateUpsellCandidates } from '../src/services/upsell-identity-validation.js';
+import { validateUpsellCandidates, canRetryUpsellValidation } from '../src/services/upsell-identity-validation.js';
 
 const result=(compatible:boolean,state:'recoverable'|'temporary_failure'|'definitive_failure')=>({
   compatible,state,reason:state,attempts:1,httpStatus:compatible?200:404,
 });
 describe('automatic upsell identity validation',()=>{
+  it('never retries after the second attempt, including legacy jobs',()=>{
+    expect(canRetryUpsellValidation(1)).toBe(true);
+    expect(canRetryUpsellValidation(2)).toBe(false);
+    expect(canRetryUpsellValidation(6)).toBe(false);
+  });
   it('accepts only an id confirmed by a configured destination',async()=>{
     const check=vi.fn().mockResolvedValueOnce(result(false,'definitive_failure'))
       .mockResolvedValueOnce(result(true,'recoverable'));

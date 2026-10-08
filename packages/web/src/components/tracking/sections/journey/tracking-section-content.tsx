@@ -2561,9 +2561,9 @@ export function TrackingSectionContent({
                                   : identity.validation_state === 'retry'
                                     ? 'validação será tentada novamente'
                                     : identity.validation_state === 'rejected'
-                                      ? 'identificador não confirmado pela VendePay'
+                                      ? 'validação descartada · VendePay recusou'
                                       : identity.validation_state === 'failed'
-                                        ? 'validação falhou após tentativas'
+                                        ? 'validação descartada · tentativas encerradas'
                                         : 'compra aprovada · validação na fila'}
                             </span>
                           </td>
@@ -2590,13 +2590,13 @@ export function TrackingSectionContent({
                                 ))}
                               </div>
                             ) : (
-                              <span className="text-amber-100/55" title={identity.validation_error ?? undefined}>
+                              <span role={identity.validation_state === 'failed' || identity.validation_state === 'rejected' ? 'alert' : undefined} className="text-amber-100/55" title={identity.validation_error ?? undefined}>
                                 {identity.validation_error === 'account_destination_not_configured'
                                   ? 'Configure o destino de upsell desta conta'
                                   : identity.validation_state === 'rejected'
-                                    ? 'VendePay não confirmou elegibilidade para os destinos configurados'
+                                    ? 'Descartado da validação automática: VendePay não confirmou elegibilidade. A compra continua registrada.'
                                     : identity.validation_state === 'failed'
-                                      ? 'Falha na validação · use Recuperar vendaId para tentar novamente'
+                                      ? `Descartado da validação automática após ${identity.validation_attempts ?? 2} tentativa(s). Não haverá novas consultas automáticas. A compra continua registrada.`
                                       : identity.validation_state === 'processing'
                                         ? 'Consultando elegibilidade na VendePay'
                                         : identity.validation_state === 'retry'

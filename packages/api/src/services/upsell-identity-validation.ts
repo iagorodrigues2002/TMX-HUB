@@ -1,5 +1,10 @@
 import type { UpsellCompatibilityResult } from './upsell-compatibility.js';
 
+export const MAX_UPSELL_VALIDATION_ATTEMPTS = 2;
+export function canRetryUpsellValidation(attempts: number): boolean {
+  return attempts < MAX_UPSELL_VALIDATION_ATTEMPTS;
+}
+
 /** A buyer id is accepted only after the configured account's intent accepts it. */
 export async function validateUpsellCandidates(
   candidates: string[],

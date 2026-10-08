@@ -5,7 +5,7 @@ import { env } from '../env.js';
 import { decryptSecret, encryptSecret } from '../lib/secret-box.js';
 import { collectVendaIdCandidates } from '../services/vendepay-venda-id.js';
 import { checkUpsellCompatibilityDetailed } from '../services/upsell-compatibility.js';
-import { validateUpsellCandidates } from '../services/upsell-identity-validation.js';
+import { validateUpsellCandidates, MAX_UPSELL_VALIDATION_ATTEMPTS, canRetryUpsellValidation } from '../services/upsell-identity-validation.js';
 
 /** Postgres-backed queue: survives Redis outages and leases work across replicas. */
 export function startUpsellIdentityWorker(app: Pick<FastifyInstance, 'db' | 'log'>) {
@@ -22,7 +22,7 @@ export function startUpsellIdentityWorker(app: Pick<FastifyInstance, 'db' | 'log
         JOIN tracking_orders o ON o.id=q.order_id
         WHERE ((q.state IN ('pending','retry') AND q.next_attempt_at <= now())
           OR (q.state='processing' AND q.lease_until < now()))
-          AND q.attempts < 6
+          AND q.attempts < ${MAX_UPSELL_VALIDATION_ATTEMPTS}
         ORDER BY o.paid_at DESC,q.next_attempt_at ASC LIMIT 1 FOR UPDATE OF q SKIP LOCKED
       )
       UPDATE tracking_upsell_identity_validation q
@@ -91,7 +91,7 @@ export function startUpsellIdentityWorker(app: Pick<FastifyInstance, 'db' | 'log
           WHERE project_id=${order.project_id} AND source_order_id=${job.order_id}
         ` : [];
         const state = identity ? 'confirmed' : result.vendid ? 'failed' : result.temporary
-          ? (job.attempts >= 6 ? 'failed' : 'retry') : 'rejected';
+          ? (canRetryUpsellValidation(job.attempts) ? 'retry' : 'failed') : 'rejected';
         await tx`
           UPDATE tracking_upsell_identity_validation
           SET state=${state},last_error=${identity ? null : result.vendid ? 'buyer_sale_id_already_bound' : result.reason},
@@ -104,7 +104,7 @@ export function startUpsellIdentityWorker(app: Pick<FastifyInstance, 'db' | 'log
       app.log.warn({ orderId: job.order_id, error }, 'upsell identity validation failed');
       await sql`
         UPDATE tracking_upsell_identity_validation
-        SET state=${job.attempts >= 6 ? 'failed' : 'retry'},last_error='validation_processing_error',
+        SET state=${canRetryUpsellValidation(job.attempts) ? 'retry' : 'failed'},last_error='validation_processing_error',
             next_attempt_at=now()+interval '1 minute',lease_until=NULL,lease_token=NULL,updated_at=now()
         WHERE order_id=${job.order_id} AND lease_token=${token}
       `;
@@ -127,7 +127,8 @@ export function startUpsellIdentityWorker(app: Pick<FastifyInstance, 'db' | 'log
     await sql`
       UPDATE tracking_upsell_identity_validation SET state='failed',last_error='validation_worker_interrupted',
         lease_until=NULL,lease_token=NULL,updated_at=now()
-      WHERE state='processing' AND lease_until<now() AND attempts>=6
+      WHERE attempts>=${MAX_UPSELL_VALIDATION_ATTEMPTS} AND (state IN ('pending','retry')
+        OR (state='processing' AND lease_until<now()))
     `;
     await Promise.all([processOne(),processOne()]);
   };
