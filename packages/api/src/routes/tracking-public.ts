@@ -169,6 +169,11 @@ function verifyGatewayWebhook(input: {
   request: FastifyRequest;
   encryptedSecret: string | null | undefined;
 }) {
+  // Temporary operator-controlled compatibility mode; URL-token validation
+  // still runs before this function and stored signing secrets are retained.
+  if (input.provider === 'vendepay' && /^(1|true)$/i.test(process.env.VENDEPAY_SIGNATURE_DISABLED?.trim() ?? 'false')) {
+    return { accepted: true as const, secret: null };
+  }
   const suppliedSignature =
     input.request.headers[`x-${input.provider}-signature`] ?? input.request.headers['x-signature'];
   if (!input.encryptedSecret) {
