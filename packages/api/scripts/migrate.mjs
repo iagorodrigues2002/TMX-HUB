@@ -93,6 +93,7 @@ const migrations = [
   '082_vendepay_replay_terminal.sql',
   '083_network_click_ids.sql',
   '085_tiktok_test_event_code.sql',
+  '086_vendepay_async_receipts.sql',
 ];
 
 await sql`
