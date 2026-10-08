@@ -44,6 +44,23 @@ export function rollingDateRange(days: number): DateRange {
   return { from: daysAgoIso(safeDays - 1), to: todayIso() };
 }
 
+export function currentMonthRange(anchor = todayIso()): DateRange {
+  return { from: `${anchor.slice(0, 7)}-01`, to: anchor };
+}
+
+export function previousMonthRange(anchor = todayIso()): DateRange {
+  const [year, month] = anchor.split('-').map(Number);
+  return {
+    from: new Date(Date.UTC(year!, month! - 2, 1, 12)).toISOString().slice(0, 10),
+    to: new Date(Date.UTC(year!, month! - 1, 0, 12)).toISOString().slice(0, 10),
+  };
+}
+
+const MONTH_DATE_PRESETS: readonly DateRangePreset[] = [
+  { id: 'current-month', label: 'Este mês', getRange: () => currentMonthRange() },
+  { id: 'previous-month', label: 'Mês passado', getRange: () => previousMonthRange() },
+];
+
 export function isDateInRange(value: string, range: DateRange): boolean {
   const date = toIsoDateInTimeZone(value);
   return date >= range.from && date <= range.to;
@@ -55,6 +72,7 @@ export const DASHBOARD_DATE_PRESETS: readonly DateRangePreset[] = [
   { id: 'day-before-yesterday', label: 'Anteontem', getRange: () => singleDayRange(2) },
   { id: 'last-7-days', label: 'Últimos 7 dias', getRange: () => rollingDateRange(7) },
   { id: 'last-30-days', label: 'Últimos 30 dias', getRange: () => rollingDateRange(30) },
+  ...MONTH_DATE_PRESETS,
 ];
 
 export const PERIOD_DATE_PRESETS: readonly DateRangePreset[] = [
@@ -62,4 +80,5 @@ export const PERIOD_DATE_PRESETS: readonly DateRangePreset[] = [
   { id: 'last-7-days', label: 'Últimos 7 dias', getRange: () => rollingDateRange(7) },
   { id: 'last-14-days', label: 'Últimos 14 dias', getRange: () => rollingDateRange(14) },
   { id: 'last-30-days', label: 'Últimos 30 dias', getRange: () => rollingDateRange(30) },
+  ...MONTH_DATE_PRESETS,
 ];
