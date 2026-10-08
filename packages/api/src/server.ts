@@ -31,6 +31,7 @@ import { createUtmifyDeliveryWorker } from './workers/utmify-delivery.worker.js'
 import { createUtmifyWebEventWorker } from './workers/utmify-web-event.worker.js';
 import { createVslWorker } from './workers/vsl.worker.js';
 import { createVendepayWebhookWorker } from './workers/vendepay-webhook.worker.js';
+import { startUpsellIdentityWorker } from './workers/upsell-identity.worker.js';
 
 // TODO(auth): Authentication is intentionally skipped for the MVP.
 // The OpenAPI spec declares bearerAuth/apiKeyAuth, but no enforcement happens
@@ -376,6 +377,7 @@ async function main() {
   const utmifyWebEventWorker = createUtmifyWebEventWorker();
   const pushcutDeliveryWorker = createPushcutDeliveryWorker();
   const vendepayWebhookWorker = createVendepayWebhookWorker(app);
+  const upsellIdentityWorker = startUpsellIdentityWorker(app);
   const missingEnv = {
     DATABASE_URL: Boolean(env.DATABASE_URL),
     TRACKING_ENCRYPTION_KEY: Boolean(env.TRACKING_ENCRYPTION_KEY),
@@ -467,6 +469,7 @@ async function main() {
       await tikTokWorker?.close();
       await explodelyWorker?.close();
       await vendepayWebhookWorker.close();
+      await upsellIdentityWorker.close();
       app.log.info('shutdown complete');
       process.exit(0);
     } catch (err) {

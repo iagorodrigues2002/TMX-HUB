@@ -2866,6 +2866,9 @@ export const apiClient = {
       visitor_id: string;
       vendid: string;
       vendid_confirmed: boolean;
+      validation_state?: 'pending' | 'processing' | 'retry' | 'confirmed' | 'rejected' | 'failed';
+      validation_error?: string | null;
+      validation_attempts?: number;
       approved_at: string;
       connection_name: string;
       has_upsell: boolean;

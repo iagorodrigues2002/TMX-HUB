@@ -1009,6 +1009,7 @@ export function TrackingSectionContent({
     retry: false,
     staleTime: TRACKING_DASHBOARD_STALE_TIME,
     refetchOnWindowFocus: false,
+    refetchInterval: section === 'upsells' ? 15_000 : false,
   });
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset pagination when the offer changes.
   useEffect(() => {
@@ -2555,7 +2556,15 @@ export function TrackingSectionContent({
                             >
                               {identity.vendid_confirmed
                                 ? 'vendaId confirmado'
-                                : 'compra aprovada · vendaId aguardando validação'}
+                                : identity.validation_state === 'processing'
+                                  ? 'validando vendaId'
+                                  : identity.validation_state === 'retry'
+                                    ? 'validação será tentada novamente'
+                                    : identity.validation_state === 'rejected'
+                                      ? 'identificador não confirmado pela VendePay'
+                                      : identity.validation_state === 'failed'
+                                        ? 'validação falhou após tentativas'
+                                        : 'compra aprovada · validação na fila'}
                             </span>
                           </td>
                           <td className="whitespace-nowrap px-4 py-3 text-white/55">
@@ -2581,8 +2590,18 @@ export function TrackingSectionContent({
                                 ))}
                               </div>
                             ) : (
-                              <span className="text-amber-100/55">
-                                Aguardando validação na VendePay
+                              <span className="text-amber-100/55" title={identity.validation_error ?? undefined}>
+                                {identity.validation_error === 'account_destination_not_configured'
+                                  ? 'Configure o destino de upsell desta conta'
+                                  : identity.validation_state === 'rejected'
+                                    ? 'VendePay não confirmou elegibilidade para os destinos configurados'
+                                    : identity.validation_state === 'failed'
+                                      ? 'Falha na validação · use Recuperar vendaId para tentar novamente'
+                                      : identity.validation_state === 'processing'
+                                        ? 'Consultando elegibilidade na VendePay'
+                                        : identity.validation_state === 'retry'
+                                          ? 'Nova tentativa automática agendada'
+                                          : 'Validação automática pendente'}
                               </span>
                             )}
                           </td>

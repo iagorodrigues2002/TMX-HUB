@@ -555,6 +555,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           connection_id: string | null;
           connection_name: string;
           confirmed_vendid_encrypted: string | null;
+          validation_state: string | null;
+          validation_error: string | null;
+          validation_attempts: number | null;
           has_upsell: boolean;
           purchased_stage_keys: string[];
         }>
@@ -563,6 +566,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                  o.vendepay_connection_id AS connection_id,
                  COALESCE(vc.name,'Vendepay') AS connection_name,
                  identity.vendid_encrypted AS confirmed_vendid_encrypted,
+                 validation.state AS validation_state,
+                 validation.last_error AS validation_error,
+                 validation.attempts AS validation_attempts,
                  EXISTS (
                    SELECT 1 FROM tracking_orders upsell
                    WHERE upsell.project_id=o.project_id
@@ -601,6 +607,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                  ) AS purchased_stage_keys
           FROM tracking_orders o
           LEFT JOIN vendepay_connections vc ON vc.id=o.vendepay_connection_id
+          LEFT JOIN tracking_upsell_identity_validation validation ON validation.order_id=o.id
           LEFT JOIN LATERAL (
             SELECT i.vendid_encrypted
             FROM tracking_upsell_identities i
@@ -667,6 +674,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         visitor_id: receipt.visitor_id ?? '',
         vendid: displayId,
         vendid_confirmed: vendidConfirmed,
+        validation_state: vendidConfirmed ? 'confirmed' : receipt.validation_state ?? 'pending',
+        validation_error: receipt.validation_error,
+        validation_attempts: receipt.validation_attempts ?? 0,
         approved_at: receipt.paid_at,
         connection_name: receipt.connection_name,
         has_upsell: receipt.has_upsell,
