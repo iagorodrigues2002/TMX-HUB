@@ -1627,10 +1627,17 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           signing_secret_encrypted: string | null;
         }>
       >`
-        SELECT vc.id, vc.project_id, vc.token_hash, tp.offer_id, vc.name,
-               vc.payload_adapter, vc.signing_secret_encrypted
+        SELECT vc.id,vc.project_id,vc.token_hash,tp.offer_id,vc.name,vc.payload_adapter,
+               COALESCE(gateway_signing.signing_secret_encrypted,vc.signing_secret_encrypted)
+                 AS signing_secret_encrypted
         FROM vendepay_connections vc
         JOIN tracking_projects tp ON tp.id = vc.project_id
+        LEFT JOIN LATERAL (
+          SELECT signing_secret_encrypted
+          FROM tracking_gateway_connections
+          WHERE provider='vendepay' AND project_id=vc.project_id AND enabled=true
+          LIMIT 1
+        ) gateway_signing ON true
         WHERE vc.token_hash = ${candidate} AND vc.enabled = true
         LIMIT 1
       `;
@@ -1640,20 +1647,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!connection) return reply.code(404).send({ accepted: false });
 
       if (!isInternal) {
-        // Prefer the generic gateway record when one exists, while retaining
-        // compatibility with the legacy VendePay connection model currently
-        // used by the admin routes.
-        const [gatewaySigning] = await app.db<Array<{ signing_secret_encrypted: string | null }>>`
-          SELECT signing_secret_encrypted
-          FROM tracking_gateway_connections
-          WHERE provider='vendepay' AND project_id=${connection.project_id} AND enabled=true
-          LIMIT 1
-        `;
         const signature = verifyGatewayWebhook({
           provider: 'vendepay',
           request: req,
-          encryptedSecret:
-            gatewaySigning?.signing_secret_encrypted ?? connection.signing_secret_encrypted,
+          encryptedSecret: connection.signing_secret_encrypted,
         });
         if (!signature.accepted) {
           return reply.code(401).send({ accepted: false, error: signature.error });
