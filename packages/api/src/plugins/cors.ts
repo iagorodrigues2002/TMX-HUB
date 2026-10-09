@@ -1,5 +1,5 @@
-import cors from '@fastify/cors';
-import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import cors, { type FastifyCorsOptions } from '@fastify/cors';
+import type { FastifyInstance, FastifyPluginAsync, FastifyRequest } from 'fastify';
 
 const ALLOWED_ORIGINS_PROD = ['https://theminex.com', 'https://app.theminex.com'];
 const ALLOWED_ORIGINS_DEV = ['http://localhost:3100', 'http://localhost:3000'];
@@ -11,7 +11,7 @@ function isAllowedOrigin(origin: string): boolean {
 }
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
-  await app.register(cors, {
+  const administrativeOptions: FastifyCorsOptions = {
     origin: (origin, cb) => {
       if (!origin || isAllowedOrigin(origin)) {
         cb(null, true);
@@ -39,6 +39,18 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       'content-disposition',
       'content-length',
     ],
+  };
+  await app.register(cors, {
+    // Anonymous capture only: no cookies or authorization headers. All other
+    // paths retain the exact administrative origin policy above.
+    delegator: async (req: FastifyRequest) => {
+      const path = req.url.split('?')[0];
+      if (['/v1/track/bootstrap', '/v1/track/events', '/v1/track/ab/assign'].includes(path ?? '') &&
+          ['POST', 'OPTIONS'].includes(req.method)) {
+        return { origin: '*', credentials: false, methods: ['POST', 'OPTIONS'], allowedHeaders: ['content-type'] };
+      }
+      return administrativeOptions;
+    },
   });
 };
 
