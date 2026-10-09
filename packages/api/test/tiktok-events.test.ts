@@ -1,9 +1,28 @@
 import { createHash } from 'node:crypto';
+import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import { buildTikTokPixelScript } from '../src/services/tracker-script.js';
 import { TIKTOK_EVENTS_API_URL, buildTikTokPayload } from '../src/workers/tiktok.worker.js';
 
 describe('TikTok Events API payload', () => {
+  it('registers both browser pixels in the SDK and preserves an existing loader', () => {
+    const inserted: unknown[] = [];
+    const window: any = {};
+    const document = {
+      createElement: () => ({}),
+      getElementsByTagName: () => [{ parentNode: { insertBefore: (s: unknown) => inserted.push(s) } }],
+      addEventListener: () => {},
+    };
+    runInNewContext(buildTikTokPixelScript(['FIRST', 'SECOND']), { window, document });
+    expect(Object.keys(window.ttq._i ?? {})).toEqual(['FIRST', 'SECOND']);
+    expect(window.ttq._i.FIRST).toContainEqual(['page']);
+    expect(window.ttq._i.SECOND).toContainEqual(['page']);
+    const loader = window.ttq.load;
+    runInNewContext(buildTikTokPixelScript(['FIRST', 'SECOND']), { window, document });
+    expect(window.ttq.load).toBe(loader);
+    expect(inserted).toHaveLength(2);
+    expect(window.ttq._i.FIRST.filter((v: unknown[]) => v[0] === 'page')).toHaveLength(1);
+  });
   it('uses a stable event id, hashes PII and keeps the TikTok click id', () => {
     const payload = buildTikTokPayload({
       pixelCode: 'C123ABC',
@@ -44,7 +63,7 @@ describe('TikTok Events API payload', () => {
     expect(buildTikTokPixelScript()).toBe('');
     const script = buildTikTokPixelScript(['C123ABC', 'C123ABC']);
     expect(script).toContain('analytics.tiktok.com/i18n/pixel/events.js');
-    expect(script).toContain("q.track('InitiateCheckout'");
+    expect(script).toContain("q.instance(p).track('InitiateCheckout'");
     expect(script.match(/C123ABC/g)).toHaveLength(1);
   });
 });

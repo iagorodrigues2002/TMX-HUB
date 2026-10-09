@@ -26,7 +26,24 @@ export function buildTikTokPixelScript(pixelCodes: string[] = []): string {
   const codes = [...new Set(pixelCodes.filter(Boolean))];
   if (codes.length === 0) return '';
   const configuration = JSON.stringify(codes);
-  return `;(()=>{const P=${configuration};if(!P.length)return;!function(w,d,t){w.TiktokAnalyticsObject=t;const q=w[t]=w[t]||[];q.methods=['page','track','identify','instances','debug','on','off','once','ready','alias','group','enableCookie','disableCookie'];q.setAndDefer=function(o,m){o[m]=function(){o.push([m].concat([].slice.call(arguments,0)))}};for(const m of q.methods)q.setAndDefer(q,m);q.load=function(p){const u='https://analytics.tiktok.com/i18n/pixel/events.js?sdkid='+p+'&lib='+t,s=d.createElement('script');s.async=!0;s.src=u;const f=d.getElementsByTagName('script')[0];f.parentNode.insertBefore(s,f)};for(const p of P)q.load(p)}(window,document,'ttq');const q=window.ttq;if(!q)return;q.page();const checkout=a=>{try{return /checkout|pay|vendepay|kiwify|hotmart|perfectpay|\\/v1\\/(r|link)\\//i.test(a.href)}catch{return false}};const eventId=()=>crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2);document.addEventListener('click',e=>{const a=e.target?.closest?.('a[href]');if(!a||!checkout(a))return;q.track('InitiateCheckout',{content_type:'product',content_name:document.title||'Checkout',currency:'BRL'},{event_id:eventId()})},true)})();`;
+  return `;(()=>{
+const P=${configuration};if(!P.length)return;
+window.TiktokAnalyticsObject='ttq';const q=window.ttq=window.ttq||[];
+// Keep an installed TikTok SDK intact; the loader needs per-pixel queues.
+if(typeof q.load!=='function'){
+q.methods=['page','track','identify','instances','debug','on','off','once','ready','alias','group','enableCookie','disableCookie'];
+q.setAndDefer=function(o,m){o[m]=function(){o.push([m].concat([].slice.call(arguments,0)))}};
+for(const m of q.methods)q.setAndDefer(q,m);
+q.instance=function(p){const o=q._i[p];for(const m of q.methods)if(typeof o[m]!=='function')q.setAndDefer(o,m);return o};
+q.load=function(p,options){const u='https://analytics.tiktok.com/i18n/pixel/events.js';q._i=q._i||{};q._i[p]=[];q._i[p]._u=u;q._t=q._t||{};q._t[p]=Date.now();q._o=q._o||{};q._o[p]=options||{};const s=document.createElement('script');s.async=!0;s.src=u+'?sdkid='+p+'&lib=ttq';const f=document.getElementsByTagName('script')[0];f.parentNode.insertBefore(s,f)};
+}
+for(const p of P)if(!q._i?.[p]){q.load(p);q.instance(p).page()}
+const checkout=a=>{try{return /checkout|pay|vendepay|kiwify|hotmart|perfectpay|\\/v1\\/(r|link)\\//i.test(a.href)}catch{return false}};
+const eventId=()=>crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2);
+window.__tmxTikTokPixels=window.__tmxTikTokPixels||new Set();for(const p of P)window.__tmxTikTokPixels.add(p);
+if(window.__tmxTikTokCheckoutInstalled)return;window.__tmxTikTokCheckoutInstalled=true;
+document.addEventListener('click',e=>{const path=e.composedPath?.()||[],a=path.find(n=>n?.matches?.('a[href]'))||e.target?.closest?.('a[href]');if(!a||!(checkout(a)||a.dataset?.tmxCheckout!==undefined))return;const id=eventId();for(const p of window.__tmxTikTokPixels)q.instance(p).track('InitiateCheckout',{content_type:'product',content_name:document.title||'Checkout',currency:'BRL'},{event_id:id})},true)
+})();`;
 }
 
 export function buildVturbBridgeScript(publicKey: string, conversionParam = 'vtid'): string {
