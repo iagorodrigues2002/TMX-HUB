@@ -31,7 +31,7 @@ export const NETWORK_TRACKING_TEMPLATES = {
     networkName: 'TikTok Ads',
     urlPattern: '?ttclid=...',
     urlTemplate:
-      '?utm_source=tiktok&utm_medium=paid-social&utm_campaign={{campaign_id}}&utm_content={{adgroup_id}}&utm_term={{ad_id}}&ttclid={{ttclid}}',
+      '?utm_source=tiktok&utm_medium=paid-social&utm_campaign=__CAMPAIGN_ID__&utm_content=__AID__&utm_term=__CID__',
     fields: [
       { name: 'ttclid', description: 'TikTok Click ID recebido na URL' },
       { name: 'ttp', description: 'Cookie first-party _ttp do pixel' },
