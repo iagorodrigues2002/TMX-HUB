@@ -22,6 +22,8 @@ const safeUrl = (value: string | null | undefined) => {
 };
 
 export function buildTikTokPayload(input: TikTokEventInput) {
+  if (input.eventName === 'Purchase' && !input.orderId) throw new Error('Purchase requires an order');
+  if (input.eventName === 'AddToCart' && !input.contentId) throw new Error('AddToCart requires a product');
   const user: Record<string, string> = {};
   if (input.email) user.email = sha256(input.email);
   if (input.phone) user.phone = sha256(input.phone.replace(/\D/g, ''));
@@ -56,7 +58,7 @@ export function buildTikTokPayload(input: TikTokEventInput) {
           content_id: contentId,
           currency: input.currency,
           value: input.value,
-          order_id: input.orderId,
+          ...(input.orderId ? { order_id: input.orderId } : {}),
         },
       },
     ],
@@ -74,7 +76,7 @@ export function createTikTokWorker(): Worker<TikTokJobData> | null {
       Array<{
         id: string;
         event_id: string;
-        event_name: 'Purchase';
+        event_name: 'Purchase' | 'AddToCart';
         test_event_code: string | null;
         test_context: { event_url?: string | null; email?: string | null; phone?: string | null };
         attempts: number;
@@ -95,11 +97,16 @@ export function createTikTokWorker(): Worker<TikTokJobData> | null {
         source: { ttclid?: string; _ttp?: string; ttp?: string; client_ip?: string };
         client_ip: string | null;
         user_agent: string | null;
+        cart_product_id: string | null;
+        cart_product_name: string | null;
+        cart_amount_minor: number | null;
+        cart_currency: string | null;
       }>
     >`
-      SELECT d.id,d.event_id,d.event_name,COALESCE(d.test_event_code,dest.test_event_code) test_event_code,d.test_context,d.attempts,
+      SELECT d.id,d.event_id,d.event_name,CASE WHEN d.event_name='AddToCart' THEN d.test_event_code ELSE COALESCE(d.test_event_code,dest.test_event_code) END test_event_code,d.test_context,d.attempts,
              dest.pixel_code,dest.access_token_encrypted,d.order_id,
-             o.external_id,o.amount_minor,o.currency,o.amount_brl_minor,o.product,COALESCE(o.buyer,'{}'::jsonb) buyer,o.paid_at,o.visitor_id,
+             o.external_id,o.amount_minor,o.currency,o.amount_brl_minor,o.product,COALESCE(o.buyer,'{}'::jsonb) buyer,o.paid_at,COALESCE(o.visitor_id,event.visitor_id) visitor_id,
+             cart.product_id cart_product_id,cart.product_name cart_product_name,cart.amount_minor cart_amount_minor,cart.currency cart_currency,
              COALESCE(event.event_url, latest.event_url) event_url,
              COALESCE(event.referrer, latest.referrer) referrer,
              COALESCE(visitor.last_source,'{}'::jsonb) || COALESCE(visitor.click_ids,'{}'::jsonb) ||
@@ -111,14 +118,18 @@ export function createTikTokWorker(): Worker<TikTokJobData> | null {
       JOIN tracking_tiktok_destinations dest ON dest.id=d.destination_id AND dest.enabled=true
       LEFT JOIN tracking_orders o ON o.id=d.order_id
       LEFT JOIN tracking_events event ON event.project_id=d.project_id AND event.id=d.event_id
+      LEFT JOIN tracking_cart_baskets cart ON cart.project_id=d.project_id AND cart.event_id=d.event_id
       LEFT JOIN tracking_visitors visitor ON visitor.project_id=d.project_id AND visitor.visitor_id=COALESCE(o.visitor_id,event.visitor_id)
       LEFT JOIN LATERAL (SELECT event_url,referrer,source,click_ids,client_ip,user_agent FROM tracking_events te WHERE te.project_id=d.project_id AND te.visitor_id=COALESCE(o.visitor_id,event.visitor_id) ORDER BY te.received_at DESC LIMIT 1) latest ON true
       WHERE d.id=${deliveryId} AND d.state IN ('pending','failed','processing','test')
     `;
     if (!row) return;
-    const minor = row.amount_brl_minor ?? row.amount_minor;
-    const currency = row.amount_brl_minor != null ? 'BRL' : row.currency;
-    if (!row.test_event_code && (!row.order_id || !minor || !currency || !row.paid_at))
+    const isCart = row.event_name === 'AddToCart';
+    if (row.event_name !== 'Purchase' && !isCart) throw new Error('TikTok: unsupported delivery event');
+    const minor = isCart ? row.cart_amount_minor : row.amount_brl_minor ?? row.amount_minor;
+    const currency = isCart ? row.cart_currency : row.amount_brl_minor != null ? 'BRL' : row.currency;
+    if (isCart && (row.order_id || !row.cart_product_id || !minor || !currency)) throw new Error('TikTok: persisted cart required');
+    if (!isCart && !row.test_event_code && (!row.order_id || !minor || !currency || !row.paid_at))
       throw new Error('TikTok: compra aprovada sem valor, moeda ou data.');
     // TODO(LGPD consent gate): before outbound delivery, load
     // tracking_consents for the visitor. For denied consent, keep only the
@@ -127,13 +138,13 @@ export function createTikTokWorker(): Worker<TikTokJobData> | null {
     const payload = buildTikTokPayload({
       pixelCode: row.pixel_code,
       eventId: row.event_id,
-      eventName: 'Purchase',
+      eventName: row.event_name,
       occurredAt: row.paid_at ?? row.created_at,
       eventUrl: safeUrl(row.test_context.event_url ?? row.event_url),
       referrer: row.referrer ?? undefined,
       value: Number(((minor ?? 1) / 100).toFixed(2)),
       currency: currency ?? 'BRL',
-      orderId: row.external_id ?? `TMX-TEST-${row.id}`,
+      orderId: isCart ? undefined : row.external_id ?? `TMX-TEST-${row.id}`,
       ttclid,
       ttp: row.source._ttp ?? row.source.ttp,
       email: row.buyer.email ?? row.test_context.email ?? undefined,
@@ -141,8 +152,8 @@ export function createTikTokWorker(): Worker<TikTokJobData> | null {
       externalId: row.visitor_id ?? row.order_id ?? row.id,
       ip: row.client_ip ?? row.source.client_ip ?? undefined,
       userAgent: row.user_agent ?? undefined,
-      contentId: row.product?.planId ?? row.product?.id,
-      contentName: row.product?.planName ?? row.product?.name,
+      contentId: isCart ? row.cart_product_id! : row.product?.planId ?? row.product?.id,
+      contentName: isCart ? row.cart_product_name! : row.product?.planName ?? row.product?.name,
       testEventCode: row.test_event_code ?? undefined,
     });
     try {

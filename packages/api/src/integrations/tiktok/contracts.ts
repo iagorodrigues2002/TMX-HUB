@@ -13,13 +13,13 @@ export const TikTokTestSchema = z
 export type TikTokEventInput = {
   pixelCode: string;
   eventId: string;
-  eventName: 'Purchase';
+  eventName: 'Purchase' | 'AddToCart';
   occurredAt: Date;
   eventUrl: string;
   referrer?: string;
   value: number;
   currency: string;
-  orderId: string;
+  orderId?: string;
   ttclid?: string;
   ttp?: string;
   email?: string;

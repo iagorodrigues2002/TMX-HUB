@@ -17,6 +17,7 @@ import metaAdminRoutes from './meta-admin.js';
 import metaControlRoutes from './meta-control.js';
 import nichesRoutes from './niches.js';
 import offersRoutes from './offers.js';
+import offerCartRoutes from './offer-cart.js';
 import previewRoutes from './preview.js';
 import pushcutAdminRoutes from './pushcut-admin.js';
 import recoveryAdminRoutes from './recovery-admin.js';
@@ -81,6 +82,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       // Stays public; the ULID in the URL is the capability token.
       await v1.register(previewRoutes);
       await v1.register(trackingPublicRoutes);
+      await v1.register(offerCartRoutes);
       await v1.register(explodelyWebhookRoutes);
 
       // Everything below requires a valid JWT.
