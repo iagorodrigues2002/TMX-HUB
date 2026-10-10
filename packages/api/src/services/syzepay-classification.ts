@@ -133,7 +133,7 @@ export async function listSyzepayOrders(
 
 export async function classifySyzepayOrder(
   app: FastifyInstance,
-  args: { connectionId: string; ownerId: string; orderId: string; offerId: string; kind: SyzeKind },
+  args: { connectionId: string; ownerId: string; orderId: string; offerId: string; kind: SyzeKind; automatic?: boolean },
 ) {
   const c = await ownedSyzeConnection(app, args.connectionId, args.ownerId);
   if (!c.enabled) throw new ConflictError('Recepção desta conexão está pausada.');
@@ -255,6 +255,7 @@ export async function classifySyzepayOrder(
       id: `tmx-syzepay:${p.id}:${args.kind}`,
       name: `${offer.name} · ${args.kind === 'front' ? 'Front' : args.kind}`,
       internal_classification: true,
+      classification_mode: args.automatic ? 'automatic' : 'manual',
       vendor_product_id: null,
       store_id: o.store_id,
     };

@@ -18,6 +18,7 @@ import routes from './routes/index.js';
 import { convertToBrlMinor } from './services/exchange-rate.js';
 import { runRecoveryEmailAutomation } from './services/recovery-automation.js';
 import { runVturbDeliveries } from './services/vturb.js';
+import { runSyzepayAutoClassification } from './services/syzepay-auto.js';
 import { createBundleWorker } from './workers/bundle.worker.js';
 import { createExplodelyWorker } from './workers/explodely.worker.js';
 import { createFunnelWorker } from './workers/funnel.worker.js';
@@ -288,6 +289,16 @@ async function main() {
     );
   }, 30_000);
   trackingRecoveryTimer.unref();
+  let syzeAutoRunning = false;
+  const syzeAutoTimer = setInterval(() => {
+    if (syzeAutoRunning) return;
+    syzeAutoRunning = true;
+    void runSyzepayAutoClassification(app as unknown as Parameters<typeof runSyzepayAutoClassification>[0]).then(result => {
+      if (result.processed || result.failed) app.log.info(result, 'SyzePay automatic classification');
+    }).catch(() => app.log.error('SyzePay automatic classification cycle failed'))
+      .finally(() => { syzeAutoRunning = false; });
+  }, 15000);
+  syzeAutoTimer.unref();
 
   let emailRecoveryRunning = false;
   const runEmailRecovery = async () => {
@@ -450,6 +461,7 @@ async function main() {
     app.log.info({ signal }, 'shutdown initiated');
     try {
       clearInterval(trackingRecoveryTimer);
+      clearInterval(syzeAutoTimer);
       clearTimeout(trackingRecoveryStartupTimer);
       clearInterval(vendepayWebhookRecoveryTimer);
       app.utmifySync.stop();
