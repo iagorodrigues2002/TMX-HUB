@@ -42,6 +42,7 @@ function OrderClassification({
           <p className="mt-1 text-xs text-white/45">
             {[...new Set(order.types)].join(' + ')} · um único pedido
           </p>
+          <p className="mt-1 text-xs text-white/55">Produto: não informado pela SyzePay</p>
         </div>
         <span
           className={order.signature_valid ? 'text-xs text-emerald-200' : 'text-xs text-amber-200'}
@@ -56,34 +57,40 @@ function OrderClassification({
         </p>
       ) : (
         <div className="mt-4 flex flex-wrap gap-3">
-          <select
-            aria-label={`Oferta do pedido ${order.order_id}`}
-            value={offer}
-            onChange={(e) => setOffer(e.target.value)}
-            className={`${input} min-w-48 flex-1`}
-          >
-            <option value="">Selecionar oferta</option>
-            {offers.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.name}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label={`Etapa do pedido ${order.order_id}`}
-            value={kind}
-            onChange={(e) => setKind(e.target.value)}
-            className={input}
-          >
-            <option value="">Selecionar etapa</option>
-            <option value="front">Front</option>
-            <option value="upsell">Upsell 1</option>
-            {[2, 3, 4, 5].map((n) => (
-              <option key={n} value={`upsell_${n}`}>
-                Upsell {n}
-              </option>
-            ))}
-          </select>
+          <label className="flex min-w-48 flex-1 flex-col gap-2 text-sm">
+            Oferta
+            <select
+              aria-label={`Oferta do pedido ${order.order_id}`}
+              value={offer}
+              onChange={(e) => setOffer(e.target.value)}
+              className={`${input} min-w-48 flex-1`}
+            >
+              <option value="">Selecionar oferta</option>
+              {offers.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-2 text-sm">
+            Front ou upsell
+            <select
+              aria-label={`Etapa do pedido ${order.order_id}`}
+              value={kind}
+              onChange={(e) => setKind(e.target.value)}
+              className={input}
+            >
+              <option value="">Selecionar etapa</option>
+              <option value="front">Front</option>
+              <option value="upsell">Upsell 1</option>
+              {[2, 3, 4, 5].map((n) => (
+                <option key={n} value={`upsell_${n}`}>
+                  Upsell {n}
+                </option>
+              ))}
+            </select>
+          </label>
           <Button
             disabled={
               !offer ||
@@ -119,9 +126,16 @@ export function SyzepayOrders({ connectionId }: { connectionId: string }) {
     },
     onError: (e) => toast.error((e as Error).message),
   });
+  const pending = query.data?.orders.filter((order) => order.status !== 'processed') ?? [];
+  const classified = query.data?.orders.filter((order) => order.status === 'processed') ?? [];
+  const groups = new Map<string, Order[]>();
+  for (const order of pending) {
+    const key = order.hint_offer_id ?? '';
+    groups.set(key, [...(groups.get(key) ?? []), order]);
+  }
   return (
     <div className="mt-5 border-t border-white/10 pt-4">
-      <h3 className="text-sm font-semibold">Classificar pagamentos</h3>
+      <h3 className="text-sm font-semibold">Pedidos não classificados · {pending.length}</h3>
       <p className="mt-2 text-sm text-white/50">
         A SyzePay ainda não informa o ID do produto. Associe cada pedido à oferta e etapa. Somente
         order.paid aprovado gera venda; order.created e reenvios não duplicam a compra.
@@ -159,19 +173,44 @@ export function SyzepayOrders({ connectionId }: { connectionId: string }) {
               </Button>
             </form>
           )}
-          {!query.data?.orders.length ? (
+          {!pending.length ? (
             <p className="mt-4 text-sm text-white/45">
-              Nenhum pagamento SyzePay recebido. Testes internos de recepção não aparecem aqui.
+              Nenhum pedido aguardando classificação. Os já classificados ficam no histórico.
             </p>
           ) : (
-            query.data.orders.map((order) => (
-              <OrderClassification
-                key={order.order_id}
-                connectionId={connectionId}
-                order={order}
-                offers={query.data!.offers}
-              />
+            [...groups.entries()].map(([offerId, orders]) => (
+              <section key={offerId || 'unidentified'} className="mt-5">
+                <h4 className="text-sm font-semibold text-primary">
+                  {query.data?.offers.find((offer) => offer.id === offerId)?.name ??
+                    'Oferta não identificada'}
+                  {' · '}
+                  {orders.length} pendente(s)
+                </h4>
+                {orders.map((order) => (
+                  <OrderClassification
+                    key={order.order_id}
+                    connectionId={connectionId}
+                    order={order}
+                    offers={query.data!.offers}
+                  />
+                ))}
+              </section>
             ))
+          )}
+          {classified.length > 0 && (
+            <details className="mt-5 border-t border-white/10 pt-4">
+              <summary className="cursor-pointer text-sm text-white/65">
+                Histórico de classificados · {classified.length}
+              </summary>
+              {classified.map((order) => (
+                <OrderClassification
+                  key={order.order_id}
+                  connectionId={connectionId}
+                  order={order}
+                  offers={query.data!.offers}
+                />
+              ))}
+            </details>
           )}
         </>
       )}
