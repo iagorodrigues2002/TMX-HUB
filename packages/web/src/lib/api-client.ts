@@ -160,6 +160,7 @@ export interface TrackingOverviewAccount {
   syzepay_pending?: Array<{ company_name: string; pending_events: number }>;
 }
 export interface SyzepayFees {
+  fee_source?: 'configured' | 'webhook';
   fee_pct: number;
   fixed_fee_minor: number;
   fee_currency: string;

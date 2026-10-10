@@ -28,6 +28,11 @@ const bucket = (provider: string, settings: unknown, gross = '10000'): FeeBucket
   chargebacks: 1,
 });
 describe('individual gateway fee arithmetic', () => {
+  it('uses reported SyzePay transaction fees instead of percentage and fixed tariff', () => {
+    const b = {...bucket('syzepay', {...legacy,fee_source:'webhook'}),reported_fee_brl_minor:'19378',reported_fee_sales:2};
+    expect(calculateGatewayFee(b,{fixed:745,refund:0,chargeback:0})).toMatchObject({fees_brl_minor:19378,percentage_brl_minor:0,fixed_brl_minor:0,missing_operations:0,reserve_brl_minor:690});
+    expect(calculateGatewayFee({...b,reported_fee_sales:1},{fixed:745,refund:0,chargeback:0}).missing_operations).toBe(1);
+  });
   it('preserves the existing VendePay model only for its transactions', () => {
     expect(
       calculateGatewayFee(bucket('vendepay', legacy), {

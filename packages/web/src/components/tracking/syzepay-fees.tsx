@@ -12,6 +12,7 @@ export function SyzepayFeeForm({
   gatewayLabel = 'SyzePay',
 }: { id: string; settings: Partial<SyzepayFees>; offerId?: string; gatewayLabel?: string }) {
   const [open, setOpen] = useState(false);
+  const [source, setSource] = useState(settings.fee_source ?? 'configured');
   const qc = useQueryClient();
   const [pct, setPct] = useState(settings.fee_pct?.toString() ?? '');
   const [fixed, setFixed] = useState(
@@ -32,6 +33,7 @@ export function SyzepayFeeForm({
       (offerId
         ? (fees: SyzepayFees) => apiClient.saveGatewayFees(offerId, id, fees)
         : (fees: SyzepayFees) => apiClient.syzeSaveFees(id, fees))({
+        fee_source: source,
         fee_pct: Number(pct),
         fixed_fee_minor: Math.round(Number(fixed) * 100),
         fee_currency: currency,
@@ -60,7 +62,9 @@ export function SyzepayFeeForm({
         <div>
           <h3 className="text-sm font-semibold">Taxas desta conexão {gatewayLabel}</h3>
           <p className="mt-1 text-sm text-white/50">
-            {settings.fee_pct === undefined
+            {settings.fee_source === 'webhook'
+              ? `Taxa real por transação recebida no webhook. Reserva configurada separadamente: ${settings.reserve_pct ?? 0}% (não confirmada pelo webhook).`
+              : settings.fee_pct === undefined
               ? 'Não configuradas — nenhuma taxa da VendePay será herdada.'
               : `${settings.fee_pct}% por transação + tarifa fixa em ${settings.fee_currency}. Reserva: ${settings.reserve_pct}%.`}
           </p>
@@ -77,6 +81,17 @@ export function SyzepayFeeForm({
             save.mutate();
           }}
         >
+          {gatewayLabel === 'SyzePay' && (
+            <label className="block text-sm text-white/65">
+              Origem da taxa por transação
+              <select aria-label="Origem das taxas SyzePay" value={source}
+                onChange={(e) => setSource(e.target.value as 'configured' | 'webhook')} className={input}>
+                <option value="webhook">Valor real informado no webhook</option>
+                <option value="configured">Modelo manual: porcentagem + tarifa fixa</option>
+              </select>
+              <span className="mt-2 block text-xs">No modo webhook, porcentagem e tarifa fixa abaixo não são utilizadas. Taxa ausente fica sinalizada, sem estimativa silenciosa.</span>
+            </label>
+          )}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <label className="text-sm text-white/65">
               Taxa por transação (%)
@@ -88,6 +103,7 @@ export function SyzepayFeeForm({
                 step="0.01"
                 required
                 value={pct}
+                disabled={source === 'webhook'}
                 onChange={(e) => setPct(e.target.value)}
                 className={input}
               />
@@ -101,6 +117,7 @@ export function SyzepayFeeForm({
                 step="0.01"
                 required
                 value={fixed}
+                disabled={source === 'webhook'}
                 onChange={(e) => setFixed(e.target.value)}
                 className={input}
               />

@@ -11,6 +11,8 @@ export interface FeeBucket {
   refunds: number;
   chargebacks: number;
   settings: unknown;
+  reported_fee_brl_minor?: string;
+  reported_fee_sales?: number;
 }
 export interface CalculatedGatewayFee {
   provider: string;
@@ -41,17 +43,19 @@ export function calculateGatewayFee(
     };
   const model = config.data;
   const gross = Number(bucket.gross_brl_minor);
+  const reported = model.fee_source === 'webhook' && bucket.provider === 'syzepay';
+  const actualFees = Number(bucket.reported_fee_brl_minor ?? 0);
   return {
     provider: bucket.provider,
     fees_brl_minor:
-      Math.round((gross * model.fee_pct) / 100) + tariffs.fixed * Number(bucket.sales),
-    percentage_brl_minor: Math.round((gross * model.fee_pct) / 100),
-    fixed_brl_minor: tariffs.fixed * Number(bucket.sales),
+      reported ? actualFees : Math.round((gross * model.fee_pct) / 100) + tariffs.fixed * Number(bucket.sales),
+    percentage_brl_minor: reported ? 0 : Math.round((gross * model.fee_pct) / 100),
+    fixed_brl_minor: reported ? 0 : tariffs.fixed * Number(bucket.sales),
     reserve_brl_minor: Math.round((gross * model.reserve_pct) / 100),
     penalty_brl_minor:
       tariffs.refund * Number(bucket.refunds) + tariffs.chargeback * Number(bucket.chargebacks),
     penalty_count: Number(bucket.refunds) + Number(bucket.chargebacks),
-    missing_operations: 0,
+    missing_operations: reported ? Math.max(0, Number(bucket.sales) - Number(bucket.reported_fee_sales ?? 0)) : 0,
   };
 }
 export function totalGatewayFees(rows: CalculatedGatewayFee[]) {
@@ -72,6 +76,8 @@ export async function loadGatewayFees(db: Sql, offerIds: string[], from: Date, t
       SELECT p.offer_id,lower(trim(o.provider)) provider,
         CASE WHEN lower(trim(o.provider))='vendepay' THEN 'vendepay' ELSE COALESCE(o.gateway_connection_id,o.syzepay_connection_id,'unassigned') END connection_key,
         o.paid_at,o.refunded_at,o.chargeback_at,
+        CASE WHEN lower(trim(o.provider))='syzepay' AND o.attribution_source->>'gateway_fee_in_cents' ~ '^[0-9]{1,15}$'
+          THEN (o.attribution_source->>'gateway_fee_in_cents')::bigint END reported_fee,
         COALESCE(o.amount_brl_minor,CASE WHEN o.currency='BRL' THEN o.amount_minor WHEN rc.rate IS NOT NULL THEN (o.amount_minor*rc.rate)::bigint END,0) amount,
         CASE WHEN lower(trim(o.provider))='vendepay' THEN jsonb_build_object(
           'fee_pct',COALESCE(f.vendepay_fee_pct,9.9),'fixed_fee_minor',COALESCE(f.extra_fee_minor,149),
@@ -88,6 +94,8 @@ export async function loadGatewayFees(db: Sql, offerIds: string[], from: Date, t
     ) SELECT offer_id,provider,settings,
       COALESCE(sum(amount) FILTER(WHERE paid_at>=${from} AND paid_at<${to}),0)::text gross_brl_minor,
       count(*) FILTER(WHERE paid_at>=${from} AND paid_at<${to})::int sales,
+      COALESCE(sum(reported_fee) FILTER(WHERE paid_at>=${from} AND paid_at<${to} AND reported_fee<=amount),0)::text reported_fee_brl_minor,
+      count(*) FILTER(WHERE paid_at>=${from} AND paid_at<${to} AND reported_fee<=amount)::int reported_fee_sales,
       count(*) FILTER(WHERE refunded_at>=${from} AND refunded_at<${to})::int refunds,
       count(*) FILTER(WHERE chargeback_at>=${from} AND chargeback_at<${to})::int chargebacks
     FROM scoped GROUP BY offer_id,provider,connection_key,settings`;
@@ -110,7 +118,7 @@ export async function loadGatewayFees(db: Sql, offerIds: string[], from: Date, t
       if (parsed.success) {
         const fee = parsed.data;
         const [fixed, refund, chargeback] = await Promise.all([
-          convert(fee.fixed_fee_minor, fee.fee_currency),
+          fee.fee_source === 'webhook' && bucket.provider === 'syzepay' ? Promise.resolve(0) : convert(fee.fixed_fee_minor, fee.fee_currency),
           convert(fee.refund_fee_minor, fee.penalty_currency ?? fee.fee_currency),
           convert(fee.chargeback_fee_minor, fee.penalty_currency ?? fee.fee_currency),
         ]);
