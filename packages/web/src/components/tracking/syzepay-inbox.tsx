@@ -283,8 +283,8 @@ export function SyzepayInbox() {
                 </tbody>
               </table>
               <p className="mt-3 text-xs text-white/40">
-                Últimos 50 eventos. Reenvios byte a byte iguais são agrupados; deduplicação de
-                transações será definida com o payload real.
+                Últimos 50 eventos. Reenvios são agrupados por event.id. Sem ele, preservamos
+                alterações do pedido para não perder reembolsos ou renovações.
               </p>
             </div>
           )}

@@ -11,6 +11,40 @@ export const syzeHash = (value: string | Buffer) =>
 export const syzeCompanyKey = (owner: string, company: string) =>
   syzeHash(`${owner}\0${company.trim().toLocaleLowerCase('pt-BR')}`);
 
+export function syzeReceiptIdentity(body: Buffer) {
+  const id = (value: unknown) =>
+    typeof value === 'string' && value.trim() && value.length <= 256
+      ? value.trim()
+      : typeof value === 'number' && Number.isSafeInteger(value)
+        ? String(value)
+        : null;
+  const canonical = (value: unknown): unknown =>
+    Array.isArray(value)
+      ? value.map(canonical)
+      : value && typeof value === 'object'
+        ? Object.fromEntries(
+            Object.entries(value)
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([k, v]) => [k, canonical(v)]),
+          )
+        : value;
+  try {
+    const payload = JSON.parse(body.toString('utf8'));
+    const eventId = id(payload?.event?.id);
+    const orderId = id(payload?.order?.id);
+    // Orders have multiple lifecycle events. Preserve changed snapshots until
+    // the vendor contract provides a reliable event type for the fallback key.
+    const dedupeKey = eventId
+      ? `event:${eventId}`
+      : orderId
+        ? `order:${orderId}:${syzeHash(JSON.stringify(canonical(payload)))}`
+        : `body:${syzeHash(body)}`;
+    return { eventId, orderId, dedupeKey };
+  } catch {
+    return { eventId: null, orderId: null, dedupeKey: `body:${syzeHash(body)}` };
+  }
+}
+
 // Raw bytes are retained encrypted until we know the vendor contract. No parser,
 // guessed signature verification, order normalization or downstream queues here.
 export const syzepayPublicRoutes: FastifyPluginAsync<{
@@ -60,10 +94,11 @@ export const syzepayPublicRoutes: FastifyPluginAsync<{
               { id: string }[]
             >`SELECT id FROM syzepay_company_connections WHERE token_hash=${syzeHash(token)} AND enabled`;
             if (!connection) return null;
+            const identity = syzeReceiptIdentity(body);
             const [row] = await sql<{ id: string; attempts: number }[]>`
-            INSERT INTO syzepay_inbox_receipts(id,connection_id,body_hash,body_encrypted,headers_encrypted,content_type,body_bytes)
-            VALUES(${ulid()},${connection.id},${syzeHash(body)},${encryptSecret(body.toString('base64'), secret)},${encryptSecret(JSON.stringify(headers), secret)},${contentType},${body.length})
-            ON CONFLICT(connection_id,body_hash) DO UPDATE SET attempts=syzepay_inbox_receipts.attempts+1,last_received_at=now()
+            INSERT INTO syzepay_inbox_receipts(id,connection_id,body_hash,body_encrypted,headers_encrypted,content_type,body_bytes,dedupe_key,event_id,order_id)
+            VALUES(${ulid()},${connection.id},${syzeHash(body)},${encryptSecret(body.toString('base64'), secret)},${encryptSecret(JSON.stringify(headers), secret)},${contentType},${body.length},${identity.dedupeKey},${identity.eventId},${identity.orderId})
+            ON CONFLICT(connection_id,dedupe_key) DO UPDATE SET attempts=syzepay_inbox_receipts.attempts+1,last_received_at=now()
             RETURNING id,attempts`;
             return row;
           });
@@ -72,7 +107,7 @@ export const syzepayPublicRoutes: FastifyPluginAsync<{
         return reply.code(503).send({ error: 'inbox_unavailable' });
       }
       if (!receipt) return reply.code(401).send({ error: 'invalid_token' });
-      return reply.code(202).send({
+      return reply.code(200).send({
         received: true,
         receipt_id: receipt.id,
         state: 'awaiting_mapping',

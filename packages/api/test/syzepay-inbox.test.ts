@@ -11,6 +11,7 @@ import {
   syzepayAdminRoutes,
   syzeHash,
   syzeCompanyKey,
+  syzeReceiptIdentity,
 } from '../src/routes/syzepay.js';
 
 const apps: ReturnType<typeof Fastify>[] = [];
@@ -25,7 +26,7 @@ function fixture() {
   const receive = vi.fn(
     async (hash: string, body: Buffer, _contentType: string, _headers: Record<string, string>) => {
       if (hash !== syzeHash(token)) return null;
-      const key = syzeHash(body);
+      const key = syzeReceiptIdentity(body).dedupeKey;
       const row = bodies.get(key) ?? { id: 'receipt-1', attempts: 0 };
       row.attempts++;
       bodies.set(key, row);
@@ -36,6 +37,37 @@ function fixture() {
   return { app, receive, bodies };
 }
 describe('SyzePay isolated reception', () => {
+  it('deduplicates event.id across retries with different formatting or delivery metadata', async () => {
+    const { app, bodies } = fixture();
+    const send = (payload: string) =>
+      app.inject({
+        method: 'POST',
+        url: `/webhooks/syzepay?token=${token}`,
+        headers: { 'content-type': 'application/json' },
+        payload,
+      });
+    expect(
+      (await send('{"event":{"id":"ev-1"},"order":{"id":"o-1"},"delivery":1}')).statusCode,
+    ).toBe(200);
+    expect(
+      (await send('{ "order":{"id":"o-1"}, "event":{"id":"ev-1"}, "delivery":2 }')).json()
+        .duplicate,
+    ).toBe(true);
+    expect(bodies.size).toBe(1);
+  });
+  it('never deduplicates a refund just because order.id matches an approval', () => {
+    const identity = (value: unknown) =>
+      syzeReceiptIdentity(Buffer.from(JSON.stringify(value))).dedupeKey;
+    expect(identity({ order: { id: 'order-1', status: 'paid' } })).not.toBe(
+      identity({ order: { id: 'order-1', status: 'refunded' } }),
+    );
+    expect(identity({ order: { id: 'order-1', status: 'paid' }, amount: 10 })).toBe(
+      identity({ amount: 10, order: { status: 'paid', id: 'order-1' } }),
+    );
+    expect(identity({ event: { id: 'approve-1' }, order: { id: 'o-1' } })).not.toBe(
+      identity({ event: { id: 'refund-1' }, order: { id: 'o-1' } }),
+    );
+  });
   it('authenticates before storage and preserves exact JSON bytes, not parsed sales', async () => {
     const { app, receive } = fixture();
     const body = '{ "event": "sale.approved", "product": { "id": "123" } }';
@@ -49,7 +81,7 @@ describe('SyzePay isolated reception', () => {
       },
       payload: body,
     });
-    expect(result.statusCode).toBe(202);
+    expect(result.statusCode).toBe(200);
     expect(result.json()).toMatchObject({
       received: true,
       state: 'awaiting_mapping',
