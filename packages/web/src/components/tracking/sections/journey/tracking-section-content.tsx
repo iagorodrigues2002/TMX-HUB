@@ -2190,13 +2190,13 @@ export function TrackingSectionContent({
           {section === 'upsells' && (
             <Module
               title="Upsell Intelligence"
-              description="Monitore cada página diretamente pelo script, sem trocar nenhum link configurado na Vendepay."
+              description="Monitore cada página pelo script e configure os destinos de recuperação por gateway."
             >
               <div className="mb-4 rounded-xl border border-emerald-300/20 bg-emerald-300/[0.05] p-4 text-sm leading-6 text-emerald-50/75">
                 <p className="font-semibold text-emerald-200">Modo somente script</p>
                 <p>
-                  Mantenha os links atuais do funil na Vendepay. Cadastre abaixo a URL que ela já
-                  abre e instale o script gerado nessa página. O TMX captura a visita, o vendid
+                  Mantenha os links atuais do funil no gateway. Cadastre abaixo a URL que ele já
+                  abre e instale o script gerado nessa página. O TMX captura a visita, o identificador
                   disponível e cruza tudo com os webhooks automaticamente.
                 </p>
               </div>
@@ -2512,13 +2512,12 @@ export function TrackingSectionContent({
                     )}
                   </div>
                   <p className="mt-1 text-xs text-white/40">
-                    Histórico completo de compras de front aprovadas. O TMX libera os links somente
-                    após confirmar o vendaId no funil correspondente da VendePay.
+                    Histórico de compras de front aprovadas. VendePay usa vendaId validado; SyzePay
+                    usa a sessão do checkout e confirma a página no funil antes de liberar o link.
                   </p>
                   <p className="mt-1 text-xs text-white/35">
-                    A consulta é instantânea e não chama a VendePay. Use “Recuperar vendaId” quando
-                    quiser validar os identificadores pendentes; isso nunca altera o histórico
-                    manual de funcionou ou não funcionou.
+                    As verificações de sessão são somente de leitura e não realizam cobranças.
+                    “Recuperar vendaId” é específico da VendePay. Cada compra abre somente os destinos do seu gateway.
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {(

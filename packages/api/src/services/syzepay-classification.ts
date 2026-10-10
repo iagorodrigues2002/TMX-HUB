@@ -236,7 +236,6 @@ export async function classifySyzepayOrder(
         >`SELECT NULLIF(properties->>'email','') email,NULLIF(properties->>'name','') name FROM tracking_events WHERE project_id=${p.id} AND visitor_id=${visitorId} AND event_name IN ('Identify','Lead') AND NULLIF(properties->>'email','') IS NOT NULL ORDER BY received_at DESC LIMIT 1`
       : [];
     const source: Record<string, string> = {
-      ...(o.checkout_session_id ? {syzepay_session_id:o.checkout_session_id} : {}),
       ...(v?.first_source ?? {}),
       ...(v?.last_source ?? {}),
       ...(v?.click_ids ?? {}),
@@ -250,6 +249,7 @@ export async function classifySyzepayOrder(
     };
     for (const key of ['ab_test_id', 'ab_variant_id'])
       if (typeof browser?.properties?.[key] === 'string') source[key] = browser.properties[key]!;
+    if (o.checkout_session_id) source.syzepay_session_id = o.checkout_session_id;
     if (fee) source.gateway_fee_in_cents = String(fee.brlMinor);
     if (net) source.gateway_net_in_cents = String(net.brlMinor);
     const product = {
