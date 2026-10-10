@@ -14,6 +14,7 @@ import { zodToProblem } from '../lib/problem.js';
 import { decryptSecret, encryptSecret } from '../lib/secret-box.js';
 import { saoPauloParts } from '../services/intraday-store.js';
 import { upsellOrigin } from '../services/upsell-origin.js';
+import { buildSyzepayRecoveryUrl, validateSyzepayRecovery } from '../services/syzepay-upsell.js';
 import { canonicalTrackingHostname } from '../services/tracking-domain.js';
 import {
   checkUpsellCompatibility,
@@ -162,12 +163,12 @@ const UpsellStageSchema = z.object({
   stage_key: z.string().regex(/^upsell_[1-9][0-9]*$/),
   name: z.string().trim().min(2).max(120),
   destination_url: z.string().url().max(4096),
-  connection_destinations: z.record(z.string(), z.string().url().max(4096)).default({}),
+  connection_destinations: z.record(z.string(), z.string().url().max(4096)).default({}).refine(urls => !urls['gateway:syzepay'] || urls['gateway:syzepay'].toLowerCase().startsWith('https://'), 'A URL SyzePay deve usar HTTPS.'),
 });
 const UpsellStageUpdateSchema = z.object({
   name: z.string().trim().min(2).max(120),
   destination_url: z.string().url().max(4096),
-  connection_destinations: z.record(z.string(), z.string().url().max(4096)).default({}),
+  connection_destinations: z.record(z.string(), z.string().url().max(4096)).default({}).refine(urls => !urls['gateway:syzepay'] || urls['gateway:syzepay'].toLowerCase().startsWith('https://'), 'A URL SyzePay deve usar HTTPS.'),
   enabled: z.boolean().optional(),
 });
 
@@ -556,6 +557,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           connection_id: string | null;
           connection_name: string;
           provider: string;
+          syzepay_session_id: string | null;
           confirmed_vendid_encrypted: string | null;
           validation_state: string | null;
           validation_error: string | null;
@@ -564,7 +566,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           purchased_stage_keys: string[];
         }>
       >`
-          SELECT o.id,o.visitor_id,o.external_id,o.paid_at,o.provider,
+          SELECT o.id,o.visitor_id,o.external_id,o.paid_at,o.provider,o.attribution_source->>'syzepay_session_id' AS syzepay_session_id,
                  o.vendepay_connection_id AS connection_id,
                  CASE WHEN o.provider='vendepay' THEN vc.name
                       WHEN o.provider='syzepay' THEN sc.name
@@ -576,6 +578,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                  EXISTS (
                    SELECT 1 FROM tracking_orders upsell
                    WHERE upsell.project_id=o.project_id
+                     AND upsell.provider=o.provider
                      AND (upsell.order_kind='upsell' OR upsell.order_kind ~ '^upsell_[2-9][0-9]*$')
                      AND upsell.paid_at IS NOT NULL
                      AND (
@@ -596,6 +599,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                    END
                    FROM tracking_orders upsell
                    WHERE upsell.project_id=o.project_id
+                     AND upsell.provider=o.provider
                      AND (upsell.order_kind='upsell' OR upsell.order_kind ~ '^upsell_[2-9][0-9]*$')
                      AND upsell.paid_at IS NOT NULL
                      AND (
@@ -690,7 +694,15 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         has_upsell: receipt.has_upsell,
         first_seen_at: receipt.paid_at,
         last_seen_at: receipt.paid_at,
-        links: vendidConfirmed
+        links: receipt.provider === 'syzepay' && receipt.syzepay_session_id
+          ? stages.filter(stage => stage.connection_destinations?.['gateway:syzepay']).map(stage => ({
+              stage_id:stage.id,stage_key:stage.stage_key,name:stage.name,gateway:'syzepay',
+              already_purchased:receipt.purchased_stage_keys.includes(stage.stage_key),
+              url:buildSyzepayRecoveryUrl(stage.connection_destinations!['gateway:syzepay']!,receipt.syzepay_session_id!),
+              force_url:null,manual_result:resultByOrderStage.get(`${receipt.id}:${stage.id}`)?.result ?? null,
+              manual_checked_at:resultByOrderStage.get(`${receipt.id}:${stage.id}`)?.checked_at ?? null,
+            }))
+          : vendidConfirmed
           ? stages.map((stage) => {
               const validatedLink = new URL(upsellUrl(stage.slug));
               validatedLink.searchParams.set('vendaId', displayId);
@@ -710,6 +722,19 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       };
     });
     return { items, total: totals[0]?.total ?? 0, limit, offset };
+  });
+
+  app.get<{Params:{id:string;orderId:string;stageId:string}}>('/offers/:id/tracking/upsell-identities/:orderId/stages/:stageId/syzepay-check', async(req,reply) => {
+    const p = await project(req.params.id,req.user!.sub,req.user!.role === 'admin');
+    if (!app.db || !p) return reply.code(404).send({compatible:false});
+    reply.header('cache-control','private, no-store');
+    const [row] = await app.db<{session_id:string;destination:string}[]>`
+      SELECT o.attribution_source->>'syzepay_session_id' session_id,s.connection_destinations->>'gateway:syzepay' destination
+      FROM tracking_orders o JOIN tracking_upsell_stages s ON s.project_id=o.project_id
+      WHERE o.id=${req.params.orderId} AND s.id=${req.params.stageId} AND o.project_id=${p.id}
+        AND o.provider='syzepay' AND o.order_kind='front' AND o.paid_at IS NOT NULL AND s.enabled`;
+    if (!row?.session_id || !row.destination) return {compatible:false,reason:'Cadastre a URL SyzePay desta etapa; a compra precisa conter sessão.'};
+    return validateSyzepayRecovery(row.destination,row.session_id);
   });
 
   app.put<{
@@ -976,7 +1001,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!p) return reply.code(409).send({ error: 'tracking_not_configured' });
     const body = parsed(UpsellStageSchema, req.body);
     const connectionDestinations = body.connection_destinations ?? {};
-    const connectionIds = Object.keys(connectionDestinations);
+    const connectionIds = Object.keys(connectionDestinations).filter(key => !['gateway:vendepay','gateway:syzepay','gateway:paysight','gateway:explodely'].includes(key));
     if (connectionIds.length) {
       const validConnections = await app.db<Array<{ id: string }>>`
         SELECT id FROM vendepay_connections
@@ -1018,7 +1043,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!p) return reply.code(404).send({ error: 'tracking_not_configured' });
       const body = parsed(UpsellStageUpdateSchema, req.body);
       const connectionDestinations = body.connection_destinations ?? {};
-      const connectionIds = Object.keys(connectionDestinations);
+      const connectionIds = Object.keys(connectionDestinations).filter(key => !['gateway:vendepay','gateway:syzepay','gateway:paysight','gateway:explodely'].includes(key));
       if (connectionIds.length) {
         const validConnections = await app.db<Array<{ id: string }>>`
           SELECT id FROM vendepay_connections

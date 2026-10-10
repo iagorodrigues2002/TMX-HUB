@@ -1459,9 +1459,10 @@ export const apiClient = {
     }),
   syzeToggle: (id: string, enabled: boolean) =>
     request(`/v1/tracking/syzepay/connections/${encodeURIComponent(id)}`, {
-      method: 'PATCH',
-      body: { enabled },
+      method: 'PATCH', body: { enabled },
     }),
+  checkSyzepayUpsell: (offerId:string,orderId:string,stageId:string) =>
+    request<{compatible:boolean;reason:string;url?:string}>(`/v1/offers/${offerId}/tracking/upsell-identities/${orderId}/stages/${stageId}/syzepay-check`),
   syzeCompanies: () =>
     request<{ companies: Array<{ key: string; name: string; offers: number }> }>(
       '/v1/tracking/syzepay/companies',
@@ -2987,6 +2988,7 @@ export const apiClient = {
       first_seen_at: string;
       last_seen_at: string;
       links: Array<{
+        gateway?: string;
         stage_id: string;
         stage_key: UpsellStageKey;
         name: string;

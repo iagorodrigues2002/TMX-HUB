@@ -117,6 +117,7 @@ function ValidatedUpsellLink({
   offerId: string;
   orderId: string;
   link: {
+    gateway?: string;
     stage_id: string;
     name: string;
     already_purchased: boolean;
@@ -127,9 +128,11 @@ function ValidatedUpsellLink({
   };
 }) {
   const qc = useQueryClient();
-  const validation = useQuery({
+  const validation = useQuery<{compatible:boolean;reason:string|null;url?:string;state?:'recoverable'|'already_converted'|'temporary_failure'|'definitive_failure'}>({
     queryKey: ['upsell-compatibility', link.stage_id, link.url],
-    queryFn: () => apiClient.checkTrackingUpsellCompatibility(link.url),
+    queryFn: () => link.gateway === 'syzepay'
+      ? apiClient.checkSyzepayUpsell(offerId,orderId,link.stage_id)
+      : apiClient.checkTrackingUpsellCompatibility(link.url),
     staleTime: 30_000,
     refetchOnMount: 'always',
     refetchInterval: 60_000,
@@ -196,6 +199,14 @@ function ValidatedUpsellLink({
         {link.name} · já comprado · abrir
       </a>
     );
+  }
+  if (link.gateway === 'syzepay') {
+    const syzeValidation = validation.data as {compatible?:boolean;url?:string;reason?:string} | undefined;
+    if (!syzeValidation?.compatible || !syzeValidation.url)
+      return <span className="text-xs text-amber-100/60">{validation.isFetching ? 'Validando sessão SyzePay…' : syzeValidation?.reason ?? 'Sessão SyzePay indisponível'}</span>;
+    return withManualResult(<a href={syzeValidation.url} target="_blank" rel="noreferrer"
+      title="Sessão e página confirmadas na SyzePay. A cobrança exige aceitar a oferta na página."
+      className="rounded-md border border-cyan-300/25 px-2.5 py-1.5 text-cyan-100">{link.name} · SyzePay · abrir</a>);
   }
   if (link.force_url) {
     return withManualResult(
@@ -2221,6 +2232,21 @@ export function TrackingSectionContent({
                     placeholder="Nome da etapa"
                   />
                 </div>
+                <div className="mt-4 rounded-lg border border-white/10 p-3">
+                  <p className="text-xs font-semibold text-white/75">URL desta etapa por gateway</p>
+                  <p className="mt-1 text-xs text-white/45">Cada compra usa somente a URL do seu gateway. Na SyzePay, o TMX confirma a sessão antes de liberar o link.</p>
+                  <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                    {(['vendepay','syzepay','paysight','explodely'] as const).map(gateway => (
+                      <label key={gateway} className="text-xs text-white/65">
+                        {{vendepay:'VendePay (padrão)',syzepay:'SyzePay',paysight:'Paysight',explodely:'Explodely'}[gateway]}
+                        <Input aria-label={`URL de upsell ${gateway}`} value={upsellConnectionDestinations[`gateway:${gateway}`] ?? ''}
+                          onChange={e=>setUpsellConnectionDestinations(current=>{const next={...current};if(e.target.value.trim())next[`gateway:${gateway}`]=e.target.value.trim();else delete next[`gateway:${gateway}`];return next;})}
+                          placeholder="https://sua-pagina-de-upsell/" />
+                      </label>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-xs text-white/40">Paysight e Explodely: cadastro de destino disponível; recuperação autenticada depende do contrato de cada gateway.</p>
+                </div>
                 {vendepayConnections.length > 0 && (
                   <div className="mt-4 rounded-lg border border-white/[0.08] bg-black/20 p-3">
                     <p className="text-xs font-semibold text-white/75">Links por conta VendePay</p>
@@ -2346,7 +2372,7 @@ export function TrackingSectionContent({
                               setUpsellConnectionDestinations(stage.connection_destinations ?? {});
                             }}
                           >
-                            Editar links por conta
+                            Editar URLs por gateway
                           </Button>
                           <Button
                             size="sm"
@@ -2389,6 +2415,12 @@ export function TrackingSectionContent({
                               </span>
                             </div>
                           ))}
+                        {(['vendepay','syzepay','paysight','explodely'] as const).filter(gateway => stage.connection_destinations?.[`gateway:${gateway}`]).map(gateway => (
+                          <div key={gateway} className="mt-2 text-xs text-white/60">
+                            <strong>{{vendepay:'VendePay',syzepay:'SyzePay',paysight:'Paysight',explodely:'Explodely'}[gateway]}</strong>
+                            <span className="ml-2 break-all">{stage.connection_destinations?.[`gateway:${gateway}`]}</span>
+                          </div>
+                        ))}
                         {!Object.keys(stage.connection_destinations ?? {}).length && (
                           <p className="text-[11px] text-amber-100/55">
                             Nenhuma conta VendePay configurada nesta etapa.

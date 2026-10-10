@@ -520,7 +520,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       ORDER BY o.paid_at DESC LIMIT 1
     `;
     if (order?.vendepay_connection_id) {
-      return stage.connection_destinations?.[order.vendepay_connection_id] || null;
+      return stage.connection_destinations?.[order.vendepay_connection_id] || stage.connection_destinations?.['gateway:vendepay'] || null;
     }
     return stage.destination_url;
   }

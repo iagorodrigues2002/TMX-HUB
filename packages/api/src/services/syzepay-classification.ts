@@ -236,6 +236,7 @@ export async function classifySyzepayOrder(
         >`SELECT NULLIF(properties->>'email','') email,NULLIF(properties->>'name','') name FROM tracking_events WHERE project_id=${p.id} AND visitor_id=${visitorId} AND event_name IN ('Identify','Lead') AND NULLIF(properties->>'email','') IS NOT NULL ORDER BY received_at DESC LIMIT 1`
       : [];
     const source: Record<string, string> = {
+      ...(o.checkout_session_id ? {syzepay_session_id:o.checkout_session_id} : {}),
       ...(v?.first_source ?? {}),
       ...(v?.last_source ?? {}),
       ...(v?.click_ids ?? {}),
