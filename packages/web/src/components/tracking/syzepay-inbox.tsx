@@ -9,6 +9,7 @@ import { DataState } from '@/components/ui/data-state';
 import { toast } from 'sonner';
 import { Building2, Copy, Webhook, RefreshCw } from 'lucide-react';
 import { SyzepayFeeForm } from './syzepay-fees';
+import { SyzepayOrders } from './syzepay-orders';
 
 export function SyzepayInbox() {
   const params = useSearchParams();
@@ -119,11 +120,11 @@ export function SyzepayInbox() {
         )}
       </header>
       <section className="rounded-lg border border-amber-300/25 bg-amber-300/5 p-4 text-sm">
-        <strong>Somente recepção · aguardando mapeamento</strong>
+        <strong>Recepção rápida · classificação segura por pedido</strong>
         <p className="mt-2 text-white/60">
-          Os eventos são guardados criptografados. Não geram faturamento, acesso à área de membros
-          ou envios para Meta, TikTok, Google e UTMify. A assinatura do provedor ainda não foi
-          validada; a URL é protegida por token.
+          Os eventos são guardados criptografados e só geram venda após assinatura validada e
+          classificação. Os envios respeitam os destinos ativos da oferta. Compras front são
+          elegíveis aos pixels; upsells não inflam a otimização.
         </p>
       </section>
       {company && (
@@ -224,11 +225,11 @@ export function SyzepayInbox() {
             <div className="mt-5 border-t border-white/10 pt-4">
               <h3 className="text-sm font-medium">Produtos → Oferta → Front ou upsell</h3>
               <p className="mt-2 text-sm text-white/45">
-                {c.receipts
-                  ? 'Eventos recebidos. Precisamos analisar o formato da SyzePay antes de habilitar a associação de produtos.'
-                  : 'Aguardando o primeiro webhook para identificar os produtos e habilitar a classificação.'}
+                Produto não informado pelo gateway. A classificação abaixo é por pedido, sem
+                presumir que todos os produtos da loja são front.
               </p>
             </div>
+            <SyzepayOrders connectionId={c.id} />
             <SyzepayFeeForm id={c.id} settings={c.fee_settings ?? {}} />
           </section>
         ))
@@ -279,7 +280,15 @@ export function SyzepayInbox() {
                         {r.content_type} · {r.body_bytes} bytes
                       </td>
                       <td>{r.attempts - 1}</td>
-                      <td className="text-amber-200">Aguardando mapeamento</td>
+                      <td className="text-amber-200">
+                        {r.state === 'processed'
+                          ? 'Processado'
+                          : r.state === 'ignored'
+                            ? 'Sem efeito financeiro'
+                            : r.state === 'quarantined'
+                              ? 'Requer revisão'
+                              : 'Aguardando classificação'}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

@@ -6,6 +6,12 @@ import { env } from '../env.js';
 import { BadRequestError, NotFoundError } from '../lib/problem.js';
 import { decryptSecret, encryptSecret } from '../lib/secret-box.js';
 import { gatewayFeesSchema } from '../lib/gateway-fee-model.js';
+import { verifySyzepaySignature } from '../lib/syzepay-contract.js';
+import {
+  classifySyzepayOrder,
+  listSyzepayOrders,
+  ownedSyzeConnection,
+} from '../services/syzepay-classification.js';
 
 export const syzeHash = (value: string | Buffer) =>
   createHash('sha256').update(value).digest('hex');
@@ -31,8 +37,8 @@ export function syzeReceiptIdentity(body: Buffer) {
         : value;
   try {
     const payload = JSON.parse(body.toString('utf8'));
-    const eventId = id(payload?.event?.id);
-    const orderId = id(payload?.order?.id);
+    const eventId = id(payload?.event?.id) ?? (payload?.data?.object ? id(payload.id) : null);
+    const orderId = id(payload?.order?.id) ?? id(payload?.data?.object?.id);
     // Orders have multiple lifecycle events. Preserve changed snapshots until
     // the vendor contract provides a reliable event type for the fallback key.
     const dedupeKey = eventId
@@ -92,19 +98,31 @@ export const syzepayPublicRoutes: FastifyPluginAsync<{
           receipt = await app.db.begin(async (sql) => {
             await sql`SET LOCAL statement_timeout='2500ms'`;
             const [connection] = await sql<
-              { id: string }[]
-            >`SELECT id FROM syzepay_company_connections WHERE token_hash=${syzeHash(token)} AND enabled`;
+              { id: string; signing_secret_encrypted: string | null }[]
+            >`SELECT id,signing_secret_encrypted FROM syzepay_company_connections WHERE token_hash=${syzeHash(token)} AND enabled`;
             if (!connection) return null;
+            if (
+              connection.signing_secret_encrypted &&
+              !verifySyzepaySignature(
+                body,
+                headers['x-syzepay-signature'],
+                decryptSecret(connection.signing_secret_encrypted, secret),
+                new Date(),
+              )
+            )
+              throw new Error('syzepay_signature_invalid');
             const identity = syzeReceiptIdentity(body);
             const [row] = await sql<{ id: string; attempts: number }[]>`
-            INSERT INTO syzepay_inbox_receipts(id,connection_id,body_hash,body_encrypted,headers_encrypted,content_type,body_bytes,dedupe_key,event_id,order_id)
-            VALUES(${ulid()},${connection.id},${syzeHash(body)},${encryptSecret(body.toString('base64'), secret)},${encryptSecret(JSON.stringify(headers), secret)},${contentType},${body.length},${identity.dedupeKey},${identity.eventId},${identity.orderId})
+            INSERT INTO syzepay_inbox_receipts(id,connection_id,body_hash,body_encrypted,headers_encrypted,content_type,body_bytes,dedupe_key,event_id,order_id,authenticity)
+            VALUES(${ulid()},${connection.id},${syzeHash(body)},${encryptSecret(body.toString('base64'), secret)},${encryptSecret(JSON.stringify(headers), secret)},${contentType},${body.length},${identity.dedupeKey},${identity.eventId},${identity.orderId},${connection.signing_secret_encrypted ? 'signature_verified' : 'token_only'})
             ON CONFLICT(connection_id,dedupe_key) DO UPDATE SET attempts=syzepay_inbox_receipts.attempts+1,last_received_at=now()
             RETURNING id,attempts`;
             return row;
           });
         }
-      } catch {
+      } catch (error) {
+        if (error instanceof Error && error.message === 'syzepay_signature_invalid')
+          return reply.code(401).send({ error: 'invalid_signature' });
         return reply.code(503).send({ error: 'inbox_unavailable' });
       }
       if (!receipt) return reply.code(401).send({ error: 'invalid_token' });
@@ -126,6 +144,50 @@ const createSchema = z
   .strict();
 export const syzeFeesSchema = gatewayFeesSchema;
 export const syzepayAdminRoutes: FastifyPluginAsync = async (app) => {
+  app.get<{ Params: { id: string } }>(
+    '/tracking/syzepay/connections/:id/orders',
+    async (req, reply) => {
+      reply.header('Cache-Control', 'private,no-store');
+      return listSyzepayOrders(app, req.params.id, req.user!.sub);
+    },
+  );
+  app.put<{ Params: { id: string } }>(
+    '/tracking/syzepay/connections/:id/signing-secret',
+    async (req) => {
+      await ownedSyzeConnection(app, req.params.id, req.user!.sub);
+      const parsed = z
+        .object({ signing_secret: z.string().trim().min(16).max(4096) })
+        .strict()
+        .safeParse(req.body);
+      if (!parsed.success) throw new BadRequestError('Informe o secret de assinatura.');
+      await app.db!`UPDATE syzepay_company_connections SET signing_secret_encrypted=${encryptSecret(parsed.data.signing_secret, env.TRACKING_ENCRYPTION_KEY!)} WHERE id=${req.params.id} AND owner_id=${req.user!.sub}`;
+      return { configured: true };
+    },
+  );
+  app.post<{ Params: { id: string; orderId: string } }>(
+    '/tracking/syzepay/connections/:id/orders/:orderId/classify',
+    async (req, reply) => {
+      const parsed = z
+        .object({
+          offer_id: z.string().min(1).max(100),
+          order_kind: z.string().regex(/^(front|upsell|upsell_[0-9]+)$/),
+        })
+        .strict()
+        .safeParse(req.body);
+      if (!parsed.success) throw new BadRequestError('Selecione oferta e etapa.');
+      return reply
+        .code(202)
+        .send(
+          await classifySyzepayOrder(app, {
+            connectionId: req.params.id,
+            ownerId: req.user!.sub,
+            orderId: req.params.orderId,
+            offerId: parsed.data.offer_id,
+            kind: parsed.data.order_kind as 'front' | 'upsell' | `upsell_${number}`,
+          }),
+        );
+    },
+  );
   const companies = async (owner: string) => {
     const offers = (await app.offerStore.listByUser(owner)).filter(
       (o) => o.userId === owner && o.companyName?.trim(),
@@ -149,7 +211,8 @@ export const syzepayAdminRoutes: FastifyPluginAsync = async (app) => {
     if (!app.db) return reply.code(503).send({ error: 'database_unavailable' });
     const connections = await app.db`
       SELECT c.id,c.company_key,c.company_name,c.name,c.enabled,c.created_at,c.fee_settings,c.fees_updated_at,
-        (SELECT count(*)::int FROM syzepay_inbox_receipts r WHERE r.connection_id=c.id) AS receipts,
+        (c.signing_secret_encrypted IS NOT NULL) signing_secret_configured,
+        (SELECT count(*)::int FROM syzepay_inbox_receipts r WHERE r.connection_id=c.id AND r.state='awaiting_mapping') AS receipts,
         (SELECT max(received_at) FROM syzepay_inbox_receipts r WHERE r.connection_id=c.id) AS last_received_at
       FROM syzepay_company_connections c WHERE c.owner_id=${req.user!.sub} ORDER BY c.created_at DESC`;
     return { connections };

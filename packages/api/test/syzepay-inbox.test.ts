@@ -4,6 +4,9 @@ vi.mock('../src/env.js', () => ({
   env: {
     TRACKING_ENCRYPTION_KEY: 'test-secret-32-characters-long-enough',
     TRACKING_PUBLIC_BASE_URL: 'https://example.com',
+    LOG_LEVEL: 'error',
+    NODE_ENV: 'test',
+    WEBHOOK_SECRET: 'test-tracking-source-secret',
   },
 }));
 import {

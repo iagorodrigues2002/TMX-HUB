@@ -141,10 +141,14 @@ export function buildUtmifyOrderPayload(input: UtmifyOrderInput) {
     commission: {
       totalPriceInCents: input.amountMinor,
       gatewayFeeInCents: Number(source.gateway_fee_in_cents ?? 0),
-      userCommissionInCents: Math.max(
-        0,
-        input.amountMinor - Number(source.gateway_fee_in_cents ?? 0),
-      ),
+      userCommissionInCents:
+        Number.isSafeInteger(Number(source.gateway_net_in_cents)) &&
+        source.gateway_net_in_cents !== undefined &&
+        source.gateway_net_in_cents.trim() !== '' &&
+        Number(source.gateway_net_in_cents) >= 0 &&
+        Number(source.gateway_net_in_cents) <= input.amountMinor
+          ? Number(source.gateway_net_in_cents)
+          : Math.max(0, input.amountMinor - Number(source.gateway_fee_in_cents ?? 0)),
       currency: input.currency,
     },
   };

@@ -212,7 +212,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           const syzeRows = await app.db!<{ company_name: string; pending_events: number }[]>`
             SELECT c.company_name,count(r.id)::int pending_events
             FROM syzepay_company_connections c LEFT JOIN syzepay_inbox_receipts r ON r.connection_id=c.id
-              AND r.received_at>=${from} AND r.received_at<${to}
+              AND r.received_at>=${from} AND r.received_at<${to} AND r.state='awaiting_mapping'
             WHERE c.owner_id=${req.user!.sub} GROUP BY c.company_name`;
           const usdRate = await getBrlRate('USD', app.db!);
           const toUsdMinor = (brlMinor: number) => (usdRate ? Math.round(brlMinor / usdRate) : 0);

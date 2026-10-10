@@ -70,17 +70,18 @@ export async function loadGatewayFees(db: Sql, offerIds: string[], from: Date, t
   const buckets = await db<FeeBucket[]>`
     WITH scoped AS (
       SELECT p.offer_id,lower(trim(o.provider)) provider,
-        CASE WHEN lower(trim(o.provider))='vendepay' THEN 'vendepay' ELSE COALESCE(o.gateway_connection_id,'unassigned') END connection_key,
+        CASE WHEN lower(trim(o.provider))='vendepay' THEN 'vendepay' ELSE COALESCE(o.gateway_connection_id,o.syzepay_connection_id,'unassigned') END connection_key,
         o.paid_at,o.refunded_at,o.chargeback_at,
         COALESCE(o.amount_brl_minor,CASE WHEN o.currency='BRL' THEN o.amount_minor WHEN rc.rate IS NOT NULL THEN (o.amount_minor*rc.rate)::bigint END,0) amount,
         CASE WHEN lower(trim(o.provider))='vendepay' THEN jsonb_build_object(
           'fee_pct',COALESCE(f.vendepay_fee_pct,9.9),'fixed_fee_minor',COALESCE(f.extra_fee_minor,149),
           'fee_currency',COALESCE(f.extra_fee_currency,'USD'),'reserve_pct',COALESCE(f.reserve_pct,6.9),
           'chargeback_fee_minor',2700,'refund_fee_minor',2700,'penalty_currency','USD')
-          ELSE COALESCE(gc.fee_settings,'{}'::jsonb) END settings
+          ELSE COALESCE(gc.fee_settings,sc.fee_settings,'{}'::jsonb) END settings
       FROM tracking_orders o JOIN tracking_projects p ON p.id=o.project_id
       LEFT JOIN tracking_fee_settings f ON f.project_id=p.id
       LEFT JOIN tracking_gateway_connections gc ON gc.id=o.gateway_connection_id AND gc.project_id=p.id AND gc.provider=lower(trim(o.provider))
+      LEFT JOIN syzepay_company_connections sc ON sc.id=o.syzepay_connection_id AND lower(trim(o.provider))='syzepay'
       LEFT JOIN exchange_rate_cache rc ON rc.base_currency=o.currency AND rc.target_currency='BRL'
       WHERE p.offer_id=ANY(${offerIds}) AND (
         (o.paid_at>=${from} AND o.paid_at<${to}) OR (o.refunded_at>=${from} AND o.refunded_at<${to}) OR (o.chargeback_at>=${from} AND o.chargeback_at<${to}))

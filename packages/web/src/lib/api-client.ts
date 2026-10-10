@@ -1412,6 +1412,40 @@ export type TikTokDelivery = {
 };
 
 export const apiClient = {
+  syzeSigningSecret: (id: string, signing_secret: string) =>
+    request(`/v1/tracking/syzepay/connections/${id}/signing-secret`, {
+      method: 'PUT',
+      body: { signing_secret },
+    }),
+  syzeOrders: (id: string) =>
+    request<{
+      signing_secret_configured: boolean;
+      offers: Array<{ id: string; name: string }>;
+      orders: Array<{
+        order_id: string;
+        store_id: string;
+        amount_minor: number;
+        currency: string;
+        types: string[];
+        signature_valid: boolean;
+        status: string;
+        hint_offer_id: string | null;
+        tracking_order_id: string | null;
+        mapping: null | { offer_id: string; order_kind: string };
+      }>;
+    }>(`/v1/tracking/syzepay/connections/${id}/orders`),
+  syzeClassify: (id: string, orderId: string, offer_id: string, order_kind: string) =>
+    request<{
+      order_id: string;
+      duplicate: boolean;
+      meta: string[];
+      utmify: string[];
+      tiktok: string[];
+      pushcut: string[];
+    }>(`/v1/tracking/syzepay/connections/${id}/orders/${encodeURIComponent(orderId)}/classify`, {
+      method: 'POST',
+      body: { offer_id, order_kind },
+    }),
   saveGatewayFees: (offerId: string, id: string, fees: SyzepayFees) =>
     request(`/v1/offers/${offerId}/tracking/gateway-connections/${id}/fees`, {
       method: 'PUT',
