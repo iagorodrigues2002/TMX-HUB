@@ -2026,7 +2026,8 @@ export function TrackingSectionContent({
               })}
             </div>
           )}
-          {!config.isLoading &&
+          {config.isSuccess &&
+            config.data &&
             (!config.data?.configured || !config.data?.vendepay?.configured) && (
               <section className="mb-4 rounded-lg border border-cyan-300/25 bg-cyan-300/[0.06] p-5 shadow-[0_0_32px_rgba(34,211,238,.08)]">
                 <p className="hud-label text-cyan-200">
