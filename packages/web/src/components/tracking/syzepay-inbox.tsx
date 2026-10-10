@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { DataState } from '@/components/ui/data-state';
 import { toast } from 'sonner';
 import { Building2, Copy, Webhook, RefreshCw } from 'lucide-react';
+import { SyzepayFeeForm } from './syzepay-fees';
 
 export function SyzepayInbox() {
   const params = useSearchParams();
@@ -228,6 +229,7 @@ export function SyzepayInbox() {
                   : 'Aguardando o primeiro webhook para identificar os produtos e habilitar a classificação.'}
               </p>
             </div>
+            <SyzepayFeeForm id={c.id} settings={c.fee_settings ?? {}} />
           </section>
         ))
       )}

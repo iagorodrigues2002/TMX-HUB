@@ -12,6 +12,7 @@ import {
   syzeHash,
   syzeCompanyKey,
   syzeReceiptIdentity,
+  syzeFeesSchema,
 } from '../src/routes/syzepay.js';
 
 const apps: ReturnType<typeof Fastify>[] = [];
@@ -151,6 +152,101 @@ describe('SyzePay isolated reception', () => {
   });
 });
 describe('SyzePay company permissions', () => {
+  it('saves an owned connection fee model without writing offer-level VendePay settings', async () => {
+    const app = Fastify();
+    apps.push(app);
+    const statements: string[] = [];
+    const db = Object.assign(
+      async (strings: TemplateStringsArray, ...values: unknown[]) => {
+        statements.push(strings.join('?'));
+        if (values[1] === 'own-connection' && values[2] === 'owner-a')
+          return [{ id: 'own-connection', fee_settings: values[0] }];
+        return [];
+      },
+      { json: (value: unknown) => value },
+    );
+    app.decorate('db', db);
+    app.addHook('preHandler', async (req) => {
+      req.user = { sub: 'owner-a', role: 'user' } as never;
+    });
+    app.register(syzepayAdminRoutes);
+    const fees = {
+      fee_pct: 4.5,
+      fixed_fee_minor: 30,
+      fee_currency: 'USD',
+      reserve_pct: 5,
+      chargeback_fee_minor: 1500,
+      refund_fee_minor: 0,
+    };
+    const result = await app.inject({
+      method: 'PUT',
+      url: '/tracking/syzepay/connections/own-connection/fees',
+      payload: fees,
+    });
+    expect(result.statusCode).toBe(200);
+    expect(result.json().fee_settings).toEqual(fees);
+    expect(statements).toHaveLength(1);
+    expect(statements[0]).toContain('UPDATE syzepay_company_connections');
+    expect(statements[0]).not.toContain('tracking_fee_settings');
+  });
+  it('validates independent fees and rejects negative tariffs, invalid percentages and fractional cents', () => {
+    const fees = {
+      fee_pct: 4.5,
+      fixed_fee_minor: 30,
+      fee_currency: 'USD',
+      reserve_pct: 5,
+      chargeback_fee_minor: 1500,
+      refund_fee_minor: 0,
+    };
+    expect(syzeFeesSchema.parse(fees)).toEqual(fees);
+    for (const patch of [
+      { fee_pct: 101 },
+      { reserve_pct: -1 },
+      { fixed_fee_minor: 1.5 },
+      { chargeback_fee_minor: -1 },
+      { fee_currency: 'usd' },
+      { unknown: 1 },
+    ])
+      expect(syzeFeesSchema.safeParse({ ...fees, ...patch }).success).toBe(false);
+  });
+  it('writes fees only on the specified connection owned by the authenticated user', async () => {
+    const app = Fastify();
+    apps.push(app);
+    const queries: unknown[][] = [];
+    const db = Object.assign(
+      async (_strings: TemplateStringsArray, ...values: unknown[]) => {
+        queries.push(values);
+        return [];
+      },
+      { json: (value: unknown) => value },
+    );
+    app.decorate('db', db);
+    app.addHook('preHandler', async (req) => {
+      req.user = { sub: 'owner-a', role: 'user' } as never;
+    });
+    app.setErrorHandler((error, _req, reply) =>
+      reply.code((error as any).status ?? 500).send({ error: error.message }),
+    );
+    app.register(syzepayAdminRoutes);
+    const fees = {
+      fee_pct: 4.5,
+      fixed_fee_minor: 30,
+      fee_currency: 'USD',
+      reserve_pct: 5,
+      chargeback_fee_minor: 1500,
+      refund_fee_minor: 0,
+    };
+    expect(
+      (
+        await app.inject({
+          method: 'PUT',
+          url: '/tracking/syzepay/connections/owner-b-connection/fees',
+          payload: fees,
+        })
+      ).statusCode,
+    ).toBe(404);
+    expect(queries[0]).toEqual([fees, 'owner-b-connection', 'owner-a']);
+  });
   it('lists only owned companies, not invited company-wide data', async () => {
     const app = Fastify();
     apps.push(app);

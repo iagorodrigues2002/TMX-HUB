@@ -123,6 +123,16 @@ const createSchema = z
     name: z.string().trim().min(2).max(100),
   })
   .strict();
+export const syzeFeesSchema = z
+  .object({
+    fee_pct: z.number().finite().min(0).max(100),
+    fixed_fee_minor: z.number().int().min(0).max(1_000_000_000),
+    fee_currency: z.string().regex(/^[A-Z]{3}$/),
+    reserve_pct: z.number().finite().min(0).max(100),
+    chargeback_fee_minor: z.number().int().min(0).max(1_000_000_000),
+    refund_fee_minor: z.number().int().min(0).max(1_000_000_000),
+  })
+  .strict();
 export const syzepayAdminRoutes: FastifyPluginAsync = async (app) => {
   const companies = async (owner: string) => {
     const offers = (await app.offerStore.listByUser(owner)).filter(
@@ -146,7 +156,7 @@ export const syzepayAdminRoutes: FastifyPluginAsync = async (app) => {
     reply.header('Cache-Control', 'private, no-store');
     if (!app.db) return reply.code(503).send({ error: 'database_unavailable' });
     const connections = await app.db`
-      SELECT c.id,c.company_key,c.company_name,c.name,c.enabled,c.created_at,
+      SELECT c.id,c.company_key,c.company_name,c.name,c.enabled,c.created_at,c.fee_settings,c.fees_updated_at,
         (SELECT count(*)::int FROM syzepay_inbox_receipts r WHERE r.connection_id=c.id) AS receipts,
         (SELECT max(received_at) FROM syzepay_inbox_receipts r WHERE r.connection_id=c.id) AS last_received_at
       FROM syzepay_company_connections c WHERE c.owner_id=${req.user!.sub} ORDER BY c.created_at DESC`;
@@ -174,6 +184,22 @@ export const syzepayAdminRoutes: FastifyPluginAsync = async (app) => {
       webhook_url: `${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/webhooks/syzepay?token=${token}`,
     });
   });
+  app.put<{ Params: { id: string } }>(
+    '/tracking/syzepay/connections/:id/fees',
+    async (req, reply) => {
+      const parsed = syzeFeesSchema.safeParse(req.body);
+      if (!parsed.success)
+        throw new BadRequestError(
+          'Informe percentuais de 0 a 100 e tarifas não negativas em centavos.',
+        );
+      if (!app.db) return reply.code(503).send({ error: 'database_unavailable' });
+      const [row] =
+        await app.db`UPDATE syzepay_company_connections SET fee_settings=${app.db.json(parsed.data)},fees_updated_at=now()
+      WHERE id=${req.params.id} AND owner_id=${req.user!.sub} RETURNING id,fee_settings,fees_updated_at`;
+      if (!row) throw new NotFoundError();
+      return row;
+    },
+  );
   app.get<{ Params: { id: string } }>(
     '/tracking/syzepay/connections/:id/url',
     async (req, reply) => {

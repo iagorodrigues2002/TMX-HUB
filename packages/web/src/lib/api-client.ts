@@ -154,6 +154,14 @@ export interface TrackingOverviewAccount {
   }>;
   syzepay_pending?: Array<{ company_name: string; pending_events: number }>;
 }
+export interface SyzepayFees {
+  fee_pct: number;
+  fixed_fee_minor: number;
+  fee_currency: string;
+  reserve_pct: number;
+  chargeback_fee_minor: number;
+  refund_fee_minor: number;
+}
 
 // The API uses snake_case in the wire format per OpenAPI; shared types use
 // camelCase. The client converts at the boundary so the rest of the app
@@ -1399,6 +1407,11 @@ export type TikTokDelivery = {
 };
 
 export const apiClient = {
+  syzeSaveFees: (id: string, fees: SyzepayFees) =>
+    request(`/v1/tracking/syzepay/connections/${encodeURIComponent(id)}/fees`, {
+      method: 'PUT',
+      body: fees,
+    }),
   syzeToggle: (id: string, enabled: boolean) =>
     request(`/v1/tracking/syzepay/connections/${encodeURIComponent(id)}`, {
       method: 'PATCH',
@@ -1414,6 +1427,8 @@ export const apiClient = {
         id: string;
         company_key: string;
         company_name: string;
+        fee_settings: Partial<SyzepayFees>;
+        fees_updated_at: string | null;
         name: string;
         enabled: boolean;
         receipts: number;

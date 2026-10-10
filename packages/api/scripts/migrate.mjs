@@ -97,6 +97,7 @@ const migrations = [
   '087_upsell_identity_validation.sql',
   '089_syzepay_company_inbox.sql',
   '090_syzepay_event_identity.sql',
+  '091_syzepay_connection_fees.sql',
 ];
 
 await sql`
