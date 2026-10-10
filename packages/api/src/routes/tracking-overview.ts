@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { convertToBrlMinor, getBrlRate } from '../services/exchange-rate.js';
 import { saoPauloParts } from '../services/intraday-store.js';
 import { saoPauloDayRange } from '../services/utmify-sync.js';
+import { gatewayOverviewForOffers, type GatewayOverviewRow } from '../services/gateway-overview.js';
 
 const OverviewRangeSchema = z.object({
   date: z
@@ -72,7 +73,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         offers.map((offer) => [offer.id, { name: offer.name, ownerId: offer.userId }] as const),
       );
       const scope = createHash('sha256')
-        .update(`${req.user.sub}:${offerIds.slice().sort().join(',')}`)
+        .update(`gateway-v1:${req.user.sub}:${offerIds.slice().sort().join(',')}`)
         .digest('base64url');
 
       return app.analyticsCache.getOrSet(
@@ -195,6 +196,28 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       WHERE p.offer_id = ANY(${offerIds}) AND p.enabled = true
     `;
 
+          const gatewayRows = await app.db!<GatewayOverviewRow[]>`
+            WITH scoped AS (
+              SELECT p.offer_id,COALESCE(NULLIF(lower(trim(o.provider)),''),'unknown') AS provider,o.order_kind,
+                CASE WHEN o.amount_brl_minor IS NOT NULL THEN o.amount_brl_minor
+                  WHEN o.currency='BRL' THEN o.amount_minor
+                  WHEN rc.rate IS NOT NULL THEN (o.amount_minor*rc.rate)::bigint ELSE NULL END AS amount
+              FROM tracking_orders o JOIN tracking_projects p ON p.id=o.project_id
+              LEFT JOIN exchange_rate_cache rc ON rc.base_currency=o.currency AND rc.target_currency='BRL'
+              WHERE p.offer_id=ANY(${offerIds}) AND p.enabled AND o.paid_at>=${from} AND o.paid_at<${to}
+            )
+            SELECT offer_id,provider,count(*)::int transactions,
+              count(*) FILTER(WHERE order_kind='front')::int fronts,
+              count(*) FILTER(WHERE order_kind='upsell' OR order_kind LIKE 'upsell_%')::int upsells,
+              COALESCE(sum(amount),0)::text gross_brl_minor,count(*) FILTER(WHERE amount IS NULL)::int missing_amounts
+            FROM scoped GROUP BY offer_id,provider`;
+          // Company-wide SyzePay receipts are visible only to their owner; an
+          // invitation to one offer never grants access to the company inbox.
+          const syzeRows = await app.db!<{ company_name: string; pending_events: number }[]>`
+            SELECT c.company_name,count(r.id)::int pending_events
+            FROM syzepay_company_connections c LEFT JOIN syzepay_inbox_receipts r ON r.connection_id=c.id
+              AND r.received_at>=${from} AND r.received_at<${to}
+            WHERE c.owner_id=${req.user!.sub} GROUP BY c.company_name`;
           const usdRate = await getBrlRate('USD', app.db!);
           const toUsdMinor = (brlMinor: number) => (usdRate ? Math.round(brlMinor / usdRate) : 0);
 
@@ -369,6 +392,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                   : (ownerNames.get(ownerId) ?? 'Conta compartilhada'),
               is_current_user: ownerId === req.user!.sub,
               offers: accountOffers,
+              gateways: gatewayOverviewForOffers(
+                gatewayRows,
+                accountOffers.map((o) => o.offer_id),
+              ),
+              syzepay_pending: ownerId === req.user!.sub ? syzeRows : [],
               totals: totalsWire(aggregate(accountOffers)),
             }))
             .sort(

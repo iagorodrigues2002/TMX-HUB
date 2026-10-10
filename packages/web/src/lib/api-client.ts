@@ -144,6 +144,15 @@ export interface TrackingOverviewAccount {
   is_current_user: boolean;
   offers: TrackingOverviewOffer[];
   totals: TrackingOverviewTotals;
+  gateways?: Array<{
+    provider: string;
+    transactions: number;
+    fronts: number;
+    upsells: number;
+    gross_brl_minor: string;
+    missing_amounts: number;
+  }>;
+  syzepay_pending?: Array<{ company_name: string; pending_events: number }>;
 }
 
 // The API uses snake_case in the wire format per OpenAPI; shared types use
