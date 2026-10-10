@@ -2976,7 +2976,8 @@ export const apiClient = {
       visitor_id: string;
       vendid: string;
       vendid_confirmed: boolean;
-      validation_state?: 'pending' | 'processing' | 'retry' | 'confirmed' | 'rejected' | 'failed';
+      provider?: string;
+      validation_state?: 'pending' | 'processing' | 'retry' | 'confirmed' | 'rejected' | 'failed' | 'not_applicable';
       validation_error?: string | null;
       validation_attempts?: number;
       approved_at: string;

@@ -5,6 +5,30 @@ import errorHandlerPlugin from '../src/plugins/error-handler.js';
 import trackingAdvancedRoutes, { mergeAdvancedGateways } from '../src/routes/tracking-advanced.js';
 
 describe('advanced tracking gateways', () => {
+  it('reports SyzePay purchase origins without VendePay validation or recovery links', async () => {
+    const app = Fastify();
+    const query = async (strings: TemplateStringsArray) => {
+      const sql = strings.join('?');
+      if (sql.includes('SELECT id, public_key FROM tracking_projects')) return [{id:'project-a',public_key:'key-a'}];
+      if (sql.includes('SELECT o.id,o.visitor_id,o.external_id')) {
+        expect(sql).toContain('o.provider');
+        expect(sql).toContain('LEFT JOIN syzepay_company_connections');
+        expect(sql).toContain("WHEN o.provider='syzepay' THEN sc.name");
+        return [{id:'order-a',provider:'syzepay',external_id:'syze-order',paid_at:new Date(),connection_name:'SyzePay TMX',confirmed_vendid_encrypted:null,validation_state:null,has_upsell:true,purchased_stage_keys:[]}];
+      }
+      if (sql.includes('count(*)')) return [{total:1}];
+      return [];
+    };
+    app.decorate('db', query);
+    app.decorate('offerStore', {assertAccess:async()=>({id:'offer-a'})});
+    app.addHook('preHandler', async req => { (req as any).user={sub:'owner-a',role:'user'}; });
+    await app.register(trackingAdvancedRoutes);
+    try {
+      const response = await app.inject({method:'GET',url:'/offers/offer-a/tracking/upsell-identities'});
+      expect(response.statusCode).toBe(200);
+      expect(response.json().items[0]).toMatchObject({provider:'syzepay',connection_name:'SyzePay TMX',validation_state:'not_applicable',vendid_confirmed:false,links:[]});
+    } finally { await app.close(); }
+  });
   it('keeps managed Vendepay connections without duplicating the universal provider', () => {
     const gateways = [
       { id: 'universal-vendepay', provider: 'vendepay', enabled: true },

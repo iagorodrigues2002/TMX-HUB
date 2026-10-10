@@ -2557,7 +2557,9 @@ export function TrackingSectionContent({
                                   : 'border-amber-300/20 bg-amber-300/[0.07] text-amber-200',
                               )}
                             >
-                              {identity.vendid_confirmed
+                              {identity.validation_state === 'not_applicable'
+                                ? 'compra aprovada · ID do pedido'
+                                : identity.vendid_confirmed
                                 ? 'vendaId confirmado'
                                 : identity.validation_state === 'processing'
                                   ? 'validando vendaId'
@@ -2603,7 +2605,9 @@ export function TrackingSectionContent({
                                 className="text-amber-100/55"
                                 title={identity.validation_error ?? undefined}
                               >
-                                {identity.validation_error === 'account_destination_not_configured'
+                                {identity.validation_state === 'not_applicable'
+                                  ? 'Link de recuperação de upsell não disponível para este gateway'
+                                  : identity.validation_error === 'account_destination_not_configured'
                                   ? 'Configure o destino de upsell desta conta'
                                   : identity.validation_state === 'rejected'
                                     ? 'Descartado da validação automática: VendePay não confirmou elegibilidade. A compra continua registrada.'

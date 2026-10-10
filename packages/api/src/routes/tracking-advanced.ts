@@ -13,6 +13,7 @@ import { normalizeVendepay } from '../integrations/vendepay/normalize.js';
 import { zodToProblem } from '../lib/problem.js';
 import { decryptSecret, encryptSecret } from '../lib/secret-box.js';
 import { saoPauloParts } from '../services/intraday-store.js';
+import { upsellOrigin } from '../services/upsell-origin.js';
 import { canonicalTrackingHostname } from '../services/tracking-domain.js';
 import {
   checkUpsellCompatibility,
@@ -554,6 +555,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           paid_at: Date;
           connection_id: string | null;
           connection_name: string;
+          provider: string;
           confirmed_vendid_encrypted: string | null;
           validation_state: string | null;
           validation_error: string | null;
@@ -562,9 +564,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           purchased_stage_keys: string[];
         }>
       >`
-          SELECT o.id,o.visitor_id,o.external_id,o.paid_at,
+          SELECT o.id,o.visitor_id,o.external_id,o.paid_at,o.provider,
                  o.vendepay_connection_id AS connection_id,
-                 COALESCE(vc.name,'Vendepay') AS connection_name,
+                 CASE WHEN o.provider='vendepay' THEN vc.name
+                      WHEN o.provider='syzepay' THEN sc.name
+                      ELSE gc.name END AS connection_name,
                  identity.vendid_encrypted AS confirmed_vendid_encrypted,
                  validation.state AS validation_state,
                  validation.last_error AS validation_error,
@@ -606,7 +610,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                      )
                  ) AS purchased_stage_keys
           FROM tracking_orders o
-          LEFT JOIN vendepay_connections vc ON vc.id=o.vendepay_connection_id
+          LEFT JOIN vendepay_connections vc ON vc.id=o.vendepay_connection_id AND o.provider='vendepay'
+          LEFT JOIN syzepay_company_connections sc ON sc.id=o.syzepay_connection_id AND o.provider='syzepay'
+          LEFT JOIN tracking_gateway_connections gc ON gc.id=o.gateway_connection_id AND gc.provider=o.provider
           LEFT JOIN tracking_upsell_identity_validation validation ON validation.order_id=o.id
           LEFT JOIN LATERAL (
             SELECT i.vendid_encrypted
@@ -667,18 +673,20 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           vendid = undefined;
         }
       }
-      const vendidConfirmed = Boolean(vendid);
-      const displayId = vendid ?? receipt.external_id;
+      const origin = upsellOrigin(receipt.provider, receipt.connection_name);
+      const vendidConfirmed = origin.vendepay_validation_applicable && Boolean(vendid);
+      const displayId = vendidConfirmed ? vendid! : receipt.external_id;
       return {
         id: receipt.id,
         visitor_id: receipt.visitor_id ?? '',
         vendid: displayId,
         vendid_confirmed: vendidConfirmed,
-        validation_state: vendidConfirmed ? 'confirmed' : receipt.validation_state ?? 'pending',
+        provider: receipt.provider,
+        validation_state: !origin.vendepay_validation_applicable ? 'not_applicable' : vendidConfirmed ? 'confirmed' : receipt.validation_state ?? 'pending',
         validation_error: receipt.validation_error,
         validation_attempts: receipt.validation_attempts ?? 0,
         approved_at: receipt.paid_at,
-        connection_name: receipt.connection_name,
+        connection_name: origin.connection_name,
         has_upsell: receipt.has_upsell,
         first_seen_at: receipt.paid_at,
         last_seen_at: receipt.paid_at,
