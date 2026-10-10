@@ -95,6 +95,7 @@ const migrations = [
   '085_tiktok_test_event_code.sql',
   '086_vendepay_async_receipts.sql',
   '087_upsell_identity_validation.sql',
+  '089_syzepay_company_inbox.sql',
 ];
 
 await sql`
