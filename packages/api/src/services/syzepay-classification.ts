@@ -226,7 +226,7 @@ export async function classifySyzepayOrder(
             event_url: string | null;
             properties: Record<string, string>;
           }[]
-        >`SELECT host(client_ip) AS client_ip,user_agent,event_url,properties FROM tracking_events WHERE project_id=${p.id} AND visitor_id=${visitorId} ORDER BY received_at DESC LIMIT 1`
+        >`SELECT client_ip,user_agent,event_url,properties FROM tracking_events WHERE project_id=${p.id} AND visitor_id=${visitorId} ORDER BY received_at DESC LIMIT 1`
       : [];
     const [identity] = visitorId
       ? await sql<
@@ -242,7 +242,7 @@ export async function classifySyzepayOrder(
           ([, value]) => typeof value === 'string' && value.trim(),
         ),
       ) as Record<string, string>),
-      ...(browser?.client_ip ? { client_ip: browser.client_ip } : {}),
+      ...(browser?.client_ip ? { client_ip: browser.client_ip.split('/')[0]! } : {}),
       ...(browser?.user_agent ? { user_agent: browser.user_agent } : {}),
     };
     for (const key of ['ab_test_id', 'ab_variant_id'])
