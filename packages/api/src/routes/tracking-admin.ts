@@ -9,6 +9,7 @@ import { encryptSecret } from '../lib/secret-box.js';
 import { convertToBrlMinor, getBrlRate, warmupBrlRates } from '../services/exchange-rate.js';
 import { saoPauloParts } from '../services/intraday-store.js';
 import { saoPauloDayRange } from '../services/utmify-sync.js';
+import { gatewayFeesSchema, loadGatewayFees, totalGatewayFees } from '../services/gateway-fees.js';
 
 const PaginationSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -94,8 +95,6 @@ const DEFAULT_FEE_SETTINGS = {
   reserve_days: 90,
   payout_days: 5,
 };
-
-const REFUND_CHARGEBACK_FEE_USD_MINOR = 2_700;
 
 const FeeSettingsSchema = z.object({
   vendepay_fee_pct: z.coerce.number().min(0).max(100),
@@ -966,6 +965,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         name: string;
         enabled: boolean;
         settings: Record<string, unknown>;
+        fee_settings: Record<string, unknown>;
         api_key_configured: boolean;
         signing_secret_configured: boolean;
         last_validated_at: Date | null;
@@ -973,7 +973,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         created_at: Date;
       }>
     >`
-      SELECT id,provider,name,enabled,settings,
+      SELECT id,provider,name,enabled,settings,fee_settings,
              (api_key_encrypted IS NOT NULL) AS api_key_configured,
              (signing_secret_encrypted IS NOT NULL) AS signing_secret_configured,
              last_validated_at,last_webhook_at,created_at
@@ -2071,31 +2071,23 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         WHERE project_id = (SELECT id FROM tracking_projects WHERE offer_id = ${req.params.id})
       `;
           const fee = feeRow ?? DEFAULT_FEE_SETTINGS;
-          const extraFeeConversion = await convertToBrlMinor(
-            Number(fee.extra_fee_minor),
-            fee.extra_fee_currency,
-            app.db!,
-          );
-          const extraFeePerOrderBrlMinor = extraFeeConversion?.brlMinor ?? 0;
+          const gatewayFees =
+            (await loadGatewayFees(app.db!, [req.params.id], new Date(from), new Date(to))).get(
+              req.params.id,
+            ) ?? [];
+          const feeTotal = totalGatewayFees(gatewayFees);
           const grossBrlMinor = Number(summary?.paid_revenue_brl_minor ?? 0);
-          const paidOrdersCount = summary?.paid_orders ?? 0;
-          const feeVendepayBrlMinor = Math.round(
-            (grossBrlMinor * Number(fee.vendepay_fee_pct)) / 100,
-          );
-          const feeExtraBrlMinor = extraFeePerOrderBrlMinor * paidOrdersCount;
-          const reserveBrlMinor = Math.round((grossBrlMinor * Number(fee.reserve_pct)) / 100);
+          const feeVendepayBrlMinor = gatewayFees
+            .filter((f) => f.provider === 'vendepay')
+            .reduce((total, f) => total + f.percentage_brl_minor, 0);
+          const feeExtraBrlMinor = gatewayFees
+            .filter((f) => f.provider === 'vendepay')
+            .reduce((total, f) => total + f.fixed_brl_minor, 0);
+          const reserveBrlMinor = feeTotal.reserve;
           const refundedBrlMinor = Number(summary?.refunded_revenue_brl_minor ?? 0);
           const chargebackBrlMinor = Number(summary?.chargeback_revenue_brl_minor ?? 0);
-          const refundChargebackFeeCount =
-            (summary?.refunded_orders ?? 0) + (summary?.chargeback_orders ?? 0);
-          const refundChargebackFeeUsdMinor =
-            refundChargebackFeeCount * REFUND_CHARGEBACK_FEE_USD_MINOR;
-          const refundChargebackFeeConversion = await convertToBrlMinor(
-            refundChargebackFeeUsdMinor,
-            'USD',
-            app.db!,
-          );
-          const refundChargebackFeeBrlMinor = refundChargebackFeeConversion?.brlMinor ?? 0;
+          const refundChargebackFeeCount = feeTotal.penaltyCount;
+          const refundChargebackFeeBrlMinor = feeTotal.penalties;
           // "Total" includes the reserve as if it were already released; "available"
           // subtracts it too, since Vendepay is still holding it back. The reserve
           // never gets added to either figure twice — total = available + reserve.
@@ -2103,8 +2095,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             grossBrlMinor -
             refundedBrlMinor -
             chargebackBrlMinor -
-            feeVendepayBrlMinor -
-            feeExtraBrlMinor -
+            feeTotal.fees -
             refundChargebackFeeBrlMinor;
           const netAvailableBrlMinor = netRevenueBrlMinor - reserveBrlMinor;
           const usdRate = await getBrlRate('USD', app.db!);
@@ -2151,6 +2142,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
               payout_days: fee.payout_days,
               configured: Boolean(feeRow),
             },
+            gateway_fees: gatewayFees,
+            fees_missing_operations: feeTotal.missing,
+            fees_total_brl_minor: String(feeTotal.fees),
             refunded_revenue_usd_minor: String(toUsdMinor(refundedBrlMinor)),
             chargeback_revenue_usd_minor: String(toUsdMinor(chargebackBrlMinor)),
             fee_vendepay_brl_minor: String(feeVendepayBrlMinor),
@@ -2159,7 +2153,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             fee_extra_usd_minor: String(toUsdMinor(feeExtraBrlMinor)),
             refund_chargeback_fee_count: refundChargebackFeeCount,
             refund_chargeback_fee_brl_minor: String(refundChargebackFeeBrlMinor),
-            refund_chargeback_fee_usd_minor: String(refundChargebackFeeUsdMinor),
+            refund_chargeback_fee_usd_minor: String(toUsdMinor(refundChargebackFeeBrlMinor)),
             reserve_brl_minor: String(reserveBrlMinor),
             reserve_usd_minor: String(toUsdMinor(reserveBrlMinor)),
             net_revenue_brl_minor: String(netRevenueBrlMinor),
@@ -2173,6 +2167,21 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   );
 
   // Per-offer gateway fee configuration used to compute net revenue.
+  app.put<{ Params: { id: string; connectionId: string } }>(
+    '/offers/:id/tracking/gateway-connections/:connectionId/fees',
+    async (req, reply) => {
+      await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
+      if (!app.db) return reply.code(503).send(databaseUnavailable);
+      const parsed = gatewayFeesSchema.safeParse(req.body);
+      if (!parsed.success) throw zodToProblem(parsed.error);
+      const [row] =
+        await app.db`UPDATE tracking_gateway_connections SET fee_settings=${app.db.json(parsed.data)}
+      WHERE id=${req.params.connectionId} AND project_id=(SELECT id FROM tracking_projects WHERE offer_id=${req.params.id}) RETURNING id,fee_settings`;
+      if (!row) throw new NotFoundError('Conexão desta oferta não encontrada.');
+      await app.invalidateAnalyticsCache({ offerId: req.params.id });
+      return row;
+    },
+  );
   // Falls back to Vendepay's global defaults when nothing has been saved.
   app.get<{ Params: { id: string } }>('/offers/:id/tracking/fee-settings', async (req, reply) => {
     await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');

@@ -1,10 +1,15 @@
 import { createHash } from 'node:crypto';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { convertToBrlMinor, getBrlRate } from '../services/exchange-rate.js';
+import { getBrlRate } from '../services/exchange-rate.js';
 import { saoPauloParts } from '../services/intraday-store.js';
 import { saoPauloDayRange } from '../services/utmify-sync.js';
-import { gatewayOverviewForOffers, type GatewayOverviewRow } from '../services/gateway-overview.js';
+import {
+  gatewayOverviewForOffers,
+  mergeGatewayFees,
+  type GatewayOverviewRow,
+} from '../services/gateway-overview.js';
+import { loadGatewayFees, totalGatewayFees } from '../services/gateway-fees.js';
 
 const OverviewRangeSchema = z.object({
   date: z
@@ -20,15 +25,6 @@ const OverviewRangeSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .optional(),
 });
-
-const DEFAULT_FEE_SETTINGS = {
-  vendepay_fee_pct: '9.9',
-  extra_fee_minor: '149',
-  extra_fee_currency: 'USD',
-  reserve_pct: '6.9',
-};
-
-const REFUND_CHARGEBACK_FEE_USD_MINOR = 2_700;
 
 const databaseUnavailable = {
   error: 'tracking_database_unavailable',
@@ -73,7 +69,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         offers.map((offer) => [offer.id, { name: offer.name, ownerId: offer.userId }] as const),
       );
       const scope = createHash('sha256')
-        .update(`gateway-v1:${req.user.sub}:${offerIds.slice().sort().join(',')}`)
+        .update(`gateway-fees-v2:${req.user.sub}:${offerIds.slice().sort().join(',')}`)
         .digest('base64url');
 
       return app.analyticsCache.getOrSet(
@@ -220,38 +216,21 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             WHERE c.owner_id=${req.user!.sub} GROUP BY c.company_name`;
           const usdRate = await getBrlRate('USD', app.db!);
           const toUsdMinor = (brlMinor: number) => (usdRate ? Math.round(brlMinor / usdRate) : 0);
+          const feeMap = await loadGatewayFees(app.db!, offerIds, from, to);
 
           const perOffer = await Promise.all(
             rows.map(async (row) => {
-              const feePct = Number(row.vendepay_fee_pct ?? DEFAULT_FEE_SETTINGS.vendepay_fee_pct);
-              const extraFeeMinor = Number(
-                row.extra_fee_minor ?? DEFAULT_FEE_SETTINGS.extra_fee_minor,
-              );
-              const extraFeeCurrency =
-                row.extra_fee_currency ?? DEFAULT_FEE_SETTINGS.extra_fee_currency;
-              const reservePct = Number(row.reserve_pct ?? DEFAULT_FEE_SETTINGS.reserve_pct);
-              const extraFeeConversion = await convertToBrlMinor(
-                extraFeeMinor,
-                extraFeeCurrency,
-                app.db!,
-              );
-              const extraFeeBrlMinor = (extraFeeConversion?.brlMinor ?? 0) * row.paid_orders;
+              const gatewayFees = feeMap.get(row.offer_id) ?? [];
+              const calculatedFees = totalGatewayFees(gatewayFees);
               const grossBrlMinor = Number(row.paid_revenue_brl_minor);
               const failedBrlMinor = Number(row.failed_revenue_brl_minor);
               const refundedBrlMinor = Number(row.refunded_revenue_brl_minor);
               const chargebackBrlMinor = Number(row.chargeback_revenue_brl_minor);
-              const feeVendepayBrlMinor = Math.round((grossBrlMinor * feePct) / 100);
-              const reserveBrlMinor = Math.round((grossBrlMinor * reservePct) / 100);
-              const feesBrlMinor = feeVendepayBrlMinor + extraFeeBrlMinor;
-              const refundChargebackFeeCount = row.refunded_orders + row.chargeback_orders;
-              const refundChargebackFeeUsdMinor =
-                refundChargebackFeeCount * REFUND_CHARGEBACK_FEE_USD_MINOR;
-              const refundChargebackFeeConversion = await convertToBrlMinor(
-                refundChargebackFeeUsdMinor,
-                'USD',
-                app.db!,
-              );
-              const refundChargebackFeeBrlMinor = refundChargebackFeeConversion?.brlMinor ?? 0;
+              const reserveBrlMinor = calculatedFees.reserve;
+              const feesBrlMinor = calculatedFees.fees;
+              const refundChargebackFeeCount = calculatedFees.penaltyCount;
+              const refundChargebackFeeBrlMinor = calculatedFees.penalties;
+              const refundChargebackFeeUsdMinor = toUsdMinor(refundChargebackFeeBrlMinor);
               // "Total" assumes the reserve is already released; "available"
               // subtracts it too, since Vendepay is still holding it back.
               // total = available + reserve — the reserve is never double-counted.
@@ -266,6 +245,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                 offer_id: row.offer_id,
                 offer_name: offerMeta.get(row.offer_id)?.name ?? row.offer_id,
                 owner_id: offerMeta.get(row.offer_id)?.ownerId ?? '',
+                gateway_fees: gatewayFees,
+                fees_missing_operations: calculatedFees.missing,
                 paid_orders: row.paid_orders,
                 gross_revenue_brl_minor: String(grossBrlMinor),
                 gross_revenue_usd_minor: String(toUsdMinor(grossBrlMinor)),
@@ -298,6 +279,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           );
 
           const emptyTotals = () => ({
+            fees_missing_operations: 0,
             paid_orders: 0,
             gross_revenue_brl_minor: 0,
             failed_orders: 0,
@@ -316,6 +298,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           const aggregate = (accountOffers: typeof perOffer) =>
             accountOffers.reduce(
               (acc, offer) => ({
+                fees_missing_operations:
+                  acc.fees_missing_operations + offer.fees_missing_operations,
                 paid_orders: acc.paid_orders + offer.paid_orders,
                 gross_revenue_brl_minor:
                   acc.gross_revenue_brl_minor + Number(offer.gross_revenue_brl_minor),
@@ -357,6 +341,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             byOwner.set(offer.owner_id, group);
           }
           const totalsWire = (totals: ReturnType<typeof emptyTotals>) => ({
+            fees_missing_operations: totals.fees_missing_operations,
             paid_orders: totals.paid_orders,
             gross_revenue_brl_minor: String(totals.gross_revenue_brl_minor),
             gross_revenue_usd_minor: String(toUsdMinor(totals.gross_revenue_brl_minor)),
@@ -374,7 +359,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             refund_chargeback_fee_count: totals.refund_chargeback_fee_count,
             refund_chargeback_fee_brl_minor: String(totals.refund_chargeback_fee_brl_minor),
             refund_chargeback_fee_usd_minor: String(
-              totals.refund_chargeback_fee_count * REFUND_CHARGEBACK_FEE_USD_MINOR,
+              toUsdMinor(totals.refund_chargeback_fee_brl_minor),
             ),
             reserve_brl_minor: String(totals.reserve_brl_minor),
             reserve_usd_minor: String(toUsdMinor(totals.reserve_brl_minor)),
@@ -392,9 +377,12 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                   : (ownerNames.get(ownerId) ?? 'Conta compartilhada'),
               is_current_user: ownerId === req.user!.sub,
               offers: accountOffers,
-              gateways: gatewayOverviewForOffers(
-                gatewayRows,
-                accountOffers.map((o) => o.offer_id),
+              gateways: mergeGatewayFees(
+                gatewayOverviewForOffers(
+                  gatewayRows,
+                  accountOffers.map((o) => o.offer_id),
+                ),
+                accountOffers.flatMap((o) => o.gateway_fees),
               ),
               syzepay_pending: ownerId === req.user!.sub ? syzeRows : [],
               totals: totalsWire(aggregate(accountOffers)),

@@ -83,8 +83,9 @@ interface OverviewDataset {
   finance: {
     fees: number;
     reserve: number;
-    net: number;
-    available: number;
+    net: number | null;
+    available: number | null;
+    missingFeeOperations?: number;
     refunds: number;
     penalties: number;
   } | null;
@@ -461,6 +462,16 @@ function Dataset({ dataset }: { dataset: OverviewDataset }) {
         Taxas e retenções calculadas pelo modelo financeiro do TMX. A cotação e as tarifas
         efetivamente liquidadas pelo gateway podem diferir.
       </p>
+      {Boolean(dataset.finance?.missingFeeOperations) && (
+        <p
+          role="status"
+          className="rounded-lg border border-amber-300/20 bg-amber-300/5 p-3 text-sm text-amber-200"
+        >
+          Líquido indisponível: {dataset.finance?.missingFeeOperations} operações sem taxas ou
+          cotação configuradas. Configure o gateway correspondente. As taxas da VendePay não são
+          usadas como substituição.
+        </p>
+      )}
 
       <div className="animate-[tmx-reveal_220ms_cubic-bezier(0,0,0.2,1)_150ms_both] grid gap-4 motion-reduce:animate-none xl:grid-cols-2">
         <RevenueChart

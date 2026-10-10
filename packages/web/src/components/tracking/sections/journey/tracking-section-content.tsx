@@ -1,4 +1,5 @@
 'use client';
+import { SyzepayFeeForm } from '@/components/tracking/syzepay-fees';
 
 import { GoogleAdsDestinations } from '@/components/tracking/google-ads-destinations';
 import { TikTokDestinations } from '@/components/tracking/tiktok-destinations';
@@ -796,6 +797,7 @@ const ADVANCED_QUERY_SECTIONS = new Set<TrackingSectionId>([
   'vturb',
 ]);
 const CONFIG_QUERY_SECTIONS = new Set<TrackingSectionId>([
+  'fees',
   'gateways',
   'meta',
   'tiktok-ads',
@@ -2591,7 +2593,16 @@ export function TrackingSectionContent({
                                 ))}
                               </div>
                             ) : (
-                              <span role={identity.validation_state === 'failed' || identity.validation_state === 'rejected' ? 'alert' : undefined} className="text-amber-100/55" title={identity.validation_error ?? undefined}>
+                              <span
+                                role={
+                                  identity.validation_state === 'failed' ||
+                                  identity.validation_state === 'rejected'
+                                    ? 'alert'
+                                    : undefined
+                                }
+                                className="text-amber-100/55"
+                                title={identity.validation_error ?? undefined}
+                              >
                                 {identity.validation_error === 'account_destination_not_configured'
                                   ? 'Configure o destino de upsell desta conta'
                                   : identity.validation_state === 'rejected'
@@ -4200,8 +4211,8 @@ export function TrackingSectionContent({
           )}
           {section === 'fees' && (
             <Module
-              title="Taxas e líquido"
-              description="Configure as taxas cobradas pelo gateway pra calcular o faturamento líquido (bruto − reembolsos − chargebacks − taxas) exibido no Funil. Os valores já vêm preenchidos com as taxas do Mercado Global da Vendepay — ajuste se sua oferta usar outra tabela."
+              title="Taxas da VendePay"
+              description="Esta tabela é exclusiva da VendePay nesta oferta. Paysight e Explodely têm taxas próprias por conexão, abaixo; a SyzePay é configurada na empresa. A visão geral soma cada gateway sem herdar taxas de outros."
             >
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
@@ -4300,6 +4311,20 @@ export function TrackingSectionContent({
                   configuração nesta oferta.
                 </p>
               )}
+              {canManage &&
+                (config.data?.gateways ?? [])
+                  .filter((g) => g.provider !== 'vendepay')
+                  .map((g) => (
+                    <div key={`fee-${g.id}`} className="mt-6 border-t border-white/10 pt-4">
+                      <h3>{g.name}</h3>
+                      <SyzepayFeeForm
+                        id={g.id}
+                        settings={g.fee_settings ?? {}}
+                        offerId={offerId}
+                        gatewayLabel={g.provider === 'paysight' ? 'Paysight' : 'Explodely'}
+                      />
+                    </div>
+                  ))}
             </Module>
           )}
           {(section === 'links' || section === 'ab') && (

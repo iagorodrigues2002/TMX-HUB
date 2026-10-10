@@ -5,7 +5,12 @@ import { apiClient, type SyzepayFees } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
-export function SyzepayFeeForm({ id, settings }: { id: string; settings: Partial<SyzepayFees> }) {
+export function SyzepayFeeForm({
+  id,
+  settings,
+  offerId,
+  gatewayLabel = 'SyzePay',
+}: { id: string; settings: Partial<SyzepayFees>; offerId?: string; gatewayLabel?: string }) {
   const [open, setOpen] = useState(false);
   const qc = useQueryClient();
   const [pct, setPct] = useState(settings.fee_pct?.toString() ?? '');
@@ -24,7 +29,9 @@ export function SyzepayFeeForm({ id, settings }: { id: string; settings: Partial
   );
   const save = useMutation({
     mutationFn: () =>
-      apiClient.syzeSaveFees(id, {
+      (offerId
+        ? (fees: SyzepayFees) => apiClient.saveGatewayFees(offerId, id, fees)
+        : (fees: SyzepayFees) => apiClient.syzeSaveFees(id, fees))({
         fee_pct: Number(pct),
         fixed_fee_minor: Math.round(Number(fixed) * 100),
         fee_currency: currency,
@@ -34,8 +41,15 @@ export function SyzepayFeeForm({ id, settings }: { id: string; settings: Partial
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['syzepay-connections'] });
+      void qc.invalidateQueries({ queryKey: ['tracking-config', offerId] });
+      void qc.invalidateQueries({ queryKey: ['overview-financial'] });
+      void qc.invalidateQueries({ queryKey: ['tracking-overview'] });
+      if (offerId) {
+        void qc.invalidateQueries({ queryKey: ['tracking-summary', offerId] });
+        void qc.invalidateQueries({ queryKey: ['overview-tracking-summary', offerId] });
+      }
       setOpen(false);
-      toast.success('Taxas da SyzePay salvas somente nesta conexão.');
+      toast.success(`Taxas de ${gatewayLabel} salvas somente nesta conexão.`);
     },
     onError: (error) => toast.error((error as Error).message),
   });
@@ -44,7 +58,7 @@ export function SyzepayFeeForm({ id, settings }: { id: string; settings: Partial
     <div className="mt-5 border-t border-white/10 pt-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold">Taxas desta conexão SyzePay</h3>
+          <h3 className="text-sm font-semibold">Taxas desta conexão {gatewayLabel}</h3>
           <p className="mt-1 text-sm text-white/50">
             {settings.fee_pct === undefined
               ? 'Não configuradas — nenhuma taxa da VendePay será herdada.'
@@ -148,11 +162,13 @@ export function SyzepayFeeForm({ id, settings }: { id: string; settings: Partial
           </div>
           <p className="text-xs leading-5 text-white/45">
             Informe 0 quando não houver cobrança. Reserva é retenção temporária, não taxa. Estas
-            configurações são exclusivas desta conexão; o cálculo financeiro da SyzePay depende do
-            mapeamento dos webhooks.
+            configurações são exclusivas desta conexão.{' '}
+            {gatewayLabel === 'SyzePay'
+              ? 'O cálculo financeiro da SyzePay depende do mapeamento dos webhooks.'
+              : 'A visão geral soma somente as taxas das transações deste gateway.'}
           </p>
           <Button type="submit" disabled={save.isPending}>
-            {save.isPending ? 'Salvando…' : 'Salvar taxas SyzePay'}
+            {save.isPending ? 'Salvando…' : `Salvar taxas ${gatewayLabel}`}
           </Button>
         </form>
       )}

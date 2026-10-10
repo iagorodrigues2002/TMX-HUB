@@ -12,6 +12,7 @@ import { DataState } from '@/components/ui/data-state';
 import { apiClient, authToken } from '@/lib/api-client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { SyzepayFeeForm } from '@/components/tracking/syzepay-fees';
 
 interface GatewaysSectionProps {
   offerId: string;
@@ -216,6 +217,22 @@ export function GatewaysSection({ offerId, canManage }: GatewaysSectionProps) {
           />
         ))}
       </div>
+      {canManage &&
+        (config.data.gateways ?? [])
+          .filter((g) => g.provider !== 'vendepay')
+          .map((g) => (
+            <section key={`fees-${g.id}`} className="rounded-lg border border-white/10 p-4">
+              <h3 className="text-sm font-medium">
+                {g.name} · {g.provider}
+              </h3>
+              <SyzepayFeeForm
+                id={g.id}
+                offerId={offerId}
+                gatewayLabel={g.provider === 'paysight' ? 'Paysight' : 'Explodely'}
+                settings={g.fee_settings ?? {}}
+              />
+            </section>
+          ))}
     </section>
   );
 }

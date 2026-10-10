@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { env } from '../env.js';
 import { BadRequestError, NotFoundError } from '../lib/problem.js';
 import { decryptSecret, encryptSecret } from '../lib/secret-box.js';
+import { gatewayFeesSchema } from '../lib/gateway-fee-model.js';
 
 export const syzeHash = (value: string | Buffer) =>
   createHash('sha256').update(value).digest('hex');
@@ -123,16 +124,7 @@ const createSchema = z
     name: z.string().trim().min(2).max(100),
   })
   .strict();
-export const syzeFeesSchema = z
-  .object({
-    fee_pct: z.number().finite().min(0).max(100),
-    fixed_fee_minor: z.number().int().min(0).max(1_000_000_000),
-    fee_currency: z.string().regex(/^[A-Z]{3}$/),
-    reserve_pct: z.number().finite().min(0).max(100),
-    chargeback_fee_minor: z.number().int().min(0).max(1_000_000_000),
-    refund_fee_minor: z.number().int().min(0).max(1_000_000_000),
-  })
-  .strict();
+export const syzeFeesSchema = gatewayFeesSchema;
 export const syzepayAdminRoutes: FastifyPluginAsync = async (app) => {
   const companies = async (owner: string) => {
     const offers = (await app.offerStore.listByUser(owner)).filter(

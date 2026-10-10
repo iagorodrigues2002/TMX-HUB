@@ -107,6 +107,7 @@ export type VturbComparisonAnalytics = {
 export type TrackingOrderKind = TrackingProductKind | 'unknown';
 
 export interface TrackingOverviewTotals {
+  fees_missing_operations?: number;
   paid_orders: number;
   gross_revenue_brl_minor: string;
   gross_revenue_usd_minor: string;
@@ -151,6 +152,10 @@ export interface TrackingOverviewAccount {
     upsells: number;
     gross_brl_minor: string;
     missing_amounts: number;
+    fees_brl_minor?: number;
+    reserve_brl_minor?: number;
+    penalty_brl_minor?: number;
+    fees_missing_operations?: number;
   }>;
   syzepay_pending?: Array<{ company_name: string; pending_events: number }>;
 }
@@ -1407,6 +1412,11 @@ export type TikTokDelivery = {
 };
 
 export const apiClient = {
+  saveGatewayFees: (offerId: string, id: string, fees: SyzepayFees) =>
+    request(`/v1/offers/${offerId}/tracking/gateway-connections/${id}/fees`, {
+      method: 'PUT',
+      body: fees,
+    }),
   syzeSaveFees: (id: string, fees: SyzepayFees) =>
     request(`/v1/tracking/syzepay/connections/${encodeURIComponent(id)}/fees`, {
       method: 'PUT',
@@ -2014,6 +2024,7 @@ export const apiClient = {
     gateways?: Array<{
       id: string;
       provider: string;
+      fee_settings?: Partial<SyzepayFees>;
       name: string;
       enabled: boolean;
       settings: {

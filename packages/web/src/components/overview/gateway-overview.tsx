@@ -25,7 +25,7 @@ export function GatewayOverview({ accounts }: { accounts: TrackingOverviewAccoun
         <div key={account.owner_id} className="space-y-3">
           <h3 className="text-sm font-medium text-white/70">{account.owner_name}</h3>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[580px] text-left text-sm">
+            <table className="w-full min-w-[880px] text-left text-sm">
               <thead className="text-xs text-white/45">
                 <tr>
                   <th className="pb-3">Gateway</th>
@@ -33,6 +33,9 @@ export function GatewayOverview({ accounts }: { accounts: TrackingOverviewAccoun
                   <th className="pb-3 text-right">Front</th>
                   <th className="pb-3 text-right">Upsells</th>
                   <th className="pb-3 text-right">Faturamento bruto</th>
+                  <th className="pb-3 text-right">Taxas</th>
+                  <th className="pb-3 text-right">Reserva</th>
+                  <th className="pb-3 text-right">Encargos</th>
                 </tr>
               </thead>
               <tbody>
@@ -52,6 +55,17 @@ export function GatewayOverview({ accounts }: { accounts: TrackingOverviewAccoun
                         </span>
                       )}
                     </td>
+                    {[row.fees_brl_minor, row.reserve_brl_minor, row.penalty_brl_minor].map(
+                      (value, index) => (
+                        <td key={index} className="text-right">
+                          {row.fees_missing_operations
+                            ? 'Configuração incompleta'
+                            : isPrivate
+                              ? '****'
+                              : formatCurrency((value ?? 0) / 100, 'BRL')}
+                        </td>
+                      ),
+                    )}
                   </tr>
                 ))}
                 {account.syzepay_pending?.map((row) => (
@@ -60,12 +74,14 @@ export function GatewayOverview({ accounts }: { accounts: TrackingOverviewAccoun
                     <td colSpan={3} className="text-right text-amber-200">
                       {formatInt(row.pending_events)} eventos aguardando mapeamento
                     </td>
-                    <td className="text-right text-white/40">Ainda não contabilizado</td>
+                    <td colSpan={4} className="text-right text-white/40">
+                      Ainda não contabilizado
+                    </td>
                   </tr>
                 ))}
                 {!account.gateways?.length && !account.syzepay_pending?.length && (
                   <tr>
-                    <td colSpan={5} className="py-4 text-white/40">
+                    <td colSpan={8} className="py-4 text-white/40">
                       Nenhuma transação aprovada neste período.
                     </td>
                   </tr>
