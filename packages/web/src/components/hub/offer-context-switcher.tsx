@@ -32,7 +32,10 @@ const OfferContext = createContext<OfferContextValue | null>(null);
 
 export function isOfferContextPath(pathname: string) {
   return (
-    /^\/ofertas\/[^/]+$/.test(pathname) || pathname === '/tracking' || pathname === '/reembolsos'
+    /^\/ofertas\/[^/]+$/.test(pathname) ||
+    pathname === '/tracking' ||
+    pathname === '/reembolsos' ||
+    pathname === '/integracoes/syzepay'
   );
 }
 
@@ -115,6 +118,14 @@ export function useOfferContext() {
 
 export function OfferContextSwitcher() {
   const pathname = usePathname();
+  const params = useSearchParams();
+  const router = useRouter();
+  const companyMode = pathname === '/integracoes/syzepay';
+  const allowCompany =
+    companyMode ||
+    (pathname === '/tracking' &&
+      params.get('view') === 'finance' &&
+      params.get('section') === 'payments');
   const { offers, currentOfferId, isLoading, isError, retry, setCurrentOfferId } =
     useOfferContext();
   const [open, setOpen] = useState(false);
@@ -133,12 +144,25 @@ export function OfferContextSwitcher() {
       <Select
         open={open}
         onOpenChange={setOpen}
-        value={currentOfferId || undefined}
-        onValueChange={(value) => (value === '__retry' ? retry() : setCurrentOfferId(value))}
+        value={
+          companyMode
+            ? `__company:${params.get('company') ?? offersByCompany[0]?.company ?? ''}`
+            : currentOfferId || undefined
+        }
+        onValueChange={(value) => {
+          if (value === '__retry') retry();
+          else if (value.startsWith('__company:'))
+            router.push(`/integracoes/syzepay?company=${encodeURIComponent(value.slice(10))}`);
+          else if (companyMode)
+            router.push(
+              `/tracking?view=finance&section=payments&offer=${encodeURIComponent(value)}`,
+            );
+          else setCurrentOfferId(value);
+        }}
         disabled={isLoading || (!isError && offers.length === 0)}
       >
         <SelectTrigger
-          aria-label="Trocar oferta atual"
+          aria-label={allowCompany ? 'Selecionar oferta ou empresa' : 'Trocar oferta atual'}
           className="h-11 w-11 justify-center border-border/60 bg-muted/70 px-0 text-[13px] sm:h-9 sm:w-[min(30vw,240px)] sm:justify-between sm:px-3"
         >
           <Store className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
@@ -156,6 +180,11 @@ export function OfferContextSwitcher() {
           {offersByCompany.map((group) => (
             <SelectGroup key={group.company}>
               <SelectLabel>{group.company}</SelectLabel>
+              {allowCompany && (
+                <SelectItem value={`__company:${group.company}`}>
+                  {group.company} · SyzePay geral
+                </SelectItem>
+              )}
               {group.offers.map((offer) => (
                 <SelectItem key={offer.id} value={offer.id}>
                   {offer.name}

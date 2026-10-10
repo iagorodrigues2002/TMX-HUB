@@ -34,6 +34,7 @@ import utmifyTrackingAdminRoutes from './utmify-tracking-admin.js';
 import vslJobsRoutes from './vsl-jobs.js';
 import webhookTestRoutes from './webhook-test.js';
 import explodelyWebhookRoutes from './webhooks-explodely.js';
+import { syzepayAdminRoutes, syzepayPublicRoutes } from './syzepay.js';
 
 /**
  * Mapeia prefixos de path (sob /v1) → ToolKey requerida. Paths não listados
@@ -84,6 +85,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       await v1.register(trackingPublicRoutes);
       await v1.register(offerCartRoutes);
       await v1.register(explodelyWebhookRoutes);
+      await v1.register(syzepayPublicRoutes);
 
       // Everything below requires a valid JWT.
       await v1.register(async (protectedRoutes) => {
@@ -112,6 +114,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         await protectedRoutes.register(funnelJobsRoutes);
         await protectedRoutes.register(offersRoutes);
         await protectedRoutes.register(trackingAdminRoutes);
+        await protectedRoutes.register(syzepayAdminRoutes);
         await protectedRoutes.register(googleAdsAdminRoutes);
         await protectedRoutes.register(googleAdsOAuthRoutes);
         await protectedRoutes.register(tiktokAdsAdminRoutes);

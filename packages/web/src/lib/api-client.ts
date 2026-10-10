@@ -1390,6 +1390,47 @@ export type TikTokDelivery = {
 };
 
 export const apiClient = {
+  syzeToggle: (id: string, enabled: boolean) =>
+    request(`/v1/tracking/syzepay/connections/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: { enabled },
+    }),
+  syzeCompanies: () =>
+    request<{ companies: Array<{ key: string; name: string; offers: number }> }>(
+      '/v1/tracking/syzepay/companies',
+    ),
+  syzeConnections: () =>
+    request<{
+      connections: Array<{
+        id: string;
+        company_key: string;
+        company_name: string;
+        name: string;
+        enabled: boolean;
+        receipts: number;
+        last_received_at: string | null;
+      }>;
+    }>('/v1/tracking/syzepay/connections'),
+  syzeCreate: (company_key: string, name: string) =>
+    request<{ id: string; webhook_url: string }>('/v1/tracking/syzepay/connections', {
+      method: 'POST',
+      body: { company_key, name },
+    }),
+  syzeUrl: (id: string) =>
+    request<{ webhook_url: string }>(
+      `/v1/tracking/syzepay/connections/${encodeURIComponent(id)}/url`,
+    ),
+  syzeReceipts: (id: string) =>
+    request<{
+      receipts: Array<{
+        id: string;
+        received_at: string;
+        attempts: number;
+        content_type: string;
+        body_bytes: number;
+        state: string;
+      }>;
+    }>(`/v1/tracking/syzepay/connections/${encodeURIComponent(id)}/receipts`),
   tiktokDestinations: (offerId: string) =>
     request<{ destinations: TikTokDestination[] }>(
       `/v1/offers/${offerId}/tracking/tiktok/destinations`,

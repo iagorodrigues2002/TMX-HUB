@@ -253,6 +253,15 @@ export const NAV_ITEMS: NavItem[] = [
         keywords: ['vendepay', 'paysight', 'gateway'],
       },
       {
+        id: 'integration-syzepay',
+        label: 'SyzePay por empresa',
+        href: '/integracoes/syzepay',
+        icon: Webhook,
+        group: 'Integrações',
+        ...trackingTool,
+        keywords: ['syzepay', 'webhook geral', 'empresa'],
+      },
+      {
         id: 'integration-meta',
         label: 'Meta',
         href: '/tracking?view=destinations&section=meta',
