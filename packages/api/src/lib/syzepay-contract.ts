@@ -57,7 +57,7 @@ export function syzepayPurchaseAllowed(event: z.infer<typeof syzepayEventSchema>
   return (
     event.type === 'order.paid' &&
     event.data.object.status === 'succeeded' &&
-    event.data.object.kind === 'sale' &&
+    ['sale', 'upsell'].includes(event.data.object.kind) &&
     event.data.object.amount > 0 &&
     event.livemode !== false &&
     !event.is_test &&

@@ -99,12 +99,14 @@ describe('actual SyzePay envelope and signature contract', () => {
     expect(payload.customer.email).toBe('');
   });
 });
-function fixture(project = 'project-a') {
+function fixture(project = 'project-a', providerKind = 'sale') {
   let inserted = false;
   let mapping: null | { project_id: string; order_kind: string } = null;
   let writes = 0;
   const records = ['order.created', 'order.paid'].map((type, index) => {
-    const body = Buffer.from(JSON.stringify(event(type, project)));
+    const payload = event(type, project);
+    payload.data.object.kind = providerKind;
+    const body = Buffer.from(JSON.stringify(payload));
     return {
       id: 'receipt-' + index,
       received_at: time,
@@ -212,6 +214,25 @@ describe('SyzePay classification transaction and dispatch', () => {
     await expect(classifySyzepayOrder(f.app as never, args)).rejects.toThrow('outra oferta');
     expect(f.writes()).toBe(0);
     expect(f.app.metaQueue.add).not.toHaveBeenCalled();
+  });
+  it('accepts approved upsells once and sends UTMify without pixel Purchase', async () => {
+    const f = fixture('project-a', 'upsell');
+    const upsellArgs = { ...args, kind: 'upsell_2' as const };
+    const first = await classifySyzepayOrder(f.app as never, upsellArgs);
+    const duplicate = await classifySyzepayOrder(f.app as never, upsellArgs);
+    expect(first.utmify).toHaveLength(2);
+    expect(first.meta).toEqual([]);
+    expect(first.tiktok).toEqual([]);
+    expect(duplicate.duplicate).toBe(true);
+    expect(f.writes()).toBe(1);
+    expect(f.app.metaQueue.add).not.toHaveBeenCalled();
+    expect(f.app.tiktokQueue.add).not.toHaveBeenCalled();
+    expect(f.app.utmifyDeliveryQueue.add).toHaveBeenCalledTimes(2);
+  });
+  it('does not allow a gateway upsell to be misclassified as front', async () => {
+    const f = fixture('project-a', 'upsell');
+    await expect(classifySyzepayOrder(f.app as never, args)).rejects.toThrow('upsell');
+    expect(f.writes()).toBe(0);
   });
   it('denies another connection owner before decrypting receipts', async () => {
     const f = fixture();

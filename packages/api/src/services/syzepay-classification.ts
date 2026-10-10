@@ -187,6 +187,8 @@ export async function classifySyzepayOrder(
   if (!paid) throw new ConflictError('Nenhum order.paid aprovado de produção para este pedido.');
   const event = paid.event;
   const o = event.data.object;
+  if (o.kind === 'upsell' && args.kind === 'front')
+    throw new ConflictError('A SyzePay identifica este pagamento como upsell. Selecione uma etapa de upsell.');
   const token = o.utm?.src
     ? readTrackingTokenWithRotation(o.utm.src, env.WEBHOOK_SECRET, env.WEBHOOK_SECRET_PREV)
     : null;
