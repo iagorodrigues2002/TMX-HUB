@@ -19,6 +19,7 @@ import { convertToBrlMinor } from './services/exchange-rate.js';
 import { runRecoveryEmailAutomation } from './services/recovery-automation.js';
 import { runVturbDeliveries } from './services/vturb.js';
 import { runSyzepayAutoClassification } from './services/syzepay-auto.js';
+import { runAdsImport } from './services/ads-intelligence.js';
 import { createBundleWorker } from './workers/bundle.worker.js';
 import { createExplodelyWorker } from './workers/explodely.worker.js';
 import { createFunnelWorker } from './workers/funnel.worker.js';
@@ -299,6 +300,14 @@ async function main() {
       .finally(() => { syzeAutoRunning = false; });
   }, 15000);
   syzeAutoTimer.unref();
+  let adsImportRunning = false;
+  const adsImportTimer = setInterval(() => {
+    if (adsImportRunning) return;
+    adsImportRunning = true;
+    void runAdsImport(app).catch(() => app.log.error('Ads Intelligence import cycle failed'))
+      .finally(() => { adsImportRunning = false; });
+  }, 60_000);
+  adsImportTimer.unref();
 
   let emailRecoveryRunning = false;
   const runEmailRecovery = async () => {
@@ -462,6 +471,7 @@ async function main() {
     try {
       clearInterval(trackingRecoveryTimer);
       clearInterval(syzeAutoTimer);
+      clearInterval(adsImportTimer);
       clearTimeout(trackingRecoveryStartupTimer);
       clearInterval(vendepayWebhookRecoveryTimer);
       app.utmifySync.stop();

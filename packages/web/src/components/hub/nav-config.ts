@@ -79,6 +79,12 @@ export const NAV_ITEMS: NavItem[] = [
     keywords: ['produtos', 'campanhas'],
     children: [
       {
+        id: 'ads-intelligence', label: 'Ads Intelligence', href: '/ads-intelligence',
+        icon: ChartNoAxesCombined, group: 'Ofertas', requiresTool: 'ofertas',
+        roles: ['admin'],
+        keywords: ['levas', 'anúncios', 'roas', 'roi', 'utmify'],
+      },
+      {
         id: 'offers-all',
         label: 'Todas as ofertas',
         href: '/ofertas',

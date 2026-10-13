@@ -329,7 +329,7 @@ async function releaseLock(redis: Redis, key: string, token: string): Promise<vo
   );
 }
 
-async function authenticate(login: string, password: string): Promise<UtmifyAuthSession> {
+export async function authenticate(login: string, password: string): Promise<UtmifyAuthSession> {
   const response = await fetch(AUTH_URL, {
     headers: { authorization: `Basic ${Buffer.from(`${login}:${password}`).toString('base64')}` },
     signal: AbortSignal.timeout(20_000),
@@ -370,7 +370,7 @@ export function detectDashboardCurrency(payload: unknown, dashboardId: string): 
   return visit(payload, 0);
 }
 
-async function fetchAds(
+export async function fetchAds(
   token: string,
   dashboardId: string,
   date: string,
@@ -405,6 +405,7 @@ async function fetchAds(
     throw new Error(`Consulta UTMify falhou (${response.status})${detail ? `: ${detail}` : '.'}`);
   }
   const currency = detectCurrency(payload);
+  if (!Array.isArray(payload?.results)) throw new Error('Resposta UTMify sem resultados válidos.');
   return {
     results: Array.isArray(payload?.results) ? (payload.results as UtmifyResult[]) : [],
     ...(currency ? { currency } : {}),

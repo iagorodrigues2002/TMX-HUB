@@ -1415,7 +1415,34 @@ export type TikTokDelivery = {
   pixel_code: string;
 };
 
+export type AdsIntelligenceMetrics = {
+  spend: number | null; impressions: number | null; clicks: number | null;
+  video_views: number | null; ic: number; front_sales: number; upsell_sales: number;
+  revenue: number; cpc: number | null; cpm: number | null; ctr: number | null;
+  hook_rate: number | null; roas: number | null; roi: number | null;
+};
+export type AdsIntelligenceData = {
+  connection: null | { dashboard_id: string; state: string; last_sync_at: string | null;
+    next_sync_at: string | null; error: string | null; cursor_date?: string; range_end?: string | null };
+  offers: Array<{id: string; name: string; company_name?: string | null}>;
+  pending: Array<{campaign_key: string; campaign_name: string; reason?: string; can_map_offer: boolean}>;
+  coverage?: {from: string | null; to: string | null; complete?: boolean};
+  currency?: string;
+  batches: Array<{key: string; name: string; offer_id: string; offer_name: string;
+    ads: Array<AdsIntelligenceMetrics & {key: string; name: string; sources?: Array<{
+      account_id?: string | null; account_name?: string | null;
+      campaign_id?: string | null; campaign_name?: string | null;
+      adset_id?: string | null; adset_name?: string | null;
+      ad_id?: string | null; ad_name?: string | null;
+    }>}>; totals: AdsIntelligenceMetrics}>;
+};
+
 export const apiClient = {
+  getAdsIntelligence: () => request<AdsIntelligenceData>('/v1/ads-intelligence'),
+  saveAdsIntelligenceConnection: (body: {login: string; password: string; dashboard_id: string}) =>
+    request('/v1/ads-intelligence/connection', {method: 'PUT', body}),
+  mapAdsIntelligenceCampaign: (body: {campaign_key: string; offer_id: string}) =>
+    request('/v1/ads-intelligence/mappings', {method: 'PUT', body}),
   syzeSigningSecret: (id: string, signing_secret: string) =>
     request(`/v1/tracking/syzepay/connections/${id}/signing-secret`, {
       method: 'PUT',

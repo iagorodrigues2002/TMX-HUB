@@ -100,6 +100,7 @@ const migrations = [
   '091_syzepay_connection_fees.sql',
   '092_gateway_connection_fees.sql',
   '093_syzepay_classification.sql',
+  '094_ads_intelligence.sql',
 ];
 
 await sql`
