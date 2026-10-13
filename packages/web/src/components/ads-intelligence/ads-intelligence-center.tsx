@@ -22,6 +22,7 @@ const columns: Array<{key: keyof AdsIntelligenceMetrics; label: string; kind: 'm
 const money = new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
 const numeric = new Intl.NumberFormat('pt-BR',{maximumFractionDigits:2});
 const date = (value?: string|null) => value ? new Date(value).toLocaleString('pt-BR') : 'Ainda não realizada';
+const platformLabel = (value?: string) => ({meta:'Meta',google:'Google Ads',tiktok:'TikTok Ads'} as Record<string,string>)[value ?? ''] ?? value ?? 'Plataforma não informada';
 const selectClass = 'min-h-11 rounded-lg border border-border bg-background px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary';
 
 function MetricColumns() {
@@ -66,6 +67,7 @@ function BatchRow({batch,sort,privateMode}: {batch: AdsIntelligenceData['batches
                     <summary tabIndex={open?undefined:-1} className="cursor-pointer text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">Nomes e IDs originais</summary>
                     <div className="mt-2 space-y-3 break-words text-muted-foreground">
                       {ad.sources.map((source,index)=><dl key={index} className="space-y-2 border-t border-border pt-2">
+                        <div><dt className="font-medium text-foreground">Plataforma</dt><dd>{platformLabel(source.platform)}</dd></div>
                         {(['account','campaign','adset','ad'] as const).map((field)=><div key={field}>
                           <dt className="font-medium text-foreground">{{account:'Conta',campaign:'Campanha',adset:'Conjunto',ad:'Anúncio'}[field]}</dt>
                           <dd>{source[`${field}_name`] || 'Nome não informado'}</dd>
@@ -124,8 +126,18 @@ export function AdsIntelligenceCenter() {
       <Button type="submit" disabled={save.isPending}>{save.isPending&&<Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Salvar conexão</Button>
     </form>}
     {data?.connection && <section aria-label="Estado da importação" className="rounded-xl border border-border bg-card p-5 text-sm">
-      <div className="flex flex-wrap gap-x-8 gap-y-3"><p>Estado: <span className="font-medium">{({ready:'Agendada',importing:'Importando',paused:'Pausada',running:'Importando',error:'Falha',completed:'Atualizada',idle:'Aguardando próxima atualização'} as Record<string,string>)[data.connection.state] ?? data.connection.state}</span></p><p>Última atualização: {date(data.connection.last_sync_at)}</p><p>Próxima: {data.connection.state==='paused'?'Aguardando correção da conexão':date(data.connection.next_sync_at)}</p></div>
-      <p className="mt-3 text-muted-foreground">Histórico solicitado desde 01/08/2026. {data.coverage?.from && data.coverage.to ? `Cobertura disponível: ${data.coverage.from.slice(0,10)} a ${data.coverage.to.slice(0,10)}.` : 'Cobertura ainda não confirmada.'} {data.coverage?.complete ? 'Importação desse intervalo concluída.' : 'A tabela aguarda a importação completa para não comparar custos parciais com faturamento.'}</p>
+      <div className="flex flex-wrap gap-x-8 gap-y-3"><p>Estado: <span className="font-medium">{({ready:'Agendada',partial:'Atualizada parcialmente',importing:'Importando',paused:'Pausada',running:'Importando',error:'Falha',completed:'Atualizada',idle:'Aguardando próxima atualização'} as Record<string,string>)[data.connection.state] ?? data.connection.state}</span></p><p>Última atualização: {date(data.connection.last_sync_at)}</p><p>Próxima: {data.connection.state==='paused'?'Aguardando correção da conexão':date(data.connection.next_sync_at)}</p></div>
+      <p className="mt-3 text-muted-foreground">Histórico solicitado desde 01/08/2026. {data.coverage?.from && data.coverage.to ? `Intervalo consultado: ${data.coverage.from.slice(0,10)} a ${data.coverage.to.slice(0,10)}.` : 'Cobertura ainda não confirmada.'} {data.coverage?.complete ? 'Importação desse intervalo concluída.' : 'Os dados disponíveis são exibidos, mas ROAS e ROI ficam indisponíveis enquanto a cobertura ou os vínculos estiverem incompletos.'}</p>
+      {!!data.connection.platform_coverage?.length && <ul className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-muted-foreground">{data.connection.platform_coverage.map(p=><li key={p.platform}>{platformLabel(p.platform)}: {({complete:'completa',partial:'parcial',unavailable:'indisponível'})[p.state]} · {p.accounts} contas</li>)}</ul>}
+      {!!data.connection.account_failures?.length && <div role="status" className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+        <h2 className="font-medium">Cobertura incompleta: {data.connection.account_failures.length} contas com falha</h2>
+        <p className="mt-2 text-muted-foreground">As contas disponíveis continuam na tabela. Contas com falha não representam gasto zero; seus custos estão ausentes. O TMX verificará novamente essas contas na atualização semanal e recuperará o histórico quando a origem voltar a responder.</p>
+        <ul className="mt-3 space-y-3">{data.connection.account_failures.map((failure,index)=><li key={`${failure.platform}:${failure.account_id}:${index}`} className="break-words">
+          <p className="font-medium">{platformLabel(failure.platform)} · {failure.account_name || 'Conta sem nome'}</p>
+          <p className="break-all text-xs text-muted-foreground">ID: {failure.account_id} · {failure.from.slice(0,10)} a {failure.to.slice(0,10)}</p>
+          <p className="text-xs text-muted-foreground">{failure.reason}</p>
+        </li>)}</ul>
+      </div>}
       {data.connection.error && <p role="alert" className="mt-3 text-destructive">{data.connection.error}</p>}
     </section>}
     {!!data?.pending.length && <section className="space-y-3 rounded-xl border border-border bg-card p-5">

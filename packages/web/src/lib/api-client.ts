@@ -1423,14 +1423,17 @@ export type AdsIntelligenceMetrics = {
 };
 export type AdsIntelligenceData = {
   connection: null | { dashboard_id: string; state: string; last_sync_at: string | null;
-    next_sync_at: string | null; error: string | null; cursor_date?: string; range_end?: string | null };
+    next_sync_at: string | null; error: string | null; cursor_date?: string; range_end?: string | null;
+    coverage_complete?: boolean;
+    account_failures?: Array<{platform: 'meta'|'google'|'tiktok'; account_id: string; account_name: string; reason: string; from: string; to: string}>;
+    platform_coverage?: Array<{platform: 'meta'|'google'|'tiktok'; state: 'complete'|'partial'|'unavailable'; accounts: number}> };
   offers: Array<{id: string; name: string; company_name?: string | null}>;
   pending: Array<{campaign_key: string; campaign_name: string; reason?: string; can_map_offer: boolean}>;
   coverage?: {from: string | null; to: string | null; complete?: boolean};
   currency?: string;
   batches: Array<{key: string; name: string; offer_id: string; offer_name: string;
     ads: Array<AdsIntelligenceMetrics & {key: string; name: string; sources?: Array<{
-      account_id?: string | null; account_name?: string | null;
+      platform?: string; account_id?: string | null; account_name?: string | null;
       campaign_id?: string | null; campaign_name?: string | null;
       adset_id?: string | null; adset_name?: string | null;
       ad_id?: string | null; ad_name?: string | null;

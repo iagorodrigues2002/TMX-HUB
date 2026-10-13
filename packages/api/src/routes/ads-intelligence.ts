@@ -88,7 +88,7 @@ const plugin: FastifyPluginAsync = async (app) => {
     const owner = req.user!.sub;
     const offers = (await app.offerStore.listAll()).filter((o) => o.userId === owner);
     const [connection] =
-      await app.db`SELECT dashboard_id,state,next_sync_at,last_sync_at,error,cursor_date,range_end,coverage_from,coverage_to FROM ads_intelligence_connections WHERE owner_id=${owner}`;
+      await app.db`SELECT dashboard_id,state,next_sync_at,last_sync_at,error,cursor_date,range_end,coverage_from,coverage_to,coverage_complete,account_failures,platform_coverage FROM ads_intelligence_connections WHERE owner_id=${owner}`;
     const rows =
       await app.db`SELECT day,physical_key,raw,currency FROM ads_intelligence_daily WHERE owner_id=${owner} ORDER BY day`;
     const mappings =
@@ -122,7 +122,7 @@ const plugin: FastifyPluginAsync = async (app) => {
     for (const row of rows) {
       const raw = row.raw as Record<string, unknown>;
       const campaign = stringField(raw, 'campaignName');
-      const campaignKey = JSON.stringify([raw.adAccountId ?? '', raw.campaignId ?? '', campaign]);
+      const campaignKey = JSON.stringify([raw.platform ?? 'meta', raw.adAccountId ?? '', raw.campaignId ?? '', campaign]);
       const offerId =
         manual.get(campaignKey) ?? (campaign ? matchCampaign(campaign, offers) : null);
       const logical = logicalAd(stringField(raw, 'name'), stringField(raw, 'adsetName'));
@@ -151,6 +151,7 @@ const plugin: FastifyPluginAsync = async (app) => {
       }
       const key = JSON.stringify([
         offerId,
+        raw.platform ?? 'meta',
         raw.adAccountId,
         logical.batch,
         logical.ad,
@@ -159,6 +160,7 @@ const plugin: FastifyPluginAsync = async (app) => {
       const existing = ads.get(key);
       const data = metrics(raw);
       const source = {
+        platform: stringField(raw, 'platform') || 'meta',
         account_id: stringField(raw, 'adAccountId'),
         campaign_id: stringField(raw, 'campaignId'),
         campaign_name: campaign,
@@ -280,7 +282,8 @@ const plugin: FastifyPluginAsync = async (app) => {
       }
     >();
     for (const ad of ads.values()) {
-      const key = JSON.stringify([ad.offer_id, ad.batch]);
+      const firstSource = [...ad.sources.values()][0]!;
+      const key = JSON.stringify([ad.offer_id, firstSource.platform, firstSource.account_id, ad.batch]);
       let batch = batches.get(key);
       if (!batch) {
         batch = {
@@ -311,7 +314,7 @@ const plugin: FastifyPluginAsync = async (app) => {
       });
     }
     const complete =
-      connection?.state === 'ready' && connection?.last_sync_at && pending.size === 0;
+      connection?.state === 'ready' && connection?.last_sync_at && connection?.coverage_complete !== false && pending.size === 0;
     const safeRatios = (data: Metrics) => ({
       ...ratios(data),
       ...(!complete ? { roi: null, roas: null } : {}),
@@ -321,7 +324,7 @@ const plugin: FastifyPluginAsync = async (app) => {
       offers: offers.map((o) => ({ id: o.id, name: o.name, company_name: o.companyName ?? null })),
       pending: [...pending.values()],
       batches:
-        connection?.state === 'ready'
+        ['ready', 'partial'].includes(connection?.state)
           ? [...batches.values()].map(({ data, ...batch }) => ({
               ...batch,
               ads: batch.ads.map((ad) => ({

@@ -21,6 +21,19 @@ async function setup(role = 'admin', own = 'owner-a') {
   return { app, sql };
 }
 describe('central analytics access isolation', () => {
+  it('shows healthy data in partial state but never calculates ROAS over missing account costs', async()=>{
+    const {app,sql}=await setup();
+    sql.mockResolvedValueOnce([{state:'partial',last_sync_at:'2026-10-13',coverage_from:'2026-08-01',coverage_to:'2026-10-12',coverage_complete:false,account_failures:[{platform:'meta',account_id:'bad',reason:'COULD_NOT_CONVERT_CURRENCY'}]}] as never)
+      .mockResolvedValueOnce([{day:'2026-08-01',raw:{platform:'meta',name:'AD5-L17',adId:'a',adAccountId:'acc',campaignName:'PJR_ENG',spend:10000},currency:'BRL'}] as never)
+      .mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    const r=await app.inject('/ads-intelligence'); const data=r.json();
+    expect(data.batches).toHaveLength(1);
+    expect(data.batches[0].totals).toMatchObject({spend:100,roi:null,roas:null});
+    expect(data.batches[0].ads[0]).toMatchObject({spend:100,roi:null,roas:null});
+    expect(data.coverage.complete).toBe(false);
+    expect(data.batches[0].ads[0].sources[0].platform).toBe('meta');
+    await app.close();
+  });
   it('uses provider cents and TMX revenue to recompute batch ROAS and ROI', async () => {
     const { app, sql } = await setup();
     sql
