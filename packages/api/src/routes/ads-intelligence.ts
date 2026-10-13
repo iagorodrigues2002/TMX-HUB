@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { env } from '../env.js';
 import { encryptSecret } from '../lib/secret-box.js';
-import { logicalAd, matchCampaign, stringField } from '../services/ads-intelligence.js';
+import { adsCalendarDay, logicalAd, matchCampaign, stringField } from '../services/ads-intelligence.js';
 
 const credentials = z.object({
   login: z.string().trim().min(1).max(320),
@@ -172,7 +172,7 @@ const plugin: FastifyPluginAsync = async (app) => {
       if (existing) {
         sum(existing.data, data);
         existing.ids.add(stringField(raw, 'adId'));
-        existing.days.add(String(row.day).slice(0, 10));
+        existing.days.add(adsCalendarDay(row.day));
         existing.sources.set(JSON.stringify(source), source);
       } else
         ads.set(key, {
@@ -184,16 +184,16 @@ const plugin: FastifyPluginAsync = async (app) => {
           campaign,
           logical,
           sources: new Map([[JSON.stringify(source), source]]),
-          days: new Set([String(row.day).slice(0, 10)]),
+          days: new Set([adsCalendarDay(row.day)]),
           ids: new Set([stringField(raw, 'adId')].filter(Boolean)),
         });
     }
     // IDs first; names only when offer/campaign/creative resolve uniquely.
     // Missing identifiers and unattributed upsells stay outside ad ROI rather than guessed.
     const from = connection?.coverage_from
-      ? String(connection.coverage_from).slice(0, 10)
+      ? adsCalendarDay(connection.coverage_from)
       : undefined;
-    const to = connection?.coverage_to ? String(connection.coverage_to).slice(0, 10) : undefined;
+    const to = connection?.coverage_to ? adsCalendarDay(connection.coverage_to) : undefined;
     const unattributed = { ic: 0, front_sales: 0, upsell_sales: 0, revenue: 0 };
     if (from && to && ads.size) {
       const facts = await app.db`

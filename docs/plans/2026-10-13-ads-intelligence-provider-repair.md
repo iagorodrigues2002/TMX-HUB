@@ -44,3 +44,16 @@ Focused unit/route/worker regressions, API typecheck/build, review, and a bounde
 live read-only provider contract check precede deployment. Production import is
 not resumed by tests or migration; the root task explicitly resumes the one
 paused owner connection after reviewing the deployed repair.
+
+## PostgreSQL date parser regression
+
+The first production import exposed another TMX defect before any provider
+request: PostgreSQL DATE columns are returned as JavaScript Date objects.
+`String(date).slice(0,10)` produced display strings such as `Sat Aug 01`, which
+PostgreSQL interpreted as year 2001. The empty paused connection's cursor/end
+must be explicitly restored to 2026-08-01/2026-10-12 after the fix is published.
+All worker cursor/end and route coverage/row days now use a validated UTC ISO
+calendar helper. Historical bounds are validated before credentials or provider
+authentication. A corrupted year pauses with safe `HISTORICAL_RANGE_INVALID`,
+and no external request is made. Error reports retain whitelisted provider/DB
+codes and phase only, never arbitrary upstream text, credentials or SQL bodies.

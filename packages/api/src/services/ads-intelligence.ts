@@ -6,6 +6,24 @@ import { authenticate, detectDashboardCurrency } from './utmify-sync.js';
 import { ADS_PLATFORMS, AdsProviderError, accountsFromProfiles, fetchProviderObjects, listMetaAccounts, normalizeProviderAd, providerDashboard, type AdsPlatform, type ProviderAccount, type ProviderRow } from './ads-utmify-provider.js';
 
 export const ADS_START = '2026-08-01';
+/** postgres DATE is a Date with the default driver parser, not a display string. */
+export function adsCalendarDay(value: unknown): string {
+  const day = value instanceof Date && Number.isFinite(value.getTime())
+    ? value.toISOString().slice(0, 10)
+    : typeof value === 'string' && /^\d{4}-\d{2}-\d{2}(?:T.*)?$/.test(value)
+      ? value.slice(0, 10) : '';
+  const parsed = new Date(`${day}T00:00:00Z`);
+  if (!day || !Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== day)
+    throw new AdsProviderError('CALENDAR_DATE_INVALID', 502);
+  return day;
+}
+export function safeAdsImportError(error: unknown, phase: string): string {
+  const code = error instanceof AdsProviderError ? error.reason
+    : error && typeof error === 'object' && 'code' in error && typeof error.code === 'string' && /^[A-Z0-9]{5}$/.test(error.code)
+      ? `DATABASE_${error.code}` : 'INTERNAL_ERROR';
+  const status = error instanceof AdsProviderError ? ` HTTP ${error.status}` : '';
+  return `Importação pausada: ${code}${status} (${phase}). Nenhuma nova tentativa automática.`;
+}
 export function adsTokens(value: string) {
   return value
     .normalize('NFD')
@@ -52,7 +70,7 @@ export function physicalKey(raw: Record<string, unknown>) {
   ];
   return createHash('sha256').update(JSON.stringify(identity)).digest('hex');
 }
-export function nextImportRange(lastSync: string | null, today: string) {
+export function nextImportRange(lastSync: string | Date | null, today: string) {
   const end = new Date(`${today}T12:00:00Z`);
   end.setUTCDate(end.getUTCDate() - 1);
   const start = lastSync ? new Date(`${today}T12:00:00Z`) : new Date(`${ADS_START}T12:00:00Z`);
@@ -101,34 +119,41 @@ export async function runAdsImport(app: Pick<FastifyInstance, 'db'>) {
         AND (lease_until IS NULL OR lease_until<now()) ORDER BY next_sync_at LIMIT 1 FOR UPDATE SKIP LOCKED)
     RETURNING *`;
   if (!connection) return;
+  let phase = 'credentials';
   try {
-    const credentials = JSON.parse(
-      decryptSecret(connection.credentials_encrypted, env.TRACKING_ENCRYPTION_KEY),
-    );
-    const session = await authenticate(credentials.login, credentials.password);
-    const dashboard = providerDashboard(session.payload, connection.dashboard_id);
-    const currency = detectDashboardCurrency(session.payload, connection.dashboard_id);
-    if (!dashboard || currency !== 'BRL') throw new AdsProviderError('DASHBOARD_BRL_NOT_CONFIRMED', 502);
     const today = new Intl.DateTimeFormat('en-CA', {
       timeZone: 'America/Sao_Paulo',
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
     }).format(new Date());
+    phase = 'date_range';
     const range = connection.range_end
       ? {
-          from: String(connection.cursor_date).slice(0, 10),
-          to: String(connection.range_end).slice(0, 10),
+          from: adsCalendarDay(connection.cursor_date),
+          to: adsCalendarDay(connection.range_end),
         }
       : nextImportRange(connection.last_sync_at, today);
+    if (range.from < ADS_START || range.to < range.from || range.to >= today)
+      throw new AdsProviderError('HISTORICAL_RANGE_INVALID', 502);
     // If any previous cycle missed accounts, repair the whole retained historical
     // range when they recover. Never claim complete coverage over a persistent gap.
     if (Array.isArray(connection.account_failures) && connection.account_failures.length) range.from = ADS_START;
+    phase = 'credentials';
+    const credentials = JSON.parse(
+      decryptSecret(connection.credentials_encrypted, env.TRACKING_ENCRYPTION_KEY),
+    );
+    phase = 'authentication';
+    const session = await authenticate(credentials.login, credentials.password);
+    const dashboard = providerDashboard(session.payload, connection.dashboard_id);
+    const currency = detectDashboardCurrency(session.payload, connection.dashboard_id);
+    if (!dashboard || currency !== 'BRL') throw new AdsProviderError('DASHBOARD_BRL_NOT_CONFIRMED', 502);
     await db`UPDATE ads_intelligence_connections SET state='importing',range_end=${range.to},cursor_date=${range.from},next_sync_at=now()+interval '7 days' WHERE owner_id=${connection.owner_id}`;
     const catalogs = new Map<AdsPlatform, ProviderAccount[]>();
     const failures: AccountFailure[] = [];
     const platforms: Array<{ platform: AdsPlatform; state: string; accounts: number }> = [];
     for (const platform of ADS_PLATFORMS) {
+      phase = `catalog:${platform}`;
       try {
         catalogs.set(platform, platform === 'meta' ? await listMetaAccounts(session.token, connection.dashboard_id) : accountsFromProfiles(dashboard, platform));
       } catch (e) {
@@ -149,6 +174,7 @@ export async function runAdsImport(app: Pick<FastifyInstance, 'db'>) {
         continue;
       }
       try {
+        phase = `health:${old.platform}`;
         await fetchProviderObjects(session.token, connection.dashboard_id, old.platform, [account.id], old.from, old.from);
       } catch (e) {
         if (!(e instanceof AdsProviderError) || e.reason !== 'COULD_NOT_CONVERT_CURRENCY') throw e;
@@ -163,6 +189,7 @@ export async function runAdsImport(app: Pick<FastifyInstance, 'db'>) {
       const day = date.toISOString().slice(0, 10);
       const daily: Array<{ platform: AdsPlatform; accounts: string[]; rows: ProviderRow[] }> = [];
       for (const platform of ADS_PLATFORMS) {
+        phase = `ads:${platform}:${day}`;
         const selected = catalogs.get(platform)!;
         if (!selected.length) continue;
         // The first query also rechecks previously blocked accounts once this
@@ -178,6 +205,7 @@ export async function runAdsImport(app: Pick<FastifyInstance, 'db'>) {
         if (!hierarchy || hierarchy.to < day) {
           const windowEnd = new Date(`${day}T12:00:00Z`); windowEnd.setUTCDate(windowEnd.getUTCDate() + 6);
           const to = windowEnd.toISOString().slice(0, 10) < range.to ? windowEnd.toISOString().slice(0, 10) : range.to;
+          phase = `hierarchy:${platform}:${day}`;
           const campaign = await isolateProviderAccounts(session.token, connection.dashboard_id, platform, isolated.accounts, day, range.to, 'campaign', to);
           const adset = await isolateProviderAccounts(session.token, connection.dashboard_id, platform, campaign.accounts, day, range.to, 'adset', to);
           failures.push(...campaign.failures, ...adset.failures);
@@ -186,11 +214,13 @@ export async function runAdsImport(app: Pick<FastifyInstance, 'db'>) {
           metadata.set(platform, hierarchy);
         }
         const healthyIds = catalogs.get(platform)!.map(a => a.id);
+        phase = `normalize:${platform}:${day}`;
         const rows = isolated.rows.filter(row => healthyIds.includes(String(row.accountId ?? row.adAccountId ?? ''))).map(row => normalizeProviderAd(platform, row, hierarchy!.campaigns, hierarchy!.adsets));
         const keys = rows.map(physicalKey);
         if (new Set(keys).size !== keys.length) throw new AdsProviderError('PHYSICAL_IDENTITY_DUPLICATED', 502);
         daily.push({ platform, accounts: healthyIds, rows });
       }
+      phase = `persist:${day}`;
       await db.begin(async (sql) => {
         for (const imported of daily) {
           // Replace only the healthy physical accounts. Never wipe another
@@ -209,8 +239,8 @@ export async function runAdsImport(app: Pick<FastifyInstance, 'db'>) {
     for (const platform of ADS_PLATFORMS) platforms.push({ platform, state: failures.some(f => f.platform === platform) ? 'partial' : 'complete', accounts: catalogs.get(platform)!.length });
     const partial = failures.length > 0;
     await db`UPDATE ads_intelligence_connections SET state=${partial ? 'partial' : 'ready'},last_sync_at=now(),coverage_from=COALESCE(coverage_from,${ADS_START}::date),coverage_to=${range.to}::date,range_end=NULL,lease_until=NULL,coverage_complete=${!partial},account_failures=${db.json(failures as never)},platform_coverage=${db.json(platforms as never)},error=${partial ? 'Cobertura parcial: contas com falha estão identificadas. ROAS/ROI indisponíveis até reparar as lacunas.' : null} WHERE owner_id=${connection.owner_id}`;
-  } catch {
+  } catch (error) {
     // Never expose upstream bodies, account identities or credentials in logs/UI.
-    await db`UPDATE ads_intelligence_connections SET state='paused',lease_until=NULL,error='Importação pausada: falha de autenticação, contrato ou consulta UTMify. Atualize a conexão para retomar.' WHERE owner_id=${connection.owner_id}`;
+    await db`UPDATE ads_intelligence_connections SET state='paused',lease_until=NULL,error=${safeAdsImportError(error, phase)} WHERE owner_id=${connection.owner_id}`;
   }
 }

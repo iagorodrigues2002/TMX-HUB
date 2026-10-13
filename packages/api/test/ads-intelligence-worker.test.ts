@@ -45,8 +45,8 @@ describe('durable weekly importer', () => {
         JSON.stringify({ login: 'l', password: 'p' }),
         'test-secret',
       ),
-      range_end: '2026-08-01',
-      cursor_date: '2026-08-01',
+      range_end: new Date('2026-08-01T00:00:00Z'),
+      cursor_date: new Date('2026-08-01T00:00:00Z'),
     };
     const db = vi.fn().mockResolvedValueOnce([conn]).mockResolvedValue([]);
     Object.assign(db, { begin: async (fn: Function) => fn(db), json: (v: unknown) => v });
@@ -61,6 +61,21 @@ describe('durable weekly importer', () => {
     expect(JSON.stringify(db.mock.calls)).toContain('last_sync_at=now()');
     expect(JSON.stringify(db.mock.calls)).toContain('coverage_complete=');
     expect(JSON.stringify(db.mock.calls)).toContain('campaignName');
+    expect(fetchProviderObjects).toHaveBeenCalledWith('token','dash','meta',['account'],'2026-08-01','2026-08-01','ad');
+  });
+  it.each([
+    [new Date('2001-08-01T00:00:00Z'),new Date('2001-10-12T00:00:00Z'),'HISTORICAL_RANGE_INVALID'],
+    ['Sat Aug 01','2026-10-12','CALENDAR_DATE_INVALID'],
+    ['2026-02-31','2026-10-12','CALENDAR_DATE_INVALID'],
+    ['2026-08-01','2099-10-12','HISTORICAL_RANGE_INVALID'],
+  ])('rejects corrupt cursor %s before any provider authentication or request',async(cursor,end,code)=>{
+    const conn={owner_id:'owner',dashboard_id:'dash',credentials_encrypted:encryptSecret(JSON.stringify({login:'l',password:'p'}),'test-secret'),cursor_date:cursor,range_end:end};
+    const db=vi.fn().mockResolvedValueOnce([conn]).mockResolvedValue([]);
+    await runAdsImport({db} as never);
+    expect(authenticate).not.toHaveBeenCalled();
+    expect(fetchProviderObjects).not.toHaveBeenCalled();
+    expect(JSON.stringify(db.mock.calls)).toContain(code);
+    expect(JSON.stringify(db.mock.calls)).not.toContain('2001-08-01');
   });
   it('isolates only currency failures and does not retry a blocked account',async()=>{
     vi.mocked(fetchProviderObjects).mockImplementation(async(_t,_d,_p,accounts)=>{

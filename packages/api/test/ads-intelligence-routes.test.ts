@@ -41,13 +41,13 @@ describe('central analytics access isolation', () => {
         {
           state: 'ready',
           last_sync_at: '2026-10-13',
-          coverage_from: '2026-08-01',
-          coverage_to: '2026-10-12',
+          coverage_from: new Date('2026-08-01T00:00:00Z'),
+          coverage_to: new Date('2026-10-12T00:00:00Z'),
         },
       ] as never)
       .mockResolvedValueOnce([
         {
-          day: '2026-08-01',
+          day: new Date('2026-08-01T00:00:00Z'),
           raw: {
             name: 'AD5-L17',
             adId: '5',
@@ -100,6 +100,7 @@ describe('central analytics access isolation', () => {
     expect(res.statusCode).toBe(200);
     const data = res.json();
     expect(data.batches).toHaveLength(1);
+    expect(data.coverage).toMatchObject({from:'2026-08-01',to:'2026-10-12'});
     expect(data.batches[0].ads).toHaveLength(2);
     expect(data.batches[0].totals).toMatchObject({
       spend: 100,
