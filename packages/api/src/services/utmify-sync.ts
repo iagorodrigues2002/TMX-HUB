@@ -76,7 +76,7 @@ export class UtmifySyncService {
 
   async syncAll(): Promise<void> {
     const offers = await this.offerStore.listAll();
-    const configured = offers.filter((item) => item.utmifyConfigured && item.dashboardId);
+    const configured = offers.filter((item) => item.utmifyAccessEnabled !== false && item.utmifyConfigured && item.dashboardId);
     await mapWithConcurrency(configured, OFFER_SYNC_CONCURRENCY, async (offer) => {
       try {
         await this.syncOffer(offer);
@@ -87,6 +87,7 @@ export class UtmifySyncService {
   }
 
   async syncOffer(offer: Offer, full = false): Promise<SyncResult> {
+    if (offer.utmifyAccessEnabled === false) throw new Error('Acesso à dashboard UTMify desativado nesta oferta.');
     if (!offer.dashboardId) throw new Error('Dashboard ID da UTMify não configurado.');
     const dashboardId = offer.dashboardId;
     const credentials = await this.offerStore.getUtmifyCredentials(offer.id);
@@ -275,6 +276,7 @@ export class UtmifySyncService {
     accountFields: Array<Record<string, string | number | boolean>>;
     currency?: string;
   }> {
+    if (offer.utmifyAccessEnabled === false) throw new Error('Acesso à dashboard UTMify desativado nesta oferta.');
     if (!offer.dashboardId) throw new Error('Dashboard ID da UTMify não configurado.');
     const credentials = await this.offerStore.getUtmifyCredentials(offer.id);
     if (!credentials) throw new Error('Credenciais da UTMify não configuradas.');

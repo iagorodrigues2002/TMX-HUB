@@ -787,6 +787,7 @@ export interface OfferView {
   dashboardId?: string;
   currency: string;
   utmifyConfigured: boolean;
+  utmifyAccessEnabled?: boolean;
   utmifyLoginHint?: string;
   syncStatus: 'idle' | 'syncing' | 'success' | 'partial' | 'error';
   lastSyncAt?: string;
@@ -1151,6 +1152,7 @@ interface OfferWire {
   dashboard_id?: string;
   currency?: string;
   utmify_configured?: boolean;
+  utmify_access_enabled?: boolean;
   utmify_login_hint?: string;
   sync_status?: 'idle' | 'syncing' | 'success' | 'partial' | 'error';
   last_sync_at?: string;
@@ -1216,6 +1218,7 @@ function fromOfferWire(w: OfferWire): OfferView {
     dashboardId: w.dashboard_id,
     currency: w.currency ?? 'BRL',
     utmifyConfigured: Boolean(w.utmify_configured),
+    utmifyAccessEnabled: w.utmify_access_enabled ?? Boolean(w.utmify_configured),
     utmifyLoginHint: w.utmify_login_hint,
     syncStatus: w.sync_status ?? 'idle',
     lastSyncAt: w.last_sync_at,
@@ -1974,6 +1977,7 @@ export const apiClient = {
   },
 
   async createOffer(input: {
+    utmify_access_enabled?: boolean;
     name: string;
     company_name?: string;
     dashboard_id?: string;

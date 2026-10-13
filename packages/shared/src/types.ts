@@ -322,6 +322,7 @@ export interface Offer {
   currency?: string;
   /** Whether server-side UTMify credentials are configured (credentials are never exposed). */
   utmifyConfigured?: boolean;
+  utmifyAccessEnabled?: boolean;
   utmifyLoginHint?: string;
   syncStatus?: 'idle' | 'syncing' | 'success' | 'partial' | 'error';
   lastSyncAt?: string;
@@ -390,6 +391,7 @@ export interface SnapshotMetrics {
 }
 
 export interface CreateOfferRequest {
+  utmify_access_enabled?: boolean;
   name: string;
   dashboard_id?: string;
   description?: string;

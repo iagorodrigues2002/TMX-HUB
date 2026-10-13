@@ -38,6 +38,7 @@ export function OfferList() {
   const [name, setName] = useState('');
   const [dashboardId, setDashboardId] = useState('');
   const [utmifyLogin, setUtmifyLogin] = useState('');
+  const [utmifyAccess, setUtmifyAccess] = useState(false);
   const [utmifyPassword, setUtmifyPassword] = useState('');
   const [editing, setEditing] = useState<OfferView | null>(null);
   const [memberIds, setMemberIds] = useState<string[]>([]);
@@ -95,9 +96,8 @@ export function OfferList() {
       apiClient.createOffer({
         company_name: companyName.trim(),
         name: name.trim(),
-        dashboard_id: dashboardId.trim(),
-        utmify_login: utmifyLogin.trim(),
-        utmify_password: utmifyPassword,
+        utmify_access_enabled: utmifyAccess,
+        ...(utmifyAccess ? {dashboard_id: dashboardId.trim(),utmify_login: utmifyLogin.trim(),utmify_password: utmifyPassword} : {}),
         ...(user?.role === 'admin' ? { member_ids: memberIds } : {}),
       }),
     onSuccess: () => {
@@ -111,7 +111,8 @@ export function OfferList() {
       setUtmifyPassword('');
       setMemberIds([]);
       setCreateAttempted(false);
-      toast.success('Oferta criada. A primeira sincronização já começou.');
+      toast.success(utmifyAccess ? 'Oferta criada. A primeira sincronização já começou.' : 'Oferta criada sem acesso à dashboard UTMify.');
+      setUtmifyAccess(false);
     },
     onError: (error) => toast.error((error as Error).message),
   });
@@ -141,13 +142,13 @@ export function OfferList() {
   });
 
   const canCreate =
-    companyName.trim() && name.trim() && dashboardId.trim() && utmifyLogin.trim() && utmifyPassword;
+    companyName.trim() && name.trim() && (!utmifyAccess || (dashboardId.trim() && utmifyLogin.trim() && utmifyPassword));
   const createErrors = {
     companyName: companyName.trim() ? null : 'Informe o nome da empresa.',
     name: name.trim() ? null : 'Informe o nome da oferta.',
-    dashboardId: dashboardId.trim() ? null : 'Informe o ID da dashboard.',
-    utmifyLogin: utmifyLogin.trim() ? null : 'Informe o login da UTMify.',
-    utmifyPassword: utmifyPassword ? null : 'Informe a senha da UTMify.',
+    dashboardId: !utmifyAccess || dashboardId.trim() ? null : 'Informe o ID da dashboard.',
+    utmifyLogin: !utmifyAccess || utmifyLogin.trim() ? null : 'Informe o login da UTMify.',
+    utmifyPassword: !utmifyAccess || utmifyPassword ? null : 'Informe a senha da UTMify.',
   };
   const summary = summaryQuery.data;
   const visibleSummaryOffers =
@@ -353,6 +354,14 @@ export function OfferList() {
                   placeholder="Ex: PFL Brasil"
                 />
               </FormField>
+              <label className="col-span-full flex items-start gap-3 rounded-lg border border-white/10 p-3 text-sm">
+                <input type="checkbox" aria-label="Permitir acesso à dashboard UTMify" checked={utmifyAccess}
+                  onChange={e=>setUtmifyAccess(e.target.checked)} className="mt-1" />
+                <span>Permitir acesso à dashboard UTMify
+                  <span className="mt-1 block text-xs text-white/50">Opcional. Desmarcado: sem login ou importação da dashboard. O envio de vendas por API é configurado separadamente no Tracking.</span>
+                </span>
+              </label>
+              {utmifyAccess && <>
               <FormField
                 id="offer-utmify-login"
                 label="Login UTMify"
@@ -390,6 +399,7 @@ export function OfferList() {
                   placeholder="6a2182d753f10e2ba0fb2ed2"
                 />
               </FormField>
+              </>}
             </div>
             {user?.role === 'admin' && (
               <OfferMemberPicker
@@ -457,7 +467,7 @@ export function OfferList() {
                         variant="ghost"
                         size="sm"
                         onClick={() => syncMut.mutate(offer.id)}
-                        disabled={syncMut.isPending || offer.syncStatus === 'syncing'}
+                        disabled={syncMut.isPending || offer.syncStatus === 'syncing' || offer.utmifyAccessEnabled === false || !offer.utmifyConfigured}
                       >
                         <RefreshCw
                           className={`h-3.5 w-3.5 ${offer.syncStatus === 'syncing' ? 'animate-spin' : ''}`}

@@ -120,7 +120,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
   const capabilitiesQuery = useQuery({
     queryKey: ['utmify-capabilities', id],
     queryFn: () => apiClient.getUtmifyCapabilities(id),
-    enabled: Boolean(offer?.utmifyConfigured) && canManage,
+    enabled: Boolean(offer?.utmifyConfigured) && offer?.utmifyAccessEnabled !== false && canManage,
     staleTime: 30 * 60 * 1000,
     retry: false,
   });

@@ -33,6 +33,7 @@ function offerToWire(
     dashboard_id: o.dashboardId,
     currency: o.currency ?? 'BRL',
     utmify_configured: Boolean(o.utmifyConfigured),
+    utmify_access_enabled: o.utmifyAccessEnabled ?? Boolean(o.utmifyConfigured),
     utmify_login_hint: o.utmifyLoginHint,
     sync_status: o.syncStatus ?? 'idle',
     last_sync_at: o.lastSyncAt,
@@ -212,6 +213,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const offer = await app.offerStore.create({
       userId: req.user.sub,
       name: parsed.data.name,
+      utmifyAccessEnabled: parsed.data.utmify_access_enabled ?? Boolean(parsed.data.utmify_login && parsed.data.utmify_password),
       ...(parsed.data.company_name ? { companyName: parsed.data.company_name } : {}),
       ...(parsed.data.dashboard_id ? { dashboardId: parsed.data.dashboard_id } : {}),
       ...(parsed.data.description ? { description: parsed.data.description } : {}),

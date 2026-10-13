@@ -187,6 +187,7 @@ export const OfferStatusSchema = z.enum(['testando', 'validando', 'escala', 'pau
 
 export const CreateOfferRequestSchema = z
   .object({
+    utmify_access_enabled: z.boolean().optional(),
     name: z.string().min(1).max(60),
     company_name: z.string().trim().min(1).max(80).optional(),
     dashboard_id: z.string().max(100).optional(),
@@ -198,8 +199,13 @@ export const CreateOfferRequestSchema = z
   })
   .strict()
   .superRefine((value, ctx) => {
+    if (value.utmify_access_enabled === false) {
+      if (value.utmify_login || value.utmify_password)
+        ctx.addIssue({code:z.ZodIssueCode.custom,path:['utmify_access_enabled'],message:'Não envie credenciais quando o acesso à UTMify estiver desativado.'});
+      return;
+    }
     const hasConnection = Boolean(
-      value.dashboard_id || value.utmify_login || value.utmify_password,
+      value.utmify_access_enabled || value.dashboard_id || value.utmify_login || value.utmify_password,
     );
     if (!hasConnection) return;
     for (const field of ['dashboard_id', 'utmify_login', 'utmify_password'] as const) {

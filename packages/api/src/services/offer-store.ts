@@ -122,6 +122,7 @@ export class OfferStore {
     name: string;
     companyName?: string;
     dashboardId?: string;
+    utmifyAccessEnabled?: boolean;
     description?: string;
     status?: OfferStatus;
     memberIds?: string[];
@@ -135,6 +136,7 @@ export class OfferStore {
       id: ulid(),
       userId: args.userId,
       name: args.name.trim(),
+      ...(args.utmifyAccessEnabled !== undefined ? {utmifyAccessEnabled:args.utmifyAccessEnabled} : {}),
       ...(args.memberIds && args.memberIds.length > 0
         ? { memberIds: [...new Set(args.memberIds)] }
         : {}),
@@ -290,6 +292,7 @@ export class OfferStore {
     await this.redis.set(this.credentialKey(id), this.encrypt(JSON.stringify(credentials)));
     await this.redis.hset(this.key(id), {
       utmifyConfigured: 'true',
+      utmifyAccessEnabled: 'true',
       utmifyLoginHint: maskLogin(credentials.login),
       syncStatus: 'idle',
       updatedAt: new Date().toISOString(),
@@ -572,6 +575,7 @@ export class OfferStore {
     if (offer.currency) out.currency = offer.currency;
     if (offer.description) out.description = offer.description;
     if (offer.utmifyConfigured) out.utmifyConfigured = 'true';
+    if (offer.utmifyAccessEnabled !== undefined) out.utmifyAccessEnabled = String(offer.utmifyAccessEnabled);
     if (offer.utmifyLoginHint) out.utmifyLoginHint = offer.utmifyLoginHint;
     if (offer.syncStatus) out.syncStatus = offer.syncStatus;
     if (offer.lastSyncAt) out.lastSyncAt = offer.lastSyncAt;
@@ -592,6 +596,7 @@ export class OfferStore {
       ...(data.currency ? { currency: data.currency } : {}),
       ...(data.description ? { description: data.description } : {}),
       ...(data.utmifyConfigured === 'true' ? { utmifyConfigured: true } : {}),
+      ...(data.utmifyAccessEnabled !== undefined ? {utmifyAccessEnabled:data.utmifyAccessEnabled === 'true'} : {}),
       ...(data.utmifyLoginHint ? { utmifyLoginHint: data.utmifyLoginHint } : {}),
       ...(data.syncStatus === 'idle' ||
       data.syncStatus === 'syncing' ||
