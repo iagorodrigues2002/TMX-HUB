@@ -18,10 +18,14 @@ export function adsCalendarDay(value: unknown): string {
   return day;
 }
 export function safeAdsImportError(error: unknown, phase: string): string {
-  const code = error instanceof AdsProviderError ? error.reason
+  const auth = error && typeof error === 'object' && 'authCode' in error &&
+    typeof error.authCode === 'string' && ['AUTH_HTTP_REJECTED','AUTH_TOKEN_MISSING','AUTH_TIMEOUT','AUTH_ABORTED','AUTH_NETWORK','AUTH_UNEXPECTED'].includes(error.authCode)
+      ? error as { authCode: string; httpStatus?: number } : null;
+  const code = auth ? auth.authCode : error instanceof AdsProviderError ? error.reason
     : error && typeof error === 'object' && 'code' in error && typeof error.code === 'string' && /^[A-Z0-9]{5}$/.test(error.code)
       ? `DATABASE_${error.code}` : 'INTERNAL_ERROR';
-  const status = error instanceof AdsProviderError ? ` HTTP ${error.status}` : '';
+  const status = auth && Number.isInteger(auth.httpStatus) && auth.httpStatus! >= 100 && auth.httpStatus! <= 599
+    ? ` HTTP ${auth.httpStatus}` : error instanceof AdsProviderError ? ` HTTP ${error.status}` : '';
   const diagnostics = error instanceof AdsProviderError && error.diagnostics
     ? ` [${error.diagnostics.responseKind}; Cloudflare=${error.diagnostics.cloudflare}${error.diagnostics.retryAfterSeconds !== undefined ? `; retry_after=${error.diagnostics.retryAfterSeconds}s` : ''}]` : '';
   return `Importação pausada: ${code}${status} (${phase})${diagnostics}. Nenhuma nova tentativa automática.`;
