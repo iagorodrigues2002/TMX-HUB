@@ -12,6 +12,14 @@ export class AdsProviderError extends Error {
 function record(v: unknown): ProviderRow | null {
   return v && typeof v === 'object' && !Array.isArray(v) ? v as ProviderRow : null;
 }
+export function providerErrorCode(payload: unknown): string {
+  const root = record(payload);
+  if (!root) return 'UPSTREAM_NON_JSON';
+  const error = record(root.error);
+  for (const candidate of [root.reason, root.code, error?.reason, error?.code])
+    if (typeof candidate === 'string' && /^[A-Z][A-Z0-9_]{0,99}$/.test(candidate)) return candidate;
+  return 'UPSTREAM_ERROR';
+}
 /** Exact dashboard membership, never another dashboard's profiles/currency. */
 export function providerDashboard(payload: unknown, id: string): ProviderRow | null {
   const visit = (v: unknown, depth: number): ProviderRow | null => {
@@ -61,9 +69,8 @@ async function request(token: string, path: string, body: ProviderRow): Promise<
   });
   const payload: unknown = await response.json().catch(() => null);
   if (!response.ok) {
-    const reason = record(payload)?.reason;
     // Whitelist machine codes; never expose upstream free text or tokens.
-    throw new AdsProviderError(typeof reason === 'string' && /^[A-Z0-9_]{1,100}$/.test(reason) ? reason : 'UPSTREAM_ERROR', response.status);
+    throw new AdsProviderError(providerErrorCode(payload), response.status);
   }
   return payload;
 }

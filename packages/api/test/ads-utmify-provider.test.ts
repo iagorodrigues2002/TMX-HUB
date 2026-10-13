@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { accountsFromProfiles, fetchProviderObjects, normalizeAccounts, normalizeProviderAd, providerDashboard } from '../src/services/ads-utmify-provider.js';
+import { accountsFromProfiles, fetchProviderObjects, normalizeAccounts, normalizeProviderAd, providerDashboard, providerErrorCode } from '../src/services/ads-utmify-provider.js';
 afterEach(() => vi.unstubAllGlobals());
 describe('actual UTMify provider contract', () => {
+  it('records only machine reason/code envelopes, never arbitrary messages',()=>{
+    expect(providerErrorCode({reason:'COULD_NOT_CONVERT_CURRENCY'})).toBe('COULD_NOT_CONVERT_CURRENCY');
+    expect(providerErrorCode({error:{code:'RATE_LIMITED'}})).toBe('RATE_LIMITED');
+    expect(providerErrorCode({message:'private user body',reason:'private account body'})).toBe('UPSTREAM_ERROR');
+    expect(providerErrorCode(null)).toBe('UPSTREAM_NON_JSON');
+  });
   it('deduplicates accounts but retains disabled delivery accounts with enabled connections', () => {
     expect(normalizeAccounts([{id:'a',name:'A',status:'DISABLED',enabled:true},{id:'a',name:'A'},{id:'b',enabled:false}])).toEqual([{id:'a',name:'A'}]);
   });

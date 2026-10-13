@@ -138,7 +138,7 @@ export async function runAdsImport(app: Pick<FastifyInstance, 'db'>) {
       throw new AdsProviderError('HISTORICAL_RANGE_INVALID', 502);
     // If any previous cycle missed accounts, repair the whole retained historical
     // range when they recover. Never claim complete coverage over a persistent gap.
-    if (Array.isArray(connection.account_failures) && connection.account_failures.length) range.from = ADS_START;
+    if (!connection.range_end && Array.isArray(connection.account_failures) && connection.account_failures.length) range.from = ADS_START;
     phase = 'credentials';
     const credentials = JSON.parse(
       decryptSecret(connection.credentials_encrypted, env.TRACKING_ENCRYPTION_KEY),
@@ -166,6 +166,15 @@ export async function runAdsImport(app: Pick<FastifyInstance, 'db'>) {
     // cycle. Persistent errors do not trigger historical requests for it.
     for (const old of (Array.isArray(connection.account_failures) ? connection.account_failures : []) as AccountFailure[]) {
       const list = catalogs.get(old.platform);
+      if (connection.range_end) {
+        // Explicit continuation of the SAME interrupted weekly job: keep its
+        // gaps and exclusion decisions, without rechecking blocked accounts or
+        // restarting already committed August snapshots. A new weekly job
+        // (range_end=NULL) performs health checks and historical repair.
+        failures.push({ ...old, to: range.to });
+        if (old.account_id) catalogs.set(old.platform, (list ?? []).filter(a => a.id !== old.account_id));
+        continue;
+      }
       const account = list?.find(a => a.id === old.account_id);
       if (!account) {
         // Disconnection does not erase an already recorded historical gap.
@@ -205,8 +214,9 @@ export async function runAdsImport(app: Pick<FastifyInstance, 'db'>) {
         if (!hierarchy || hierarchy.to < day) {
           const windowEnd = new Date(`${day}T12:00:00Z`); windowEnd.setUTCDate(windowEnd.getUTCDate() + 6);
           const to = windowEnd.toISOString().slice(0, 10) < range.to ? windowEnd.toISOString().slice(0, 10) : range.to;
-          phase = `hierarchy:${platform}:${day}`;
+          phase = `hierarchy_campaign:${platform}:${day}`;
           const campaign = await isolateProviderAccounts(session.token, connection.dashboard_id, platform, isolated.accounts, day, range.to, 'campaign', to);
+          phase = `hierarchy_adset:${platform}:${day}`;
           const adset = await isolateProviderAccounts(session.token, connection.dashboard_id, platform, campaign.accounts, day, range.to, 'adset', to);
           failures.push(...campaign.failures, ...adset.failures);
           catalogs.set(platform, adset.accounts);

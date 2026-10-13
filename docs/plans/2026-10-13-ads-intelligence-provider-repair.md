@@ -57,3 +57,15 @@ calendar helper. Historical bounds are validated before credentials or provider
 authentication. A corrupted year pauses with safe `HISTORICAL_RANGE_INVALID`,
 and no external request is made. Error reports retain whitelisted provider/DB
 codes and phase only, never arbitrary upstream text, credentials or SQL bodies.
+
+## Interrupted weekly cycle
+
+After 1,255 committed daily rows through September 4, a Meta hierarchy request
+returned HTTP 400 without a recognized machine reason. A bounded read-only
+reproduction of the same healthy 41 accounts and September 5–11 range returned
+HTTP 200 for both campaign (15 rows) and adset (72 rows) queries. No upstream
+cause was proven, so generic HTTP 400 does not receive automatic retries.
+Campaign/adset phases are recorded separately. Explicit continuation preserves
+the September 5 cursor and blocked-account decisions rather than restarting
+August or probing the blocked accounts again. New weekly jobs alone recheck
+blocked accounts and start historical gap repair from August.

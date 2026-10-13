@@ -93,7 +93,7 @@ describe('durable weekly importer', () => {
     expect(fetchProviderObjects).toHaveBeenCalledTimes(1);
   });
   it('preserves an unrepaired historical gap when an account disappears from the catalog',async()=>{
-    const conn={owner_id:'owner',dashboard_id:'dash',credentials_encrypted:encryptSecret(JSON.stringify({login:'l',password:'p'}),'test-secret'),range_end:'2026-08-01',cursor_date:'2026-08-01',account_failures:[{platform:'meta',account_id:'removed',account_name:'Removed',reason:'COULD_NOT_CONVERT_CURRENCY',from:'2026-08-01',to:'2026-08-01'}]};
+    const conn={owner_id:'owner',dashboard_id:'dash',credentials_encrypted:encryptSecret(JSON.stringify({login:'l',password:'p'}),'test-secret'),range_end:null,cursor_date:'2026-08-01',account_failures:[{platform:'meta',account_id:'removed',account_name:'Removed',reason:'COULD_NOT_CONVERT_CURRENCY',from:'2026-08-01',to:'2026-08-01'}]};
     const db=vi.fn().mockResolvedValueOnce([conn]).mockResolvedValue([]);
     Object.assign(db,{begin:async(fn:Function)=>fn(db),json:(v:unknown)=>v});
     vi.mocked(authenticate).mockResolvedValue({token:'t',payload:{user:{dashboards:[{id:'dash',googleProfiles:[],tikTokProfiles:[]}]}}});
@@ -112,5 +112,17 @@ describe('durable weekly importer', () => {
     expect(result.accounts.map(a=>a.id)).toEqual(['healthy']);
     expect(result.failures[0]?.account_id).toBe('broken');
     expect(fetchProviderObjects).toHaveBeenLastCalledWith('t','d','meta',['broken'],'2026-08-01','2026-08-07','campaign');
+  });
+  it('continues an interrupted job at its committed cursor without reimporting August or rechecking blocked accounts',async()=>{
+    const conn={owner_id:'owner',dashboard_id:'dash',credentials_encrypted:encryptSecret(JSON.stringify({login:'l',password:'p'}),'test-secret'),range_end:new Date('2026-09-05T00:00:00Z'),cursor_date:new Date('2026-09-05T00:00:00Z'),account_failures:[{platform:'meta',account_id:'broken',account_name:'Bad',reason:'COULD_NOT_CONVERT_CURRENCY',from:'2026-08-01',to:'2026-09-05'}]};
+    const db=vi.fn().mockResolvedValueOnce([conn]).mockResolvedValue([]);
+    Object.assign(db,{begin:async(fn:Function)=>fn(db),json:(v:unknown)=>v});
+    vi.mocked(authenticate).mockResolvedValue({token:'t',payload:{user:{dashboards:[{id:'dash',googleProfiles:[],tikTokProfiles:[]}]}}});
+    vi.mocked(listMetaAccounts).mockResolvedValue([{id:'good',name:'Good'},{id:'broken',name:'Bad'}]);
+    vi.mocked(fetchProviderObjects).mockResolvedValue([]);
+    await runAdsImport({db} as never);
+    expect(fetchProviderObjects).toHaveBeenCalledTimes(3);
+    for(const call of vi.mocked(fetchProviderObjects).mock.calls){expect(call[3]).toEqual(['good']);expect(call[4]).toBe('2026-09-05');}
+    expect(JSON.stringify(db.mock.calls)).toContain('partial');
   });
 });
