@@ -125,4 +125,16 @@ describe('durable weekly importer', () => {
     for(const call of vi.mocked(fetchProviderObjects).mock.calls){expect(call[3]).toEqual(['good']);expect(call[4]).toBe('2026-09-05');}
     expect(JSON.stringify(db.mock.calls)).toContain('partial');
   });
+  it('refreshes Meta hierarchy each day, keeping metadata query bounds equal to spend day',async()=>{
+    const conn={owner_id:'owner',dashboard_id:'dash',credentials_encrypted:encryptSecret(JSON.stringify({login:'l',password:'p'}),'test-secret'),range_end:'2026-09-20',cursor_date:'2026-09-19'};
+    const db=vi.fn().mockResolvedValueOnce([conn]).mockResolvedValue([]);
+    Object.assign(db,{begin:async(fn:Function)=>fn(db),json:(v:unknown)=>v});
+    vi.mocked(authenticate).mockResolvedValue({token:'t',payload:{user:{dashboards:[{id:'dash',googleProfiles:[],tikTokProfiles:[]}]}}});
+    vi.mocked(listMetaAccounts).mockResolvedValue([{id:'good',name:'Good'}]);
+    vi.mocked(fetchProviderObjects).mockResolvedValue([]);
+    await runAdsImport({db} as never);
+    expect(fetchProviderObjects).toHaveBeenCalledTimes(6);
+    for(const call of vi.mocked(fetchProviderObjects).mock.calls)expect(call[4]).toBe(call[5]);
+    expect(vi.mocked(fetchProviderObjects).mock.calls.filter(c=>c[6]==='adset').map(c=>c[4])).toEqual(['2026-09-19','2026-09-20']);
+  });
 });

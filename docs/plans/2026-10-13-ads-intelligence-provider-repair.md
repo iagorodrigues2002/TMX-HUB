@@ -69,3 +69,15 @@ Campaign/adset phases are recorded separately. Explicit continuation preserves
 the September 5 cursor and blocked-account decisions rather than restarting
 August or probing the blocked accounts again. New weekly jobs alone recheck
 blocked accounts and start historical gap repair from August.
+
+After a further production weekly-adset HTTP 400 at September 19, the exact
+September 19–25 local request again returned 200 (18 rows). Railway SSH could
+not be used because no key was registered; no key/access change was made.
+A separately authorized single-day September 19 adset request returned 200
+(6 rows, the same 41 healthy accounts). Meta hierarchy queries now use that
+verified native daily contract; Google/TikTok keep bounded seven-day metadata.
+This reduces request size but does not prove the source of the intermittent
+production HTTP 400. Unknown 4xx errors still pause immediately, without retries.
+Safe diagnostics retain only JSON/non-JSON classification, a Cloudflare boolean,
+and an optional numeric Retry-After limited to 0–3600 seconds. No response body,
+header strings, credential or token is persisted.

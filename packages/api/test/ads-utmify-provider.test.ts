@@ -8,6 +8,12 @@ describe('actual UTMify provider contract', () => {
     expect(providerErrorCode({message:'private user body',reason:'private account body'})).toBe('UPSTREAM_ERROR');
     expect(providerErrorCode(null)).toBe('UPSTREAM_NON_JSON');
   });
+  it('retains only bounded safe HTTP diagnostics and does not retry an unknown 400',async()=>{
+    const fetch=vi.fn(async()=>new Response(JSON.stringify({message:'private account details'}),{status:400,headers:{server:'cloudflare','retry-after':'120','content-type':'application/json'}}));vi.stubGlobal('fetch',fetch);
+    try {await fetchProviderObjects('secret','dash','meta',['a'],'2026-09-19');throw new Error('expected failure');}
+    catch(error){expect(error).toMatchObject({reason:'UPSTREAM_ERROR',status:400,diagnostics:{responseKind:'json',cloudflare:true,retryAfterSeconds:120}});expect(JSON.stringify(error)).not.toContain('private');}
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
   it('deduplicates accounts but retains disabled delivery accounts with enabled connections', () => {
     expect(normalizeAccounts([{id:'a',name:'A',status:'DISABLED',enabled:true},{id:'a',name:'A'},{id:'b',enabled:false}])).toEqual([{id:'a',name:'A'}]);
   });

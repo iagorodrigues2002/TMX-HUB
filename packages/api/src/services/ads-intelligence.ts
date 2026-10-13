@@ -22,7 +22,17 @@ export function safeAdsImportError(error: unknown, phase: string): string {
     : error && typeof error === 'object' && 'code' in error && typeof error.code === 'string' && /^[A-Z0-9]{5}$/.test(error.code)
       ? `DATABASE_${error.code}` : 'INTERNAL_ERROR';
   const status = error instanceof AdsProviderError ? ` HTTP ${error.status}` : '';
-  return `Importação pausada: ${code}${status} (${phase}). Nenhuma nova tentativa automática.`;
+  const diagnostics = error instanceof AdsProviderError && error.diagnostics
+    ? ` [${error.diagnostics.responseKind}; Cloudflare=${error.diagnostics.cloudflare}${error.diagnostics.retryAfterSeconds !== undefined ? `; retry_after=${error.diagnostics.retryAfterSeconds}s` : ''}]` : '';
+  return `Importação pausada: ${code}${status} (${phase})${diagnostics}. Nenhuma nova tentativa automática.`;
+}
+export function adsHierarchyWindowEnd(platform: AdsPlatform, day: string, rangeEnd: string): string {
+  // Meta's observed production 400s occurred in weekly adset requests. A daily
+  // request is the native UI-supported contract, verified with this dashboard.
+  // Smaller batches are mitigation, not a claim of an upstream root cause.
+  if (platform === 'meta') return day;
+  const end = new Date(`${day}T12:00:00Z`); end.setUTCDate(end.getUTCDate() + 6);
+  return end.toISOString().slice(0, 10) < rangeEnd ? end.toISOString().slice(0, 10) : rangeEnd;
 }
 export function adsTokens(value: string) {
   return value
@@ -212,8 +222,7 @@ export async function runAdsImport(app: Pick<FastifyInstance, 'db'>) {
         if (!isolated.accounts.length) continue;
         let hierarchy = metadata.get(platform);
         if (!hierarchy || hierarchy.to < day) {
-          const windowEnd = new Date(`${day}T12:00:00Z`); windowEnd.setUTCDate(windowEnd.getUTCDate() + 6);
-          const to = windowEnd.toISOString().slice(0, 10) < range.to ? windowEnd.toISOString().slice(0, 10) : range.to;
+          const to = adsHierarchyWindowEnd(platform, day, range.to);
           phase = `hierarchy_campaign:${platform}:${day}`;
           const campaign = await isolateProviderAccounts(session.token, connection.dashboard_id, platform, isolated.accounts, day, range.to, 'campaign', to);
           phase = `hierarchy_adset:${platform}:${day}`;

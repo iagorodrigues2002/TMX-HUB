@@ -7,8 +7,14 @@ import {
   physicalKey,
   adsCalendarDay,
   safeAdsImportError,
+  adsHierarchyWindowEnd,
 } from '../src/services/ads-intelligence.js';
 describe('Ads Intelligence identity and weekly ranges', () => {
+  it('uses verified single-day Meta metadata and bounded weekly windows for other platforms',()=>{
+    expect(adsHierarchyWindowEnd('meta','2026-09-19','2026-10-12')).toBe('2026-09-19');
+    expect(adsHierarchyWindowEnd('google','2026-09-19','2026-10-12')).toBe('2026-09-25');
+    expect(adsHierarchyWindowEnd('tiktok','2026-10-10','2026-10-12')).toBe('2026-10-12');
+  });
   it('normalizes actual postgres DATE objects and ISO strings, never display strings',()=>{
     expect(adsCalendarDay(new Date('2026-08-01T00:00:00Z'))).toBe('2026-08-01');
     expect(adsCalendarDay('2026-10-12')).toBe('2026-10-12');

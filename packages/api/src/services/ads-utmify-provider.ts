@@ -4,8 +4,9 @@ export type AdsPlatform = 'meta' | 'google' | 'tiktok';
 export const ADS_PLATFORMS: AdsPlatform[] = ['meta', 'google', 'tiktok'];
 export type ProviderRow = Record<string, unknown>;
 export type ProviderAccount = { id: string; name: string };
+export type ProviderErrorDiagnostics = { responseKind: 'json' | 'non-json'; cloudflare: boolean; retryAfterSeconds?: number };
 export class AdsProviderError extends Error {
-  constructor(public readonly reason: string, public readonly status: number) {
+  constructor(public readonly reason: string, public readonly status: number, public readonly diagnostics?: ProviderErrorDiagnostics) {
     super(`UTMify ${status}: ${reason}`);
   }
 }
@@ -70,7 +71,13 @@ async function request(token: string, path: string, body: ProviderRow): Promise<
   const payload: unknown = await response.json().catch(() => null);
   if (!response.ok) {
     // Whitelist machine codes; never expose upstream free text or tokens.
-    throw new AdsProviderError(providerErrorCode(payload), response.status);
+    const retryAfter = response.headers.get('retry-after');
+    const seconds = retryAfter && /^\d{1,4}$/.test(retryAfter) && Number(retryAfter) <= 3600 ? Number(retryAfter) : undefined;
+    throw new AdsProviderError(providerErrorCode(payload), response.status, {
+      responseKind: payload && typeof payload === 'object' ? 'json' : 'non-json',
+      cloudflare: response.headers.get('server')?.toLowerCase() === 'cloudflare',
+      ...(seconds !== undefined ? { retryAfterSeconds: seconds } : {}),
+    });
   }
   return payload;
 }
