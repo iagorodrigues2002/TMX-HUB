@@ -109,7 +109,9 @@ export function AdsIntelligenceCenter() {
 
   if (query.isPending) return <DataState variant="loading" title="Carregando Ads Intelligence"/>;
   if (query.isError) return <DataState variant="error" title="Não foi possível carregar os anúncios" description={query.error.message} onRetry={()=>void query.refetch()}/>;
-  return <div className="space-y-6">
+  // Keep absolutely positioned screen-reader table captions inside the main
+  // scroll area; otherwise their containing block is the page body.
+  return <div className="relative space-y-6">
     <header className="flex flex-wrap items-start justify-between gap-4">
       <div><h1 className="text-2xl font-semibold">Ads Intelligence</h1><p className="mt-2 max-w-3xl text-sm text-muted-foreground">Custos da UTMify e conversões do TMX, organizados por oferta e leva. Abra uma leva para comparar seus anúncios.</p></div>
       {data?.connection && <Button variant="outline" onClick={()=>setEditing(!editing)}>{editing?'Fechar configuração':'Editar conexão'}</Button>}
