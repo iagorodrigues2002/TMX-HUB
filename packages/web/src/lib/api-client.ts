@@ -1439,6 +1439,7 @@ export type AdsIntelligenceData = {
       campaign_id?: string | null; campaign_name?: string | null;
       adset_id?: string | null; adset_name?: string | null;
       ad_id?: string | null; ad_name?: string | null;
+      page_id?: string | null; page_name?: string | null;
     }>}>; totals: AdsIntelligenceMetrics}>;
 };
 

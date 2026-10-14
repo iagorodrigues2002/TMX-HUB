@@ -8,8 +8,16 @@ import {
   adsCalendarDay,
   safeAdsImportError,
   adsHierarchyWindowEnd,
+  advertiserPage,
 } from '../src/services/ads-intelligence.js';
 describe('Ads Intelligence identity and weekly ranges', () => {
+  it('retains only explicit bounded advertiser page fields, never metrics or account names',()=>{
+    expect(advertiserPage({pageName:' Mainex Page ',pageId:' 123 '})).toEqual({page_name:'Mainex Page',page_id:'123'});
+    expect(advertiserPage({provider_original:{page_name:'Cobrak Page',page_id:'456'}})).toEqual({page_name:'Cobrak Page',page_id:'456'});
+    expect(advertiserPage({accountName:'Not a page',landingPageViews:200,profileId:'789'})).toEqual({page_name:'',page_id:''});
+    expect(advertiserPage({pageName:{name:'object'},pageId:['array']})).toEqual({page_name:'',page_id:''});
+    expect(advertiserPage({pageName:'x'.repeat(257),pageId:'x'.repeat(129)})).toEqual({page_name:'',page_id:''});
+  });
   it('uses verified single-day Meta metadata and bounded weekly windows for other platforms',()=>{
     expect(adsHierarchyWindowEnd('meta','2026-09-19','2026-10-12')).toBe('2026-09-19');
     expect(adsHierarchyWindowEnd('google','2026-09-19','2026-10-12')).toBe('2026-09-25');

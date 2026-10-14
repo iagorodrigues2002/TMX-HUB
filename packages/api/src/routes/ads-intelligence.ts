@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { env } from '../env.js';
 import { encryptSecret } from '../lib/secret-box.js';
-import { adsCalendarDay, logicalAd, matchCampaign, stringField } from '../services/ads-intelligence.js';
+import { adsCalendarDay, advertiserPage, logicalAd, matchCampaign, stringField } from '../services/ads-intelligence.js';
 
 const credentials = z.object({
   login: z.string().trim().min(1).max(320),
@@ -187,6 +187,7 @@ const plugin: FastifyPluginAsync = async (app) => {
         adset_name: stringField(raw, 'adsetName'),
         ad_id: stringField(raw, 'adId'),
         ad_name: stringField(raw, 'name'),
+        ...advertiserPage(raw),
       };
       if (existing) {
         sum(existing.data, data);

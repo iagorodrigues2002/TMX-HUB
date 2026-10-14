@@ -21,6 +21,21 @@ async function setup(role = 'admin', own = 'owner-a') {
   return { app, sql };
 }
 describe('central analytics access isolation', () => {
+  it('exposes advertiser pages per physical source without treating account or landing metrics as a page',async()=>{
+    const {app,sql}=await setup();
+    sql.mockResolvedValueOnce([{state:'ready',last_sync_at:'2026-10-13',coverage_from:'2026-08-01',coverage_to:'2026-10-12'}] as never)
+      .mockResolvedValueOnce([
+        {day:'2026-08-01',currency:'BRL',raw:{name:'PJR_ENG_AD03_L17',adId:'3',adAccountId:'one',spend:10000,pageName:'Page One',pageId:'100'}},
+        {day:'2026-08-01',currency:'BRL',raw:{name:'PJR_ENG_AD03_L17',adId:'3',adAccountId:'two',spend:10000,provider_original:{page_name:'Page Two',page_id:'200'}}},
+        {day:'2026-08-01',currency:'BRL',raw:{name:'PJR_ENG_AD03_L17',adId:'3',adAccountId:'three',spend:10000,accountName:'Not a page',landingPageViews:10}},
+      ] as never).mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    const data=(await app.inject('/ads-intelligence')).json();
+    expect(data.batches).toHaveLength(3);
+    expect(data.batches[0].ads[0].sources[0]).toMatchObject({account_id:'one',page_name:'Page One',page_id:'100'});
+    expect(data.batches[1].ads[0].sources[0]).toMatchObject({account_id:'two',page_name:'Page Two',page_id:'200'});
+    expect(data.batches[2].ads[0].sources[0]).toMatchObject({account_id:'three',page_name:'',page_id:''});
+    await app.close();
+  });
   it('excludes only exact owner campaign names from existing/future views without deleting raw snapshots',async()=>{
     const {app,sql}=await setup();
     const excluded='[SEARCH] Hillside - Leads | 28.09';

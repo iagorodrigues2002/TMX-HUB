@@ -76,6 +76,7 @@ function BatchRow({batch,sort,privateMode}: {batch: AdsIntelligenceData['batches
                     <div className="mt-2 space-y-3 break-words text-muted-foreground">
                       {ad.sources.map((source,index)=><dl key={index} className="space-y-2 border-t border-border pt-2">
                         <div><dt className="font-medium text-foreground">Plataforma</dt><dd>{platformLabel(source.platform)}</dd></div>
+                        <div><dt className="font-medium text-foreground">Página anunciante</dt><dd>{source.page_name || 'Não informada'}</dd>{source.page_id && <dd className="break-all">ID: {source.page_id}</dd>}</div>
                         {(['account','campaign','adset','ad'] as const).map((field)=><div key={field}>
                           <dt className="font-medium text-foreground">{{account:'Conta',campaign:'Campanha',adset:'Conjunto',ad:'Anúncio'}[field]}</dt>
                           <dd>{source[`${field}_name`] || 'Nome não informado'}</dd>

@@ -1,0 +1,9 @@
+# Advertiser page identity in Ads Intelligence
+
+Page name and ID are independent of the advertising account name/ID. Expose `page_name` and `page_id` in each physical source only from explicit `pageName`/`page_name` and `pageId`/`page_id` string fields at the raw snapshot root or its preserved `provider_original`. Trim nonempty strings, bound names to 256 and IDs to 128 characters, and reject nonstrings. Never infer a page from account name, campaign, profile ID or landing-page metrics.
+
+The existing provider normalizer preserves the full row and original row; future explicit page fields are therefore already retained without a new table or import change. Read-time extraction preserves account, offer and physical-source isolation. Missing metadata remains unknown in the interface, not a guessed name.
+
+Read-only inspection of the requested owner's 3,992 snapshots (1,802 after the two campaign exclusions) found no explicit page metadata: 1,583 Meta and 219 Google snapshots only contain landing-page metrics. Their current page identity cannot be recovered from those fields. None of the 24 imported Meta advertising accounts matched a stored Meta Marketing connection; no CAPI token was repurposed and no external lookup or permission change was attempted.
+
+Regression tests cover root/original aliases, nonstrings, bounded values, misleading metrics/account fields and independent accounts using the same ad ID. No financial records, provider requests, historical snapshots or connection credentials change.

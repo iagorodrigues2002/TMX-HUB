@@ -53,3 +53,9 @@ test('only known legacy partial summary is normalized; paused and real upstream 
   assert.deepEqual(importErrorPresentation('retry_wait','UPSTREAM_ERROR HTTP 500'),{message:'UPSTREAM_ERROR HTTP 500',warning:false});
   assert.deepEqual(importErrorPresentation('partial','Outra falha'),{message:'Outra falha',warning:false});
 });
+test('advertiser page details use explicit source name/id without guessing the ad account',()=>{
+  const source=readFileSync(new URL('../src/components/ads-intelligence/ads-intelligence-center.tsx',import.meta.url),'utf8');
+  assert.match(source,/Página anunciante<\/dt><dd>\{source\.page_name \|\| 'Não informada'\}/);
+  assert.match(source,/source\.page_id && <dd className="break-all">ID: \{source\.page_id\}/);
+  assert.doesNotMatch(source,/source\.page_name \|\| source\.account_name/);
+});

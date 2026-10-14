@@ -83,6 +83,19 @@ export function matchCampaign(campaign: string, offers: Array<{ id: string; name
 export function stringField(raw: Record<string, unknown>, key: string): string {
   return typeof raw[key] === 'string' ? (raw[key] as string) : '';
 }
+/** Page identity is distinct from the ad account and landing-page metrics. */
+export function advertiserPage(raw: Record<string, unknown>): {page_name:string;page_id:string} {
+  const original = raw.provider_original && typeof raw.provider_original === 'object' && !Array.isArray(raw.provider_original)
+    ? raw.provider_original as Record<string, unknown> : {};
+  const explicit = (keys: string[], max: number) => {
+    for (const source of [raw, original]) for (const key of keys) {
+      const value = source[key];
+      if (typeof value === 'string' && value.trim() && value.trim().length <= max) return value.trim();
+    }
+    return '';
+  };
+  return {page_name:explicit(['pageName','page_name'],256),page_id:explicit(['pageId','page_id'],128)};
+}
 export function physicalKey(raw: Record<string, unknown>) {
   // Raw provider rows are retained. Never consolidate costs merely by visible ad name.
   const identity = [
