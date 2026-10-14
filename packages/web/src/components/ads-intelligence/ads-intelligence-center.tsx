@@ -62,7 +62,7 @@ function BatchRow({batch,sort,privateMode}: {batch: AdsIntelligenceData['batches
     </tr>
     <tr><td colSpan={columns.length+1} className="p-0">
       <div id={panelId} aria-hidden={!open} className="grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none" style={{gridTemplateRows:open?'1fr':'0fr'}}>
-        <div className="min-h-0 overflow-hidden">
+        <div className="min-h-0 overflow-clip">
           <table className="table-fixed text-sm" style={{width:tableWidth,minWidth:tableWidth}} aria-label={`Anúncios da ${batch.name}`}>
             <MetricColumns/>
             <thead className="sr-only"><tr><th>Anúncio</th>{columns.map(c=><th key={c.key}>{c.label}</th>)}</tr></thead>

@@ -32,6 +32,8 @@ test('sticky first column is opaque and nested tables share explicit full column
   assert.equal((source.match(/style=\{\{width:tableWidth,minWidth:tableWidth\}\}/g)||[]).length,2);
   assert.ok(source.indexOf('aria-label="Filtros dos anúncios"')<source.indexOf('aria-label="Estado da importação"'));
   assert.match(source,/<details className="space-y-3 rounded-xl/);
+  assert.match(source,/className="min-h-0 overflow-clip"/);
+  assert.doesNotMatch(source,/min-h-0 overflow-hidden/);
 });
 test('metric colors follow explicit app theme independently from operating-system dark mode',()=>{
   const css=readFileSync(new URL('../src/app/globals.css',import.meta.url),'utf8');
