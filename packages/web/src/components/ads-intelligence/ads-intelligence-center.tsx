@@ -9,7 +9,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, Loader2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { metricPresentation } from './metric-presentation';
+import { importErrorPresentation, metricPresentation } from './metric-presentation';
 
 type MetricKey = Exclude<keyof AdsIntelligenceMetrics,'calculation_status'|'calculation_reason'>;
 const columns: Array<{key: MetricKey; label: string; kind: 'money'|'count'|'percent'|'ratio'}> = [
@@ -108,6 +108,7 @@ export function AdsIntelligenceCenter() {
   const save = useMutation({mutationFn:()=>apiClient.saveAdsIntelligenceConnection(form),onSuccess:()=>{setForm({login:'',password:'',dashboard_id:''});setEditing(false);void qc.invalidateQueries({queryKey:['ads-intelligence']});toast.success('Conexão salva. A importação segue o agendamento semanal.');},onError:(e)=>toast.error(e.message)});
   const mapping = useMutation({mutationFn:apiClient.mapAdsIntelligenceCampaign,onSuccess:()=>{void qc.invalidateQueries({queryKey:['ads-intelligence']});toast.success('Campanha vinculada à oferta.');},onError:(e)=>toast.error(e.message)});
   const data = query.data;
+  const importError = data?.connection?.error ? importErrorPresentation(data.connection.state,data.connection.error) : null;
   const companies = [...new Set((data?.offers ?? []).map(o=>o.company_name || 'Sem empresa'))].sort();
   const offers = (data?.offers ?? []).filter(o=>!company || (o.company_name || 'Sem empresa') === company);
   const batches = useMemo(()=> (data?.coverage?.to ? data.batches : []).filter(b=>{
@@ -155,7 +156,7 @@ export function AdsIntelligenceCenter() {
           <p className="text-xs text-muted-foreground">{failure.reason}</p>
         </li>)}</ul>
       </div>}
-      {data.connection.error && <p role="alert" className="mt-3 text-destructive">{data.connection.error}</p>}
+      {importError && <p role={importError.warning?'status':'alert'} className={`mt-3 ${importError.warning?'text-[var(--ads-cost)]':'text-destructive'}`}>{importError.message}</p>}
     </section>}
     {!!data?.pending.length && <details className="space-y-3 rounded-xl border border-border bg-card p-5">
       <summary className="min-h-11 cursor-pointer font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">Campanhas aguardando revisão ({data.pending.length}) <span className="ml-2 text-sm font-normal text-primary">Revisar campanhas</span></summary>

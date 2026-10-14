@@ -1,3 +1,11 @@
+export function importErrorPresentation(state: string, error: string) {
+  const legacyPartial = state === 'partial' && error === 'Cobertura parcial: contas com falha estão identificadas. ROAS/ROI indisponíveis até reparar as lacunas.';
+  return {
+    message: legacyPartial ? 'Cobertura parcial: ROAS/ROI calculados com os custos conhecidos e a receita atribuída; contas com lacunas permanecem indisponíveis.' : error,
+    warning: legacyPartial,
+  };
+}
+
 export function metricPresentation(key: string, value: number | null, hidden = false) {
   if (hidden) return { tone: 'text-foreground', cue: '', description: 'Valor oculto' };
   if (value == null || !Number.isFinite(value)) return { tone: 'text-muted-foreground', cue: '', description: 'Dado indisponível' };

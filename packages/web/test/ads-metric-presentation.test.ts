@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
-import { metricPresentation } from '../src/components/ads-intelligence/metric-presentation';
+import { importErrorPresentation, metricPresentation } from '../src/components/ads-intelligence/metric-presentation';
 
 test('ROAS uses 1x and ROI uses zero as media break-even, not positive sign alone',()=>{
   assert.equal(metricPresentation('roas',0.9).cue,'▼');
@@ -41,4 +41,13 @@ test('metric colors follow explicit app theme independently from operating-syste
   assert.match(css,/--ads-positive: #6ee7b7/);
   assert.doesNotMatch(helper,/dark:/);
   assert.match(metricPresentation('roas',2).tone,/var\(--ads-positive\)/);
+});
+test('only known legacy partial summary is normalized; paused and real upstream errors remain untouched',()=>{
+  const legacy='Cobertura parcial: contas com falha estão identificadas. ROAS/ROI indisponíveis até reparar as lacunas.';
+  const fixed=importErrorPresentation('partial',legacy);
+  assert.equal(fixed.warning,true);
+  assert.match(fixed.message,/calculados com os custos conhecidos/);
+  assert.deepEqual(importErrorPresentation('paused',legacy),{message:legacy,warning:false});
+  assert.deepEqual(importErrorPresentation('retry_wait','UPSTREAM_ERROR HTTP 500'),{message:'UPSTREAM_ERROR HTTP 500',warning:false});
+  assert.deepEqual(importErrorPresentation('partial','Outra falha'),{message:'Outra falha',warning:false});
 });
