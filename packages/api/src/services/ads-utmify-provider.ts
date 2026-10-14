@@ -6,7 +6,8 @@ export type ProviderRow = Record<string, unknown>;
 export type ProviderAccount = { id: string; name: string };
 export type ProviderErrorDiagnostics = { responseKind: 'json' | 'non-json'; cloudflare: boolean; retryAfterSeconds?: number };
 export class AdsProviderError extends Error {
-  constructor(public readonly reason: string, public readonly status: number, public readonly diagnostics?: ProviderErrorDiagnostics) {
+  constructor(public readonly reason: string, public readonly status: number, public readonly diagnostics?: ProviderErrorDiagnostics,
+    public readonly origin: 'contract' | 'upstream' | 'transport' = 'contract') {
     super(`UTMify ${status}: ${reason}`);
   }
 }
@@ -64,10 +65,18 @@ export async function listMetaAccounts(token: string, dashboardId: string): Prom
   return normalizeAccounts(r);
 }
 async function request(token: string, path: string, body: ProviderRow): Promise<unknown> {
-  const response = await fetch(`https://server.utmify.com.br${path}`, {
-    method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json; charset=UTF-8' },
-    body: JSON.stringify(body), signal: AbortSignal.timeout(45_000),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`https://server.utmify.com.br${path}`, {
+      method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json; charset=UTF-8' },
+      body: JSON.stringify(body), signal: AbortSignal.timeout(45_000),
+    });
+  } catch (e) {
+    const name=e && typeof e==='object' && 'name' in e ? e.name : '';
+    if(name==='TimeoutError')throw new AdsProviderError('UPSTREAM_TIMEOUT',504,undefined,'transport');
+    if(name==='TypeError')throw new AdsProviderError('UPSTREAM_NETWORK',502,undefined,'transport');
+    throw new AdsProviderError('UPSTREAM_TRANSPORT_UNCLASSIFIED',502);
+  }
   const payload: unknown = await response.json().catch(() => null);
   if (!response.ok) {
     // Whitelist machine codes; never expose upstream free text or tokens.
@@ -77,7 +86,7 @@ async function request(token: string, path: string, body: ProviderRow): Promise<
       responseKind: payload && typeof payload === 'object' ? 'json' : 'non-json',
       cloudflare: response.headers.get('server')?.toLowerCase() === 'cloudflare',
       ...(seconds !== undefined ? { retryAfterSeconds: seconds } : {}),
-    });
+    },'upstream');
   }
   return payload;
 }

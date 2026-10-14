@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { env } from '../env.js';
 import { decryptSecret } from '../lib/secret-box.js';
@@ -29,6 +29,13 @@ export function safeAdsImportError(error: unknown, phase: string): string {
   const diagnostics = error instanceof AdsProviderError && error.diagnostics
     ? ` [${error.diagnostics.responseKind}; Cloudflare=${error.diagnostics.cloudflare}${error.diagnostics.retryAfterSeconds !== undefined ? `; retry_after=${error.diagnostics.retryAfterSeconds}s` : ''}]` : '';
   return `Importação pausada: ${code}${status} (${phase})${diagnostics}. Nenhuma nova tentativa automática.`;
+}
+export function adsRetryDelaySeconds(error: unknown, attempts: number): number | null {
+  if(attempts>=2 || !(error instanceof AdsProviderError) || error.reason==='COULD_NOT_CONVERT_CURRENCY')return null;
+  const transport=error.origin==='transport' && ['UPSTREAM_TIMEOUT','UPSTREAM_NETWORK'].includes(error.reason);
+  const upstream=error.origin==='upstream' && ([429,502,503,504].includes(error.status) || (error.status===500 && error.reason==='UNKNOWN'));
+  if(!transport&&!upstream)return null;
+  return Math.max(attempts===0?600:1800,error.diagnostics?.retryAfterSeconds??0);
 }
 export function adsHierarchyWindowEnd(platform: AdsPlatform, day: string, rangeEnd: string): string {
   // Meta's observed production 400s occurred in weekly adset requests. A daily
@@ -126,10 +133,11 @@ export async function isolateProviderAccounts(token: string, dashboard: string, 
 export async function runAdsImport(app: Pick<FastifyInstance, 'db'>) {
   if (!app.db || !env.TRACKING_ENCRYPTION_KEY) return;
   const db = app.db;
+  const leaseToken = randomUUID();
   const [connection] = await db`
-    UPDATE ads_intelligence_connections SET lease_until=now()+interval '30 minutes',state='importing',next_sync_at=now()+interval '7 days'
+    UPDATE ads_intelligence_connections SET lease_until=now()+interval '30 minutes',import_lease_token=${leaseToken},state='importing',next_sync_at=now()+interval '7 days',retry_attempts=CASE WHEN range_end IS NULL THEN 0 ELSE retry_attempts END
     WHERE owner_id=(SELECT owner_id FROM ads_intelligence_connections
-      WHERE state IN ('ready','partial','importing') AND next_sync_at<=now()
+      WHERE state IN ('ready','partial','retry_wait','importing') AND next_sync_at<=now()
         AND (lease_until IS NULL OR lease_until<now()) ORDER BY next_sync_at LIMIT 1 FOR UPDATE SKIP LOCKED)
     RETURNING *`;
   if (!connection) return;
@@ -162,7 +170,7 @@ export async function runAdsImport(app: Pick<FastifyInstance, 'db'>) {
     const dashboard = providerDashboard(session.payload, connection.dashboard_id);
     const currency = detectDashboardCurrency(session.payload, connection.dashboard_id);
     if (!dashboard || currency !== 'BRL') throw new AdsProviderError('DASHBOARD_BRL_NOT_CONFIRMED', 502);
-    await db`UPDATE ads_intelligence_connections SET state='importing',range_end=${range.to},cursor_date=${range.from},next_sync_at=now()+interval '7 days' WHERE owner_id=${connection.owner_id}`;
+    await db`UPDATE ads_intelligence_connections SET state='importing',range_end=${range.to},cursor_date=${range.from},next_sync_at=now()+interval '7 days' WHERE owner_id=${connection.owner_id} AND import_lease_token=${leaseToken}`;
     const catalogs = new Map<AdsPlatform, ProviderAccount[]>();
     const failures: AccountFailure[] = [];
     const platforms: Array<{ platform: AdsPlatform; state: string; accounts: number }> = [];
@@ -245,6 +253,8 @@ export async function runAdsImport(app: Pick<FastifyInstance, 'db'>) {
       }
       phase = `persist:${day}`;
       await db.begin(async (sql) => {
+        const [fence]=await sql`SELECT owner_id FROM ads_intelligence_connections WHERE owner_id=${connection.owner_id} AND import_lease_token=${leaseToken} FOR UPDATE`;
+        if(!fence)throw new AdsProviderError('IMPORT_LEASE_LOST',409);
         for (const imported of daily) {
           // Replace only the healthy physical accounts. Never wipe another
           // platform, or previously retained costs of a now-blocked account.
@@ -254,16 +264,21 @@ export async function runAdsImport(app: Pick<FastifyInstance, 'db'>) {
             await sql`INSERT INTO ads_intelligence_daily(owner_id,day,physical_key,raw,currency) VALUES(${connection.owner_id},${day},${physicalKey(row)},${sql.json(row as never)},${currency}) ON CONFLICT(owner_id,day,physical_key) DO UPDATE SET raw=EXCLUDED.raw,currency=EXCLUDED.currency,updated_at=now()`;
         }
         date.setUTCDate(date.getUTCDate() + 1);
-        await sql`UPDATE ads_intelligence_connections SET cursor_date=${date.toISOString().slice(0, 10)},account_failures=${sql.json(failures as never)},coverage_complete=false,lease_until=now()+interval '30 minutes' WHERE owner_id=${connection.owner_id}`;
+        await sql`UPDATE ads_intelligence_connections SET cursor_date=${date.toISOString().slice(0, 10)},account_failures=${sql.json(failures as never)},coverage_from=COALESCE(coverage_from,${ADS_START}::date),coverage_to=GREATEST(coverage_to,${day}::date),coverage_complete=false,lease_until=now()+interval '30 minutes' WHERE owner_id=${connection.owner_id} AND import_lease_token=${leaseToken}`;
       });
     }
     if (date.toISOString().slice(0, 10) <= range.to)
       throw new Error('Importação excedeu limite seguro de dias.');
     for (const platform of ADS_PLATFORMS) platforms.push({ platform, state: failures.some(f => f.platform === platform) ? 'partial' : 'complete', accounts: catalogs.get(platform)!.length });
     const partial = failures.length > 0;
-    await db`UPDATE ads_intelligence_connections SET state=${partial ? 'partial' : 'ready'},last_sync_at=now(),coverage_from=COALESCE(coverage_from,${ADS_START}::date),coverage_to=${range.to}::date,range_end=NULL,lease_until=NULL,coverage_complete=${!partial},account_failures=${db.json(failures as never)},platform_coverage=${db.json(platforms as never)},error=${partial ? 'Cobertura parcial: contas com falha estão identificadas. ROAS/ROI indisponíveis até reparar as lacunas.' : null} WHERE owner_id=${connection.owner_id}`;
+    await db`UPDATE ads_intelligence_connections SET state=${partial ? 'partial' : 'ready'},last_sync_at=now(),coverage_from=COALESCE(coverage_from,${ADS_START}::date),coverage_to=${range.to}::date,range_end=NULL,lease_until=NULL,coverage_complete=${!partial},account_failures=${db.json(failures as never)},platform_coverage=${db.json(platforms as never)},error=${partial ? 'Cobertura parcial: contas com falha estão identificadas. ROAS/ROI indisponíveis até reparar as lacunas.' : null} WHERE owner_id=${connection.owner_id} AND import_lease_token=${leaseToken}`;
   } catch (error) {
     // Never expose upstream bodies, account identities or credentials in logs/UI.
-    await db`UPDATE ads_intelligence_connections SET state='paused',lease_until=NULL,error=${safeAdsImportError(error, phase)} WHERE owner_id=${connection.owner_id}`;
+    const attempts=connection.range_end ? Number(connection.retry_attempts??0) : 0;
+    const delay=adsRetryDelaySeconds(error,attempts);
+    if(delay!==null){
+      const message=safeAdsImportError(error,phase).replace('Importação pausada:','Importação aguardando recuperação:').replace('Nenhuma nova tentativa automática.',`Tentativa automática ${attempts+1}/2 em ${Math.ceil(delay/60)} minutos.`);
+      await db`UPDATE ads_intelligence_connections SET state='retry_wait',lease_until=NULL,retry_attempts=${attempts+1},next_sync_at=now()+${delay}*interval '1 second',error=${message} WHERE owner_id=${connection.owner_id} AND import_lease_token=${leaseToken}`;
+    }else await db`UPDATE ads_intelligence_connections SET state='paused',lease_until=NULL,error=${safeAdsImportError(error, phase)} WHERE owner_id=${connection.owner_id} AND import_lease_token=${leaseToken}`;
   }
 }

@@ -81,3 +81,26 @@ production HTTP 400. Unknown 4xx errors still pause immediately, without retries
 Safe diagnostics retain only JSON/non-JSON classification, a Cloudflare boolean,
 and an optional numeric Retry-After limited to 0–3600 seconds. No response body,
 header strings, credential or token is persisted.
+
+## Bounded recovery and committed coverage
+
+The later October 7 production Meta ad request failed with `UNKNOWN` HTTP 500.
+An authorized local same-day reproduction returned HTTP 200, 93 rows in 2.336
+seconds after a successful login. This does not prove Railway/egress root cause.
+
+Migration 096 introduces at most **two delayed retry claims per import job**:
+10 minutes then 30 minutes (bounded numeric Retry-After may extend up to one
+hour). There are no blocking sleeps or auth loops. Only explicitly upstream
+HTTP 500/UNKNOWN, 502/503/504/429, or classified provider transport timeout/network
+errors qualify. Auth, currency, HTTP 400, malformed contract and synthetic 502
+errors still pause. Successful days do not replenish the budget. Only a new
+weekly job with `range_end=NULL` resets the count; continuation keeps cursor,
+range, account gaps and retry count. Weekly cadence and 35-day overlap remain.
+
+Each claim receives an opaque lease token. Daily transactions lock and verify
+that lease before replacing any data, and all connection mutations are fenced.
+Cursor, confirmed coverage dates and costs are committed atomically per day.
+The migration repairs older interrupted-job coverage metadata only where valid
+2026 cursors and retained physical rows prove prior committed days. Paused,
+importing and retry-wait views can display confirmed data; ratios stay unavailable
+until full coverage and mapping are complete. No financial event is manufactured.

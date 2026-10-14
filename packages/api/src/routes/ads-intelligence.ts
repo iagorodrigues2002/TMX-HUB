@@ -88,7 +88,7 @@ const plugin: FastifyPluginAsync = async (app) => {
     const owner = req.user!.sub;
     const offers = (await app.offerStore.listAll()).filter((o) => o.userId === owner);
     const [connection] =
-      await app.db`SELECT dashboard_id,state,next_sync_at,last_sync_at,error,cursor_date,range_end,coverage_from,coverage_to,coverage_complete,account_failures,platform_coverage FROM ads_intelligence_connections WHERE owner_id=${owner}`;
+      await app.db`SELECT dashboard_id,state,next_sync_at,last_sync_at,error,cursor_date,range_end,coverage_from,coverage_to,coverage_complete,account_failures,platform_coverage,retry_attempts FROM ads_intelligence_connections WHERE owner_id=${owner}`;
     const rows =
       await app.db`SELECT day,physical_key,raw,currency FROM ads_intelligence_daily WHERE owner_id=${owner} ORDER BY day`;
     const mappings =
@@ -324,7 +324,7 @@ const plugin: FastifyPluginAsync = async (app) => {
       offers: offers.map((o) => ({ id: o.id, name: o.name, company_name: o.companyName ?? null })),
       pending: [...pending.values()],
       batches:
-        ['ready', 'partial'].includes(connection?.state)
+        from && to
           ? [...batches.values()].map(({ data, ...batch }) => ({
               ...batch,
               ads: batch.ads.map((ad) => ({

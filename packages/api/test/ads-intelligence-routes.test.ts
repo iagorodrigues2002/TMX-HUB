@@ -21,6 +21,15 @@ async function setup(role = 'admin', own = 'owner-a') {
   return { app, sql };
 }
 describe('central analytics access isolation', () => {
+  it('shows committed groups while paused, with honest covered dates and no ROI',async()=>{
+    const {app,sql}=await setup();
+    sql.mockResolvedValueOnce([{state:'paused',coverage_from:new Date('2026-08-01T00:00:00Z'),coverage_to:new Date('2026-10-06T00:00:00Z'),coverage_complete:false,retry_attempts:2}] as never)
+      .mockResolvedValueOnce([{day:'2026-10-06',raw:{platform:'meta',name:'AD5-L17',adId:'a',adAccountId:'acc',campaignName:'PJR_ENG',spend:10000},currency:'BRL'}] as never)
+      .mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    const data=(await app.inject('/ads-intelligence')).json();
+    expect(data.batches).toHaveLength(1);expect(data.batches[0].totals).toMatchObject({spend:100,roi:null,roas:null});
+    expect(data.coverage).toEqual({from:'2026-08-01',to:'2026-10-06',complete:false});await app.close();
+  });
   it('shows healthy data in partial state but never calculates ROAS over missing account costs', async()=>{
     const {app,sql}=await setup();
     sql.mockResolvedValueOnce([{state:'partial',last_sync_at:'2026-10-13',coverage_from:'2026-08-01',coverage_to:'2026-10-12',coverage_complete:false,account_failures:[{platform:'meta',account_id:'bad',reason:'COULD_NOT_CONVERT_CURRENCY'}]}] as never)

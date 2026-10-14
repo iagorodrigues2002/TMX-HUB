@@ -102,6 +102,7 @@ const migrations = [
   '093_syzepay_classification.sql',
   '094_ads_intelligence.sql',
   '095_ads_intelligence_coverage.sql',
+  '096_ads_intelligence_bounded_recovery.sql',
 ];
 
 await sql`

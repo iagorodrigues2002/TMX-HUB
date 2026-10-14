@@ -1424,7 +1424,7 @@ export type AdsIntelligenceMetrics = {
 export type AdsIntelligenceData = {
   connection: null | { dashboard_id: string; state: string; last_sync_at: string | null;
     next_sync_at: string | null; error: string | null; cursor_date?: string; range_end?: string | null;
-    coverage_complete?: boolean;
+    coverage_complete?: boolean; retry_attempts?: number;
     account_failures?: Array<{platform: 'meta'|'google'|'tiktok'; account_id: string; account_name: string; reason: string; from: string; to: string}>;
     platform_coverage?: Array<{platform: 'meta'|'google'|'tiktok'; state: 'complete'|'partial'|'unavailable'; accounts: number}> };
   offers: Array<{id: string; name: string; company_name?: string | null}>;

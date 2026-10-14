@@ -11,9 +11,57 @@ vi.mock('../src/services/ads-utmify-provider.js', async () => ({
 import { authenticate } from '../src/services/utmify-sync.js';
 import { AdsProviderError, fetchProviderObjects, listMetaAccounts } from '../src/services/ads-utmify-provider.js';
 import { encryptSecret } from '../src/lib/secret-box.js';
-import { isolateProviderAccounts, runAdsImport } from '../src/services/ads-intelligence.js';
+import { adsRetryDelaySeconds, isolateProviderAccounts, runAdsImport } from '../src/services/ads-intelligence.js';
 beforeEach(() => vi.clearAllMocks());
 describe('durable weekly importer', () => {
+  it('limits eligible errors to two retries per job, excluding auth/currency/400/contract failures',()=>{
+    const e=new AdsProviderError('UNKNOWN',500,undefined,'upstream');
+    expect(adsRetryDelaySeconds(e,0)).toBe(600);expect(adsRetryDelaySeconds(e,1)).toBe(1800);expect(adsRetryDelaySeconds(e,2)).toBeNull();
+    expect(adsRetryDelaySeconds(new AdsProviderError('RESULTS_CONTRACT_INVALID',502),0)).toBeNull();
+    expect(adsRetryDelaySeconds(new AdsProviderError('UPSTREAM_ERROR',400,undefined,'upstream'),0)).toBeNull();
+    expect(adsRetryDelaySeconds(new AdsProviderError('COULD_NOT_CONVERT_CURRENCY',500,undefined,'upstream'),0)).toBeNull();
+    expect(adsRetryDelaySeconds({authCode:'AUTH_TIMEOUT'},0)).toBeNull();
+    expect(adsRetryDelaySeconds(new AdsProviderError('RATE_LIMITED',429,{responseKind:'json',cloudflare:true,retryAfterSeconds:3600},'upstream'),0)).toBe(3600);
+    expect(adsRetryDelaySeconds(new AdsProviderError('UPSTREAM_TIMEOUT',504,undefined,'transport'),0)).toBe(600);
+  });
+  it.each([1,2])('does not reset retry budget %s after a successful committed day',async attempts=>{
+    const conn={owner_id:'owner',dashboard_id:'dash',credentials_encrypted:encryptSecret(JSON.stringify({login:'l',password:'p'}),'test-secret'),range_end:'2026-10-07',cursor_date:'2026-10-06',retry_attempts:attempts};
+    const db=vi.fn().mockResolvedValueOnce([conn]).mockResolvedValue([{owner_id:'owner'}]);
+    Object.assign(db,{begin:async(fn:Function)=>fn(db),json:(v:unknown)=>v});
+    vi.mocked(authenticate).mockResolvedValue({token:'t',payload:{user:{dashboards:[{id:'dash',googleProfiles:[],tikTokProfiles:[]}]}}});
+    vi.mocked(listMetaAccounts).mockResolvedValue([{id:'good',name:'Good'}]);
+    vi.mocked(fetchProviderObjects).mockImplementation(async(_t,_d,_p,_a,day)=>{if(day==='2026-10-07')throw new AdsProviderError('UNKNOWN',500,undefined,'upstream');return[]});
+    await runAdsImport({db} as never);
+    const calls=JSON.stringify(db.mock.calls);
+    expect(calls).toContain('coverage_to=GREATEST');expect(calls).toContain('2026-10-06');
+    expect(calls).not.toContain('2026-10-08');
+    if(attempts===1){expect(calls).toContain("state='retry_wait'");expect(calls).toContain('1800');expect(calls).toContain('Tentativa automática 2/2');}
+    else {expect(calls).toContain("state='paused'");expect(calls).not.toContain('Tentativa automática');}
+  });
+  it('does not mutate daily data after a stale worker loses its fenced lease',async()=>{
+    const conn={owner_id:'owner',dashboard_id:'dash',credentials_encrypted:encryptSecret(JSON.stringify({login:'l',password:'p'}),'test-secret'),range_end:'2026-10-07',cursor_date:'2026-10-07'};
+    const db=vi.fn().mockResolvedValueOnce([conn]).mockResolvedValue([]);
+    Object.assign(db,{begin:async(fn:Function)=>fn(db),json:(v:unknown)=>v});
+    vi.mocked(authenticate).mockResolvedValue({token:'t',payload:{user:{dashboards:[{id:'dash',googleProfiles:[],tikTokProfiles:[]}]}}});
+    vi.mocked(listMetaAccounts).mockResolvedValue([{id:'good',name:'Good'}]);vi.mocked(fetchProviderObjects).mockResolvedValue([]);
+    await runAdsImport({db} as never);
+    const calls=JSON.stringify(db.mock.calls);
+    expect(calls).toContain('IMPORT_LEASE_LOST');expect(calls).toContain('FOR UPDATE');
+    expect(calls).not.toContain('DELETE FROM ads_intelligence_daily');expect(calls).not.toContain('coverage_to=GREATEST');
+    expect(db.mock.calls.at(-1)![0].join('')).toContain('AND import_lease_token=');
+  });
+  it('waits ten minutes on the first explicit upstream 500 without advancing cursor',async()=>{
+    const conn={owner_id:'owner',dashboard_id:'dash',credentials_encrypted:encryptSecret(JSON.stringify({login:'l',password:'p'}),'test-secret'),range_end:'2026-10-07',cursor_date:'2026-10-07',retry_attempts:0};
+    const db=vi.fn().mockResolvedValueOnce([conn]).mockResolvedValue([]);
+    Object.assign(db,{begin:async(fn:Function)=>fn(db),json:(v:unknown)=>v});
+    vi.mocked(authenticate).mockResolvedValue({token:'t',payload:{user:{dashboards:[{id:'dash',googleProfiles:[],tikTokProfiles:[]}]}}});
+    vi.mocked(listMetaAccounts).mockResolvedValue([{id:'good',name:'Good'}]);
+    vi.mocked(fetchProviderObjects).mockRejectedValue(Object.assign(new AdsProviderError('UNKNOWN',500),{origin:'upstream'}));
+    await runAdsImport({db} as never);
+    const calls=JSON.stringify(db.mock.calls);
+    expect(calls).toContain('retry_wait');expect(calls).toContain('600');
+    expect(calls).not.toContain('DELETE FROM ads_intelligence_daily');
+  });
   it('does not login when no weekly connection is due', async () => {
     const db = vi.fn(async () => []);
     await runAdsImport({ db } as never);
@@ -29,7 +77,7 @@ describe('durable weekly importer', () => {
         'test-secret',
       ),
     };
-    const db = vi.fn().mockResolvedValueOnce([conn]).mockResolvedValue([]);
+    const db = vi.fn().mockResolvedValueOnce([conn]).mockResolvedValue([{owner_id:'owner'}]);
     vi.mocked(authenticate).mockRejectedValue(new Error('secret upstream error'));
     await runAdsImport({ db } as never);
     expect(authenticate).toHaveBeenCalledTimes(1);
@@ -48,7 +96,7 @@ describe('durable weekly importer', () => {
       range_end: new Date('2026-08-01T00:00:00Z'),
       cursor_date: new Date('2026-08-01T00:00:00Z'),
     };
-    const db = vi.fn().mockResolvedValueOnce([conn]).mockResolvedValue([]);
+    const db = vi.fn().mockResolvedValueOnce([conn]).mockResolvedValue([{owner_id:'owner'}]);
     Object.assign(db, { begin: async (fn: Function) => fn(db), json: (v: unknown) => v });
     Object.assign(db,{json:(v:unknown)=>v});
     vi.mocked(authenticate).mockResolvedValue({ token: 'token', payload: {user:{dashboards:[{id:'dash',googleProfiles:[],tikTokProfiles:[]}]}} });
@@ -70,7 +118,7 @@ describe('durable weekly importer', () => {
     ['2026-08-01','2099-10-12','HISTORICAL_RANGE_INVALID'],
   ])('rejects corrupt cursor %s before any provider authentication or request',async(cursor,end,code)=>{
     const conn={owner_id:'owner',dashboard_id:'dash',credentials_encrypted:encryptSecret(JSON.stringify({login:'l',password:'p'}),'test-secret'),cursor_date:cursor,range_end:end};
-    const db=vi.fn().mockResolvedValueOnce([conn]).mockResolvedValue([]);
+    const db=vi.fn().mockResolvedValueOnce([conn]).mockResolvedValue([{owner_id:'owner'}]);
     await runAdsImport({db} as never);
     expect(authenticate).not.toHaveBeenCalled();
     expect(fetchProviderObjects).not.toHaveBeenCalled();
@@ -94,7 +142,7 @@ describe('durable weekly importer', () => {
   });
   it('preserves an unrepaired historical gap when an account disappears from the catalog',async()=>{
     const conn={owner_id:'owner',dashboard_id:'dash',credentials_encrypted:encryptSecret(JSON.stringify({login:'l',password:'p'}),'test-secret'),range_end:null,cursor_date:'2026-08-01',account_failures:[{platform:'meta',account_id:'removed',account_name:'Removed',reason:'COULD_NOT_CONVERT_CURRENCY',from:'2026-08-01',to:'2026-08-01'}]};
-    const db=vi.fn().mockResolvedValueOnce([conn]).mockResolvedValue([]);
+    const db=vi.fn().mockResolvedValueOnce([conn]).mockResolvedValue([{owner_id:'owner'}]);
     Object.assign(db,{begin:async(fn:Function)=>fn(db),json:(v:unknown)=>v});
     vi.mocked(authenticate).mockResolvedValue({token:'t',payload:{user:{dashboards:[{id:'dash',googleProfiles:[],tikTokProfiles:[]}]}}});
     vi.mocked(listMetaAccounts).mockResolvedValue([]);
@@ -115,7 +163,7 @@ describe('durable weekly importer', () => {
   });
   it('continues an interrupted job at its committed cursor without reimporting August or rechecking blocked accounts',async()=>{
     const conn={owner_id:'owner',dashboard_id:'dash',credentials_encrypted:encryptSecret(JSON.stringify({login:'l',password:'p'}),'test-secret'),range_end:new Date('2026-09-05T00:00:00Z'),cursor_date:new Date('2026-09-05T00:00:00Z'),account_failures:[{platform:'meta',account_id:'broken',account_name:'Bad',reason:'COULD_NOT_CONVERT_CURRENCY',from:'2026-08-01',to:'2026-09-05'}]};
-    const db=vi.fn().mockResolvedValueOnce([conn]).mockResolvedValue([]);
+    const db=vi.fn().mockResolvedValueOnce([conn]).mockResolvedValue([{owner_id:'owner'}]);
     Object.assign(db,{begin:async(fn:Function)=>fn(db),json:(v:unknown)=>v});
     vi.mocked(authenticate).mockResolvedValue({token:'t',payload:{user:{dashboards:[{id:'dash',googleProfiles:[],tikTokProfiles:[]}]}}});
     vi.mocked(listMetaAccounts).mockResolvedValue([{id:'good',name:'Good'},{id:'broken',name:'Bad'}]);
@@ -127,7 +175,7 @@ describe('durable weekly importer', () => {
   });
   it('refreshes Meta hierarchy each day, keeping metadata query bounds equal to spend day',async()=>{
     const conn={owner_id:'owner',dashboard_id:'dash',credentials_encrypted:encryptSecret(JSON.stringify({login:'l',password:'p'}),'test-secret'),range_end:'2026-09-20',cursor_date:'2026-09-19'};
-    const db=vi.fn().mockResolvedValueOnce([conn]).mockResolvedValue([]);
+    const db=vi.fn().mockResolvedValueOnce([conn]).mockResolvedValue([{owner_id:'owner'}]);
     Object.assign(db,{begin:async(fn:Function)=>fn(db),json:(v:unknown)=>v});
     vi.mocked(authenticate).mockResolvedValue({token:'t',payload:{user:{dashboards:[{id:'dash',googleProfiles:[],tikTokProfiles:[]}]}}});
     vi.mocked(listMetaAccounts).mockResolvedValue([{id:'good',name:'Good'}]);
