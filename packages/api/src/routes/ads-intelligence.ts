@@ -88,12 +88,14 @@ const plugin: FastifyPluginAsync = async (app) => {
     const owner = req.user!.sub;
     const offers = (await app.offerStore.listAll()).filter((o) => o.userId === owner);
     const [connection] =
-      await app.db`SELECT dashboard_id,state,next_sync_at,last_sync_at,error,cursor_date,range_end,coverage_from,coverage_to,coverage_complete,account_failures,platform_coverage,retry_attempts FROM ads_intelligence_connections WHERE owner_id=${owner}`;
+      await app.db`SELECT dashboard_id,state,next_sync_at,last_sync_at,error,cursor_date,range_end,coverage_from,coverage_to,coverage_complete,account_failures,platform_coverage,retry_attempts,excluded_campaigns FROM ads_intelligence_connections WHERE owner_id=${owner}`;
     const rows =
       await app.db`SELECT day,physical_key,raw,currency FROM ads_intelligence_daily WHERE owner_id=${owner} ORDER BY day`;
     const mappings =
       await app.db`SELECT campaign_key,offer_id FROM ads_intelligence_mappings WHERE owner_id=${owner}`;
     const manual = new Map(mappings.map((m) => [m.campaign_key, m.offer_id]));
+    const excludedCampaigns = new Set<string>(Array.isArray(connection?.excluded_campaigns)
+      ? connection.excluded_campaigns.filter((value: unknown): value is string => typeof value === 'string') : []);
     const from = connection?.coverage_from ? adsCalendarDay(connection.coverage_from) : undefined;
     const to = connection?.coverage_to ? adsCalendarDay(connection.coverage_to) : undefined;
     const failures = Array.isArray(connection?.account_failures) ? connection.account_failures : [];
@@ -132,6 +134,7 @@ const plugin: FastifyPluginAsync = async (app) => {
     for (const row of rows) {
       const raw = row.raw as Record<string, unknown>;
       const campaign = stringField(raw, 'campaignName');
+      if (excludedCampaigns.has(campaign)) continue;
       const campaignKey = JSON.stringify([raw.platform ?? 'meta', raw.adAccountId ?? '', raw.campaignId ?? '', campaign]);
       const campaignOffer = campaign ? matchCampaign(campaign, offers) : null;
       const creativeOffer = matchCampaign(stringField(raw, 'name'), offers);

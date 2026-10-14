@@ -21,6 +21,36 @@ async function setup(role = 'admin', own = 'owner-a') {
   return { app, sql };
 }
 describe('central analytics access isolation', () => {
+  it('excludes only exact owner campaign names from existing/future views without deleting raw snapshots',async()=>{
+    const {app,sql}=await setup();
+    const excluded='[SEARCH] Hillside - Leads | 28.09';
+    const makeRows=()=>[
+      {day:'2026-08-01',currency:'BRL',raw:{campaignName:excluded,name:'unknown',spend:0}},
+      {day:'2026-10-12',currency:'BRL',raw:{campaignName:excluded,name:'PJR_ENG_AD03_L17',adAccountId:'acc',spend:10000}},
+      {day:'2026-10-12',currency:'BRL',raw:{campaignName:excluded+' extra',name:'unknown',spend:0}},
+    ];
+    sql.mockResolvedValueOnce([{excluded_campaigns:[excluded],state:'ready',last_sync_at:'2026-10-13',coverage_from:'2026-08-01',coverage_to:'2026-10-12'}] as never)
+      .mockResolvedValueOnce(makeRows() as never).mockResolvedValueOnce([]);
+    const data=(await app.inject('/ads-intelligence')).json();
+    expect(data.pending).toHaveLength(1);expect(data.pending[0].campaign_name).toBe(excluded+' extra');
+    expect(data.batches).toHaveLength(0);
+    expect(sql.mock.calls.every(call=>!Array.from(call[0] as any).join('').includes('DELETE'))).toBe(true);
+    sql.mockResolvedValueOnce([{state:'ready',last_sync_at:'2026-10-13',coverage_from:'2026-08-01',coverage_to:'2026-10-12'}] as never)
+      .mockResolvedValueOnce(makeRows() as never).mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    const legacy=(await app.inject('/ads-intelligence')).json();
+    expect(legacy.pending).toHaveLength(2);expect(legacy.batches).toHaveLength(1);
+    await app.close();
+  });
+  it('reads another owner connection independently with no globally hardcoded exclusion',async()=>{
+    const {app,sql}=await setup('admin','owner-b');
+    sql.mockResolvedValueOnce([{excluded_campaigns:[],state:'ready',last_sync_at:'2026-10-13',coverage_from:'2026-08-01',coverage_to:'2026-10-12'}] as never)
+      .mockResolvedValueOnce([{day:'2026-08-01',currency:'BRL',raw:{campaignName:'[SEARCH] Hillside - Leads | 28.09',name:'PJR_ENG_AD03_L17',adAccountId:'acc',spend:10000}}] as never)
+      .mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    const data=(await app.inject('/ads-intelligence')).json();
+    expect(data.batches[0].offer_id).toBe('b');
+    expect(sql.mock.calls[0].slice(1)).toEqual(['owner-b']);
+    await app.close();
+  });
   it('shows committed groups while paused, with honest covered dates and no ROI',async()=>{
     const {app,sql}=await setup();
     sql.mockResolvedValueOnce([{state:'paused',coverage_from:new Date('2026-08-01T00:00:00Z'),coverage_to:new Date('2026-10-06T00:00:00Z'),coverage_complete:false,retry_attempts:2}] as never)
