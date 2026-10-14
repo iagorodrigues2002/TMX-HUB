@@ -94,6 +94,14 @@ const plugin: FastifyPluginAsync = async (app) => {
     const mappings =
       await app.db`SELECT campaign_key,offer_id FROM ads_intelligence_mappings WHERE owner_id=${owner}`;
     const manual = new Map(mappings.map((m) => [m.campaign_key, m.offer_id]));
+    const from = connection?.coverage_from ? adsCalendarDay(connection.coverage_from) : undefined;
+    const to = connection?.coverage_to ? adsCalendarDay(connection.coverage_to) : undefined;
+    const failures = Array.isArray(connection?.account_failures) ? connection.account_failures : [];
+    const platformCoverage = Array.isArray(connection?.platform_coverage) ? connection.platform_coverage : [];
+    const failedAccount = (platform: string, account: string) => !account || platformCoverage.some((coverage: any) => coverage.platform === platform && coverage.state === 'unavailable') || failures.some((failure: any) =>
+      failure.platform === platform && (!failure.account_id || failure.account_id === account) &&
+      (!failure.from || !to || adsCalendarDay(failure.from) <= to) &&
+      (!failure.to || !from || adsCalendarDay(failure.to) >= from));
     const pending = new Map<
       string,
       {
@@ -117,28 +125,36 @@ const plugin: FastifyPluginAsync = async (app) => {
         campaign: string;
         logical: NonNullable<ReturnType<typeof logicalAd>>;
         sources: Map<string, Record<string, string>>;
+        blocked: boolean;
+        missingRevenue: boolean;
       }
     >();
     for (const row of rows) {
       const raw = row.raw as Record<string, unknown>;
       const campaign = stringField(raw, 'campaignName');
       const campaignKey = JSON.stringify([raw.platform ?? 'meta', raw.adAccountId ?? '', raw.campaignId ?? '', campaign]);
-      const offerId =
-        manual.get(campaignKey) ?? (campaign ? matchCampaign(campaign, offers) : null);
-      const logical = logicalAd(stringField(raw, 'name'), stringField(raw, 'adsetName'));
+      const campaignOffer = campaign ? matchCampaign(campaign, offers) : null;
+      const creativeOffer = matchCampaign(stringField(raw, 'name'), offers);
+      const conflict = campaignOffer && creativeOffer && campaignOffer !== creativeOffer;
+      const offerId = manual.get(campaignKey) ?? (conflict ? null : campaignOffer ?? creativeOffer);
+      const offerName = offers.find(o => o.id === offerId)?.name ?? '';
+      const logical = logicalAd(stringField(raw, 'name'), stringField(raw, 'adsetName'), offerName);
+      const day = adsCalendarDay(row.day);
+      const covered = Boolean(from && to && from <= day && day <= to);
       if (
         !offerId ||
         !offers.some((o) => o.id === offerId) ||
         !logical ||
-        row.currency !== 'BRL' ||
-        !campaign
+        row.currency !== 'BRL' || !covered
       ) {
         const p = pending.get(campaignKey) ?? {
           campaign_key: campaignKey,
           campaign_name: campaign || `Hierarquia não informada: ${stringField(raw, 'name')}`,
           reason:
-            row.currency !== 'BRL'
+            !covered ? 'Data fora do período de custos confirmado' : row.currency !== 'BRL'
               ? 'Moeda BRL não confirmada'
+              : conflict && !manual.has(campaignKey)
+                ? 'Oferta conflitante entre campanha e anúncio'
               : !logical
                 ? 'Leva/anúncio ambíguo'
                 : 'Oferta/hierarquia não identificada',
@@ -172,8 +188,9 @@ const plugin: FastifyPluginAsync = async (app) => {
       if (existing) {
         sum(existing.data, data);
         existing.ids.add(stringField(raw, 'adId'));
-        existing.days.add(adsCalendarDay(row.day));
+        existing.days.add(day);
         existing.sources.set(JSON.stringify(source), source);
+        existing.blocked ||= failedAccount(source.platform, source.account_id);
       } else
         ads.set(key, {
           key,
@@ -184,17 +201,15 @@ const plugin: FastifyPluginAsync = async (app) => {
           campaign,
           logical,
           sources: new Map([[JSON.stringify(source), source]]),
-          days: new Set([adsCalendarDay(row.day)]),
+          days: new Set([day]),
           ids: new Set([stringField(raw, 'adId')].filter(Boolean)),
+          blocked: failedAccount(source.platform, source.account_id),
+          missingRevenue: false,
         });
     }
     // IDs first; names only when offer/campaign/creative resolve uniquely.
     // Missing identifiers and unattributed upsells stay outside ad ROI rather than guessed.
-    const from = connection?.coverage_from
-      ? adsCalendarDay(connection.coverage_from)
-      : undefined;
-    const to = connection?.coverage_to ? adsCalendarDay(connection.coverage_to) : undefined;
-    const unattributed = { ic: 0, front_sales: 0, upsell_sales: 0, revenue: 0 };
+    const unattributed = { ic: 0, front_sales: 0, upsell_sales: 0, revenue: 0, unknown_revenue_sales: 0 };
     if (from && to && ads.size) {
       const facts = await app.db`
         WITH resolved AS (
@@ -217,11 +232,11 @@ const plugin: FastifyPluginAsync = async (app) => {
           o.source->>'campaign_name' AS campaign_name,o.source->>'ad_name' AS ad_name,o.source->>'adset_name' AS adset_name,
           count(*) FILTER(WHERE o.order_kind='front')::int AS front_sales,
           count(*) FILTER(WHERE o.order_kind ~ '^upsell(_[0-9]+)?$')::int AS upsell_sales,
+          count(*) FILTER(WHERE o.amount_brl_minor IS NULL)::int AS unknown_revenue_sales,
           sum(o.amount_brl_minor)::text AS revenue
         FROM resolved o JOIN tracking_projects p ON p.id=o.project_id
         WHERE p.offer_id=ANY(${offers.map((o) => o.id)}) AND o.status='paid' AND (o.order_kind='front' OR o.order_kind ~ '^upsell(_[0-9]+)?$')
           AND o.occurred_at>=(${from}::date::timestamp AT TIME ZONE 'America/Sao_Paulo') AND o.occurred_at<((${to}::date+1)::timestamp AT TIME ZONE 'America/Sao_Paulo')
-          AND o.amount_brl_minor IS NOT NULL
         GROUP BY p.offer_id,to_char(o.occurred_at AT TIME ZONE 'America/Sao_Paulo','YYYY-MM-DD'),o.source->>'ad_id',o.source->>'campaign_name',o.source->>'ad_name',o.source->>'adset_name'`;
       const ic = await app.db`
         WITH event_facts AS (
@@ -248,7 +263,7 @@ const plugin: FastifyPluginAsync = async (app) => {
           (a) => a.offer_id === fact.offer_id && fact.ad_id && a.ids.has(fact.ad_id),
         );
         if (!fact.ad_id) {
-          const logical = logicalAd(fact.ad_name ?? '', fact.adset_name ?? '');
+          const logical = logicalAd(fact.ad_name ?? '', fact.adset_name ?? '', offers.find(o => o.id === fact.offer_id)?.name ?? '');
           if (logical && fact.campaign_name)
             candidates = [...ads.values()].filter(
               (a) =>
@@ -264,6 +279,9 @@ const plugin: FastifyPluginAsync = async (app) => {
         const data = candidates.length === 1 ? candidates[0]!.data : unattributed;
         if ('ic' in fact) data.ic += Number(fact.ic);
         else {
+          const unknownRevenue = Number(fact.unknown_revenue_sales ?? 0);
+          if (candidates.length === 1) candidates[0]!.missingRevenue ||= unknownRevenue > 0;
+          else unattributed.unknown_revenue_sales += unknownRevenue;
           data.front_sales += Number(fact.front_sales);
           data.upsell_sales += Number(fact.upsell_sales);
           data.revenue += Number(fact.revenue ?? 0) / 100;
@@ -279,6 +297,8 @@ const plugin: FastifyPluginAsync = async (app) => {
         offer_name: string;
         ads: unknown[];
         data: Metrics;
+        blocked: boolean;
+        missingRevenue: boolean;
       }
     >();
     for (const ad of ads.values()) {
@@ -292,6 +312,8 @@ const plugin: FastifyPluginAsync = async (app) => {
           offer_id: ad.offer_id,
           offer_name: offers.find((o) => o.id === ad.offer_id)!.name,
           ads: [],
+          blocked: false,
+          missingRevenue: false,
           data: {
             spend: 0,
             impressions: 0,
@@ -306,32 +328,41 @@ const plugin: FastifyPluginAsync = async (app) => {
         batches.set(key, batch);
       }
       sum(batch.data, ad.data);
+      batch.blocked ||= ad.blocked;
+      batch.missingRevenue ||= ad.missingRevenue;
       batch.ads.push({
         key: ad.key,
         name: ad.name,
         sources: [...ad.sources.values()],
         ...ratios(ad.data),
+        blocked: ad.blocked,
+        missingRevenue: ad.missingRevenue,
       });
     }
     const complete =
-      connection?.state === 'ready' && connection?.last_sync_at && connection?.coverage_complete !== false && pending.size === 0;
-    const safeRatios = (data: Metrics) => ({
-      ...ratios(data),
-      ...(!complete ? { roi: null, roas: null } : {}),
-    });
+      connection?.state === 'ready' && connection?.last_sync_at && connection?.coverage_complete !== false && pending.size === 0 && unattributed.front_sales === 0 && unattributed.upsell_sales === 0 && ![...ads.values()].some(ad => ad.missingRevenue);
+    const calculation = (spend: number | null, blocked: boolean, missingRevenue = false) => {
+      const reason = !connection?.last_sync_at ? 'Importação ainda não finalizada'
+        : blocked ? 'Conta/plataforma sem escopo confirmado ou com lacuna de custos no período'
+        : missingRevenue ? 'Faturamento com conversão pendente'
+        : spend === null ? 'Gasto não informado' : spend <= 0 ? 'Gasto zero: divisão indisponível' : null;
+      return {calculation_status: reason ? 'unavailable' : complete ? 'complete' : 'provisional',
+        calculation_reason: reason ?? (complete ? null : 'Receita atribuída e custos conhecidos; cobertura ou atribuição geral incompleta')};
+    };
     return {
       connection: connection ?? null,
       offers: offers.map((o) => ({ id: o.id, name: o.name, company_name: o.companyName ?? null })),
       pending: [...pending.values()],
       batches:
         from && to
-          ? [...batches.values()].map(({ data, ...batch }) => ({
+          ? [...batches.values()].map(({ data, blocked, missingRevenue, ...batch }) => ({
               ...batch,
-              ads: batch.ads.map((ad) => ({
-                ...(ad as object),
-                ...(!complete ? { roi: null, roas: null } : {}),
-              })),
-              totals: safeRatios(data),
+              ads: batch.ads.map((value) => {
+                const {blocked: adBlocked, missingRevenue: adMissingRevenue, ...ad} = value as ReturnType<typeof ratios> & {blocked:boolean;missingRevenue:boolean};
+                const quality = calculation(ad.spend, adBlocked, adMissingRevenue);
+                return {...ad, ...quality, ...(quality.calculation_status === 'unavailable' ? {roi:null,roas:null} : {})};
+              }),
+              totals: {...ratios(data), ...calculation(data.spend, blocked, missingRevenue), ...(calculation(data.spend, blocked, missingRevenue).calculation_status === 'unavailable' ? {roi:null,roas:null} : {})},
             }))
           : [],
       coverage: { from: from ?? null, to: to ?? null, complete: Boolean(complete) },

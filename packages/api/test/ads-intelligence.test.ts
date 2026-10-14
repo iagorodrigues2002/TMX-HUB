@@ -35,6 +35,14 @@ describe('Ads Intelligence identity and weekly ranges', () => {
   it('rejects conflicting batches', () => {
     expect(logicalAd('AD5-L17', 'Leva18')).toBeNull();
   });
+  it('defaults missing batch and strips offer prefixes while preserving hook/avatar', () => {
+    expect(logicalAd('PJR_ESP_AD03_L17', '', 'PJR_ESP')).toEqual({batch:'L17',ad:'AD03',variant:''});
+    expect(logicalAd('SLM_DE_AD75_H2_AV13', '', 'SLM_DE')).toEqual({batch:'L1',ad:'AD75',variant:'H2_AV13'});
+    expect(logicalAd('SLM_DE_AD75_H3_AV13', '', 'SLM_DE')?.variant).toBe('H3_AV13');
+    expect(logicalAd('SLM_DE_AD75_H2_AV13 cópia 2', '', 'SLM_DE')?.variant).toBe('H2_AV13');
+    expect(logicalAd('AD03_AD04_L17')).toBeNull();
+    expect(logicalAd('no ad number')).toBeNull();
+  });
   it('preserves meaningful creative variants', () => {
     expect(logicalAd('AD5-L17 HOOK2')?.variant).toBe('HOOK2');
   });

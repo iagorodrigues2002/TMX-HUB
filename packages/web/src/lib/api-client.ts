@@ -1420,6 +1420,8 @@ export type AdsIntelligenceMetrics = {
   video_views: number | null; ic: number; front_sales: number; upsell_sales: number;
   revenue: number; cpc: number | null; cpm: number | null; ctr: number | null;
   hook_rate: number | null; roas: number | null; roi: number | null;
+  calculation_status?: 'complete' | 'provisional' | 'unavailable';
+  calculation_reason?: string | null;
 };
 export type AdsIntelligenceData = {
   connection: null | { dashboard_id: string; state: string; last_sync_at: string | null;

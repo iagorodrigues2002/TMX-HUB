@@ -209,6 +209,20 @@
   }
 }
 
+/* Ads metrics follow the app's selected theme, not the operating system. */
+.ads-intelligence-metrics {
+  --ads-positive: #6ee7b7;
+  --ads-negative: #fca5a5;
+  --ads-cost: #fcd34d;
+  --ads-info: #67e8f9;
+}
+html[data-theme="light"] .ads-intelligence-metrics {
+  --ads-positive: #047857;
+  --ads-negative: #b91c1c;
+  --ads-cost: #92400e;
+  --ads-info: #155e75;
+}
+
 html[data-theme="light"] {
   color-scheme: light;
   --bg-base: #e7eff1;

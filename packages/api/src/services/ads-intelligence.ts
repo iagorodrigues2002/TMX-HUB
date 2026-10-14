@@ -53,21 +53,25 @@ export function adsTokens(value: string) {
     .replace(/[^A-Z0-9]+/g, '_')
     .replace(/^_|_$/g, '');
 }
-export function logicalAd(name: string, adset = '') {
-  const text = `${name} ${adset}`;
+export function logicalAd(name: string, adset = '', offerName = '') {
+  let creative = adsTokens(name);
+  const offerPrefix = adsTokens(offerName);
+  if (offerPrefix && creative.startsWith(`${offerPrefix}_`)) creative = creative.slice(offerPrefix.length + 1);
+  const text = `${creative} ${adsTokens(adset)}`;
   const batches = [
     ...text.matchAll(/(?:^|[^A-Z0-9])(?:LEVA\s*|L)[\s_-]*0*(\d+)(?=$|[^0-9])/gi),
   ].map((m) => Number(m[1]));
   const unique = [...new Set(batches)];
-  const ad = name.match(/(?:^|[^A-Z0-9])AD[\s_-]*0*(\d+)(?=$|[^0-9])/i);
-  if (unique.length !== 1 || !ad) return null;
+  const adMatches = [...creative.matchAll(/(?:^|[^A-Z0-9])AD[\s_-]*0*(\d+)(?=$|[^0-9])/gi)];
+  const ad = adMatches[0];
+  if (unique.length > 1 || !ad || new Set(adMatches.map(m => Number(m[1]))).size !== 1) return null;
   const variant = adsTokens(
-    name
-      .replace(ad[0], ' ')
+    creative
+      .replace(/(?:^|[^A-Z0-9])AD[\s_-]*0*\d+(?=$|[^0-9])/gi, ' ')
       .replace(/(?:^|[^A-Z0-9])(?:LEVA\s*|L)[\s_-]*0*\d+(?=$|[^0-9])/gi, ' ')
-      .replace(/(?:copia|copy)(?:\s*\d+)?/gi, ''),
+      .replace(/(?:^|_)(?:COPIA|COPY)(?:_\d+)?(?=$|_)/gi, ''),
   );
-  return { batch: `L${unique[0]}`, ad: `AD${String(Number(ad[1])).padStart(2, '0')}`, variant };
+  return { batch: `L${unique[0] ?? 1}`, ad: `AD${String(Number(ad[1])).padStart(2, '0')}`, variant };
 }
 export function matchCampaign(campaign: string, offers: Array<{ id: string; name: string }>) {
   const token = `_${adsTokens(campaign)}_`;

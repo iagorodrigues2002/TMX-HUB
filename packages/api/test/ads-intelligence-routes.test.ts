@@ -30,15 +30,15 @@ describe('central analytics access isolation', () => {
     expect(data.batches).toHaveLength(1);expect(data.batches[0].totals).toMatchObject({spend:100,roi:null,roas:null});
     expect(data.coverage).toEqual({from:'2026-08-01',to:'2026-10-06',complete:false});await app.close();
   });
-  it('shows healthy data in partial state but never calculates ROAS over missing account costs', async()=>{
+  it('calculates healthy account ratios provisionally without including failed account costs', async()=>{
     const {app,sql}=await setup();
     sql.mockResolvedValueOnce([{state:'partial',last_sync_at:'2026-10-13',coverage_from:'2026-08-01',coverage_to:'2026-10-12',coverage_complete:false,account_failures:[{platform:'meta',account_id:'bad',reason:'COULD_NOT_CONVERT_CURRENCY'}]}] as never)
       .mockResolvedValueOnce([{day:'2026-08-01',raw:{platform:'meta',name:'AD5-L17',adId:'a',adAccountId:'acc',campaignName:'PJR_ENG',spend:10000},currency:'BRL'}] as never)
       .mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
     const r=await app.inject('/ads-intelligence'); const data=r.json();
     expect(data.batches).toHaveLength(1);
-    expect(data.batches[0].totals).toMatchObject({spend:100,roi:null,roas:null});
-    expect(data.batches[0].ads[0]).toMatchObject({spend:100,roi:null,roas:null});
+    expect(data.batches[0].totals).toMatchObject({spend:100,roi:-100,roas:0,calculation_status:'provisional'});
+    expect(data.batches[0].ads[0]).toMatchObject({spend:100,roi:-100,roas:0,calculation_status:'provisional'});
     expect(data.coverage.complete).toBe(false);
     expect(data.batches[0].ads[0].sources[0].platform).toBe('meta');
     await app.close();
@@ -126,7 +126,7 @@ describe('central analytics access isolation', () => {
     });
     await app.close();
   });
-  it('preserves unknown hook rate and hides ROAS if unresolved traffic remains', async () => {
+  it('preserves unknown hook rate and marks healthy ratios provisional if unresolved traffic remains', async () => {
     const { app, sql } = await setup();
     sql
       .mockResolvedValueOnce([
@@ -146,6 +146,7 @@ describe('central analytics access isolation', () => {
             campaignName: 'PJR_ENG',
             spend: 10000,
             impressions: 1000,
+            adAccountId: 'acc',
           },
           currency: 'BRL',
         },
@@ -160,9 +161,98 @@ describe('central analytics access isolation', () => {
     expect(data.batches[0].totals).toMatchObject({
       spend: 100,
       hook_rate: null,
-      roi: null,
-      roas: null,
+      roi: -100,
+      roas: 0,
+      calculation_status: 'provisional',
     });
+    await app.close();
+  });
+  it('classifies existing ad prefixes without hierarchy and blocks only failed-account ratios', async()=>{
+    const {app,sql}=await setup();
+    sql.mockResolvedValueOnce([{state:'partial',last_sync_at:'2026-10-13',coverage_from:'2026-08-01',coverage_to:'2026-10-12',coverage_complete:false,account_failures:[{platform:'meta',account_id:'bad',from:'2026-08-01',to:'2026-10-12'}]}] as never)
+      .mockResolvedValueOnce(['good','bad'].map(account=>({day:'2026-08-01',currency:'BRL',raw:{platform:'meta',name:'PJR_ENG_AD75_H2_AV13',adId:account,adAccountId:account,spend:10000}})) as never)
+      .mockResolvedValueOnce([]).mockResolvedValueOnce([{offer_id:'a',ad_id:'good',day:'2026-09-01',front_sales:1,upsell_sales:1,revenue:'25000'}] as never).mockResolvedValueOnce([]);
+    const data=(await app.inject('/ads-intelligence')).json();
+    expect(data.pending).toHaveLength(0);expect(data.batches).toHaveLength(2);
+    expect(data.batches[0]).toMatchObject({name:'L1',totals:{roas:2.5,roi:150,calculation_status:'provisional'}});
+    expect(data.batches[0].ads[0].name).toBe('AD75 · H2_AV13');
+    expect(data.batches[1].totals).toMatchObject({roas:null,roi:null,calculation_status:'unavailable'});
+    await app.close();
+  });
+  it('does not mix duplicated ad IDs across accounts', async()=>{
+    const {app,sql}=await setup();
+    sql.mockResolvedValueOnce([{state:'ready',last_sync_at:'2026-10-13',coverage_from:'2026-08-01',coverage_to:'2026-10-12'}] as never)
+      .mockResolvedValueOnce(['one','two'].map(account=>({day:'2026-08-01',currency:'BRL',raw:{platform:'meta',name:'PJR_ENG_AD03_L17',campaignName:'PJR_ENG',adAccountId:account,adId:'same',spend:10000}})) as never)
+      .mockResolvedValueOnce([]).mockResolvedValueOnce([{offer_id:'a',ad_id:'same',day:'2026-09-01',front_sales:1,upsell_sales:0,revenue:'25000'}] as never).mockResolvedValueOnce([]);
+    const data=(await app.inject('/ads-intelligence')).json();
+    expect(data.batches).toHaveLength(2);expect(data.unattributed.revenue).toBe(250);
+    expect(data.batches.every((b:any)=>b.totals.revenue===0&&b.totals.calculation_status==='provisional')).toBe(true);
+    await app.close();
+  });
+  it('does not divide unknown or zero spend and does not duplicate hook/avatar variations', async()=>{
+    const {app,sql}=await setup();
+    sql.mockResolvedValueOnce([{state:'ready',last_sync_at:'2026-10-13',coverage_from:'2026-08-01',coverage_to:'2026-10-12'}] as never)
+      .mockResolvedValueOnce([null,0,10000].map((spend,index)=>({day:'2026-08-01',currency:'BRL',raw:{platform:'meta',name:`PJR_ENG_AD75_H${index+1}_AV13`,adAccountId:'acc',adId:String(index),spend}})) as never)
+      .mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    const data=(await app.inject('/ads-intelligence')).json();
+    expect(data.batches[0].ads).toHaveLength(3);
+    expect(data.batches[0].ads[0]).toMatchObject({spend:null,roas:null,roi:null,calculation_status:'unavailable'});
+    expect(data.batches[0].ads[1]).toMatchObject({spend:0,roas:null,roi:null,calculation_status:'unavailable'});
+    expect(data.batches[0].ads[2]).toMatchObject({spend:100,roas:0,roi:-100,calculation_status:'complete'});
+    expect(data.batches[0].totals).toMatchObject({spend:null,roas:null,roi:null});
+    await app.close();
+  });
+  it('does not mix snapshot costs outside confirmed coverage into ratios', async()=>{
+    const {app,sql}=await setup();
+    sql.mockResolvedValueOnce([{state:'partial',last_sync_at:'2026-10-13',coverage_from:'2026-08-01',coverage_to:'2026-10-12'}] as never)
+      .mockResolvedValueOnce(['2026-10-12','2026-10-13'].map(day=>({day,currency:'BRL',raw:{name:'PJR_ENG_AD03_L17',adId:'3',adAccountId:'acc',spend:10000}})) as never)
+      .mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    const data=(await app.inject('/ads-intelligence')).json();
+    expect(data.batches[0].totals).toMatchObject({spend:100,roas:0,roi:-100,calculation_status:'provisional'});
+    expect(data.pending[0].reason).toBe('Data fora do período de custos confirmado');
+    await app.close();
+  });
+  it('keeps conflicting campaign/ad offers pending unless owner manual mapping resolves it', async()=>{
+    const {app,sql}=await setup();
+    app.offerStore.listAll=async()=>[{id:'a',name:'PJR_ENG',userId:'owner-a'},{id:'c',name:'PJR_ESP',userId:'owner-a'}] as any;
+    const raw={platform:'meta',campaignName:'PJR_ENG',campaignId:'campaign',adAccountId:'acc',name:'PJR_ESP_AD03_L17',spend:10000};
+    const connection={state:'ready',last_sync_at:'2026-10-13',coverage_from:'2026-08-01',coverage_to:'2026-10-12'};
+    sql.mockResolvedValueOnce([connection] as never).mockResolvedValueOnce([{day:'2026-08-01',currency:'BRL',raw}] as never).mockResolvedValueOnce([]);
+    const data=(await app.inject('/ads-intelligence')).json();
+    expect(data.batches).toHaveLength(0);expect(data.pending[0].reason).toBe('Oferta conflitante entre campanha e anúncio');
+    sql.mockResolvedValueOnce([connection] as never).mockResolvedValueOnce([{day:'2026-08-01',currency:'BRL',raw}] as never)
+      .mockResolvedValueOnce([{campaign_key:JSON.stringify(['meta','acc','campaign','PJR_ENG']),offer_id:'c'}] as never).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    expect((await app.inject('/ads-intelligence')).json().batches[0].offer_id).toBe('c');
+    await app.close();
+  });
+  it('blocks platform-wide gaps and unknown account scope but not other platforms or expired gaps', async()=>{
+    const {app,sql}=await setup();
+    sql.mockResolvedValueOnce([{state:'partial',last_sync_at:'2026-10-13',coverage_from:'2026-08-01',coverage_to:'2026-10-12',account_failures:[{platform:'meta',account_id:'',from:'2026-08-01',to:'2026-10-12'},{platform:'google',account_id:'google',from:'2026-07-01',to:'2026-07-31'}]}] as never)
+      .mockResolvedValueOnce([{platform:'meta',adAccountId:'meta'},{platform:'google',adAccountId:'google'},{platform:'tiktok',adAccountId:''}].map(scope=>({day:'2026-08-01',currency:'BRL',raw:{...scope,name:'PJR_ENG_AD03_L17',spend:10000}})) as never)
+      .mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    const data=(await app.inject('/ads-intelligence')).json();
+    expect(data.batches[0].totals).toMatchObject({roas:null,calculation_status:'unavailable'});
+    expect(data.batches[1].totals).toMatchObject({roas:0,roi:-100,calculation_status:'provisional'});
+    expect(data.batches[2].totals).toMatchObject({roas:null,calculation_status:'unavailable'});
+    await app.close();
+  });
+  it('blocks only matched unknown BRL revenue and keeps unrelated known ratios provisional', async()=>{
+    const {app,sql}=await setup();
+    sql.mockResolvedValueOnce([{state:'ready',last_sync_at:'2026-10-13',coverage_from:'2026-08-01',coverage_to:'2026-10-12'}] as never)
+      .mockResolvedValueOnce(['1','2'].map(id=>({day:'2026-08-01',currency:'BRL',raw:{name:`PJR_ENG_AD0${id}_L17`,adId:id,adAccountId:'acc',spend:10000}})) as never)
+      .mockResolvedValueOnce([]).mockResolvedValueOnce([
+        {offer_id:'a',ad_id:'1',front_sales:2,upsell_sales:0,revenue:'20000',unknown_revenue_sales:1},
+        {offer_id:'a',ad_id:'2',front_sales:1,upsell_sales:0,revenue:'25000',unknown_revenue_sales:0},
+        {offer_id:'a',ad_id:'missing',front_sales:1,upsell_sales:0,revenue:null,unknown_revenue_sales:1},
+      ] as never).mockResolvedValueOnce([]);
+    const data=(await app.inject('/ads-intelligence')).json();
+    expect(data.batches[0].ads[0]).toMatchObject({front_sales:2,revenue:200,roas:null,roi:null,calculation_reason:'Faturamento com conversão pendente'});
+    expect(data.batches[0].ads[1]).toMatchObject({revenue:250,roas:2.5,roi:150,calculation_status:'provisional'});
+    expect(data.batches[0].totals.roas).toBeNull();
+    expect(data.unattributed.unknown_revenue_sales).toBe(1);
+    const query=sql.mock.calls.map(call=>Array.from(call[0] as any).join('')).find(value=>value.includes('WITH resolved'))!;
+    expect(query).not.toContain('AND o.amount_brl_minor IS NOT NULL');
+    expect(query).toContain('count(*) FILTER(WHERE o.amount_brl_minor IS NULL)');
     await app.close();
   });
   it('returns only owner offers and never attempts external auth on reads', async () => {
