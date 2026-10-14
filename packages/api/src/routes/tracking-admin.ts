@@ -10,6 +10,7 @@ import { convertToBrlMinor, getBrlRate, warmupBrlRates } from '../services/excha
 import { saoPauloParts } from '../services/intraday-store.js';
 import { saoPauloDayRange } from '../services/utmify-sync.js';
 import { gatewayFeesSchema, loadGatewayFees, totalGatewayFees } from '../services/gateway-fees.js';
+import { attributionPage } from '../services/attribution-page.js';
 
 const PaginationSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -1614,6 +1615,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     '/offers/:id/tracking/attribution',
     async (req, reply) => {
       await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
+      const attributionOffer = await app.offerStore.get(req.params.id);
       if (!app.db) return reply.code(503).send(databaseUnavailable);
       const { date, from_date: fromDate, to_date: toDate, from, to } = parseTrackingDate(req.query);
       return app.analyticsCache.getOrSet(
@@ -1700,7 +1702,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                      NULLIF(attribution->>'ad_name', ''),
                      'não identificado') AS ad_name,
             NULLIF(attribution->>'ad_id', '') AS ad_id,
-            COALESCE(NULLIF(attribution->>'placement', ''), 'não identificado') AS placement
+            COALESCE(NULLIF(attribution->>'placement', ''), 'não identificado') AS placement,
+            jsonb_build_object('pageName',attribution->'pageName','page_name',attribution->'page_name',
+              'pageId',attribution->'pageId','page_id',attribution->'page_id') AS page_metadata
           FROM facts
         )
         SELECT
@@ -1712,6 +1716,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           ad_name,
           ad_id,
           placement,
+          jsonb_agg(DISTINCT page_metadata) AS page_metadata,
           count(*) FILTER (WHERE event_name = 'PageView')::int AS page_views,
           count(DISTINCT visitor_id) FILTER (WHERE event_name = 'PageView')::int AS visitors,
           count(*) FILTER (WHERE event_name = 'AdClick')::int AS ad_clicks,
@@ -1731,7 +1736,20 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         ORDER BY paid_orders DESC, checkouts DESC, visitors DESC, campaign_name, ad_name
         LIMIT 500
           `;
-          return { date, time_zone: 'America/Sao_Paulo', rows };
+          const adIds = [...new Set(rows.map(row => row.ad_id).filter((id): id is string => typeof id==='string' && Boolean(id)))];
+          const saved = adIds.length ? await app.db!`
+            SELECT DISTINCT jsonb_build_object('platform',raw->'platform','adId',raw->'adId',
+              'campaignId',raw->'campaignId','adAccountId',raw->'adAccountId',
+              'pageName',raw->'pageName','page_name',raw->'page_name','pageId',raw->'pageId','page_id',raw->'page_id',
+              'provider_original',jsonb_build_object('pageName',raw->'provider_original'->'pageName',
+                'page_name',raw->'provider_original'->'page_name','pageId',raw->'provider_original'->'pageId',
+                'page_id',raw->'provider_original'->'page_id')) AS raw FROM ads_intelligence_daily
+            WHERE owner_id=${attributionOffer.userId} AND raw->>'platform'='meta'
+              AND raw->>'adId'=ANY(${adIds})
+            LIMIT 2001
+          ` : [];
+          const pageSnapshots = saved.length > 2000 ? [] : saved.map(snapshot=>snapshot.raw);
+          return { date, time_zone: 'America/Sao_Paulo', rows: rows.map(({page_metadata,...row}) => ({...row,...attributionPage({...row,page_metadata},pageSnapshots)})) };
         },
       );
     },

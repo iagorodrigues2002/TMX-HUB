@@ -352,11 +352,12 @@ export function TrackingLiveConsole({
             ))}
           </div>
           <div className="overflow-x-auto rounded-xl border border-white/[0.08]">
-            <table className="min-w-[1280px] w-full text-left text-xs">
+            <table className="min-w-[1480px] w-full text-left text-xs">
               <thead className="border-b border-white/[0.08] bg-black/20 text-white/35">
                 <tr>
                   {[
                     'Campanha',
+                    'Página anunciante',
                     'Conjunto',
                     'Anúncio',
                     'Origem',
@@ -386,6 +387,10 @@ export function TrackingLiveConsole({
                       <p className="mt-1 font-mono text-[10px] text-white/30">
                         {row.campaign_id ?? 'sem campaign_id'}
                       </p>
+                    </td>
+                    <td className="min-w-48 px-4 py-3">
+                      <p className="text-white/65">{row.page_name || 'Não informada'}</p>
+                      {row.page_id && <p className="mt-1 break-all font-mono text-[10px] text-white/30">ID: {row.page_id}</p>}
                     </td>
                     <td className="px-4 py-3">
                       <p className="text-white/65">{row.adset_name}</p>

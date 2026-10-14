@@ -3223,6 +3223,8 @@ export const apiClient = {
       source: string;
       campaign_name: string;
       campaign_id?: string;
+      page_name?: string | null;
+      page_id?: string | null;
       adset_name: string;
       adset_id?: string;
       ad_name: string;
