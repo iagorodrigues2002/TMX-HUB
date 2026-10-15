@@ -23,12 +23,13 @@ export async function requireOwnership(
   table: OwnedResourceTable,
   id: string,
   userId: string,
+  isAdmin = false,
 ): Promise<void> {
   const ownerId = await redis.hget(resourceKey(table, id), OWNER_FIELD);
   if (!ownerId) {
     throw new NotFoundError(`${table} resource not found.`);
   }
-  if (ownerId !== userId) {
+  if (!isAdmin && ownerId !== userId) {
     throw new HttpProblem({
       status: 403,
       title: 'Forbidden',

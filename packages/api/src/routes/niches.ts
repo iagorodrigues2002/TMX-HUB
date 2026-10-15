@@ -84,11 +84,11 @@ function extFromMime(mime: string, fallback: string): string {
 }
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
-  // GET /v1/niches — lista TODOS os nichos da instância (compartilhado).
+  // GET /v1/niches — only the caller's niches, unless an administrator.
   app.get<{ Querystring: ListPaginationQuery }>('/niches', async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');
     const ctx = { userId: req.user.sub, isAdmin: req.user.role === 'admin' };
-    const niches = await app.nicheStore.listAll();
+    const niches = await app.nicheStore.listForUser(ctx.userId, ctx.isAdmin);
     const page = paginateItems(niches, parseListPagination(req.query));
     return reply.send({
       niches: page.items.map((n) => nicheToWire(n, ctx)),

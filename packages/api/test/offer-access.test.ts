@@ -16,9 +16,9 @@ const offer: Offer = {
 };
 
 describe('offer member access', () => {
-  it('allows the owner, assigned members and admins to view', () => {
+  it('allows only the owner and global admins to view', () => {
     expect(canAccessOffer(offer, 'owner-1')).toBe(true);
-    expect(canAccessOffer(offer, 'member-1')).toBe(true);
+    expect(canAccessOffer(offer, 'member-1')).toBe(false);
     expect(canAccessOffer(offer, 'admin-1', true)).toBe(true);
   });
 
@@ -32,10 +32,10 @@ describe('offer member access', () => {
     expect(canManageOffer(offer, 'admin-1', true)).toBe(true);
   });
 
-  it('allows tracking configuration only to owners and explicit tracking managers', () => {
+  it('does not allow legacy tracking manager membership to bypass ownership', () => {
     expect(canConfigureTrackingOffer(offer, 'owner-1')).toBe(true);
     expect(canConfigureTrackingOffer(offer, 'member-1')).toBe(false);
-    expect(canConfigureTrackingOffer(offer, 'member-1', false, 'tracking_manager')).toBe(true);
+    expect(canConfigureTrackingOffer(offer, 'member-1', false, 'tracking_manager')).toBe(false);
     expect(canConfigureTrackingOffer(offer, 'admin-1', true)).toBe(true);
   });
 });

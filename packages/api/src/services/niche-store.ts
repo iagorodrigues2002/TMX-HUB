@@ -4,8 +4,8 @@ import type { Niche, NicheWhite } from '@page-cloner/shared';
 import { ConflictError, HttpProblem, NotFoundError } from '../lib/problem.js';
 
 const NICHE_PREFIX = 'niche:';
-const NICHES_GLOBAL = 'niches:global';        // SET com todos os IDs ativos
-const USER_NICHES_PREFIX = 'user-niches:';    // legado — kept p/ migração idempotente
+const NICHES_GLOBAL = 'niches:global'; // SET com todos os IDs ativos
+const USER_NICHES_PREFIX = 'user-niches:'; // legado — kept p/ migração idempotente
 const MIGRATION_FLAG = 'niches:migration:global-v1';
 
 class ForbiddenError extends HttpProblem {
@@ -22,8 +22,7 @@ export class NicheStore {
     name: string;
     description?: string;
   }): Promise<Niche> {
-    // Conflito é avaliado contra TODOS os nichos (global), não só os do user.
-    const existing = await this.listAll();
+    const existing = await this.listForUser(args.userId);
     if (existing.some((n) => n.name.toLowerCase() === args.name.trim().toLowerCase())) {
       throw new ConflictError(`Já existe um nicho chamado "${args.name}".`);
     }
@@ -55,7 +54,7 @@ export class NicheStore {
     const current = await this.assertCanModify(id, userId, isAdmin);
 
     if (patch.name && patch.name.trim().toLowerCase() !== current.name.toLowerCase()) {
-      const all = await this.listAll();
+      const all = await this.listForUser(current.userId);
       if (
         all.some((n) => n.id !== id && n.name.toLowerCase() === patch.name!.trim().toLowerCase())
       ) {
@@ -72,11 +71,7 @@ export class NicheStore {
       updatedAt: new Date().toISOString(),
     };
 
-    await this.redis
-      .multi()
-      .del(this.key(id))
-      .hset(this.key(id), this.serialize(next))
-      .exec();
+    await this.redis.multi().del(this.key(id)).hset(this.key(id), this.serialize(next)).exec();
     return next;
   }
 
@@ -136,6 +131,17 @@ export class NicheStore {
     return this.deserialize(data);
   }
 
+  /** A member can only read/use their own niches; admins can inspect all. */
+  async assertAccess(id: string, userId: string, isAdmin = false): Promise<Niche> {
+    const niche = await this.get(id);
+    if (!isAdmin && niche.userId !== userId) throw new NotFoundError('Nicho não encontrado.');
+    return niche;
+  }
+
+  async listForUser(userId: string, isAdmin = false): Promise<Niche[]> {
+    return (await this.listAll()).filter((niche) => isAdmin || niche.userId === userId);
+  }
+
   /**
    * Lista TODOS os nichos da instância (são compartilhados entre usuários).
    * Limpa do índice global os que não existem mais (TTL/falhas).
@@ -187,9 +193,7 @@ export class NicheStore {
   async assertCanModify(id: string, userId: string, isAdmin: boolean): Promise<Niche> {
     const n = await this.get(id);
     if (!isAdmin && n.userId !== userId) {
-      throw new ForbiddenError(
-        'Apenas o criador do nicho ou um admin podem modificá-lo.',
-      );
+      throw new ForbiddenError('Apenas o criador do nicho ou um admin podem modificá-lo.');
     }
     return n;
   }

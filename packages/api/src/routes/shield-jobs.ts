@@ -182,8 +182,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!parsedBody.data.niche_id) {
         throw new BadRequestError('Selecione um nicho para usar áudio white.');
       }
-      // Niches são globais — qualquer usuário autenticado pode USAR.
-      const niche = await app.nicheStore.get(parsedBody.data.niche_id);
+      const niche = await app.nicheStore.assertAccess(
+        parsedBody.data.niche_id,
+        req.user.sub,
+        req.user.role === 'admin',
+      );
       if (niche.whites.length === 0) {
         throw new BadRequestError(
           `Nicho "${niche.name}" não tem nenhum áudio white cadastrado. Adicione pelo menos um.`,

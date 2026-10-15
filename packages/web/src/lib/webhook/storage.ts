@@ -1,3 +1,5 @@
+import { readPersonalStorage, writePersonalStorage } from '../personal-storage';
+
 const KEY = 'tmx-hub:webhook-history:v1';
 const MAX = 20;
 
@@ -16,7 +18,7 @@ export interface WebhookHistoryEntry {
 function safeRead(): WebhookHistoryEntry[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = window.localStorage.getItem(KEY);
+    const raw = readPersonalStorage(KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? (parsed as WebhookHistoryEntry[]) : [];
@@ -28,7 +30,7 @@ function safeRead(): WebhookHistoryEntry[] {
 function safeWrite(list: WebhookHistoryEntry[]): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(KEY, JSON.stringify(list.slice(0, MAX)));
+    writePersonalStorage(KEY, JSON.stringify(list.slice(0, MAX)));
   } catch {
     // ignore quota errors
   }

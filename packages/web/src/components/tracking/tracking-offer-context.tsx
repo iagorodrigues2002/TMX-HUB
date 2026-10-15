@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { TRACKING_DASHBOARD_STALE_TIME } from './tracking-query';
+import { readPersonalStorage, writePersonalStorage } from '@/lib/personal-storage';
 
 const TRACKING_OFFER_STORAGE_KEY = 'tmx-ui.tracking.offer';
 
@@ -43,14 +44,13 @@ export function TrackingOfferProvider({ children }: { children: ReactNode }) {
     : null;
 
   useEffect(() => {
-    setStoredOfferId(window.localStorage.getItem(TRACKING_OFFER_STORAGE_KEY) ?? '');
+    setStoredOfferId(readPersonalStorage(TRACKING_OFFER_STORAGE_KEY) ?? '');
     setHasReadStoredOffer(true);
   }, []);
 
   const persistOffer = useCallback((offerId: string) => {
     setStoredOfferId(offerId);
-    if (offerId) window.localStorage.setItem(TRACKING_OFFER_STORAGE_KEY, offerId);
-    else window.localStorage.removeItem(TRACKING_OFFER_STORAGE_KEY);
+    writePersonalStorage(TRACKING_OFFER_STORAGE_KEY, offerId || null);
   }, []);
 
   const writeOfferToUrl = useCallback(

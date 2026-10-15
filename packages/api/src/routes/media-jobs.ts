@@ -110,7 +110,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       parsed.data.phase_cancel && parsed.data.use_white_audio !== false,
     );
     if (useWhiteAudio && parsed.data.niche_id) {
-      const niche = await app.nicheStore.get(parsed.data.niche_id);
+      const niche = await app.nicheStore.assertAccess(
+        parsed.data.niche_id,
+        req.user.sub,
+        req.user.role === 'admin',
+      );
       if (niche.whites.length === 0) {
         throw new BadRequestError(`Nicho "${niche.name}" não tem áudio white cadastrado.`);
       }

@@ -44,10 +44,10 @@ export function operatorAuditSummary(attempts: Attempt[], approvals: Approval[])
 
 export function registerUpsellOperatorAudit(app: FastifyInstance) {
   async function scope(offerId: string, operatorId: string, admin: boolean) {
-    const offer = await app.offerStore.assertAccess(offerId, operatorId, admin);
+    await app.offerStore.assertAccess(offerId, operatorId, admin);
     if (!app.db) return null;
     const [project] = await app.db<{ id: string }[]>`SELECT id FROM tracking_projects WHERE offer_id=${offerId}`;
-    return project ? { projectId: project.id, all: admin || offer.userId === operatorId } : null;
+    return project ? { projectId: project.id, all: admin } : null;
   }
 
   app.post<{ Params: { id: string; orderId: string; stageId: string }; Body: { click_id: string; view_only?: boolean } }>(

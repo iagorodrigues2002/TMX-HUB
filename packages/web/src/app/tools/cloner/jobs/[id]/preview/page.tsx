@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { use } from 'react';
 import { ArrowLeft } from 'lucide-react';
-import { apiClient } from '@/lib/api-client';
+import { PreviewFrame } from '@/components/editor/preview-frame';
 import { useCloneJob } from '@/hooks/use-clone-job';
 import { Button } from '@/components/ui/button';
 import { StatusPill } from '@/components/editor/status-pill';
@@ -35,12 +35,7 @@ export default function PreviewPage({ params }: PreviewPageProps) {
       </header>
       <main className="flex-1 bg-[#04101A]">
         {job.data?.status === 'ready' ? (
-          <iframe
-            title="Preview final"
-            src={apiClient.previewUrl(id)}
-            sandbox="allow-same-origin allow-popups"
-            className="h-full w-full bg-white"
-          />
+          <PreviewFrame jobId={id} status={job.data.status} />
         ) : (
           <div className="flex h-full items-center justify-center text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
             Aguardando clone ficar pronto…

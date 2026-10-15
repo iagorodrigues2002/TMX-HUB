@@ -51,7 +51,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const { id } = CloneIdParam.parse(req.params);
     if (!isValidUlid(id)) throw new BadRequestError('Invalid clone id.');
 
-    await requireOwnership(app.redis, 'clone', id, req.user!.sub);
+    await requireOwnership(app.redis, 'clone', id, req.user!.sub, req.user!.role === 'admin');
     const cloneMeta = await app.jobStore.getCloneMeta(id);
     if (cloneMeta.status !== 'ready') {
       throw new ConflictError(
@@ -90,7 +90,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!isValidUlid(id)) throw new BadRequestError('Invalid clone id.');
     if (!isValidPrefixedUlid(buildId, 'bld')) throw new BadRequestError('Invalid build id.');
 
-    await requireOwnership(app.redis, 'clone', id, req.user!.sub);
+    await requireOwnership(app.redis, 'clone', id, req.user!.sub, req.user!.role === 'admin');
     const meta = await app.jobStore.getBuildMeta(buildId);
     if (meta.cloneId !== id) throw new NotFoundError(`Build ${buildId} not found for clone ${id}.`);
 

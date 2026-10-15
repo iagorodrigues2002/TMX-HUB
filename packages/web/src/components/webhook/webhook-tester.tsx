@@ -1,5 +1,7 @@
 'use client';
 
+import { getPersonalStorageOwner } from '@/lib/personal-storage';
+
 import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Send, Trash2, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -76,6 +78,8 @@ export function WebhookTester() {
   }, [templateId, platform]);
 
   const handleFire = async () => {
+    const requestOwner = getPersonalStorageOwner();
+    if (!requestOwner) return;
     if (!url.trim()) {
       toast.error('Cole a URL do webhook destino.');
       return;
@@ -100,6 +104,7 @@ export function WebhookTester() {
     if (hmacInfo && secret.trim()) {
       const bodyStr = JSON.stringify(parsedBody);
       const digest = await hmacHex(hmacInfo.algorithm, secret.trim(), bodyStr);
+      if (requestOwner !== getPersonalStorageOwner()) return;
       const value = hmacInfo.prefix ? `${hmacInfo.prefix}${digest}` : digest;
       parsedHeaders[hmacInfo.header] = value;
     }
@@ -113,6 +118,7 @@ export function WebhookTester() {
         headers: parsedHeaders,
         body: parsedBody,
       });
+      if (requestOwner !== getPersonalStorageOwner()) return;
       setResult(res);
       pushHistory({
         templateId,
@@ -126,6 +132,7 @@ export function WebhookTester() {
       else if (res.status > 0) toast.error(`HTTP ${res.status} em ${res.duration_ms}ms`);
       else toast.error(res.error ?? 'Falha ao chamar destino');
     } catch (err) {
+      if (requestOwner !== getPersonalStorageOwner()) return;
       toast.error((err as Error).message);
     } finally {
       setSending(false);

@@ -163,7 +163,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const { id } = IdParamSchema.parse(req.params);
     if (!isValidUlid(id)) throw new BadRequestError('Invalid clone id format.');
 
-    await requireOwnership(app.redis, 'clone', id, req.user!.sub);
+    await requireOwnership(app.redis, 'clone', id, req.user!.sub, req.user!.role === 'admin');
     const meta = await app.jobStore.getCloneMeta(id);
     const ifNoneMatch = req.headers['if-none-match'];
     if (typeof ifNoneMatch === 'string' && ifNoneMatch === meta.etag) {
@@ -180,7 +180,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const { id } = IdParamSchema.parse(req.params);
     if (!isValidUlid(id)) throw new BadRequestError('Invalid clone id format.');
 
-    await requireOwnership(app.redis, 'clone', id, req.user!.sub);
+    await requireOwnership(app.redis, 'clone', id, req.user!.sub, req.user!.role === 'admin');
     const meta = await app.jobStore.maybeGetCloneMeta(id);
     if (!meta) {
       // Spec allows 204 for already-deleted resources.

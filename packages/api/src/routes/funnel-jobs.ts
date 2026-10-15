@@ -57,7 +57,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get<{ Params: { id: string } }>('/funnel-jobs/:id', async (req, reply) => {
     const { id } = req.params;
     if (!isValidUlid(id)) throw new BadRequestError('Invalid job id format.');
-    await requireOwnership(app.redis, 'funnel', id, req.user!.sub);
+    await requireOwnership(app.redis, 'funnel', id, req.user!.sub, req.user!.role === 'admin');
     const meta = await app.funnelJobStore.get(id);
     let downloadUrl: string | undefined;
     if (meta.status === 'ready' && meta.storageKey) {

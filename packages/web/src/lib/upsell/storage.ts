@@ -1,5 +1,6 @@
 import type { CheckoutPlatform } from './checkout-presets';
 import type { ColumnMap, FrontConfig, FunnelStepConfig } from './calc';
+import { readPersonalStorage, writePersonalStorage } from '../personal-storage';
 
 const STORAGE_KEY = 'tmx-hub:upsell-presets:v1';
 
@@ -17,7 +18,7 @@ export interface SavedPreset {
 function safeRead(): SavedPreset[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = readPersonalStorage(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -30,7 +31,7 @@ function safeRead(): SavedPreset[] {
 function safeWrite(presets: SavedPreset[]): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(presets));
+    writePersonalStorage(STORAGE_KEY, JSON.stringify(presets));
   } catch {
     // quota or disabled storage — ignore
   }

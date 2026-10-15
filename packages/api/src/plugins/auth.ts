@@ -70,10 +70,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!token) throw new UnauthorizedError();
     const payload = verifyJwt(token, env.JWT_SECRET);
     if (!payload) throw new UnauthorizedError('Token expirado ou inválido.');
-    // Keep permission changes fresh without paying a Redis round-trip on every
-    // authenticated request. Mutation routes invalidate this entry eagerly.
+    // Ordinary member permissions may use a short cache. Global administrator
+    // privileges must be revalidated on every request: another process can
+    // demote or delete an administrator without invalidating this local cache.
     let user = authUserCache.get(payload.sub);
-    if (!user) {
+    if (!user || user.role === 'admin') {
       const storedUser = await userStore.maybeGetById(payload.sub);
       if (!storedUser) throw new UnauthorizedError('Usuário não encontrado.');
       user = { role: storedUser.role, allowedTools: storedUser.allowedTools };

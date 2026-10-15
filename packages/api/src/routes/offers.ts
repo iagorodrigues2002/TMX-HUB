@@ -229,9 +229,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       void app.utmifySync.syncOffer(connected, true).catch((error) => {
         app.log.warn({ error, offerId: offer.id }, 'initial utmify sync failed');
       });
-      return reply.code(201).send(offerToWire(connected, { includeAccess: true, canManage: true }));
+      return reply.code(201).send(offerToWire(connected, { includeAccess: req.user.role === 'admin', canManage: true }));
     }
-    return reply.code(201).send(offerToWire(offer, { includeAccess: true, canManage: true }));
+    return reply.code(201).send(offerToWire(offer, { includeAccess: req.user.role === 'admin', canManage: true }));
   });
 
   // PATCH /v1/offers/:id — update name/status/links/etc
@@ -285,7 +285,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         app.log.warn({ error, offerId: finalOffer.id }, 'utmify reconnect sync failed');
       });
     }
-    return reply.send(offerToWire(finalOffer, { includeAccess: true, canManage: true }));
+    return reply.send(offerToWire(finalOffer, { includeAccess: req.user.role === 'admin', canManage: true }));
   });
 
   // DELETE /v1/offers/:id

@@ -13,7 +13,7 @@ const now = new Date('2026-10-15T12:00:00Z');
 const attempt = { id:'attempt-1',operator_id:'member-1',order_id:'front-1',stage_id:'stage-1',stage_key:'upsell_1',provider:'vendepay',opened_at:now };
 const approval = {order_id:'paid-upsell',stage_key:'upsell_1',provider:'vendepay',approved_at:now,amount_minor:2500,currency:'USD'};
 
-async function fixture(options: { user?: string; deny?: boolean; provider?: string; unsafe?: boolean } = {}) {
+async function fixture(options: { user?: string; admin?: boolean; deny?: boolean; provider?: string; unsafe?: boolean } = {}) {
   const app=Fastify();
   const inserted: any[]=[];
   const statements: string[]=[];
@@ -42,7 +42,7 @@ async function fixture(options: { user?: string; deny?: boolean; provider?: stri
     return {userId:'owner-1'};
   }});
   app.decorate('userStore',{maybeGetById:async()=>({name:'Operador TMX',email:'do-not-expose@test'})});
-  app.addHook('preHandler',async req=>{(req as any).user={sub:options.user??'owner-1',role:'user'};});
+  app.addHook('preHandler',async req=>{(req as any).user={sub:options.user??'owner-1',role:options.admin?'admin':'user'};});
   await app.register(errorHandlerPlugin);
   registerUpsellOperatorAudit(app);
   return {app,inserted,statements};
@@ -127,19 +127,19 @@ describe('upsell operator audit',()=>{
       expect(response.statusCode).toBe(404);expect(statements).toHaveLength(0);
     } finally {await app.close();}
   });
-  it('exposes only a member’s own openings and no offer-wide approvals',async()=>{
-    const {app,statements}=await fixture({user:'member-1'});
+  it.each(['member-1','owner-1'])('exposes only %s own openings and no offer-wide approvals, including normal owners',async(user)=>{
+    const {app,statements}=await fixture({user});
     try {
       const response=await app.inject({method:'GET',url:logUrl});
       expect(response.json()).toMatchObject({scope:'self',approvals:[],summary_scope:'displayed_rows'});
-      expect(response.json().attempts[0]).toMatchObject({operator_id:'member-1',operator_name:'Operador TMX'});
+      expect(response.json().attempts[0]).toMatchObject({operator_id:user,operator_name:'Operador TMX'});
       expect(JSON.stringify(response.json())).not.toContain('do-not-expose');
       expect(statements.some(s=>s.includes('FROM tracking_orders o'))).toBe(false);
       expect(statements.some(s=>s.includes('OR operator_id=?'))).toBe(true);
     } finally {await app.close();}
   });
   it('shows gateway-paid purchases separately without assigning the only/latest operator',async()=>{
-    const {app}=await fixture();
+    const {app}=await fixture({admin:true});
     try {
       const response=await app.inject({method:'GET',url:logUrl});
       expect(response.statusCode).toBe(200);

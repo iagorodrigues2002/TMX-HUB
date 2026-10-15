@@ -55,7 +55,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const { id } = IdParamSchema.parse(req.params);
     if (!isValidUlid(id)) throw new BadRequestError('Invalid clone id.');
 
-    await requireOwnership(app.redis, 'clone', id, req.user!.sub);
+    await requireOwnership(app.redis, 'clone', id, req.user!.sub, req.user!.role === 'admin');
     const meta = await app.jobStore.getCloneMeta(id);
     const query = ListQuerySchema.parse(req.query);
 
@@ -84,7 +84,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     if (!isValidUlid(id)) throw new BadRequestError('Invalid clone id.');
     if (!isValidPrefixedUlid(formId, 'frm')) throw new BadRequestError('Invalid form id.');
 
-    await requireOwnership(app.redis, 'clone', id, req.user!.sub);
+    await requireOwnership(app.redis, 'clone', id, req.user!.sub, req.user!.role === 'admin');
     const meta = await app.jobStore.getCloneMeta(id);
     const ifMatch = req.headers['if-match'];
     if (typeof ifMatch === 'string' && ifMatch !== meta.etag) {

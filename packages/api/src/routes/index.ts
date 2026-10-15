@@ -80,8 +80,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       // Auth endpoints — explicitly public except /me which gates itself.
       await v1.register(authRoutes);
 
-      // Preview is loaded inside an iframe (no Authorization header possible).
-      // Stays public; the ULID in the URL is the capability token.
+      // Preview enforces authentication and clone ownership inside its handler.
+      // The web client fetches private HTML with Bearer before sandboxed embedding.
       await v1.register(previewRoutes);
       await v1.register(trackingPublicRoutes);
       await v1.register(offerCartRoutes);

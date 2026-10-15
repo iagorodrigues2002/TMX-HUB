@@ -34,7 +34,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.get<{ Params: { id: string } }>('/vsl-jobs/:id', async (req, reply) => {
     const { id } = req.params;
     if (!isValidUlid(id)) throw new BadRequestError('Invalid job id format.');
-    await requireOwnership(app.redis, 'vsl', id, req.user!.sub);
+    await requireOwnership(app.redis, 'vsl', id, req.user!.sub, req.user!.role === 'admin');
     const meta = await app.vslJobStore.get(id);
 
     // Surface presigned download URLs only when ready.

@@ -84,7 +84,9 @@ function isValidStatus(s: unknown): s is OfferStatus {
 }
 
 export function canAccessOffer(offer: Offer, userId: string, isAdmin = false): boolean {
-  return isAdmin || offer.userId === userId || Boolean(offer.memberIds?.includes(userId));
+  // Legacy sharing records are retained for audit, not authorization. Only the
+  // owning account and global administrators may cross the offer boundary.
+  return isAdmin || offer.userId === userId;
 }
 
 export function canManageOffer(offer: Offer, userId: string, isAdmin = false): boolean {
@@ -97,13 +99,9 @@ export function canConfigureTrackingOffer(
   offer: Offer,
   userId: string,
   isAdmin = false,
-  memberRole: OfferMemberRole = 'member',
+  _memberRole: OfferMemberRole = 'member',
 ): boolean {
-  return (
-    isAdmin ||
-    offer.userId === userId ||
-    (Boolean(offer.memberIds?.includes(userId)) && memberRole === 'tracking_manager')
-  );
+  return canAccessOffer(offer, userId, isAdmin);
 }
 
 export class OfferStore {

@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { type OfferView, apiClient } from '@/lib/api-client';
+import { readPersonalStorage, writePersonalStorage } from '@/lib/personal-storage';
 import { useQuery } from '@tanstack/react-query';
 import { Store } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -71,21 +72,22 @@ export function OfferContextProvider({ children }: { children: ReactNode }) {
   const currentOfferId = routeOfferId || queryOfferId || storedOfferId;
   const resolvedOfferId = offers.some((offer) => offer.id === currentOfferId)
     ? currentOfferId
-    : (offers[0]?.id ?? currentOfferId);
+    : (offers[0]?.id ?? '');
 
   useEffect(() => {
-    setStoredOfferId(window.localStorage.getItem(OFFER_STORAGE_KEY) ?? '');
+    setStoredOfferId(readPersonalStorage(OFFER_STORAGE_KEY) ?? '');
   }, []);
 
   useEffect(() => {
     if (!resolvedOfferId) return;
     setStoredOfferId(resolvedOfferId);
-    window.localStorage.setItem(OFFER_STORAGE_KEY, resolvedOfferId);
+    writePersonalStorage(OFFER_STORAGE_KEY, resolvedOfferId);
   }, [resolvedOfferId]);
 
   const setCurrentOfferId = (offerId: string) => {
+    if (!offers.some((offer) => offer.id === offerId)) return;
     setStoredOfferId(offerId);
-    window.localStorage.setItem(OFFER_STORAGE_KEY, offerId);
+    writePersonalStorage(OFFER_STORAGE_KEY, offerId);
 
     if (/^\/ofertas\/[^/]+$/.test(pathname)) {
       router.push(`/ofertas/${offerId}`);
