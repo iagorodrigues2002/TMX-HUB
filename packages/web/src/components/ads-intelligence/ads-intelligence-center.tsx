@@ -9,7 +9,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, Loader2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { importErrorPresentation, metricPresentation } from './metric-presentation';
+import { importErrorPresentation, metricPresentation, sourceAccountLabel } from './metric-presentation';
 
 type MetricKey = Exclude<keyof AdsIntelligenceMetrics,'calculation_status'|'calculation_reason'>;
 const columns: Array<{key: MetricKey; label: string; kind: 'money'|'count'|'percent'|'ratio'}> = [
@@ -70,7 +70,8 @@ function BatchRow({batch,sort,privateMode}: {batch: AdsIntelligenceData['batches
                 <th scope="row" className={`${stickyColumnClass} z-10 w-56 min-w-56 px-4 py-3 pl-11 text-left font-normal`}>
                 <span>{ad.name}</span>
                 {!!ad.sources?.length && <>
-                  <span className="mt-1 block break-all text-xs text-muted-foreground">Conta: {ad.sources[0]?.account_name || ad.sources[0]?.account_id || 'Não informada'}</span>
+                  <span className="mt-1 block break-all text-xs text-muted-foreground">{sourceAccountLabel(ad.sources)}</span>
+                  {new Set(ad.sources.map(source=>source.platform).filter(Boolean)).size > 1 && <span className="mt-1 block text-xs text-muted-foreground">{[...new Set(ad.sources.map(source=>source.platform).filter(Boolean))].map(platformLabel).join(' / ')}</span>}
                   <details className="mt-2 text-xs" tabIndex={open?undefined:-1}>
                     <summary tabIndex={open?undefined:-1} className="cursor-pointer text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">Nomes e IDs originais</summary>
                     <div className="mt-2 space-y-3 break-words text-muted-foreground">

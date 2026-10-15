@@ -170,8 +170,6 @@ const plugin: FastifyPluginAsync = async (app) => {
       }
       const key = JSON.stringify([
         offerId,
-        raw.platform ?? 'meta',
-        raw.adAccountId,
         logical.batch,
         logical.ad,
         logical.variant,
@@ -233,6 +231,7 @@ const plugin: FastifyPluginAsync = async (app) => {
             AND o.occurred_at>=(${from}::date::timestamp AT TIME ZONE 'America/Sao_Paulo') AND o.occurred_at<((${to}::date+1)::timestamp AT TIME ZONE 'America/Sao_Paulo')
         )
         SELECT p.offer_id,to_char(o.occurred_at AT TIME ZONE 'America/Sao_Paulo','YYYY-MM-DD') AS day,o.source->>'ad_id' AS ad_id,
+          o.source->>'campaign_id' AS campaign_id,o.source->>'utm_source' AS traffic_source,
           o.source->>'campaign_name' AS campaign_name,o.source->>'ad_name' AS ad_name,o.source->>'adset_name' AS adset_name,
           count(*) FILTER(WHERE o.order_kind='front')::int AS front_sales,
           count(*) FILTER(WHERE o.order_kind ~ '^upsell(_[0-9]+)?$')::int AS upsell_sales,
@@ -241,7 +240,7 @@ const plugin: FastifyPluginAsync = async (app) => {
         FROM resolved o JOIN tracking_projects p ON p.id=o.project_id
         WHERE p.offer_id=ANY(${offers.map((o) => o.id)}) AND o.status='paid' AND (o.order_kind='front' OR o.order_kind ~ '^upsell(_[0-9]+)?$')
           AND o.occurred_at>=(${from}::date::timestamp AT TIME ZONE 'America/Sao_Paulo') AND o.occurred_at<((${to}::date+1)::timestamp AT TIME ZONE 'America/Sao_Paulo')
-        GROUP BY p.offer_id,to_char(o.occurred_at AT TIME ZONE 'America/Sao_Paulo','YYYY-MM-DD'),o.source->>'ad_id',o.source->>'campaign_name',o.source->>'ad_name',o.source->>'adset_name'`;
+        GROUP BY p.offer_id,to_char(o.occurred_at AT TIME ZONE 'America/Sao_Paulo','YYYY-MM-DD'),o.source->>'ad_id',o.source->>'campaign_id',o.source->>'utm_source',o.source->>'campaign_name',o.source->>'ad_name',o.source->>'adset_name'`;
       const ic = await app.db`
         WITH event_facts AS (
           SELECT p.offer_id,e.visitor_id,COALESCE(e.session_id,e.id) AS session_id,
@@ -259,21 +258,30 @@ const plugin: FastifyPluginAsync = async (app) => {
             AND e.received_at>=(${from}::date::timestamp AT TIME ZONE 'America/Sao_Paulo')
             AND e.received_at<((${to}::date+1)::timestamp AT TIME ZONE 'America/Sao_Paulo')
         ) SELECT offer_id,day,source->>'ad_id' AS ad_id,source->>'campaign_name' AS campaign_name,
+          CASE WHEN count(DISTINCT NULLIF(source->>'campaign_id',''))=1 THEN min(NULLIF(source->>'campaign_id','')) END AS campaign_id,
+          CASE WHEN count(DISTINCT NULLIF(source->>'utm_source',''))=1 THEN min(NULLIF(source->>'utm_source','')) END AS traffic_source,
           source->>'ad_name' AS ad_name,source->>'adset_name' AS adset_name,
           count(DISTINCT(visitor_id,session_id))::int AS ic
         FROM event_facts GROUP BY offer_id,day,source->>'ad_id',source->>'campaign_name',source->>'ad_name',source->>'adset_name'`;
       for (const fact of [...facts, ...ic]) {
+        const traffic = typeof fact.traffic_source === 'string' ? fact.traffic_source.toLowerCase().trim() : '';
+        const platform = ['fb','facebook','meta','ig','instagram'].includes(traffic) ? 'meta'
+          : ['google','youtube'].includes(traffic) ? 'google' : ['tiktok','ttk'].includes(traffic) ? 'tiktok' : null;
         let candidates = [...ads.values()].filter(
-          (a) => a.offer_id === fact.offer_id && fact.ad_id && a.ids.has(fact.ad_id),
+          (a) => a.offer_id === fact.offer_id && fact.ad_id && [...a.sources.values()].some(source =>
+            source.ad_id === fact.ad_id && (!platform || source.platform === platform) &&
+            (!fact.campaign_id || source.campaign_id === fact.campaign_id)),
         );
+        if (candidates.length > 1 && !fact.campaign_id && fact.campaign_name)
+          candidates = candidates.filter(a => [...a.sources.values()].some(source => source.ad_id === fact.ad_id && source.campaign_name === fact.campaign_name && (!platform || source.platform === platform)));
         if (!fact.ad_id) {
           const logical = logicalAd(fact.ad_name ?? '', fact.adset_name ?? '', offers.find(o => o.id === fact.offer_id)?.name ?? '');
-          if (logical && fact.campaign_name)
+          if (logical && (fact.campaign_id || fact.campaign_name))
             candidates = [...ads.values()].filter(
               (a) =>
                 a.offer_id === fact.offer_id &&
                 [...a.sources.values()].some(
-                  (source) => source.campaign_name === fact.campaign_name,
+                  (source) => (!platform || source.platform === platform) && (fact.campaign_id ? source.campaign_id === fact.campaign_id : source.campaign_name === fact.campaign_name),
                 ) &&
                 a.logical.batch === logical.batch &&
                 a.logical.ad === logical.ad &&
@@ -306,8 +314,7 @@ const plugin: FastifyPluginAsync = async (app) => {
       }
     >();
     for (const ad of ads.values()) {
-      const firstSource = [...ad.sources.values()][0]!;
-      const key = JSON.stringify([ad.offer_id, firstSource.platform, firstSource.account_id, ad.batch]);
+      const key = JSON.stringify([ad.offer_id, ad.batch]);
       let batch = batches.get(key);
       if (!batch) {
         batch = {

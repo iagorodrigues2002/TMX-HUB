@@ -1,3 +1,15 @@
+export function sourceAccountLabel(sources: Array<{platform?: string; account_id?: string|null; account_name?: string|null}>) {
+  const accounts = new Map<string,string>();
+  let unknown = false;
+  for (const source of sources) {
+    const identity=source.account_id;
+    if (identity) accounts.set(`${source.platform || 'unknown'}:${identity}`,source.account_name || source.account_id!);
+    else unknown = true;
+  }
+  const label = accounts.size > 1 ? `${accounts.size} contas de anúncios` : accounts.size === 1 ? `Conta: ${[...accounts.values()][0]}` : 'Conta não informada';
+  return unknown && accounts.size ? `${label} + conta não informada` : label;
+}
+
 export function importErrorPresentation(state: string, error: string) {
   const legacyPartial = state === 'partial' && error === 'Cobertura parcial: contas com falha estão identificadas. ROAS/ROI indisponíveis até reparar as lacunas.';
   return {

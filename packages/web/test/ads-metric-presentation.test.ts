@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
-import { importErrorPresentation, metricPresentation } from '../src/components/ads-intelligence/metric-presentation';
+import { importErrorPresentation, metricPresentation, sourceAccountLabel } from '../src/components/ads-intelligence/metric-presentation';
 
 test('ROAS uses 1x and ROI uses zero as media break-even, not positive sign alone',()=>{
   assert.equal(metricPresentation('roas',0.9).cue,'▼');
@@ -58,4 +58,12 @@ test('advertiser page details use explicit source name/id without guessing the a
   assert.match(source,/Página anunciante<\/dt><dd>\{source\.page_name \|\| 'Não informada'\}/);
   assert.match(source,/source\.page_id && <dd className="break-all">ID: \{source\.page_id\}/);
   assert.doesNotMatch(source,/source\.page_name \|\| source\.account_name/);
+});
+test('consolidated ads count distinct platform/account identities, not campaign sources',()=>{
+  assert.equal(sourceAccountLabel([{platform:'meta',account_id:'1',account_name:'Mainex'},{platform:'meta',account_id:'1',account_name:'Mainex'}]),'Conta: Mainex');
+  assert.equal(sourceAccountLabel([{platform:'meta',account_id:'1'},{platform:'meta',account_id:'2'}]),'2 contas de anúncios');
+  assert.equal(sourceAccountLabel([{platform:'meta',account_id:'1'},{platform:'google',account_id:'1'}]),'2 contas de anúncios');
+  assert.equal(sourceAccountLabel([{}]),'Conta não informada');
+  assert.equal(sourceAccountLabel([{account_name:'Mainex'}]),'Conta não informada');
+  assert.equal(sourceAccountLabel([{platform:'meta',account_id:'1',account_name:'Mainex'},{}]),'Conta: Mainex + conta não informada');
 });
