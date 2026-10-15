@@ -62,5 +62,8 @@ export async function sendTransactionalEmail(
   }
 
   const data = (await res.json()) as { messageId?: string };
-  return { messageId: data.messageId ?? '' };
+  if (typeof data.messageId !== 'string' || !data.messageId.trim()) {
+    throw new Error('Brevo returned no message identifier; email acceptance was not confirmed.');
+  }
+  return { messageId: data.messageId };
 }

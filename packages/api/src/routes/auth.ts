@@ -1,33 +1,13 @@
-import { readFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { ALL_TOOL_KEYS, type ToolKey } from '@page-cloner/shared';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { env } from '../env.js';
 import { sendTransactionalEmail } from '../lib/brevo.js';
+import { renderInviteEmail, type InviteEmailData } from '../lib/invite-email.js';
 import { signJwt } from '../lib/jwt.js';
 import { hashPassword, verifyPassword } from '../lib/password.js';
 import { BadRequestError, HttpProblem, zodToProblem } from '../lib/problem.js';
 import { INVITE_RATE_LIMIT, LOGIN_RATE_LIMIT } from '../plugins/rate-limit.js';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-function interpolate(template: string, vars: Record<string, string>): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? '');
-}
-
-async function loadTemplate(name: string): Promise<string> {
-  return readFile(join(__dirname, '../templates', name), 'utf-8');
-}
-
-interface InviteEmailData {
-  inviterName: string;
-  roleLabel: string;
-  allowedTools?: string[];
-  acceptUrl: string;
-  expiresIn: string;
-}
 
 async function sendInviteEmail(
   email: string,
@@ -39,53 +19,12 @@ async function sendInviteEmail(
     return null;
   }
 
-  const [htmlTemplate, txtTemplate] = await Promise.all([
-    loadTemplate('invite-email.html'),
-    loadTemplate('invite-email.txt'),
-  ]);
-
-  const toolsHtml =
-    data.allowedTools && data.allowedTools.length > 0
-      ? data.allowedTools
-          .map(
-            (t) =>
-              `<span class="tools-chip" style="display:inline-block;margin:2px 4px 2px 0;padding:3px 10px;background-color:rgba(14,124,134,0.18);color:#22d3ee;border:1px solid rgba(34,211,238,0.22);border-radius:999px;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:600;">${t}</span>`,
-          )
-          .join('')
-      : '';
-
-  const toolsText =
-    data.allowedTools && data.allowedTools.length > 0
-      ? data.allowedTools.join(', ')
-      : 'Acesso completo';
-
-  const vars: Record<string, string> = {
-    inviterName: data.inviterName,
-    roleLabel: data.roleLabel,
-    toolsHtml,
-    toolsText,
-    acceptUrl: data.acceptUrl,
-    expiresIn: data.expiresIn,
-  };
-
-  // Simple template handling — strip conditional blocks not needed
-  let html = htmlTemplate;
-  if (data.allowedTools && data.allowedTools.length > 0) {
-    html = html.replace(/\{\{#if allowedTools\}\}/g, '').replace(/\{\{\/if\}\}/g, '');
-    html = html.replace(/\{\{\^if allowedTools\}\}[\s\S]*?\{\{\/if\}\}/g, '');
-  } else {
-    html = html.replace(/\{\{#if allowedTools\}\}[\s\S]*?\{\{\/if\}\}/g, '');
-    html = html.replace(/\{\{\^if allowedTools\}\}/g, '').replace(/\{\{\/if\}\}/g, '');
-  }
-  html = interpolate(html, vars);
-
-  const txt = interpolate(txtTemplate, vars);
+  const content = await renderInviteEmail(data);
 
   return sendTransactionalEmail(env.BREVO_API_KEY, env.BREVO_SENDER_EMAIL, env.BREVO_SENDER_NAME, {
     to: [{ email }],
     subject: `${data.inviterName} convidou você para o TMX Hub`,
-    htmlContent: html,
-    textContent: txt,
+    ...content,
   });
 }
 
@@ -307,7 +246,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           });
         } catch (err) {
           emailError = err instanceof Error ? err.message : 'Unknown error sending email.';
-          app.log.error({ err, inviteToken: invite.token }, 'Failed to send invite email');
+          app.log.error({ err }, 'Failed to send invite email');
         }
       }
 

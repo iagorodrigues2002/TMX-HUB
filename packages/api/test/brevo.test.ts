@@ -28,6 +28,10 @@ afterEach(() => {
 });
 
 describe('sendTransactionalEmail', () => {
+  it('does not claim acceptance without a provider message identifier', async () => {
+    mockFetch.mockResolvedValue(makeResponse(201, {}));
+    await expect(sendTransactionalEmail('key', 'sender@example.com', 'Sender', MOCK_PAYLOAD)).rejects.toThrow('message identifier');
+  });
   it('returns messageId on success', async () => {
     mockFetch.mockResolvedValue(makeResponse(201, { messageId: 'msg-abc-123' }));
 

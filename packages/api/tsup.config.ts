@@ -1,4 +1,5 @@
 import { defineConfig } from 'tsup';
+import { cp, mkdir } from 'node:fs/promises';
 
 export default defineConfig({
   entry: ['src/server.ts'],
@@ -13,4 +14,8 @@ export default defineConfig({
   // external because it ships its own dist (built separately) and is
   // imported dynamically by the workers.
   noExternal: ['@page-cloner/shared'],
+  async onSuccess() {
+    await mkdir('dist/templates', { recursive: true });
+    await cp('src/templates', 'dist/templates', { recursive: true });
+  },
 });
