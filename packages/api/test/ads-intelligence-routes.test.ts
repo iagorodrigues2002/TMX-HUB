@@ -24,7 +24,7 @@ describe('central analytics access isolation', () => {
   it('merges all accounts/platforms in the same offer, batch and variant and recalculates weighted ratios once',async()=>{
     const {app,sql}=await setup();
     sql.mockResolvedValueOnce([{state:'ready',last_sync_at:'2026-10-13',coverage_from:'2026-08-01',coverage_to:'2026-10-12'}] as never)
-      .mockResolvedValueOnce([{platform:'meta',adAccountId:'acc1',adId:'1',spend:10000},{platform:'google',adAccountId:'acc2',adId:'2',spend:30000}].map(raw=>({day:'2026-08-01',currency:'BRL',raw:{...raw,name:'PJR_ENG_AD03_L17',campaignName:'PJR_ENG'}})) as never)
+      .mockResolvedValueOnce([{platform:'meta',adAccountId:'acc1',adId:'1',spend:10000,name:'PJR_ENG_AD03_L17'},{platform:'google',adAccountId:'acc2',adId:'2',spend:30000,name:'PJR_ENG_AD03_L17 · CREATIVE_MP4'}].map(raw=>({day:'2026-08-01',currency:'BRL',raw:{...raw,campaignName:'PJR_ENG'}})) as never)
       .mockResolvedValueOnce([]).mockResolvedValueOnce([{offer_id:'a',ad_id:'1',front_sales:1,upsell_sales:0,revenue:'20000'},{offer_id:'a',ad_id:'2',front_sales:1,upsell_sales:1,revenue:'30000'}] as never).mockResolvedValueOnce([]);
     const data=(await app.inject('/ads-intelligence')).json();
     expect(data.batches).toHaveLength(1);expect(data.batches[0].ads).toHaveLength(1);

@@ -69,7 +69,9 @@ export function logicalAd(name: string, adset = '', offerName = '') {
     creative
       .replace(/(?:^|[^A-Z0-9])AD[\s_-]*0*\d+(?=$|[^0-9])/gi, ' ')
       .replace(/(?:^|[^A-Z0-9])(?:LEVA\s*|L)[\s_-]*0*\d+(?=$|[^0-9])/gi, ' ')
-      .replace(/(?:^|_)(?:COPIA|COPY)(?:_\d+)?(?=$|_)/gi, ''),
+      .replace(/(?:^|_)(?:COPIA|COPY)(?:_\d+)?(?=$|_)/gi, '')
+      // Provider file-format suffix, not a hook/avatar or creative variation.
+      .replace(/(?:^|_)CREATIVE_MP4_?$/i, ''),
   );
   return { batch: `L${unique[0] ?? 1}`, ad: `AD${String(Number(ad[1])).padStart(2, '0')}`, variant };
 }

@@ -54,6 +54,14 @@ describe('Ads Intelligence identity and weekly ranges', () => {
   it('preserves meaningful creative variants', () => {
     expect(logicalAd('AD5-L17 HOOK2')?.variant).toBe('HOOK2');
   });
+  it('ignores the technical CREATIVE_MP4 suffix but preserves meaningful variants', () => {
+    expect(logicalAd('AD04 · CREATIVE_MP4')).toEqual(logicalAd('ad 04'));
+    expect(logicalAd('PJR_ENG_AD04_L17 · creative.mp4', '', 'PJR_ENG')).toEqual(logicalAd('AD04', 'L17'));
+    expect(logicalAd('AD04 · CREATIVE_MP4 cópia 2')).toEqual(logicalAd('AD04'));
+    expect(logicalAd('AD04_H2_AV13 · CREATIVE_MP4')?.variant).toBe('H2_AV13');
+    expect(logicalAd('AD04_H3_AV13 · CREATIVE_MP4')?.variant).toBe('H3_AV13');
+    expect(logicalAd('AD04_CREATIVE_MP4_H2')?.variant).toBe('CREATIVE_MP4_H2');
+  });
   it('matches longest offer token', () => {
     expect(
       matchCampaign('PJR_ENG_TTK L17', [
