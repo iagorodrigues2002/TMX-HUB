@@ -19,6 +19,7 @@ import { ToolGuard } from '@/components/auth/tool-guard';
 import { HubShell } from '@/components/hub/hub-shell';
 import { Button } from '@/components/ui/button';
 import { apiClient } from '@/lib/api-client';
+import { UpsellOperatorLogs } from '@/components/tracking/upsell-operator-logs';
 
 const KIND_META = {
   clone: { label: 'Page Cloner', icon: Layers, href: (id: string) => `/tools/cloner/jobs/${id}`, color: 'text-cyan-300' },
@@ -71,6 +72,7 @@ export default function LogsPage() {
   return (
     <HubShell breadcrumb={['LOGS']}>
       <ToolGuard tool="logs">
+      <UpsellOperatorLogs />
       <header className="mb-6 space-y-3">
         <div className="flex items-center gap-2">
           <ScrollText className="h-5 w-5 text-cyan-300" />

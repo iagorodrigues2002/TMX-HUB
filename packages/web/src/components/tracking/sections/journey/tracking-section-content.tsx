@@ -6,6 +6,7 @@ import { TikTokDestinations } from '@/components/tracking/tiktok-destinations';
 import { TrackingHelp } from '@/components/tracking/tracking-help';
 import { TrackingLiveConsole } from '@/components/tracking/tracking-live-console';
 import { TrackingPanel } from '@/components/tracking/tracking-panel';
+import { safeUpsellDestination } from '@/components/tracking/upsell-audit-presentation';
 import { TRACKING_DASHBOARD_STALE_TIME } from '@/components/tracking/tracking-query';
 import { Button } from '@/components/ui/button';
 import { DataState, getErrorDataStateProps } from '@/components/ui/data-state';
@@ -49,7 +50,7 @@ import {
   Video,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 const vendepaySample = JSON.stringify(
@@ -128,6 +129,41 @@ function ValidatedUpsellLink({
   };
 }) {
   const qc = useQueryClient();
+  const opening = useRef(false);
+  const clickId = useRef<string | null>(null);
+  const [isOpening, setIsOpening] = useState(false);
+  const openAudited = async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    if (opening.current) return;
+    // Reserve the tab during the user gesture; a blocked popup must not create an audit opening.
+    const popup = window.open('about:blank', '_blank');
+    if (!popup) {
+      toast.error('Permita abrir uma nova aba para acessar este upsell.');
+      return;
+    }
+    popup.opener = null;
+    const referrerPolicy = popup.document.createElement('meta');
+    referrerPolicy.name = 'referrer';
+    referrerPolicy.content = 'no-referrer';
+    popup.document.head.appendChild(referrerPolicy);
+    opening.current = true;
+    setIsOpening(true);
+    clickId.current ??= crypto.randomUUID();
+    try {
+      const response = await apiClient.openTrackingUpsell(offerId, orderId, link.stage_id, clickId.current, link.already_purchased || Boolean(link.force_url));
+      const destination = safeUpsellDestination(response.url);
+      if (popup.closed) throw new Error('A nova aba foi fechada. Tente novamente.');
+      popup.location.replace(destination);
+      clickId.current = null;
+      void qc.invalidateQueries({queryKey: ['upsell-operator-logs', offerId]});
+    } catch (error) {
+      popup.close();
+      toast.error((error as Error).message || 'Não foi possível registrar a abertura. Tente novamente.');
+    } finally {
+      opening.current = false;
+      setIsOpening(false);
+    }
+  };
   const validation = useQuery<{compatible:boolean;reason:string|null;url?:string;state?:'recoverable'|'already_converted'|'temporary_failure'|'definitive_failure'}>({
     queryKey: ['upsell-compatibility', link.stage_id, link.url],
     queryFn: () => link.gateway === 'syzepay'
@@ -144,13 +180,14 @@ function ValidatedUpsellLink({
       apiClient.saveTrackingUpsellManualResult(offerId, orderId, link.stage_id, result),
     onSuccess: (_response, result) => {
       void qc.invalidateQueries({ queryKey: ['tracking-upsell-identities', offerId] });
-      toast.success(result === 'worked' ? 'Compra confirmada neste upsell.' : 'Falha registrada.');
+      toast.success(result === 'worked' ? 'Retorno manual registrado. A compra só é confirmada pelo webhook.' : 'Falha manual registrada.');
     },
     onError: (error) => toast.error((error as Error).message),
   });
   const withManualResult = (openLink: React.ReactNode) => (
     <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-cyan-300/15 bg-cyan-300/[0.04] p-1.5">
       {openLink}
+      {isOpening && <span role="status" className="text-xs text-muted-foreground">Registrando abertura…</span>}
       <button
         type="button"
         disabled={saveResult.isPending}
@@ -187,38 +224,36 @@ function ValidatedUpsellLink({
     </div>
   );
   if (link.already_purchased) {
-    const purchasedUrl = new URL(link.url);
-    purchasedUrl.searchParams.set('force', '1');
     return (
-      <a
+      <button type="button" disabled={isOpening}
+        onClick={openAudited}
+        aria-busy={isOpening}
         aria-label={`Abrir ${link.name}, já comprado`}
         title="Este upsell já foi comprado. Clique para abrir a página mesmo assim."
-        href={purchasedUrl.toString()}
         className="cursor-pointer rounded-md border border-violet-300/25 bg-violet-300/[0.08] px-2.5 py-1.5 text-violet-100 underline decoration-violet-300/40 underline-offset-2 transition hover:border-violet-300/40 hover:bg-violet-300/[0.16]"
       >
         {link.name} · já comprado · abrir
-      </a>
+      </button>
     );
   }
   if (link.gateway === 'syzepay') {
     const syzeValidation = validation.data as {compatible?:boolean;url?:string;reason?:string} | undefined;
     if (!syzeValidation?.compatible || !syzeValidation.url)
       return <span className="text-xs text-amber-100/60">{validation.isFetching ? 'Validando sessão SyzePay…' : syzeValidation?.reason ?? 'Sessão SyzePay indisponível'}</span>;
-    return withManualResult(<a href={syzeValidation.url} target="_blank" rel="noreferrer"
+    return withManualResult(<button type="button" disabled={isOpening} onClick={openAudited} aria-busy={isOpening}
       title="Sessão e página confirmadas na SyzePay. A cobrança exige aceitar a oferta na página."
-      className="rounded-md border border-cyan-300/25 px-2.5 py-1.5 text-cyan-100">{link.name} · SyzePay · abrir</a>);
+      className="rounded-md border border-cyan-300/25 px-2.5 py-1.5 text-cyan-100">{link.name} · SyzePay · abrir</button>);
   }
   if (link.force_url) {
     return withManualResult(
-      <a
+      <button type="button" disabled={isOpening}
+        onClick={openAudited}
+        aria-busy={isOpening}
         title="Abre a página mesmo sem a validação prévia da VendePay"
-        href={link.force_url}
-        target="_blank"
-        rel="noreferrer"
         className="rounded-md border border-cyan-300/25 bg-cyan-300/[0.08] px-2.5 py-1.5 text-cyan-100 transition hover:bg-cyan-300/[0.16]"
       >
         {link.name} · abrir teste
-      </a>,
+      </button>,
     );
   }
   if (validation.isLoading) {
@@ -231,31 +266,29 @@ function ValidatedUpsellLink({
   if (!validation.data?.compatible) {
     const accountMissing = validation.data?.reason === 'account_not_configured';
     return withManualResult(
-      <a
+      <button type="button" disabled={isOpening}
+        onClick={openAudited}
+        aria-busy={isOpening}
         title={
           accountMissing
             ? 'Cadastre a URL desta etapa para a conta VendePay do comprador'
             : 'Abrir para testar novamente na VendePay'
         }
-        href={link.url}
-        target="_blank"
-        rel="noreferrer"
         className="rounded-md border border-rose-300/20 bg-rose-300/[0.06] px-2.5 py-1.5 text-rose-200/70 transition hover:bg-rose-300/[0.12]"
       >
         {link.name} · {accountMissing ? 'conta sem URL' : 'indisponível'}
-      </a>,
+      </button>,
     );
   }
   return withManualResult(
-    <a
+    <button type="button" disabled={isOpening}
+      onClick={openAudited}
+      aria-busy={isOpening}
       title="Elegibilidade confirmada; o TMX validará novamente ao abrir"
-      href={link.url}
-      target="_blank"
-      rel="noreferrer"
       className="rounded-md border border-emerald-300/25 bg-emerald-300/[0.08] px-2.5 py-1.5 text-emerald-100 transition hover:bg-emerald-300/[0.16]"
     >
       {link.name} · elegível
-    </a>,
+    </button>,
   );
 }
 

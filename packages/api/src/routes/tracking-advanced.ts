@@ -23,6 +23,7 @@ import {
 import { saoPauloDayRange } from '../services/utmify-sync.js';
 import { collectCheckoutIds, collectVendaIdCandidates } from '../services/vendepay-venda-id.js';
 import { vturbAnalyticsRequest } from '../services/vturb.js';
+import { registerUpsellOperatorAudit } from './upsell-operator-audit.js';
 
 const databaseUnavailable = {
   error: 'tracking_database_unavailable',
@@ -179,6 +180,7 @@ function parsed<T>(schema: z.ZodSchema<T>, value: unknown): T {
 }
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
+  registerUpsellOperatorAudit(app);
   const cnameTarget = new URL(env.PUBLIC_BASE_URL).hostname;
   const redirectUrl = (testId: string) =>
     `${env.TRACKING_PUBLIC_BASE_URL.replace(/\/$/, '')}/v1/link/${testId}`;

@@ -104,6 +104,7 @@ const migrations = [
   '095_ads_intelligence_coverage.sql',
   '096_ads_intelligence_bounded_recovery.sql',
   '097_ads_intelligence_campaign_exclusions.sql',
+  '098_upsell_operator_audit.sql',
 ];
 
 await sql`

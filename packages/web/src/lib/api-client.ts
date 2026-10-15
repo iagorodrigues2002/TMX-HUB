@@ -3082,6 +3082,23 @@ export const apiClient = {
     );
   },
 
+  async openTrackingUpsell(id: string, orderId: string, stageId: string, clickId: string, viewOnly = false): Promise<{attempt_id: string; url: string; opened_at: string}> {
+    return request(`/v1/offers/${id}/tracking/upsell-identities/${orderId}/stages/${stageId}/open`, {
+      method: 'POST', body: {click_id: clickId, view_only: viewOnly},
+    });
+  },
+
+  async getUpsellOperatorLogs(id: string): Promise<{
+    scope: 'offer' | 'self';
+    attempts: Array<{id: string; operator_id: string; operator_name?: string | null; order_id: string; stage_id: string; stage_key: string; provider: string; opened_at: string}>;
+    approvals: Array<{order_id: string; stage_key: string; provider: string; approved_at: string; amount_minor: number | null; currency: string | null; operator_id: string | null; attribution: string}>;
+    summary: Array<{operator_id: string; operator_name?: string | null; openings: number; confirmed_purchases: number; amounts: Array<{currency: string; amount_minor: number}>}>;
+    unattributed_totals: Array<{currency: string | null; count: number; amount_minor: number | null}>;
+    attribution_notice: string;
+  }> {
+    return request(`/v1/offers/${id}/tracking/upsell-operator-logs?limit=50`);
+  },
+
   async checkTrackingUpsellCompatibility(url: string): Promise<{
     compatible: boolean;
     state: 'recoverable' | 'already_converted' | 'temporary_failure' | 'definitive_failure';
