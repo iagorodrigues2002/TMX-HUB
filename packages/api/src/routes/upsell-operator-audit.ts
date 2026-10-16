@@ -9,7 +9,7 @@ import { normalizeVendepay } from '../integrations/vendepay/normalize.js';
 
 const OpenSchema = z.object({ click_id: z.string().regex(/^[a-zA-Z0-9_-]{16,80}$/), view_only: z.boolean().optional() }).strict();
 type Attempt = { id: string; operator_id: string; order_id: string; stage_id: string; stage_key: string; provider: string; opened_at: Date };
-type Approval = { order_id: string; stage_key: string; provider: string; approved_at: Date; amount_minor: string | number | null; currency: string | null };
+type Approval = { order_id: string; stage_key: string; provider: string; approved_at: Date; amount_minor: string | number | null; currency: string | null; amount_brl_minor?: string | number | null; operator_id?: string | null };
 type ApprovalCandidate = Approval & { receipt_payloads: unknown[] | null };
 
 export function hasGatewayApproval(row: ApprovalCandidate) {
@@ -20,25 +20,34 @@ export function hasGatewayApproval(row: ApprovalCandidate) {
   });
 }
 
-// No gateway currently round-trips an authenticated operator-attempt identifier.
-// A buyer match, front-order association or temporal proximity is NOT proof.
+// Business attribution by the immutable last preapproval opening, not proof
+// that the operator personally completed the payment. One credit per order.
 export function operatorAuditSummary(attempts: Attempt[], approvals: Approval[]) {
-  const operators = new Map<string, number>();
-  for (const row of attempts) operators.set(row.operator_id, (operators.get(row.operator_id) ?? 0) + 1);
-  const currencies = new Map<string, { currency: string | null; count: number; amount_minor: number | null }>();
-  for (const row of approvals) {
-    const key = row.currency ?? 'unknown';
-    const total = currencies.get(key) ?? { currency: row.currency, count: 0, amount_minor: 0 };
+  type Total = { currency: string | null; count: number; amount_minor: number | null };
+  const operators = new Map<string, { operator_id: string; openings: number; confirmed_purchases: number; amounts: Total[] }>();
+  const operator = (id: string) => {
+    if (!operators.has(id)) operators.set(id, { operator_id: id, openings: 0, confirmed_purchases: 0, amounts: [] });
+    return operators.get(id)!;
+  };
+  for (const row of attempts) operator(row.operator_id).openings++;
+  const currencies: Total[] = [];
+  for (const row of new Map(approvals.map(row => [row.order_id, row])).values()) {
+    const owner = row.operator_id ? operator(row.operator_id) : null;
+    if (owner) owner.confirmed_purchases++;
+    const amounts = owner?.amounts ?? currencies;
+    const currency = row.amount_brl_minor != null ? 'BRL' : row.currency;
+    let total = amounts.find(total => total.currency === currency);
+    if (!total) { total = { currency, count: 0, amount_minor: 0 }; amounts.push(total); }
     total.count++;
-    const amount = row.amount_minor === null ? null : Number(row.amount_minor);
+    const rawAmount = row.amount_brl_minor ?? row.amount_minor;
+    const amount = rawAmount === null ? null : Number(rawAmount);
     total.amount_minor = total.amount_minor === null || amount === null || !Number.isSafeInteger(amount)
       ? null : total.amount_minor + amount;
     if (total.amount_minor !== null && !Number.isSafeInteger(total.amount_minor)) total.amount_minor = null;
-    currencies.set(key, total);
   }
   return {
-    summary: [...operators].map(([operator_id, openings]) => ({ operator_id, openings, confirmed_purchases: 0, amounts: [] })),
-    unattributed_totals: [...currencies.values()],
+    summary: [...operators.values()].sort((a,b) => b.confirmed_purchases-a.confirmed_purchases || a.operator_id.localeCompare(b.operator_id)),
+    unattributed_totals: currencies,
   };
 }
 
@@ -104,8 +113,8 @@ export function registerUpsellOperatorAudit(app: FastifyInstance) {
       if (safeUrl.protocol !== 'https:' || safeUrl.username || safeUrl.password)
         return reply.code(409).send({ error: 'upsell_destination_unsafe' });
       const [attempt] = await app.db<Attempt[]>`
-        INSERT INTO tracking_upsell_operator_attempts(id,project_id,order_id,stage_id,stage_key,provider,operator_id,click_id)
-        VALUES(${ulid()},${access.projectId},${target.order_id},${target.stage_id},${target.stage_key},${target.provider},${req.user!.sub},${parsed.data.click_id})
+        INSERT INTO tracking_upsell_operator_attempts(id,project_id,order_id,stage_id,stage_key,provider,operator_id,click_id,view_only)
+        VALUES(${ulid()},${access.projectId},${target.order_id},${target.stage_id},${target.stage_key},${target.provider},${req.user!.sub},${parsed.data.click_id},${parsed.data.view_only ?? false})
         ON CONFLICT(project_id,operator_id,click_id) DO NOTHING
         RETURNING id,operator_id,order_id,stage_id,stage_key,provider,opened_at
       `;
@@ -131,13 +140,14 @@ export function registerUpsellOperatorAudit(app: FastifyInstance) {
       const attempts = await app.db<Attempt[]>`
         SELECT id,operator_id,order_id,stage_id,stage_key,provider,opened_at FROM tracking_upsell_operator_attempts
         WHERE project_id=${access.projectId} AND (${access.all} OR operator_id=${req.user!.sub})
-        ORDER BY opened_at DESC,id DESC LIMIT ${limit}
+        ORDER BY opened_at DESC,id DESC
       `;
       // Only real gateway-paid orders, each primary key once. Manual test results are never read.
-      // These are offer-wide approvals since auditing started, NOT claimed recoveries from clicks.
-      const candidates = access.all ? await app.db<ApprovalCandidate[]>`
+      // Pick the winner before filtering by viewer. Never assign each viewer
+      // their own older click when someone else had the last qualifying one.
+      const candidates = await app.db<ApprovalCandidate[]>`
         SELECT o.id AS order_id,CASE WHEN o.order_kind='upsell' THEN 'upsell_1' ELSE o.order_kind END AS stage_key,
-          o.provider,o.paid_at AS approved_at,o.amount_minor,o.currency,
+          o.provider,o.paid_at AS approved_at,o.amount_minor,o.currency,o.amount_brl_minor,credit.operator_id,
           CASE WHEN o.provider='vendepay' THEN (
             SELECT jsonb_agg(proof.payload) FROM (
               SELECT r.payload FROM webhook_receipts r
@@ -148,7 +158,9 @@ export function registerUpsellOperatorAudit(app: FastifyInstance) {
             ) proof
           ) ELSE NULL END AS receipt_payloads
         FROM tracking_orders o
+        LEFT JOIN tracking_upsell_operator_credits credit ON credit.order_id=o.id AND credit.project_id=o.project_id
         WHERE o.project_id=${access.projectId} AND o.paid_at IS NOT NULL
+          AND (${access.all} OR credit.operator_id=${req.user!.sub})
           AND o.provider IN ('vendepay','syzepay')
           AND (o.order_kind='upsell' OR o.order_kind ~ '^upsell_[2-9][0-9]*$')
           AND (
@@ -162,20 +174,20 @@ export function registerUpsellOperatorAudit(app: FastifyInstance) {
             ))
           )
           AND o.paid_at >= (SELECT min(opened_at) FROM tracking_upsell_operator_attempts WHERE project_id=${access.projectId})
-        ORDER BY o.paid_at DESC,o.id DESC LIMIT ${limit}
-      ` : [];
+        ORDER BY o.paid_at DESC,o.id DESC
+      `;
       const approvals: Approval[] = candidates.filter(hasGatewayApproval).map(({ receipt_payloads: _proof, ...row }) => row);
       const { summary, unattributed_totals } = operatorAuditSummary(attempts, approvals);
-      const names = new Map(await Promise.all([...new Set(attempts.map(row => row.operator_id))].map(async id => {
+      const names = new Map(await Promise.all([...new Set(summary.map(row => row.operator_id))].map(async id => {
         const user = await app.userStore.maybeGetById(id);
         return [id, user?.name ?? null] as const;
       })));
       return {
-        scope: access.all ? 'offer' : 'self', attempts: attempts.map(row => ({ ...row, operator_name: names.get(row.operator_id) ?? null })),
-        approvals: approvals.map(row => ({ ...row, amount_minor: row.amount_minor === null ? null : Number(row.amount_minor), operator_id: null, attribution: 'operator_not_determined' })),
+        scope: access.all ? 'offer' : 'self', attempts: attempts.slice(0,limit).map(row => ({ ...row, operator_name: names.get(row.operator_id) ?? null })),
+        approvals: approvals.slice(0,limit).map(row => ({ ...row, amount_minor: row.amount_minor === null ? null : Number(row.amount_minor), operator_id: row.operator_id ?? null, attribution: row.operator_id ? 'last_preapproval_click' : 'operator_not_determined' })),
         summary: summary.map(row => ({ ...row, operator_name: names.get(row.operator_id) ?? null })), unattributed_totals,
-        limit, summary_scope: 'displayed_rows',
-        attribution_notice: 'Aprovações da oferta desde o início dos logs. Sem identificador da tentativa devolvido pelo gateway, o operador não pode ser determinado. Aberturas não comprovam compra.',
+        limit, summary_scope: 'all_recorded_history',
+        attribution_notice: 'Upsell aprovado atribuído ao último clique registrado antes da aprovação, na mesma compra de origem, etapa e gateway. É uma regra de crédito operacional, não prova de quem concluiu o pagamento. Valores brutos aprovados; devoluções não descontadas. Sem cruzamento único, fica sem operador. Valores sem conversão em reais permanecem na moeda original.',
       };
     },
   );

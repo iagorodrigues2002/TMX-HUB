@@ -3097,7 +3097,7 @@ export const apiClient = {
     scope: 'offer' | 'self';
     attempts: Array<{id: string; operator_id: string; operator_name?: string | null; order_id: string; stage_id: string; stage_key: string; provider: string; opened_at: string}>;
     approvals: Array<{order_id: string; stage_key: string; provider: string; approved_at: string; amount_minor: number | null; currency: string | null; operator_id: string | null; attribution: string}>;
-    summary: Array<{operator_id: string; operator_name?: string | null; openings: number; confirmed_purchases: number; amounts: Array<{currency: string; amount_minor: number}>}>;
+    summary: Array<{operator_id: string; operator_name?: string | null; openings: number; confirmed_purchases: number; amounts: Array<{currency: string | null; amount_minor: number | null}>}>;
     unattributed_totals: Array<{currency: string | null; count: number; amount_minor: number | null}>;
     attribution_notice: string;
   }> {

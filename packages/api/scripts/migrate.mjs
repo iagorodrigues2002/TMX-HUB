@@ -106,6 +106,7 @@ const migrations = [
   '097_ads_intelligence_campaign_exclusions.sql',
   '098_upsell_operator_audit.sql',
   '099_paid_attribution_snapshot.sql',
+  '100_upsell_operator_last_click.sql',
 ];
 
 await sql`

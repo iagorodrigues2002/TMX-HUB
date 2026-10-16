@@ -33,7 +33,8 @@ async function fixture(options: { user?: string; admin?: boolean; deny?: boolean
       expect(sql).toContain('r.tracking_order_id=o.id');
       expect(sql).toContain('r.order_id=o.id');
       expect(sql).not.toContain('tracking_upsell_manual_test_results');
-      return [{...approval,receipt_payloads:[{transaction_id:'real-transaction',status:'paid'}]},{...approval,order_id:'syze-upsell',provider:'syzepay',currency:'BRL',amount_minor:12417,receipt_payloads:null}];
+      const rows=[{...approval,operator_id:options.admin ? null : options.user??'owner-1',receipt_payloads:[{transaction_id:'real-transaction',status:'paid'}]},{...approval,order_id:'syze-upsell',provider:'syzepay',currency:'BRL',amount_minor:12417,receipt_payloads:null}];
+      return options.admin ? rows : rows.slice(0,1);
     }
     return [];
   });
@@ -127,18 +128,21 @@ describe('upsell operator audit',()=>{
       expect(response.statusCode).toBe(404);expect(statements).toHaveLength(0);
     } finally {await app.close();}
   });
-  it.each(['member-1','owner-1'])('exposes only %s own openings and no offer-wide approvals, including normal owners',async(user)=>{
+  it.each(['member-1','owner-1'])('exposes only %s own openings and credited approvals, including normal owners',async(user)=>{
     const {app,statements}=await fixture({user});
     try {
       const response=await app.inject({method:'GET',url:logUrl});
-      expect(response.json()).toMatchObject({scope:'self',approvals:[],summary_scope:'displayed_rows'});
+      expect(response.json()).toMatchObject({scope:'self',summary_scope:'all_recorded_history'});
+      expect(response.json().approvals).toHaveLength(1);
+      expect(response.json().approvals[0].operator_id).toBe(user);
+      expect(response.json().summary[0].confirmed_purchases).toBe(1);
       expect(response.json().attempts[0]).toMatchObject({operator_id:user,operator_name:'Operador TMX'});
       expect(JSON.stringify(response.json())).not.toContain('do-not-expose');
-      expect(statements.some(s=>s.includes('FROM tracking_orders o'))).toBe(false);
+      expect(statements.find(s=>s.includes('FROM tracking_orders o'))).toContain('OR credit.operator_id=?');
       expect(statements.some(s=>s.includes('OR operator_id=?'))).toBe(true);
     } finally {await app.close();}
   });
-  it('shows gateway-paid purchases separately without assigning the only/latest operator',async()=>{
+  it('keeps gateway-paid purchases with no immutable credit unassigned',async()=>{
     const {app}=await fixture({admin:true});
     try {
       const response=await app.inject({method:'GET',url:logUrl});
@@ -155,6 +159,22 @@ describe('upsell operator audit',()=>{
   });
   it('does not invent a zero amount when payment value or currency is unknown',()=>{
     expect(operatorAuditSummary([],[{...approval,amount_minor:null,currency:null}]).unattributed_totals).toEqual([{currency:null,count:1,amount_minor:null}]);
+  });
+  it('groups credited purchases once per person/order and uses saved BRL conversions',()=>{
+    const rows=[{...approval,operator_id:'member-1',amount_brl_minor:13000},
+      {...approval,operator_id:'member-1',amount_brl_minor:13000},
+      {...approval,order_id:'second',operator_id:'member-1',currency:'EUR',amount_brl_minor:15000},
+      {...approval,order_id:'third',operator_id:'member-2',amount_minor:900}];
+    const result=operatorAuditSummary([attempt,{...attempt,id:'second-attempt',operator_id:'member-2'}],rows);
+    expect(result.summary).toHaveLength(2);
+    expect(result.summary[0]).toMatchObject({operator_id:'member-1',confirmed_purchases:2,amounts:[{currency:'BRL',amount_minor:28000,count:2}]});
+    expect(result.summary[1]).toMatchObject({operator_id:'member-2',confirmed_purchases:1,amounts:[{currency:'USD',amount_minor:900,count:1}]});
+    expect(result.unattributed_totals).toEqual([]);
+  });
+  it('summarizes beyond fifty openings rather than truncating totals',()=>{
+    const attempts=Array.from({length:75},(_,i)=>({...attempt,id:`click-${i}`}));
+    const approvals=Array.from({length:75},(_,i)=>({...approval,order_id:`sale-${i}`,operator_id:'member-1',amount_brl_minor:100}));
+    expect(operatorAuditSummary(attempts,approvals).summary[0]).toMatchObject({openings:75,confirmed_purchases:75,amounts:[{currency:'BRL',amount_minor:7500,count:75}]});
   });
   it('rejects manual imports without paid receipts and a refund receipt retaining generic completed status',()=>{
     expect(hasGatewayApproval({...approval,receipt_payloads:[]})).toBe(false);
