@@ -215,7 +215,7 @@ const plugin: FastifyPluginAsync = async (app) => {
     if (from && to && ads.size) {
       const facts = await app.db`
         WITH resolved AS (
-          SELECT o.*, CASE WHEN o.order_kind='front' OR NULLIF(o.attribution_source->>'ad_id','') IS NOT NULL OR (NULLIF(o.attribution_source->>'campaign_name','') IS NOT NULL AND NULLIF(o.attribution_source->>'ad_name','') IS NOT NULL) THEN o.attribution_source ELSE parent.source END AS source
+          SELECT o.*, CASE WHEN o.attribution_locked_at IS NOT NULL OR o.order_kind='front' OR NULLIF(o.attribution_source->>'ad_id','') IS NOT NULL OR (NULLIF(o.attribution_source->>'campaign_name','') IS NOT NULL AND NULLIF(o.attribution_source->>'ad_name','') IS NOT NULL) THEN o.attribution_source ELSE parent.source END AS source
           FROM tracking_orders o
           LEFT JOIN LATERAL (
             SELECT (array_agg(f.attribution_source))[1] AS source

@@ -109,9 +109,10 @@ export function createTikTokWorker(): Worker<TikTokJobData> | null {
              cart.product_id cart_product_id,cart.product_name cart_product_name,cart.amount_minor cart_amount_minor,cart.currency cart_currency,
              COALESCE(event.event_url, latest.event_url) event_url,
              COALESCE(event.referrer, latest.referrer) referrer,
+             CASE WHEN o.attribution_locked_at IS NOT NULL THEN o.attribution_source ELSE
              COALESCE(visitor.last_source,'{}'::jsonb) || COALESCE(visitor.click_ids,'{}'::jsonb) ||
              COALESCE(latest.source,'{}'::jsonb) || COALESCE(latest.click_ids,'{}'::jsonb) ||
-             COALESCE(event.source,'{}'::jsonb) || COALESCE(event.click_ids,'{}'::jsonb) source,
+             COALESCE(event.source,'{}'::jsonb) || COALESCE(event.click_ids,'{}'::jsonb) END source,
              COALESCE(event.client_ip,latest.client_ip) client_ip,COALESCE(event.user_agent,latest.user_agent) user_agent,
              d.created_at
       FROM tracking_tiktok_deliveries d

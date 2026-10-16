@@ -370,14 +370,18 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       JOIN meta_pixels mp ON mp.id = md.pixel_id
       LEFT JOIN tracking_orders o ON o.id = md.order_id
       LEFT JOIN tracking_events direct_event
-        ON direct_event.project_id = md.project_id AND direct_event.id = md.event_id
+        ON direct_event.project_id = md.project_id
+       AND direct_event.id = CASE WHEN o.attribution_locked_at IS NOT NULL
+         THEN o.attribution_event_id ELSE md.event_id END
       LEFT JOIN tracking_visitors tv
         ON tv.project_id = md.project_id
+       AND o.attribution_locked_at IS NULL
        AND tv.visitor_id = COALESCE(o.visitor_id, direct_event.visitor_id)
       LEFT JOIN LATERAL (
         SELECT te.event_url, te.source
         FROM tracking_events te
         WHERE te.project_id = md.project_id
+          AND o.attribution_locked_at IS NULL
           AND te.visitor_id = COALESCE(o.visitor_id, direct_event.visitor_id)
           AND te.source <> '{}'::jsonb
         ORDER BY te.received_at DESC

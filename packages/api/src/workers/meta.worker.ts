@@ -172,6 +172,7 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
                    AND te.visitor_id = COALESCE(o.visitor_id, direct_event.visitor_id)
                  ORDER BY te.received_at DESC LIMIT 1
                )) AS event_url,
+               CASE WHEN o.attribution_locked_at IS NOT NULL THEN o.attribution_source ELSE
                COALESCE(o.attribution_source, '{}'::jsonb) ||
                COALESCE(tv.first_source, '{}'::jsonb) ||
                COALESCE(tv.last_source, '{}'::jsonb) ||
@@ -183,7 +184,7 @@ export function createMetaWorker(): Worker<MetaJobData> | null {
                    AND te.visitor_id = COALESCE(o.visitor_id, direct_event.visitor_id)
                    AND te.source <> '{}'::jsonb
                  ORDER BY te.received_at DESC LIMIT 1
-               ), '{}'::jsonb) AS source,
+               ), '{}'::jsonb) END AS source,
                COALESCE(direct_event.client_ip, (
                  SELECT te.client_ip FROM tracking_events te
                  WHERE te.project_id = md.project_id

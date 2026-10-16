@@ -76,6 +76,7 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
                COALESCE(o.occurred_at, direct_event.received_at, d.created_at) AS occurred_at,
                o.paid_at,
                COALESCE(o.chargeback_at, o.refunded_at) AS lifecycle_at,
+               (CASE WHEN o.attribution_locked_at IS NOT NULL THEN o.attribution_source ELSE
                COALESCE(visitor.first_source, '{}'::jsonb) ||
                COALESCE(visitor.last_source, '{}'::jsonb) ||
                COALESCE(visitor.click_ids, '{}'::jsonb) ||
@@ -83,7 +84,7 @@ export function createUtmifyDeliveryWorker(): Worker<UtmifyDeliveryJobData> | nu
                COALESCE(best_event.click_ids, '{}'::jsonb) ||
                COALESCE(direct_event.source, '{}'::jsonb) ||
                COALESCE(direct_event.click_ids, '{}'::jsonb) ||
-               COALESCE(o.attribution_source, '{}'::jsonb) ||
+               COALESCE(o.attribution_source, '{}'::jsonb) END) ||
                jsonb_strip_nulls(jsonb_build_object(
                  'payment_method', COALESCE(o.payment_method, 'pix'),
                  'product_id', o.product->>'id',

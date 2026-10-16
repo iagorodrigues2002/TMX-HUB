@@ -185,6 +185,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
               LIMIT 1
             ) best ON true
             WHERE o.project_id=${project.id} AND o.status='paid' AND o.order_kind='front'
+              AND o.attribution_locked_at IS NULL
           )
           UPDATE tracking_orders o
           SET attribution_source=o.attribution_source || attributed.recovered, updated_at=now()
