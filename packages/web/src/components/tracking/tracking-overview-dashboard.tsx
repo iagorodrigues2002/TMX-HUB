@@ -5,11 +5,29 @@ import { DataState } from '@/components/ui/data-state';
 import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api-client';
 import { formatMoney, useDisplayCurrency } from '@/lib/currency-preference';
+import { formatRefundRevenuePercentage, refundRevenuePercentage } from '@/lib/overview-financial';
+import { usePrivacy } from '@/lib/privacy-context';
 import { useQuery } from '@tanstack/react-query';
 import { LayoutDashboard } from 'lucide-react';
 import { useState } from 'react';
 
 const SAO_PAULO_TIME_ZONE = 'America/Sao_Paulo';
+
+function reversedMetrics(row: {
+  refunded_revenue_brl_minor: string; chargeback_revenue_brl_minor: string;
+  refunded_revenue_usd_minor: string; chargeback_revenue_usd_minor: string;
+  refund_chargeback_fee_brl_minor: string; refund_chargeback_fee_usd_minor: string;
+  gross_revenue_brl_minor: string; gross_revenue_usd_minor: string;
+}, currency: string) {
+  const brl = Number(row.refunded_revenue_brl_minor) + Number(row.chargeback_revenue_brl_minor);
+  const usd = Number(row.refunded_revenue_usd_minor) + Number(row.chargeback_revenue_usd_minor);
+  const impactBrl = brl + Number(row.refund_chargeback_fee_brl_minor);
+  const impactUsd = usd + Number(row.refund_chargeback_fee_usd_minor);
+  const gross = Number(currency === 'USD' ? row.gross_revenue_usd_minor : row.gross_revenue_brl_minor);
+  return { brl: String(brl), usd: String(usd), impactBrl: String(impactBrl), impactUsd: String(impactUsd),
+    percentage: formatRefundRevenuePercentage(refundRevenuePercentage(currency === 'USD' ? usd : brl, gross)),
+    impactPercentage: formatRefundRevenuePercentage(refundRevenuePercentage(currency === 'USD' ? impactUsd : impactBrl, gross)) };
+}
 
 function saoPauloDate(date = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -27,6 +45,8 @@ function integer(value: number | undefined) {
 }
 
 export function TrackingOverviewDashboard() {
+  const { isPrivate } = usePrivacy();
+  const percentage = (value: string) => isPrivate ? '****' : value;
   const [from, setFrom] = useState(() => saoPauloDate());
   const [to, setTo] = useState(() => saoPauloDate());
   const [displayCurrency] = useDisplayCurrency();
@@ -102,6 +122,7 @@ export function TrackingOverviewDashboard() {
       ) : (
         overview.data.accounts.map((account) => {
           const totals = account.totals;
+          const reversed = reversedMetrics(totals, displayCurrency);
           return (
             <section
               key={account.owner_id}
@@ -141,23 +162,14 @@ export function TrackingOverviewDashboard() {
                   </div>
                   <div className="tmx-kpi-strip-cell">
                     <div className="tmx-kpi-strip-head">
-                      <span className="tmx-kpi-strip-label">Reembolsos + chargeback</span>
+                      <span className="tmx-kpi-strip-label">Reembolsos e chargebacks</span>
                     </div>
                     <p className="mono-num tmx-kpi-strip-value">
-                      {pick(
-                        String(
-                          Number(totals?.refunded_revenue_brl_minor ?? 0) +
-                            Number(totals?.chargeback_revenue_brl_minor ?? 0),
-                        ),
-                        String(
-                          Number(totals?.refunded_revenue_usd_minor ?? 0) +
-                            Number(totals?.chargeback_revenue_usd_minor ?? 0),
-                        ),
-                      )}
+                      {pick(reversed.brl, reversed.usd)}
                     </p>
                     <p className="tmx-kpi-strip-detail">
                       {integer((totals?.refunded_orders ?? 0) + (totals?.chargeback_orders ?? 0))}{' '}
-                      pedidos
+                      pedidos · {percentage(reversed.percentage)} do bruto
                     </p>
                   </div>
                   <div className="tmx-kpi-strip-cell">
@@ -179,16 +191,16 @@ export function TrackingOverviewDashboard() {
                   </div>
                   <div className="tmx-kpi-strip-cell">
                     <div className="tmx-kpi-strip-head">
-                      <span className="tmx-kpi-strip-label">Taxa de reembolso/chargeback</span>
+                      <span className="tmx-kpi-strip-label">Impacto total das devoluções</span>
                     </div>
                     <p className="mono-num tmx-kpi-strip-value text-danger">
-                      {pick(
-                        totals?.refund_chargeback_fee_brl_minor,
-                        totals?.refund_chargeback_fee_usd_minor,
+                      {(totals?.fees_missing_operations ?? 0) > 0 ? '—' : pick(
+                        reversed.impactBrl,
+                        reversed.impactUsd,
                       )}
                     </p>
                     <p className="tmx-kpi-strip-detail">
-                      {integer(totals?.refund_chargeback_fee_count)} ocorrências · US$ 27 cada
+                      {(totals?.fees_missing_operations ?? 0) > 0 ? 'Impacto indisponível: taxas não configuradas' : `${percentage(reversed.impactPercentage)} do bruto · inclui multas configuradas por gateway`}
                     </p>
                   </div>
                 </div>
@@ -222,6 +234,8 @@ export function TrackingOverviewDashboard() {
                 </div>
               </div>
 
+              <p className="text-xs text-white/45">Devoluções pela data da ocorrência; podem ser de compras anteriores. Percentuais sobre o faturamento bruto do período, não sobre uma coorte de compras.</p>
+
               <div className="overflow-x-auto rounded-lg border border-white/[0.08]">
                 <table className="w-full min-w-[820px] border-collapse text-sm">
                   <thead>
@@ -230,17 +244,16 @@ export function TrackingOverviewDashboard() {
                       <th className="p-3 text-right font-medium tabular-nums">Pedidos</th>
                       <th className="p-3 text-right font-medium tabular-nums">Bruto</th>
                       <th className="p-3 text-right font-medium tabular-nums">Com erro</th>
-                      <th className="p-3 text-right font-medium tabular-nums">Reembolsos</th>
-                      <th className="p-3 text-right font-medium tabular-nums">Chargeback</th>
+                      <th className="p-3 text-right font-medium tabular-nums">Reembolsos e chargebacks</th>
                       <th className="p-3 text-right font-medium tabular-nums">Taxas</th>
-                      <th className="p-3 text-right font-medium tabular-nums">Taxa R/CB</th>
+                      <th className="p-3 text-right font-medium tabular-nums">Impacto total c/ multas</th>
                       <th className="p-3 text-right font-medium tabular-nums">Em reserva</th>
                       <th className="p-3 text-right font-medium tabular-nums">Líquido agora</th>
                       <th className="p-3 text-right font-medium tabular-nums">Líquido total</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {account.offers.map((offer) => (
+                    {account.offers.map((offer) => { const offerReversed = reversedMetrics(offer, displayCurrency); return (
                       <tr
                         key={offer.offer_id}
                         className="border-b border-white/[0.05] text-white/75 last:border-0"
@@ -261,26 +274,21 @@ export function TrackingOverviewDashboard() {
                           </span>
                         </td>
                         <td className="mono-num p-3 text-right tabular-nums text-amber-200/80">
-                          {pick(offer.refunded_revenue_brl_minor, offer.refunded_revenue_usd_minor)}
-                        </td>
-                        <td className="mono-num p-3 text-right tabular-nums text-danger/80">
-                          {pick(
-                            offer.chargeback_revenue_brl_minor,
-                            offer.chargeback_revenue_usd_minor,
-                          )}
+                          {pick(offerReversed.brl, offerReversed.usd)}
+                          <span className="mt-1 block text-[10px] text-white/50">{percentage(offerReversed.percentage)} do bruto</span>
                         </td>
                         <td className="mono-num p-3 text-right tabular-nums text-white/50">
                           {pick(offer.fees_brl_minor, offer.fees_usd_minor)}
                         </td>
                         <td className="mono-num p-3 text-right tabular-nums text-danger/80">
                           <span className="block">
-                            {pick(
-                              offer.refund_chargeback_fee_brl_minor,
-                              offer.refund_chargeback_fee_usd_minor,
+                            {(offer.fees_missing_operations ?? 0) > 0 ? '—' : pick(
+                              offerReversed.impactBrl,
+                              offerReversed.impactUsd,
                             )}
                           </span>
                           <span className="mt-1 block text-[10px] text-white/35">
-                            {integer(offer.refund_chargeback_fee_count)} ocorrências
+                            {(offer.fees_missing_operations ?? 0) > 0 ? 'Taxas não configuradas' : `${percentage(offerReversed.impactPercentage)} do bruto`}
                           </span>
                         </td>
                         <td className="mono-num p-3 text-right tabular-nums text-white/50">
@@ -293,7 +301,7 @@ export function TrackingOverviewDashboard() {
                           {pick(offer.net_revenue_brl_minor, offer.net_revenue_usd_minor)}
                         </td>
                       </tr>
-                    ))}
+                    ); })}
                   </tbody>
                 </table>
               </div>

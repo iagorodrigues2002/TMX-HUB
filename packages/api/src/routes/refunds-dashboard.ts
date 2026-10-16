@@ -1,146 +1,136 @@
-import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { convertToBrlMinor } from '../services/exchange-rate.js';
-import { saoPauloParts } from '../services/intraday-store.js';
+import { canAccessOffer } from '../services/offer-store.js';
+import { VENDEPAY_PENALTY_MINOR } from '../lib/gateway-fee-model.js';
 import { saoPauloDayRange } from '../services/utmify-sync.js';
+import {
+  buildRefundAnalytics,
+  localDay,
+  shiftDay,
+  validDate,
+  summarizeRefunds,
+  type RefundOrder,
+} from '../services/refund-analytics.js';
 
-const QuerySchema = z.object({
-  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+const schema = z.object({
+  from: z.string().refine(validDate).optional(),
+  to: z.string().refine(validDate).optional(),
   offer_id: z.string().min(1).optional(),
   product: z.string().min(1).max(300).optional(),
   vendepay: z.enum(['mainex', 'cobrak']).optional(),
+  provider: z
+    .string()
+    .regex(/^[a-z_]+$/)
+    .optional(),
+  interval: z.enum(['day', 'week', 'month']).default('day'),
 });
-
-const REFUND_CHARGEBACK_FEE_USD_MINOR = 2_700;
-const unavailable = { error: 'tracking_database_unavailable' };
-
-/**
- * Read-only financial view. Lifecycle timestamps are deliberately used here
- * rather than `updated_at`, so replaying an old webhook can never move an old
- * refund into today's report.
- */
-const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
-  app.get<{
-    Querystring: { from?: string; to?: string; offer_id?: string; product?: string; vendepay?: 'mainex' | 'cobrak' };
-  }>('/tracking/refunds-dashboard', async (req, reply) => {
+const plugin: FastifyPluginAsync = async (app) => {
+  app.get('/tracking/refunds-dashboard', async (req, reply) => {
     if (!req.user) return reply.code(401).send({ error: 'unauthorized' });
-    if (!app.db) return reply.code(503).send(unavailable);
-    const parsed = QuerySchema.safeParse(req.query);
+    if (!app.db) return reply.code(503).send({ error: 'tracking_database_unavailable' });
+    const parsed = schema.safeParse(req.query);
     if (!parsed.success) return reply.code(400).send({ error: 'invalid_refund_filter' });
-
-    const today = saoPauloParts(new Date()).date;
-    const fromDate = parsed.data.from ?? today;
-    const toDate = parsed.data.to ?? today;
-    if (fromDate > toDate || toDate > today) return reply.code(400).send({ error: 'invalid_range' });
-    const from = new Date(saoPauloDayRange(fromDate).from);
-    const to = new Date(saoPauloDayRange(toDate).to);
-    const accessible = await app.offerStore.listAccessible(req.user.sub, req.user.role === 'admin');
-    const selectedOffers = parsed.data.offer_id
-      ? accessible.filter((offer) => offer.id === parsed.data.offer_id)
-      : accessible;
-    if (parsed.data.offer_id && selectedOffers.length === 0) {
-      return reply.code(404).send({ error: 'offer_not_found' });
-    }
-    const offerIds = selectedOffers.map((offer) => offer.id);
-    const offerName = new Map(selectedOffers.map((offer) => [offer.id, offer.name]));
-    if (!offerIds.length) return { from: fromDate, to: toDate, offers: [], products: [], vendepays: [], daily: [], items: [], totals: emptyTotals() };
-
-    const productFilter = parsed.data.product ?? null;
-    const vendepayFilter = parsed.data.vendepay ?? null;
-    const rows = await app.db<Array<{
-      id: string; offer_id: string; external_id: string; status: 'refunded' | 'chargeback';
-      amount_minor: number | null; currency: string | null; amount_brl_minor: string | null;
-      product_name: string; order_kind: string; lifecycle_at: string; buyer: { name?: string; email?: string };
-      connection_name: string | null;
-    }>>`
-      SELECT o.id, p.offer_id, o.external_id, o.status, o.amount_minor, o.currency,
-             o.amount_brl_minor::text, COALESCE(NULLIF(o.product->>'name',''), 'Produto não identificado') AS product_name,
-             o.order_kind, COALESCE(o.refunded_at, o.chargeback_at) AS lifecycle_at, o.buyer,
-             vc.name AS connection_name
-      FROM tracking_orders o
-      JOIN tracking_projects p ON p.id=o.project_id
-      LEFT JOIN vendepay_connections vc ON vc.id=o.vendepay_connection_id
-      WHERE p.offer_id = ANY(${offerIds})
-        AND o.status IN ('refunded','chargeback')
-        AND COALESCE(o.refunded_at,o.chargeback_at) >= ${from}
-        AND COALESCE(o.refunded_at,o.chargeback_at) < ${to}
-        AND (${productFilter}::text IS NULL OR COALESCE(NULLIF(o.product->>'name',''), 'Produto não identificado')=${productFilter})
-        AND (
-          ${vendepayFilter}::text IS NULL
-          OR LOWER(COALESCE(vc.name, '')) LIKE '%' || ${vendepayFilter} || '%'
-          -- Accept the former labels while a rolling deployment is applying
-          -- the display-name migration.
-          OR (${vendepayFilter}='mainex' AND LOWER(COALESCE(vc.name, '')) LIKE '%iago%')
-          OR (${vendepayFilter}='cobrak' AND LOWER(COALESCE(vc.name, '')) LIKE '%lucas%')
-        )
-      ORDER BY COALESCE(o.refunded_at,o.chargeback_at) DESC, o.id DESC
-    `;
-
-    const asBrl = (row: (typeof rows)[number]) => {
-      if (row.amount_brl_minor != null) return Number(row.amount_brl_minor);
-      return row.currency === 'BRL' ? Number(row.amount_minor ?? 0) : 0;
-    };
-    const totals = emptyTotals();
-    const byOffer = new Map<string, ReturnType<typeof emptyBreakdown>>();
-    const byProduct = new Map<string, ReturnType<typeof emptyBreakdown>>();
-    const byDay = new Map<string, ReturnType<typeof emptyBreakdown>>();
-    const byVendepay = new Map<string, ReturnType<typeof emptyBreakdown>>();
-    for (const row of rows) {
-      const amount = asBrl(row);
-      apply(totals, row.status, amount);
-      const offer = byOffer.get(row.offer_id) ?? emptyBreakdown();
-      apply(offer, row.status, amount); byOffer.set(row.offer_id, offer);
-      const product = byProduct.get(row.product_name) ?? emptyBreakdown();
-      apply(product, row.status, amount); byProduct.set(row.product_name, product);
-      const vendepay = vendepayLabel(row.connection_name);
-      const account = byVendepay.get(vendepay) ?? emptyBreakdown();
-      apply(account, row.status, amount); byVendepay.set(vendepay, account);
-      const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' })
-        .format(new Date(row.lifecycle_at));
-      const daily = byDay.get(day) ?? emptyBreakdown();
-      apply(daily, row.status, amount); byDay.set(day, daily);
-    }
-    totals.fee_usd_minor = totals.count * REFUND_CHARGEBACK_FEE_USD_MINOR;
-    const feeConversion = await convertToBrlMinor(totals.fee_usd_minor, 'USD', app.db);
-    totals.fee_brl_minor = feeConversion?.brlMinor ?? 0;
-    totals.fee_exchange_rate = feeConversion?.rate ?? null;
-    const withVendepayFee = (connection_name: string, value: ReturnType<typeof emptyBreakdown>) => ({
-      connection_name,
-      ...value,
-      fee_usd_minor: value.count * REFUND_CHARGEBACK_FEE_USD_MINOR,
-      fee_brl_minor: feeConversion ? Math.round(value.count * REFUND_CHARGEBACK_FEE_USD_MINOR * feeConversion.rate) : 0,
-    });
+    const asOf = new Date();
+    const q = parsed.data,
+      today = localDay(asOf),
+      from = q.from ?? today,
+      to = q.to ?? today;
+    if (from > to || to > today || Number(to.slice(0, 4)) - Number(from.slice(0, 4)) > 10)
+      return reply.code(400).send({ error: 'invalid_range' });
+    const accessible = (
+      await app.offerStore.listAccessible(req.user.sub, req.user.role === 'admin')
+    ).filter((o) => canAccessOffer(o, req.user!.sub, req.user!.role === 'admin'));
+    const offers = q.offer_id ? accessible.filter((o) => o.id === q.offer_id) : accessible;
+    if (q.offer_id && !offers.length) return reply.code(404).send({ error: 'offer_not_found' });
+    const span = Math.round((Date.parse(to) - Date.parse(from)) / 86400000) + 1;
+    const previousFrom = shiftDay(from, -span),
+      start = new Date(saoPauloDayRange(previousFrom).from),
+      end = new Date(saoPauloDayRange(to).to);
+    const ids = offers.map((o) => o.id),
+      names = new Map(offers.map((o) => [o.id, o.name]));
+    const rows = ids.length
+      ? await app.db<
+          Array<
+            Record<string, unknown> & {
+              id: string;
+              offer_id: string;
+              provider: string;
+              connection_name: string;
+              product_name: string;
+              paid_at: string | null;
+              reversal_at: string | null;
+              amount_brl_minor: string | null;
+              penalty_brl_minor: string | null;
+            }
+          >
+        >`
+      WITH scoped AS (
+        SELECT o.*,p.offer_id,LEAST(o.refunded_at,o.chargeback_at) reversal_at,
+          COALESCE(NULLIF(o.product->>'name',''),'Produto não identificado') product_name,
+          COALESCE(vc.name,gc.name,sc.name,INITCAP(o.provider)) connection_name,
+          COALESCE(o.amount_brl_minor,CASE WHEN o.currency='BRL' THEN o.amount_minor WHEN amount_fx.rate IS NOT NULL THEN round(o.amount_minor*amount_fx.rate)::bigint END) brl,
+          CASE WHEN lower(trim(o.provider))='vendepay' THEN jsonb_build_object('refund_fee_minor',${VENDEPAY_PENALTY_MINOR}::int,'chargeback_fee_minor',${VENDEPAY_PENALTY_MINOR}::int,'penalty_currency','USD')
+            ELSE COALESCE(gc.fee_settings,sc.fee_settings,'{}'::jsonb) END fee_settings
+        FROM tracking_orders o JOIN tracking_projects p ON p.id=o.project_id
+        LEFT JOIN vendepay_connections vc ON vc.id=o.vendepay_connection_id AND vc.project_id=p.id
+        LEFT JOIN tracking_gateway_connections gc ON gc.id=o.gateway_connection_id AND gc.project_id=p.id AND gc.provider=lower(trim(o.provider))
+        LEFT JOIN syzepay_company_connections sc ON sc.id=o.syzepay_connection_id AND lower(trim(o.provider))='syzepay'
+        LEFT JOIN exchange_rate_cache amount_fx ON amount_fx.base_currency=o.currency AND amount_fx.target_currency='BRL'
+        WHERE p.offer_id=ANY(${ids})
+          AND ((o.paid_at>=${start} AND o.paid_at<${end}) OR (LEAST(o.refunded_at,o.chargeback_at)>=${start} AND LEAST(o.refunded_at,o.chargeback_at)<${end}))
+          AND (${q.product ?? null}::text IS NULL OR COALESCE(NULLIF(o.product->>'name',''),'Produto não identificado')=${q.product ?? null})
+          AND (${q.provider ?? null}::text IS NULL OR lower(trim(o.provider))=${q.provider ?? null})
+          AND (${q.vendepay ?? null}::text IS NULL OR (lower(trim(o.provider))='vendepay' AND (lower(COALESCE(vc.name,'')) LIKE '%'||${q.vendepay ?? null}||'%' OR (${q.vendepay ?? null}='mainex' AND lower(COALESCE(vc.name,'')) LIKE '%iago%') OR (${q.vendepay ?? null}='cobrak' AND lower(COALESCE(vc.name,'')) LIKE '%lucas%'))))
+      ), tariffs AS (
+        SELECT *,CASE WHEN chargeback_at IS NOT NULL AND (refunded_at IS NULL OR chargeback_at<refunded_at) THEN fee_settings->>'chargeback_fee_minor' ELSE fee_settings->>'refund_fee_minor' END fee_minor,
+          COALESCE(fee_settings->>'penalty_currency',fee_settings->>'fee_currency') fee_currency FROM scoped
+      ) SELECT t.id,t.offer_id,t.provider,t.connection_name,t.product_name,t.external_id,t.status,t.order_kind,
+        jsonb_build_object('name',t.buyer->>'name','email',t.buyer->>'email') buyer,
+        t.paid_at,t.reversal_at,t.brl::text amount_brl_minor,
+        CASE WHEN t.fee_minor ~ '^[0-9]{1,10}$' THEN CASE WHEN t.fee_minor::numeric=0 THEN 0 WHEN t.fee_currency='BRL' THEN t.fee_minor::numeric WHEN fx.rate IS NOT NULL THEN round(t.fee_minor::numeric*fx.rate) END END::text penalty_brl_minor
+      FROM tariffs t LEFT JOIN exchange_rate_cache fx ON fx.base_currency=t.fee_currency AND fx.target_currency='BRL'
+    `
+      : [];
+    const normalized: RefundOrder[] = rows.map((r) => ({
+      ...r,
+      offer_name: names.get(r.offer_id) ?? r.offer_id,
+      amount_brl_minor: r.amount_brl_minor === null ? null : Number(r.amount_brl_minor),
+      penalty_brl_minor: r.penalty_brl_minor === null ? null : Number(r.penalty_brl_minor),
+    }));
+    const analytics = buildRefundAnalytics(normalized, from, to, q.interval, today);
     return {
-      from: fromDate, to: toDate, time_zone: 'America/Sao_Paulo',
-      offers: selectedOffers.map((offer) => ({ offer_id: offer.id, offer_name: offer.name, ...(byOffer.get(offer.id) ?? emptyBreakdown()) })),
-      products: [...byProduct.entries()].map(([product_name, value]) => ({ product_name, ...value })).sort((a,b) => b.brl_minor - a.brl_minor),
-      vendepays: ['VendePay Mainex', 'VendePay Cobrak'].map((connection_name) => withVendepayFee(connection_name, byVendepay.get(connection_name) ?? emptyBreakdown()))
-        .concat([...byVendepay.entries()].filter(([name]) => name !== 'VendePay Mainex' && name !== 'VendePay Cobrak').map(([connection_name, value]) => withVendepayFee(connection_name, value)))
-        .sort((a,b) => b.brl_minor - a.brl_minor),
-      daily: [...byDay.entries()].map(([date, value]) => ({ date, ...value })).sort((a,b) => a.date.localeCompare(b.date)),
-      items: rows.map((row) => ({ ...row, connection_name: vendepayLabel(row.connection_name), offer_name: offerName.get(row.offer_id) ?? row.offer_id, brl_minor: asBrl(row) })),
-      totals,
+      from,
+      to,
+      as_of: asOf.toISOString(),
+      time_zone: 'America/Sao_Paulo',
+      interval: q.interval,
+      ...analytics,
+      offers: analytics.rankings.offers.map((r) => ({
+        ...r,
+        offer_id: r.key,
+        offer_name: r.label,
+      })),
+      products: analytics.rankings.products.map((r) => ({ ...r, product_name: r.label })),
+      vendepays: [...new Set(normalized.map((r) => r.connection_name))].map((connection_name) => ({
+        connection_name,
+        ...summarizeRefunds(
+          normalized.filter((r) => r.connection_name === connection_name),
+          from,
+          to,
+        ),
+      })),
+      providers: [...new Set(normalized.map((r) => r.provider))].sort(),
+      items: normalized
+        .filter(
+          (r) => r.reversal_at && localDay(r.reversal_at) >= from && localDay(r.reversal_at) <= to,
+        )
+        .sort((a, b) => Date.parse(b.reversal_at!) - Date.parse(a.reversal_at!))
+        .slice(0, 500)
+        .map((r) => ({ ...r, lifecycle_at: r.reversal_at, brl_minor: r.amount_brl_minor })),
+      fee_basis: 'configured_gateway_penalties_cached_exchange_rate',
+      cohort_basis: 'selected_purchase_dates_as_of_now',
+      items_limit: 500,
     };
   });
 };
-
-function emptyBreakdown() { return { refunded_orders: 0, chargeback_orders: 0, refunded_brl_minor: 0, chargeback_brl_minor: 0, count: 0, brl_minor: 0 }; }
-function emptyTotals() { return { ...emptyBreakdown(), fee_usd_minor: 0, fee_brl_minor: 0, fee_exchange_rate: null as number | null }; }
-function apply(target: ReturnType<typeof emptyBreakdown> | ReturnType<typeof emptyTotals>, status: 'refunded' | 'chargeback', amount: number) {
-  target.count += 1; target.brl_minor += amount;
-  if (status === 'refunded') { target.refunded_orders += 1; target.refunded_brl_minor += amount; }
-  else { target.chargeback_orders += 1; target.chargeback_brl_minor += amount; }
-}
-
-/** Uses the same connection names shown in Upsell Intelligence. */
-function vendepayLabel(connectionName: string | null) {
-  const normalized = (connectionName ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  // Keep the legacy aliases during the database migration so old rows and
-  // freshly named connections always resolve to the same public label.
-  if (normalized.includes('iago') || normalized.includes('mainex')) return 'VendePay Mainex';
-  if (normalized.includes('lucas') || normalized.includes('cobrak')) return 'VendePay Cobrak';
-  return connectionName?.trim() || 'VendePay não identificada';
-}
-
 export default plugin;

@@ -1,4 +1,6 @@
 import { z } from 'zod';
+/** Legacy VendePay contract only; never inherited by other gateways. */
+export const VENDEPAY_PENALTY_MINOR = 2_700;
 export const gatewayFeesSchema = z
   .object({
     fee_source: z.enum(['configured', 'webhook']).optional(),

@@ -17,16 +17,22 @@ describe('overview financial isolation', () => {
       net: null,
       available: null,
       missingFeeOperations: 2,
+      impact: null,
+      impactPercentage: null,
     });
   });
   it('does not combine another account or unselected offer', () => {
     expect(overviewFinancials(['mine'], [row('mine'), row('other')])).toEqual({
+      gross: null,
       fees: 1,
       reserve: 0.5,
       net: 9,
       available: 8.5,
       refunds: 0.5,
       penalties: 0.1,
+      impact: 0.6,
+      refundPercentage: null,
+      impactPercentage: null,
     });
   });
   it('does not show missing financial data as zero', () => {

@@ -30,8 +30,9 @@ import {
   ShoppingCart,
 } from 'lucide-react';
 import { useState } from 'react';
-import { overviewFinancials } from '@/lib/overview-financial';
+import { formatRefundRevenuePercentage, overviewFinancials } from '@/lib/overview-financial';
 import { GatewayOverview } from './gateway-overview';
+import { usePrivacy } from '@/lib/privacy-context';
 
 type OverviewDashboardProps =
   | {
@@ -88,6 +89,9 @@ interface OverviewDataset {
     missingFeeOperations?: number;
     refunds: number;
     penalties: number;
+    impact: number | null;
+    refundPercentage: number | null;
+    impactPercentage: number | null;
   } | null;
 }
 
@@ -350,6 +354,7 @@ function RevenueChart({
 }
 
 function Dataset({ dataset }: { dataset: OverviewDataset }) {
+  const { isPrivate } = usePrivacy();
   return (
     <section
       className="space-y-4 rounded-xl border border-cyan-300/[0.14] bg-cyan-300/[0.025] p-3 sm:p-4"
@@ -426,12 +431,12 @@ function Dataset({ dataset }: { dataset: OverviewDataset }) {
           [
             'Reembolsos e chargebacks',
             dataset.finance?.refunds,
-            'Devoluções registradas no período',
+            `${isPrivate ? '****' : formatRefundRevenuePercentage(dataset.finance?.refundPercentage ?? null)} do faturamento bruto do período`,
           ],
           [
-            'Encargos de devolução',
-            dataset.finance?.penalties,
-            'Conforme modelo financeiro configurado',
+            'Impacto total das devoluções',
+            dataset.finance?.impact,
+            `${isPrivate ? '****' : formatRefundRevenuePercentage(dataset.finance?.impactPercentage ?? null)} do bruto · inclui multas por gateway`,
           ],
           [
             'Receita líquida estimada',
@@ -459,6 +464,8 @@ function Dataset({ dataset }: { dataset: OverviewDataset }) {
         ))}
       </div>
       <p className="text-xs text-white/45">
+        Reembolsos e chargebacks são unificados pela data da devolução e podem incluir compras anteriores.
+        O percentual compara esse fluxo com o bruto do período, não com uma coorte de compras.
         Taxas e retenções calculadas pelo modelo financeiro do TMX. A cotação e as tarifas
         efetivamente liquidadas pelo gateway podem diferir.
       </p>

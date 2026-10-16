@@ -69,7 +69,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         offers.map((offer) => [offer.id, { name: offer.name, ownerId: offer.userId }] as const),
       );
       const scope = createHash('sha256')
-        .update(`gateway-fees-v2:${req.user.sub}:${offerIds.slice().sort().join(',')}`)
+        .update(`gateway-fees-v3-reversal-once:${req.user.sub}:${offerIds.slice().sort().join(',')}`)
         .digest('base64url');
 
       return app.analyticsCache.getOrSet(
@@ -153,6 +153,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             END < ${to}) AS failed_revenue_brl_minor,
         (SELECT count(*)::int FROM tracking_orders o
           WHERE o.project_id = p.id AND o.refunded_at IS NOT NULL
+            AND (o.chargeback_at IS NULL OR o.refunded_at <= o.chargeback_at)
             AND o.refunded_at >= ${from} AND o.refunded_at < ${to}) AS refunded_orders,
         (SELECT COALESCE(sum(
             CASE
@@ -166,9 +167,11 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           LEFT JOIN exchange_rate_cache rc
             ON rc.base_currency = o.currency AND rc.target_currency = 'BRL'
           WHERE o.project_id = p.id AND o.refunded_at IS NOT NULL
+            AND (o.chargeback_at IS NULL OR o.refunded_at <= o.chargeback_at)
             AND o.refunded_at >= ${from} AND o.refunded_at < ${to}) AS refunded_revenue_brl_minor,
         (SELECT count(*)::int FROM tracking_orders o
           WHERE o.project_id = p.id AND o.chargeback_at IS NOT NULL
+            AND (o.refunded_at IS NULL OR o.chargeback_at < o.refunded_at)
             AND o.chargeback_at >= ${from} AND o.chargeback_at < ${to}) AS chargeback_orders,
         (SELECT COALESCE(sum(
             CASE
@@ -182,6 +185,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           LEFT JOIN exchange_rate_cache rc
             ON rc.base_currency = o.currency AND rc.target_currency = 'BRL'
           WHERE o.project_id = p.id AND o.chargeback_at IS NOT NULL
+            AND (o.refunded_at IS NULL OR o.chargeback_at < o.refunded_at)
             AND o.chargeback_at >= ${from} AND o.chargeback_at < ${to}) AS chargeback_revenue_brl_minor,
         f.vendepay_fee_pct::text AS vendepay_fee_pct,
         f.extra_fee_minor::text AS extra_fee_minor,

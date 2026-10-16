@@ -204,6 +204,29 @@ export type RefundBreakdown = {
   count: number;
   brl_minor: number;
 };
+export type RefundFinancialTotals = {
+  count: number;
+  brl_minor: number;
+  gross_brl_minor: number;
+  sales: number;
+  rate_pct: number | null;
+  impact_brl_minor: number;
+  impact_pct: number | null;
+  fee_brl_minor: number;
+  missing_brl_orders: number;
+  missing_fee_orders: number;
+};
+export type RefundRanking = {
+  key: string;
+  label: string;
+  sales: number;
+  gross_brl_minor: number;
+  count: number;
+  brl_minor: number;
+  rate_pct: number | null;
+  fee_brl_minor: number;
+  impact_brl_minor: number;
+};
 
 function trackingPeriodParams(period?: string | TrackingPeriod) {
   const params = new URLSearchParams();
@@ -2413,16 +2436,52 @@ export const apiClient = {
     offerId?: string,
     product?: string,
     vendepay?: 'mainex' | 'cobrak',
+    options?: { interval?: 'day' | 'week' | 'month'; provider?: string },
   ): Promise<{
     from: string;
     to: string;
     time_zone: string;
-    offers: Array<RefundBreakdown & { offer_id: string; offer_name: string }>;
-    products: Array<RefundBreakdown & { product_name: string }>;
-    vendepays: Array<
-      RefundBreakdown & { connection_name: string; fee_usd_minor: number; fee_brl_minor: number }
-    >;
-    daily: Array<RefundBreakdown & { date: string }>;
+    providers: string[];
+    items_limit: number;
+    trend: Array<{
+      date: string;
+      count: number;
+      brl_minor: number;
+      gross_brl_minor: number;
+      rate_pct: number | null;
+      fee_brl_minor: number;
+      impact_brl_minor: number;
+      moving_average_brl_minor: number;
+    }>;
+    comparison: {
+      previous_from: string;
+      previous_to: string;
+      previous: RefundFinancialTotals;
+      amount_change_pct: number | null;
+      rate_change_pp: number | null;
+    };
+    cohorts: Array<{
+      month: string;
+      sales: number;
+      gross_brl_minor: number;
+      count: number;
+      brl_minor: number;
+      rate_pct: number | null;
+      immature: boolean;
+    }>;
+    rankings: { offers: RefundRanking[]; gateways: RefundRanking[]; products: RefundRanking[] };
+    delay: {
+      mean_days: number | null;
+      median_days: number | null;
+      sample_count?: number;
+      missing_paid_at?: number;
+      negative_delay_orders?: number;
+      buckets: Array<{ label: string; count: number }>;
+    };
+    offers: Array<RefundFinancialTotals & { offer_id: string; offer_name: string }>;
+    products: Array<RefundFinancialTotals & { product_name: string }>;
+    vendepays: Array<RefundFinancialTotals & { connection_name: string }>;
+    daily: Array<RefundFinancialTotals & { date: string }>;
     items: Array<{
       id: string;
       offer_id: string;
@@ -2430,25 +2489,21 @@ export const apiClient = {
       connection_name: string;
       external_id: string;
       status: 'refunded' | 'chargeback';
-      amount_minor: number | null;
-      currency: string | null;
-      amount_brl_minor: string | null;
-      brl_minor: number;
+      amount_brl_minor: number | null;
+      brl_minor: number | null;
       product_name: string;
       order_kind: string;
       lifecycle_at: string;
       buyer: { name?: string; email?: string };
     }>;
-    totals: RefundBreakdown & {
-      fee_usd_minor: number;
-      fee_brl_minor: number;
-      fee_exchange_rate: number | null;
-    };
+    totals: RefundFinancialTotals;
   }> {
     const params = new URLSearchParams({ from, to });
     if (offerId) params.set('offer_id', offerId);
     if (product) params.set('product', product);
     if (vendepay) params.set('vendepay', vendepay);
+    if (options?.interval) params.set('interval', options.interval);
+    if (options?.provider) params.set('provider', options.provider);
     return request(`/v1/tracking/refunds-dashboard?${params.toString()}`);
   },
 
