@@ -3093,15 +3093,17 @@ export const apiClient = {
     });
   },
 
-  async getUpsellOperatorLogs(id: string): Promise<{
-    scope: 'offer' | 'self';
+  async getUpsellOperatorLogs(id: string, period?: {from:string;to:string}): Promise<{
+    scope: 'offer' | 'self' | 'all_offers';
     attempts: Array<{id: string; operator_id: string; operator_name?: string | null; order_id: string; stage_id: string; stage_key: string; provider: string; opened_at: string}>;
     approvals: Array<{order_id: string; stage_key: string; provider: string; approved_at: string; amount_minor: number | null; currency: string | null; operator_id: string | null; attribution: string}>;
     summary: Array<{operator_id: string; operator_name?: string | null; openings: number; confirmed_purchases: number; amounts: Array<{currency: string | null; amount_minor: number | null}>}>;
     unattributed_totals: Array<{currency: string | null; count: number; amount_minor: number | null}>;
     attribution_notice: string;
   }> {
-    return request(`/v1/offers/${id}/tracking/upsell-operator-logs?limit=50`);
+    const query=new URLSearchParams({limit:'50',...(period??{})});
+    const path=id?`/v1/offers/${id}/tracking/upsell-operator-logs`:'/v1/tracking/upsell-operator-logs';
+    return request(`${path}?${query.toString()}`);
   },
 
   async checkTrackingUpsellCompatibility(url: string): Promise<{

@@ -92,3 +92,7 @@ export const PERIOD_DATE_PRESETS: readonly DateRangePreset[] = [
   { id: 'last-30-days', label: 'Últimos 30 dias', getRange: () => rollingDateRange(30) },
   ...MONTH_DATE_PRESETS,
 ];
+
+export const UPSELL_LOG_DATE_PRESETS = DASHBOARD_DATE_PRESETS.filter(preset =>
+  ['today','yesterday','last-7-days','current-month'].includes(preset.id),
+);

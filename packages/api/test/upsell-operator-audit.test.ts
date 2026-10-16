@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { encryptSecret } from '../src/lib/secret-box.js';
 import { HttpProblem } from '../src/lib/problem.js';
 import errorHandlerPlugin from '../src/plugins/error-handler.js';
-import { hasGatewayApproval, operatorAuditSummary, registerUpsellOperatorAudit } from '../src/routes/upsell-operator-audit.js';
+import { hasGatewayApproval, operatorAuditSummary, registerUpsellOperatorAudit, OperatorLogQuery } from '../src/routes/upsell-operator-audit.js';
 import { validateSyzepayRecovery } from '../src/services/syzepay-upsell.js';
 
 vi.mock('../src/env.js', () => ({ env: { TRACKING_ENCRYPTION_KEY: 'test-key-longer-than-thirty-two-characters', TRACKING_PUBLIC_BASE_URL: 'https://tmx.test' } }));
@@ -13,13 +13,15 @@ const now = new Date('2026-10-15T12:00:00Z');
 const attempt = { id:'attempt-1',operator_id:'member-1',order_id:'front-1',stage_id:'stage-1',stage_key:'upsell_1',provider:'vendepay',opened_at:now };
 const approval = {order_id:'paid-upsell',stage_key:'upsell_1',provider:'vendepay',approved_at:now,amount_minor:2500,currency:'USD'};
 
-async function fixture(options: { user?: string; admin?: boolean; deny?: boolean; provider?: string; unsafe?: boolean } = {}) {
+async function fixture(options: { user?: string; admin?: boolean; deny?: boolean; provider?: string; unsafe?: boolean; offers?:string[]; foreign?:boolean } = {}) {
   const app=Fastify();
   const inserted: any[]=[];
   const statements: string[]=[];
+  const parameters: any[][]=[];
   app.decorate('db',async (strings: TemplateStringsArray,...values: any[]) => {
-    const sql=strings.join('?'); statements.push(sql);
-    if(sql.includes('SELECT id FROM tracking_projects'))return [{id:'project-1'}];
+    const sql=strings.join('?'); statements.push(sql); parameters.push(values);
+    if(sql.includes('SELECT id,offer_id FROM tracking_projects'))return [{id:'project-1',offer_id:options.offers?.[0]??'offer-1'},{id:'other-project',offer_id:'not-authorized'}];
+    if(sql.includes('SELECT id FROM tracking_projects'))return sql.includes('ANY') && !values[0].length ? [] : [{id:'project-1'}];
     if(sql.includes('o.id AS order_id,s.id AS stage_id'))return [{order_id:values[1],stage_id:values[2],stage_key:'upsell_1',provider:options.provider??'vendepay',slug:'slug-1',session_id:'session-secret',syzepay_destination:'https://checkout.test/upsell',vendid_encrypted:encryptSecret('venda-secret','test-key-longer-than-thirty-two-characters')}];
     if(sql.includes('INSERT INTO tracking_upsell_operator_attempts')) {
       if(inserted.length)return [];
@@ -38,7 +40,7 @@ async function fixture(options: { user?: string; admin?: boolean; deny?: boolean
     }
     return [];
   });
-  app.decorate('offerStore',{assertAccess:async()=>{
+  app.decorate('offerStore',{maybeGet:async(id:string)=> (options.offers??['offer-1']).includes(id)?{id,userId:options.user??'owner-1'}:options.foreign?{id,userId:'other-owner',memberIds:[options.user??'owner-1']}:null,assertAccess:async()=>{
     if(options.deny)throw new HttpProblem({status:404,title:'Not found',code:'offer_not_found'});
     return {userId:'owner-1'};
   }});
@@ -46,12 +48,65 @@ async function fixture(options: { user?: string; admin?: boolean; deny?: boolean
   app.addHook('preHandler',async req=>{(req as any).user={sub:options.user??'owner-1',role:options.admin?'admin':'user'};});
   await app.register(errorHandlerPlugin);
   registerUpsellOperatorAudit(app);
-  return {app,inserted,statements};
+  return {app,inserted,statements,parameters};
 }
 
 const openUrl='/offers/offer-1/tracking/upsell-identities/front-1/stages/stage-1/open';
 const logUrl='/offers/offer-1/tracking/upsell-operator-logs';
+const globalUrl='/tracking/upsell-operator-logs';
 describe('upsell operator audit',()=>{
+  it('requires authentication for the global report',async()=>{
+    const app=Fastify();registerUpsellOperatorAudit(app);
+    try {expect((await app.inject(globalUrl)).statusCode).toBe(401);} finally {await app.close();}
+  });
+  it('builds the global project list only from server-authorized offers',async()=>{
+    const {app,statements,parameters}=await fixture({admin:true,offers:['allowed-offer']});
+    try {
+      const r=await app.inject(globalUrl);
+      expect(r.statusCode).toBe(200);expect(r.json().scope).toBe('all_offers');
+      expect(statements[0]).toBe('SELECT id,offer_id FROM tracking_projects');
+      const index=statements.findIndex(s=>s.includes('ORDER BY opened_at'));
+      expect(parameters[index][0]).toEqual(['project-1']);
+    }finally{await app.close();}
+  });
+  it('passes an empty authorized project set rather than falling back to every project',async()=>{
+    const {app,statements,parameters}=await fixture({offers:[]});
+    try {
+      expect((await app.inject(globalUrl)).statusCode).toBe(200);
+      const index=statements.findIndex(s=>s.includes('ORDER BY opened_at'));
+      expect(parameters[index][0]).toEqual([]);
+      expect(statements[index]).toContain('project_id=ANY');
+    }finally{await app.close();}
+  });
+  it('does not treat a legacy sharing entry as global authorization',async()=>{
+    const {app,statements,parameters}=await fixture({user:'member-1',foreign:true});
+    try {
+      expect((await app.inject(globalUrl)).statusCode).toBe(200);
+      const index=statements.findIndex(s=>s.includes('ORDER BY opened_at'));
+      expect(parameters[index][0]).toEqual(['project-1']);
+    }finally{await app.close();}
+  });
+  it('filters by the immutable winning click in Brasília, not the approval date',async()=>{
+    const {app,statements}=await fixture({admin:true});
+    try {
+      const r=await app.inject(`${globalUrl}?from=2026-10-15&to=2026-10-16`);
+      expect(r.statusCode).toBe(200);
+      expect(r.json()).toMatchObject({date_basis:'click',summary_scope:'click_period',period:{from:'2026-10-15',to:'2026-10-16',time_zone:'America/Sao_Paulo'}});
+      const sql=statements.find(s=>s.includes('FROM tracking_orders o'))!;
+      expect(sql).toContain('credited_click.id=credit.attempt_id');
+      expect(sql).toContain('credited_click.opened_at >=');
+      expect(sql).toContain("AT TIME ZONE 'America/Sao_Paulo'");
+      expect(sql).not.toContain('o.paid_at >= (?');
+    }finally{await app.close();}
+  });
+  it.each(['from=2026-02-30&to=2026-03-01','from=2026-10-16&to=2026-10-15','from=2026-10-15','from=no&to=2026-10-16','from=0000-01-01&to=2026-10-16'])('rejects an invalid period: %s',async(query)=>{
+    const {app,statements}=await fixture();
+    try {expect((await app.inject(`${globalUrl}?${query}`)).statusCode).toBe(400);expect(statements).toHaveLength(0);} finally {await app.close();}
+  });
+  it('accepts real leap days but rejects invalid leap dates',()=>{
+    expect(OperatorLogQuery.safeParse({from:'2024-02-29',to:'2024-03-01'}).success).toBe(true);
+    expect(OperatorLogQuery.safeParse({from:'2026-02-29',to:'2026-03-01'}).success).toBe(false);
+  });
   it.each(['GET','POST'] as const)('requires an authenticated session for %s',async method=>{
     const app=Fastify();registerUpsellOperatorAudit(app);
     try {

@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { ulid } from 'ulid';
 import { z } from 'zod';
 import { env } from '../env.js';
@@ -6,11 +6,20 @@ import { decryptSecret } from '../lib/secret-box.js';
 import { zodToProblem } from '../lib/problem.js';
 import { buildSyzepayRecoveryUrl, validateSyzepayRecovery } from '../services/syzepay-upsell.js';
 import { normalizeVendepay } from '../integrations/vendepay/normalize.js';
+import { canAccessOffer } from '../services/offer-store.js';
 
 const OpenSchema = z.object({ click_id: z.string().regex(/^[a-zA-Z0-9_-]{16,80}$/), view_only: z.boolean().optional() }).strict();
 type Attempt = { id: string; operator_id: string; order_id: string; stage_id: string; stage_key: string; provider: string; opened_at: Date };
 type Approval = { order_id: string; stage_key: string; provider: string; approved_at: Date; amount_minor: string | number | null; currency: string | null; amount_brl_minor?: string | number | null; operator_id?: string | null };
 type ApprovalCandidate = Approval & { receipt_payloads: unknown[] | null };
+type LogRequest = { Params: { id?: string }; Querystring: { limit?: string; from?: string; to?: string } };
+const AuditDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
+  const date = new Date(`${value}T12:00:00Z`);
+  return !value.startsWith('0000') && Number.isFinite(date.getTime()) && date.toISOString().slice(0,10) === value;
+});
+export const OperatorLogQuery = z.object({limit:z.string().optional(),from:AuditDate.optional(),to:AuditDate.optional()})
+  .strict().refine(q=>Boolean(q.from)===Boolean(q.to),{message:'Informe o início e o fim do período.'})
+  .refine(q=>!q.from || !q.to || q.from<=q.to,{message:'O início deve ser anterior ou igual ao fim.'});
 
 export function hasGatewayApproval(row: ApprovalCandidate) {
   if (row.provider === 'syzepay') return true; // SQL requires processed, signature-verified order.paid receipt.
@@ -128,18 +137,35 @@ export function registerUpsellOperatorAudit(app: FastifyInstance) {
     },
   );
 
-  app.get<{ Params: { id: string }; Querystring: { limit?: string } }>(
-    '/offers/:id/tracking/upsell-operator-logs', async (req, reply) => {
+  const logsHandler = async (req: FastifyRequest<LogRequest>, reply: FastifyReply) => {
       if (!req.user) return reply.code(401).send({ error: 'authentication_required' });
-      const access = await scope(req.params.id, req.user!.sub, req.user!.role === 'admin');
       reply.header('cache-control', 'private, no-store');
+      const query = OperatorLogQuery.safeParse(req.query);
+      if (!query.success) return reply.code(400).send({error:'invalid_audit_period',detail:'Informe datas válidas e um intervalo em ordem.'});
       if (!app.db) return reply.code(503).send({ error: 'tracking_database_unavailable' });
-      if (!access) return reply.code(404).send({ error: 'tracking_not_configured' });
-      const parsedLimit = Number(req.query.limit ?? 50);
+      const admin = req.user.role === 'admin';
+      let projectIds: string[];
+      if (req.params.id) {
+        const access = await scope(req.params.id, req.user.sub, admin);
+        if (!access) return reply.code(404).send({ error: 'tracking_not_configured' });
+        projectIds = [access.projectId];
+      } else {
+        // Never use a client-supplied tenant/project list for the global view.
+        const projects = await app.db<{id:string;offer_id:string}[]>`SELECT id,offer_id FROM tracking_projects`;
+        const allowed = await Promise.all(projects.map(async project=>{
+          const offer = await app.offerStore.maybeGet(project.offer_id);
+          return offer && canAccessOffer(offer,req.user!.sub,admin) ? project.id : null;
+        }));
+        projectIds = allowed.filter((id):id is string=>id!==null);
+      }
+      const from = query.data.from ?? null, to = query.data.to ?? null;
+      const parsedLimit = Number(query.data.limit ?? 50);
       const limit = Number.isFinite(parsedLimit) ? Math.min(200, Math.max(1, Math.floor(parsedLimit))) : 50;
       const attempts = await app.db<Attempt[]>`
         SELECT id,operator_id,order_id,stage_id,stage_key,provider,opened_at FROM tracking_upsell_operator_attempts
-        WHERE project_id=${access.projectId} AND (${access.all} OR operator_id=${req.user!.sub})
+        WHERE project_id=ANY(${projectIds}::text[]) AND (${admin} OR operator_id=${req.user!.sub})
+          AND (${from}::date IS NULL OR opened_at >= (${from}::date::timestamp AT TIME ZONE 'America/Sao_Paulo'))
+          AND (${to}::date IS NULL OR opened_at < ((${to}::date+1)::timestamp AT TIME ZONE 'America/Sao_Paulo'))
         ORDER BY opened_at DESC,id DESC
       `;
       // Only real gateway-paid orders, each primary key once. Manual test results are never read.
@@ -159,8 +185,13 @@ export function registerUpsellOperatorAudit(app: FastifyInstance) {
           ) ELSE NULL END AS receipt_payloads
         FROM tracking_orders o
         LEFT JOIN tracking_upsell_operator_credits credit ON credit.order_id=o.id AND credit.project_id=o.project_id
-        WHERE o.project_id=${access.projectId} AND o.paid_at IS NOT NULL
-          AND (${access.all} OR credit.operator_id=${req.user!.sub})
+        LEFT JOIN tracking_upsell_operator_attempts credited_click ON credited_click.id=credit.attempt_id AND credited_click.project_id=o.project_id
+        WHERE o.project_id=ANY(${projectIds}::text[]) AND o.paid_at IS NOT NULL
+          AND (${admin} OR credit.operator_id=${req.user!.sub})
+          -- The immutable winner is chosen before applying the date window.
+          -- An older click in this window must not replace the real winner.
+          AND (${from}::date IS NULL OR credited_click.opened_at >= (${from}::date::timestamp AT TIME ZONE 'America/Sao_Paulo'))
+          AND (${to}::date IS NULL OR credited_click.opened_at < ((${to}::date+1)::timestamp AT TIME ZONE 'America/Sao_Paulo'))
           AND o.provider IN ('vendepay','syzepay')
           AND (o.order_kind='upsell' OR o.order_kind ~ '^upsell_[2-9][0-9]*$')
           AND (
@@ -173,7 +204,7 @@ export function registerUpsellOperatorAudit(app: FastifyInstance) {
                 AND COALESCE(r.payload->>'is_test','false') NOT IN ('true','1'))
             ))
           )
-          AND o.paid_at >= (SELECT min(opened_at) FROM tracking_upsell_operator_attempts WHERE project_id=${access.projectId})
+          AND o.paid_at >= (SELECT min(opened_at) FROM tracking_upsell_operator_attempts WHERE project_id=o.project_id)
         ORDER BY o.paid_at DESC,o.id DESC
       `;
       const approvals: Approval[] = candidates.filter(hasGatewayApproval).map(({ receipt_payloads: _proof, ...row }) => row);
@@ -183,12 +214,14 @@ export function registerUpsellOperatorAudit(app: FastifyInstance) {
         return [id, user?.name ?? null] as const;
       })));
       return {
-        scope: access.all ? 'offer' : 'self', attempts: attempts.slice(0,limit).map(row => ({ ...row, operator_name: names.get(row.operator_id) ?? null })),
+        scope: admin ? (req.params.id ? 'offer' : 'all_offers') : 'self', attempts: attempts.slice(0,limit).map(row => ({ ...row, operator_name: names.get(row.operator_id) ?? null })),
         approvals: approvals.slice(0,limit).map(row => ({ ...row, amount_minor: row.amount_minor === null ? null : Number(row.amount_minor), operator_id: row.operator_id ?? null, attribution: row.operator_id ? 'last_preapproval_click' : 'operator_not_determined' })),
         summary: summary.map(row => ({ ...row, operator_name: names.get(row.operator_id) ?? null })), unattributed_totals,
-        limit, summary_scope: 'all_recorded_history',
+        limit, summary_scope: from ? 'click_period' : 'all_recorded_history',
+        date_basis:'click',period:{from,to,time_zone:'America/Sao_Paulo'},
         attribution_notice: 'Upsell aprovado atribuído ao último clique registrado antes da aprovação, na mesma compra de origem, etapa e gateway. É uma regra de crédito operacional, não prova de quem concluiu o pagamento. Valores brutos aprovados; devoluções não descontadas. Sem cruzamento único, fica sem operador. Valores sem conversão em reais permanecem na moeda original.',
       };
-    },
-  );
+    };
+  app.get<LogRequest>('/offers/:id/tracking/upsell-operator-logs',logsHandler);
+  app.get<LogRequest>('/tracking/upsell-operator-logs',logsHandler);
 }
