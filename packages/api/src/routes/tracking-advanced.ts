@@ -666,7 +666,28 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
             AND (${allHistory} OR (paid_at >= ${fromInstant} AND paid_at < ${toInstant}))
         `,
     ]);
-    reply.header('cache-control', 'no-store');
+    reply.header('cache-control', 'private, no-store');
+    // Page-bounded audit projection: a purchase never removes opening history.
+    // Select after the operator filter, so members cannot learn another user's activity.
+    const lastOpenings = approvedReceipts.length && stages.length ? await app.db<Array<{
+      order_id: string; stage_id: string; operator_id: string; opened_at: Date;
+    }>>`
+      SELECT DISTINCT ON (order_id,stage_id) order_id,stage_id,operator_id,opened_at
+      FROM tracking_upsell_operator_attempts
+      WHERE project_id=${p.id}
+        AND order_id=ANY(${approvedReceipts.map(receipt => receipt.id)}::text[])
+        AND stage_id=ANY(${stages.map(stage => stage.id)}::text[])
+        AND (${req.user!.role === 'admin'} OR operator_id=${req.user!.sub})
+      ORDER BY order_id,stage_id,opened_at DESC,id DESC
+    ` : [];
+    const operatorNames = new Map(await Promise.all([...new Set(lastOpenings.map(row => row.operator_id))].map(async id => {
+      const user = await app.userStore.maybeGetById(id);
+      return [id, user?.name ?? null] as const;
+    })));
+    const lastOpeningByOrderStage = new Map(lastOpenings.map(row => [
+      `${row.order_id}:${row.stage_id}`,
+      { operator_id: row.operator_id, operator_name: operatorNames.get(row.operator_id) ?? null, opened_at: row.opened_at },
+    ]));
     const resultByOrderStage = new Map(
       manualResults.map((result) => [`${result.order_id}:${result.stage_id}`, result] as const),
     );
@@ -700,6 +721,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           ? stages.filter(stage => stage.connection_destinations?.['gateway:syzepay']).map(stage => ({
               stage_id:stage.id,stage_key:stage.stage_key,name:stage.name,gateway:'syzepay',
               already_purchased:receipt.purchased_stage_keys.includes(stage.stage_key),
+              last_opening:lastOpeningByOrderStage.get(`${receipt.id}:${stage.id}`) ?? null,
               url:buildSyzepayRecoveryUrl(stage.connection_destinations!['gateway:syzepay']!,receipt.syzepay_session_id!),
               force_url:null,manual_result:resultByOrderStage.get(`${receipt.id}:${stage.id}`)?.result ?? null,
               manual_checked_at:resultByOrderStage.get(`${receipt.id}:${stage.id}`)?.checked_at ?? null,
@@ -714,6 +736,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
                 stage_key: stage.stage_key,
                 name: stage.name,
                 already_purchased: receipt.purchased_stage_keys.includes(stage.stage_key),
+                last_opening: lastOpeningByOrderStage.get(`${receipt.id}:${stage.id}`) ?? null,
                 url: validatedLink.toString(),
                 force_url: null,
                 manual_result: manualResult?.result ?? null,

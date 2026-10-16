@@ -6,7 +6,7 @@ import { TikTokDestinations } from '@/components/tracking/tiktok-destinations';
 import { TrackingHelp } from '@/components/tracking/tracking-help';
 import { TrackingLiveConsole } from '@/components/tracking/tracking-live-console';
 import { TrackingPanel } from '@/components/tracking/tracking-panel';
-import { safeUpsellDestination } from '@/components/tracking/upsell-audit-presentation';
+import { safeUpsellDestination, upsellLastOpeningLabel, type UpsellLastOpening } from '@/components/tracking/upsell-audit-presentation';
 import { TRACKING_DASHBOARD_STALE_TIME } from '@/components/tracking/tracking-query';
 import { Button } from '@/components/ui/button';
 import { DataState, getErrorDataStateProps } from '@/components/ui/data-state';
@@ -126,6 +126,7 @@ function ValidatedUpsellLink({
     force_url: string | null;
     manual_result: 'worked' | 'failed' | null;
     manual_checked_at: string | null;
+    last_opening?: UpsellLastOpening | null;
   };
 }) {
   const qc = useQueryClient();
@@ -156,6 +157,7 @@ function ValidatedUpsellLink({
       popup.location.replace(destination);
       clickId.current = null;
       void qc.invalidateQueries({queryKey: ['upsell-operator-logs', offerId]});
+      void qc.invalidateQueries({queryKey: ['tracking-upsell-identities', offerId]});
     } catch (error) {
       popup.close();
       toast.error((error as Error).message || 'Não foi possível registrar a abertura. Tente novamente.');
@@ -184,7 +186,15 @@ function ValidatedUpsellLink({
     },
     onError: (error) => toast.error((error as Error).message),
   });
-  const withManualResult = (openLink: React.ReactNode) => (
+  const withLastOpening = (content: React.ReactNode) => (
+    <div className="flex min-w-0 flex-col items-start gap-1">
+      {content}
+      <span className="max-w-full break-words text-[10px] text-muted-foreground">
+        {upsellLastOpeningLabel(link.last_opening)}
+      </span>
+    </div>
+  );
+  const withManualResult = (openLink: React.ReactNode) => withLastOpening(
     <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-cyan-300/15 bg-cyan-300/[0.04] p-1.5">
       {openLink}
       {isOpening && <span role="status" className="text-xs text-muted-foreground">Registrando abertura…</span>}
@@ -224,7 +234,7 @@ function ValidatedUpsellLink({
     </div>
   );
   if (link.already_purchased) {
-    return (
+    return withLastOpening(
       <button type="button" disabled={isOpening}
         onClick={openAudited}
         aria-busy={isOpening}
@@ -239,7 +249,7 @@ function ValidatedUpsellLink({
   if (link.gateway === 'syzepay') {
     const syzeValidation = validation.data as {compatible?:boolean;url?:string;reason?:string} | undefined;
     if (!syzeValidation?.compatible || !syzeValidation.url)
-      return <span className="text-xs text-amber-100/60">{validation.isFetching ? 'Validando sessão SyzePay…' : syzeValidation?.reason ?? 'Sessão SyzePay indisponível'}</span>;
+      return withLastOpening(<span className="text-xs text-amber-100/60">{validation.isFetching ? 'Validando sessão SyzePay…' : syzeValidation?.reason ?? 'Sessão SyzePay indisponível'}</span>);
     return withManualResult(<button type="button" disabled={isOpening} onClick={openAudited} aria-busy={isOpening}
       title="Sessão e página confirmadas na SyzePay. A cobrança exige aceitar a oferta na página."
       className="rounded-md border border-cyan-300/25 px-2.5 py-1.5 text-cyan-100">{link.name} · SyzePay · abrir</button>);
@@ -257,7 +267,7 @@ function ValidatedUpsellLink({
     );
   }
   if (validation.isLoading) {
-    return (
+    return withLastOpening(
       <span className="rounded-md border border-white/10 px-2.5 py-1.5 text-white/40">
         {link.name} · verificando
       </span>

@@ -3034,6 +3034,11 @@ export const apiClient = {
         force_url: string | null;
         manual_result: 'worked' | 'failed' | null;
         manual_checked_at: string | null;
+        last_opening: {
+          operator_id: string;
+          operator_name: string | null;
+          opened_at: string;
+        } | null;
       }>;
     }>;
   }> {

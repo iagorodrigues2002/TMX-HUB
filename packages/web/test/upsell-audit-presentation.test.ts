@@ -1,7 +1,29 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {readFileSync} from 'node:fs';
-import {auditMoney, safeUpsellDestination} from '../src/components/tracking/upsell-audit-presentation';
+import {auditMoney, safeUpsellDestination, upsellLastOpeningLabel} from '../src/components/tracking/upsell-audit-presentation';
+
+test('last opening identifies the actual operator and uses Brasília time regardless of host timezone', () => {
+  assert.equal(upsellLastOpeningLabel(null), 'Sem clique registrado');
+  assert.equal(upsellLastOpeningLabel(undefined), 'Sem clique registrado');
+  const opening = {operator_id: 'member-123', operator_name: '  Ana  ', opened_at: '2026-10-16T15:04:05Z'};
+  assert.equal(upsellLastOpeningLabel(opening), 'Último clique: Ana · 16/10/2026, 12:04:05');
+  assert.match(upsellLastOpeningLabel({...opening, operator_name: null}), /^Último clique: member-123 ·/);
+  assert.match(upsellLastOpeningLabel({...opening, operator_name: ' ', opened_at: 'invalid'}), /member-123 · horário indisponível$/);
+});
+
+test('last opening persists in purchased, validating and unavailable branches without claiming purchase attribution', () => {
+  const source = readFileSync(new URL('../src/components/tracking/sections/journey/tracking-section-content.tsx', import.meta.url), 'utf8');
+  const links = source.slice(source.indexOf('function ValidatedUpsellLink'), source.indexOf('function saoPauloDate'));
+  assert.match(links, /if \(link\.already_purchased\) \{\s*return withLastOpening\(/);
+  assert.match(links, /if \(validation\.isLoading\) \{\s*return withLastOpening\(/);
+  assert.match(links, /return withLastOpening\(<span className="text-xs text-amber/);
+  assert.match(links, /const withManualResult = \(openLink: React.ReactNode\) => withLastOpening\(/);
+  assert.match(links, /upsellLastOpeningLabel\(link\.last_opening\)/);
+  const opening = links.slice(links.indexOf('const openAudited'), links.indexOf('const validation'));
+  assert.match(opening, /invalidateQueries\(\{queryKey: \['tracking-upsell-identities', offerId\]/);
+  assert.doesNotMatch(opening, /saveTrackingUpsellManualResult/);
+});
 
 test('audit navigation accepts HTTPS and rejects executable/insecure/credentialed destinations', () => {
   assert.equal(safeUpsellDestination('https://checkout.example/upsell?attempt=abc'), 'https://checkout.example/upsell?attempt=abc');
