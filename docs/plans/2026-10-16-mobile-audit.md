@@ -28,6 +28,8 @@ Sem alterar cálculos, permissões, atribuição, webhooks, pixels, filas ou int
 7. Reembolsos: estilos de tema claro usando tokens, valores do eixo legíveis e atalhos tocáveis.
 8. Conferência interativa: devolver foco ao botão do menu ao fechar o drawer; controles de conta
    com alvo de 44px também em tablets; fundo decorativo do tracking contido horizontalmente.
+9. Ads: conter as descrições acessíveis nas próprias tabelas, sem ampliar a área central
+   fora da região de rolagem horizontal.
 
 ## Verificação
 

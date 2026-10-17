@@ -63,7 +63,7 @@ function BatchRow({batch,sort,privateMode}: {batch: AdsIntelligenceData['batches
     <tr><td colSpan={columns.length+1} className="p-0">
       <div id={panelId} aria-hidden={!open} className="grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none" style={{gridTemplateRows:open?'1fr':'0fr'}}>
         <div className="min-h-0 overflow-clip">
-          <table className="table-fixed text-sm" style={{width:tableWidth,minWidth:tableWidth}} aria-label={`Anúncios da ${batch.name}`}>
+          <table className="relative table-fixed text-sm" style={{width:tableWidth,minWidth:tableWidth}} aria-label={`Anúncios da ${batch.name}`}>
             <MetricColumns/>
             <thead className="sr-only"><tr><th>Anúncio</th>{columns.map(c=><th key={c.key}>{c.label}</th>)}</tr></thead>
             <tbody>{ads.map(ad=><tr key={ad.key} className="border-t border-border/40 bg-background/40">
@@ -120,8 +120,8 @@ export function AdsIntelligenceCenter() {
 
   if (query.isPending) return <DataState variant="loading" title="Carregando Ads Intelligence"/>;
   if (query.isError) return <DataState variant="error" title="Não foi possível carregar os anúncios" description={query.error.message} onRetry={()=>void query.refetch()}/>;
-  // Keep absolutely positioned screen-reader table captions inside the main
-  // scroll area; otherwise their containing block is the page body.
+  // Screen-reader table labels are positioned within their respective tables,
+  // so their overflow stays inside the table scroll region.
   return <div className="ads-intelligence-metrics relative min-w-0 space-y-6">
     <header className="flex flex-wrap items-start justify-between gap-4">
       <div><h1 className="text-2xl font-semibold">Ads Intelligence</h1><p className="mt-2 max-w-3xl text-sm text-muted-foreground">Custos da UTMify e conversões do TMX, organizados por oferta e leva. Abra uma leva para comparar seus anúncios.</p></div>
@@ -172,8 +172,8 @@ export function AdsIntelligenceCenter() {
       </div>)}
     </details>}
     <section className="space-y-4">
-      {!batches.length ? <DataState variant="empty" title="Nenhuma leva disponível" description={data?.connection?'Aguarde a importação ou vincule as campanhas pendentes.':'Cadastre a dashboard geral para iniciar a importação.'}/> : <div className="overflow-x-auto rounded-xl border border-border bg-card">
-        <table className="table-fixed text-sm" style={{width:tableWidth,minWidth:tableWidth}}><caption className="sr-only">Levas e anúncios; custos em reais e faturamento bruto registrado no TMX.</caption>
+      {!batches.length ? <DataState variant="empty" title="Nenhuma leva disponível" description={data?.connection?'Aguarde a importação ou vincule as campanhas pendentes.':'Cadastre a dashboard geral para iniciar a importação.'}/> : <div className="relative overflow-x-auto rounded-xl border border-border bg-card">
+        <table className="relative table-fixed text-sm" style={{width:tableWidth,minWidth:tableWidth}}><caption className="sr-only">Levas e anúncios; custos em reais e faturamento bruto registrado no TMX.</caption>
           <MetricColumns/>
           <thead><tr className="border-b border-border text-xs text-muted-foreground"><th scope="col" className={`${stickyColumnClass} z-30 w-56 min-w-56 px-4 py-3 text-left`}>Leva</th>{columns.map(c=><th scope="col" key={c.key} className="whitespace-nowrap px-3 py-3 text-right">{c.label}</th>)}</tr></thead>
           {batches.map(batch=><BatchRow key={batch.key} batch={batch} sort={sort} privateMode={isPrivate}/>)}
