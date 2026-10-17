@@ -116,7 +116,7 @@ describe.skipIf(!url)('refund dashboard SQL against disposable PostgreSQL', () =
     app.decorate('db', db);
     app.decorate('offerStore', {
       listAccessible: async () => [
-        { id, name: 'Oferta fixture', userId: 'owner', memberIds: ['legacy-member'] },
+        { id, name: 'Oferta fixture', companyName: 'TMX', userId: 'owner', memberIds: ['legacy-member'] },
       ],
     });
     app.addHook('preHandler', async (req) => {

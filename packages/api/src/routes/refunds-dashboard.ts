@@ -40,7 +40,13 @@ const plugin: FastifyPluginAsync = async (app) => {
     const accessible = (
       await app.offerStore.listAccessible(req.user.sub, req.user.role === 'admin')
     ).filter((o) => canAccessOffer(o, req.user!.sub, req.user!.role === 'admin'));
-    const offers = q.offer_id ? accessible.filter((o) => o.id === q.offer_id) : accessible;
+    // Admin visibility is not ownership. The company consolidation includes
+    // only offers created by this profile and explicitly assigned to TMX.
+    const offers = q.offer_id
+      ? accessible.filter((o) => o.id === q.offer_id)
+      : accessible.filter(
+          (o) => o.userId === req.user!.sub && o.companyName?.trim().toLowerCase() === 'tmx',
+        );
     if (q.offer_id && !offers.length) return reply.code(404).send({ error: 'offer_not_found' });
     const span = Math.round((Date.parse(to) - Date.parse(from)) / 86400000) + 1;
     const previousFrom = shiftDay(from, -span),

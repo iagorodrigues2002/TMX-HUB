@@ -189,7 +189,7 @@ export function RefundsDashboard({
                 setPage(1);
               }}
             >
-              <option value="">Todas as ofertas</option>
+              <option value="">Minhas ofertas da empresa TMX</option>
               {offers.data?.map((o) => (
                 <option key={o.id} value={o.id}>
                   {o.name}
@@ -261,6 +261,12 @@ export function RefundsDashboard({
             </select>
           </Field>
         </div>
+        {!offerId && (
+          <p className="mt-3 text-sm text-white/60">
+            Receita, devoluções e multas somente das ofertas criadas pelo seu perfil
+            e vinculadas à empresa TMX. Outras empresas e outros membros não entram neste consolidado.
+          </p>
+        )}
         <div className="mt-4 flex flex-wrap gap-2">
           {[
             ['Hoje', today(), today()],
