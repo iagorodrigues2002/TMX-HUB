@@ -8,7 +8,8 @@ Direção aprovada: animações mais marcantes, organização clara e preservaç
 - Ciano #67e8f9 para orientação, rosa #fb7185 para devoluções/impacto; verde para redução.
 - Manter Space Grotesk e numerais tabulares do TMX. Nada de novos serviços ou fontes.
 - Cabeçalho e atalhos de seção; período separado dos filtros; resumo financeiro com impacto destacado.
-- Evolução em largura total; tabelas de mês e ranking lado a lado em telas largas; prazos e auditoria completos.
+- Evolução, tabelas de mês/ranking, prazos e auditoria em largura total. A revisão visual descartou
+  tabelas lado a lado: a quantidade de colunas exigia rolagem desnecessária mesmo no desktop.
 
 ## Movimento
 

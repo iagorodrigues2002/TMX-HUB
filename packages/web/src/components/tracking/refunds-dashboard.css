@@ -98,6 +98,7 @@
 .refund-workspace table {
   font-variant-numeric: tabular-nums;
 }
+.refund-workspace table td:first-child { white-space: nowrap; }
 .refund-workspace thead {
   background: #122a37;
 }
@@ -125,7 +126,6 @@
 @media (min-width: 1280px) {
   .refund-workspace .refund-analytics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .refund-workspace .refund-analytics > section { grid-column: 1 / -1; }
-  .refund-workspace .refund-analytics > .refund-breakdown { grid-column: auto; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .refund-workspace .refund-header { animation: refund-header-in 650ms var(--refund-ease) both; }
