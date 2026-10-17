@@ -25,7 +25,7 @@ const money = new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
 const numeric = new Intl.NumberFormat('pt-BR',{maximumFractionDigits:2});
 const date = (value?: string|null) => value ? new Date(value).toLocaleString('pt-BR') : 'Ainda não realizada';
 const platformLabel = (value?: string) => ({meta:'Meta',google:'Google Ads',tiktok:'TikTok Ads'} as Record<string,string>)[value ?? ''] ?? value ?? 'Plataforma não informada';
-const selectClass = 'min-h-11 rounded-lg border border-border bg-background px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary';
+const selectClass = 'min-h-11 w-full min-w-0 max-w-full rounded-lg border border-border bg-background px-3 text-base sm:w-auto sm:text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary';
 const stickyColumnClass = 'sticky left-0 bg-[var(--color-background)] shadow-[1px_0_0_var(--color-border)]';
 const tableWidth = 224 + columns.reduce((width,column)=>width+(column.key==='revenue'?160:115),0);
 
@@ -122,15 +122,15 @@ export function AdsIntelligenceCenter() {
   if (query.isError) return <DataState variant="error" title="Não foi possível carregar os anúncios" description={query.error.message} onRetry={()=>void query.refetch()}/>;
   // Keep absolutely positioned screen-reader table captions inside the main
   // scroll area; otherwise their containing block is the page body.
-  return <div className="ads-intelligence-metrics relative space-y-6">
+  return <div className="ads-intelligence-metrics relative min-w-0 space-y-6">
     <header className="flex flex-wrap items-start justify-between gap-4">
       <div><h1 className="text-2xl font-semibold">Ads Intelligence</h1><p className="mt-2 max-w-3xl text-sm text-muted-foreground">Custos da UTMify e conversões do TMX, organizados por oferta e leva. Abra uma leva para comparar seus anúncios.</p></div>
       {data?.connection && <Button variant="outline" onClick={()=>setEditing(!editing)}>{editing?'Fechar configuração':'Editar conexão'}</Button>}
     </header>
     <section aria-label="Filtros dos anúncios" className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card p-4">
-      <label className="flex min-w-44 flex-col gap-1 text-xs text-muted-foreground">Empresa<select className={selectClass} value={company} onChange={e=>{setCompany(e.target.value);setOffer('');}}><option value="">Todas as empresas</option>{companies.map(c=><option key={c}>{c}</option>)}</select></label>
-      <label className="flex min-w-56 flex-col gap-1 text-xs text-muted-foreground">Oferta<select className={selectClass} value={offer} onChange={e=>setOffer(e.target.value)}><option value="">Todas as ofertas</option>{offers.map(o=><option key={o.id} value={o.id}>{o.company_name || 'Sem empresa'} · {o.name}</option>)}</select></label>
-      <label className="flex flex-col gap-1 text-xs text-muted-foreground">Ordenar levas e anúncios<select className={selectClass} value={sort} onChange={e=>setSort(e.target.value as MetricKey)}>{columns.map(c=><option key={c.key} value={c.key}>Maior {c.label}</option>)}</select></label>
+      <label className="flex w-full min-w-0 flex-col gap-1 text-xs text-muted-foreground sm:w-44">Empresa<select className={selectClass} value={company} onChange={e=>{setCompany(e.target.value);setOffer('');}}><option value="">Todas as empresas</option>{companies.map(c=><option key={c}>{c}</option>)}</select></label>
+      <label className="flex w-full min-w-0 flex-col gap-1 text-xs text-muted-foreground sm:w-56">Oferta<select className={selectClass} value={offer} onChange={e=>setOffer(e.target.value)}><option value="">Todas as ofertas</option>{offers.map(o=><option key={o.id} value={o.id}>{o.company_name || 'Sem empresa'} · {o.name}</option>)}</select></label>
+      <label className="flex w-full min-w-0 flex-col gap-1 text-xs text-muted-foreground sm:w-56">Ordenar levas e anúncios<select className={selectClass} value={sort} onChange={e=>setSort(e.target.value as MetricKey)}>{columns.map(c=><option key={c.key} value={c.key}>Maior {c.label}</option>)}</select></label>
       <p role="status" className="pb-3 text-xs text-muted-foreground">{batches.length} levas no filtro</p>
     </section>
     {(!data?.connection || editing) && <form className="space-y-4 rounded-xl border border-border bg-card p-5" onSubmit={e=>{e.preventDefault();save.mutate();}}>
@@ -164,7 +164,7 @@ export function AdsIntelligenceCenter() {
       <summary className="min-h-11 cursor-pointer font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">Campanhas aguardando revisão ({data.pending.length}) <span className="ml-2 text-sm font-normal text-primary">Revisar campanhas</span></summary>
       <p className="text-sm text-muted-foreground">Vincule a oferta quando ela não for reconhecida. Outros problemas de formato precisam ser corrigidos na origem. Dados pendentes ficam fora dos resultados.</p>
       {data.pending.map(p=><div key={p.campaign_key} className="flex flex-wrap items-center gap-3 border-t border-border pt-3">
-        <div className="min-w-48 flex-1"><p className="text-sm font-medium">{p.campaign_name}</p><p className="text-xs text-muted-foreground">{p.reason}</p></div>
+        <div className="min-w-0 basis-full break-words sm:basis-48 sm:flex-1"><p className="text-sm font-medium">{p.campaign_name}</p><p className="text-xs text-muted-foreground">{p.reason}</p></div>
         {p.can_map_offer ? <>
           <select aria-label={`Oferta para ${p.campaign_name}`} className={selectClass} value={mappings[p.campaign_key] ?? ''} onChange={e=>setMappings({...mappings,[p.campaign_key]:e.target.value})}><option value="">Selecione a oferta</option>{data.offers.map(o=><option key={o.id} value={o.id}>{o.company_name || 'Sem empresa'} · {o.name}</option>)}</select>
           <Button variant="outline" disabled={!mappings[p.campaign_key]||mapping.isPending} onClick={()=>mapping.mutate({campaign_key:p.campaign_key,offer_id:mappings[p.campaign_key]!})}>Vincular</Button>

@@ -125,6 +125,40 @@
   outline: 2px solid #67e8f9;
   outline-offset: 4px;
 }
+html[data-theme="light"] .refund-workspace {
+  color: var(--text-100);
+}
+html[data-theme="light"] .refund-workspace :is(.refund-panel, .refund-comparison) {
+  background: var(--color-bg-elevated);
+  border-color: var(--border-soft);
+}
+html[data-theme="light"] .refund-workspace .refund-summary {
+  background: linear-gradient(120deg, var(--tmx-hero-start), var(--tmx-hero-end));
+  border-top-color: var(--color-primary);
+}
+html[data-theme="light"] .refund-workspace :is(.refund-context, .refund-scope, thead) {
+  background: var(--color-secondary);
+  color: var(--text-65);
+  border-color: var(--border-soft);
+}
+html[data-theme="light"] .refund-workspace :is(.text-slate-300, .text-slate-400, .text-white\/50, .refund-section-nav a) {
+  color: var(--text-55);
+}
+html[data-theme="light"] .refund-workspace .refund-section-nav a:is(:hover, :focus-visible) {
+  background: var(--color-accent);
+  color: var(--color-primary);
+}
+html[data-theme="light"] .refund-workspace .refund-audit :is(th:first-child, td:first-child) {
+  background: var(--color-bg-elevated);
+}
+html[data-theme="light"] .refund-workspace .text-rose-300 { color: var(--color-danger); }
+html[data-theme="light"] .refund-workspace :is(.text-cyan-200, .text-cyan-300) { color: var(--color-primary); }
+html[data-theme="light"] .refund-workspace .text-emerald-300 { color: var(--color-success); }
+html[data-theme="light"] .refund-workspace .text-amber-200 { color: var(--color-warning); }
+@media (max-width: 639px) {
+  .refund-workspace .refund-section-nav a { min-height: 44px; display: inline-flex; align-items: center; }
+  .refund-workspace summary { min-height: 44px; }
+}
 @media (min-width: 1280px) {
   .refund-workspace .refund-analytics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .refund-workspace .refund-analytics > section { grid-column: 1 / -1; }

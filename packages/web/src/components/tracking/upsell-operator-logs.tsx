@@ -26,8 +26,8 @@ export function UpsellOperatorLogs() {
       <p className="text-sm text-muted-foreground">Uma linha por usuário: quantidade de upsells cruzados com o último clique anterior à aprovação e valor total aprovado.</p>
     </div>
     <div className="flex flex-wrap items-end gap-3">
-      <label className="min-w-56 space-y-1 text-sm">Oferta
-        <select className="block w-full rounded-md border border-border bg-background p-2" value={offerId} onChange={(event) => setOfferId(event.target.value)} disabled={offers.isLoading}>
+      <label className="w-full min-w-0 space-y-1 text-sm sm:w-56">Oferta
+        <select className="block h-11 w-full min-w-0 rounded-md border border-border bg-background p-2 text-base sm:text-sm" value={offerId} onChange={(event) => setOfferId(event.target.value)} disabled={offers.isLoading}>
           <option value="">Todas as ofertas · geral</option>
           {offers.data?.map((offer) => <option key={offer.id} value={offer.id}>{offer.name}</option>)}
         </select>
@@ -41,7 +41,7 @@ export function UpsellOperatorLogs() {
     {data && !logs.isError && <>
       <p className="text-sm text-muted-foreground">{data.scope === 'self' ? 'Você vê somente seus próprios resultados nas ofertas autorizadas.' : offerId ? 'Visão consolidada da oferta.' : 'Visão geral de todas as ofertas autorizadas, agrupada por pessoa.'} Sem corte nos 50 últimos cliques. Atualização a cada 30 segundos.</p>
       <UpsellOperatorSummary rows={data.summary} unattributed={data.unattributed_totals} isPrivate={isPrivate} />
-      <details className="text-sm text-muted-foreground"><summary className="cursor-pointer">Como os resultados são atribuídos</summary><p className="mt-2 max-w-prose">{data.attribution_notice} Os cliques individuais continuam armazenados para auditoria.</p></details>
+      <details className="text-sm text-muted-foreground"><summary className="min-h-11 cursor-pointer py-3">Como os resultados são atribuídos</summary><p className="mt-2 max-w-prose">{data.attribution_notice} Os cliques individuais continuam armazenados para auditoria.</p></details>
     </>}
   </section>;
 }

@@ -321,7 +321,7 @@ function saoPauloDateOffset(daysAgo: number) {
 
 function Metric({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-lg border border-white/[0.07] bg-white/[0.025] p-3">
+    <div className="min-w-0 break-words rounded-lg border border-white/[0.07] bg-white/[0.025] p-3">
       <p className="text-[10px] uppercase tracking-wider text-white/35">{label}</p>
       <p className="mono-num mt-1 text-base font-semibold text-white/85">{value}</p>
     </div>
@@ -2243,13 +2243,13 @@ export function TrackingSectionContent({
                   disponível e cruza tudo com os webhooks automaticamente.
                 </p>
               </div>
-              <div className="rounded-xl border border-cyan-300/20 bg-cyan-300/[0.045] p-4">
+              <div className="min-w-0 rounded-xl border border-cyan-300/20 bg-cyan-300/[0.045] p-4 [&_input]:min-w-0 [&_input]:text-base sm:[&_input]:text-sm">
                 <p className="hud-label text-cyan-200">Configurar etapa</p>
                 <div className="mt-3 grid gap-3 md:grid-cols-2">
                   <select
                     aria-label="Etapa do upsell"
                     disabled={Boolean(editingUpsellStageId)}
-                    className="h-10 rounded-md border border-white/[0.1] bg-black/30 px-3 text-sm text-white outline-none focus:border-cyan-300/40"
+                    className="h-11 w-full min-w-0 rounded-md border border-white/[0.1] bg-black/30 px-3 text-base text-white outline-none focus:border-cyan-300/40 sm:text-sm"
                     value={upsellStageKey}
                     onChange={(event) => {
                       const value = event.target.value as UpsellStageKey;
@@ -2302,7 +2302,7 @@ export function TrackingSectionContent({
                       {vendepayConnections.map((connection) => (
                         <label
                           key={connection.id}
-                          className="block"
+                          className="block min-w-0 break-words"
                           htmlFor={`upsell-destination-${connection.id}`}
                         >
                           <span className="mb-1.5 block text-xs text-cyan-100/70">
@@ -2330,7 +2330,7 @@ export function TrackingSectionContent({
                 )}
                 {canManage && (
                   <Button
-                    className="mt-3"
+                    className="mt-3 h-auto min-h-11 w-full whitespace-normal sm:w-auto"
                     disabled={
                       upsellStageName.trim().length < 2 ||
                       !Object.values(upsellConnectionDestinations).some((url) =>
@@ -2350,7 +2350,7 @@ export function TrackingSectionContent({
                 )}
                 {editingUpsellStageId && (
                   <Button
-                    className="ml-2 mt-3"
+                    className="mt-3 min-h-11 w-full sm:ml-2 sm:w-auto"
                     variant="outline"
                     onClick={() => {
                       setEditingUpsellStageId('');
@@ -2374,10 +2374,10 @@ export function TrackingSectionContent({
                   return (
                     <article
                       key={stage.id}
-                      className="rounded-xl border border-emerald-300/15 bg-black/15 p-4"
+                      className="min-w-0 rounded-xl border border-emerald-300/15 bg-black/15 p-4"
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <div>
+                        <div className="min-w-0 break-words">
                           <p className="hud-label text-emerald-200">{stage.stage_key}</p>
                           <h3 className="mt-1 font-semibold text-white/90">{stage.name}</h3>
                         </div>
@@ -2403,10 +2403,11 @@ export function TrackingSectionContent({
                         <Metric label="Erros da página" value={stage.errors} />
                       </div>
                       {canManage && (
-                        <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
+                        <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
                           <Button
                             size="sm"
                             variant="outline"
+                            className="h-auto min-h-11 whitespace-normal"
                             onClick={() => {
                               setEditingUpsellStageId(stage.id);
                               setUpsellStageKey(stage.stage_key);
@@ -2420,6 +2421,7 @@ export function TrackingSectionContent({
                           <Button
                             size="sm"
                             variant="outline"
+                            className="h-11 min-w-11"
                             aria-label={`Apagar ${stage.name}`}
                             disabled={deleteUpsellStage.isPending}
                             onClick={() => {
@@ -2447,7 +2449,7 @@ export function TrackingSectionContent({
                               key={connection.id}
                               className="flex min-w-0 items-center gap-2 text-[11px]"
                             >
-                              <span className="shrink-0 rounded-full border border-emerald-300/20 bg-emerald-300/[0.06] px-2 py-0.5 text-emerald-100/75">
+                              <span className="max-w-[50%] shrink-0 break-words rounded-full border border-emerald-300/20 bg-emerald-300/[0.06] px-2 py-0.5 text-emerald-100/75">
                                 {connection.name}
                               </span>
                               <span

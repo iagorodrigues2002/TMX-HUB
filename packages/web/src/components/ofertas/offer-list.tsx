@@ -299,7 +299,7 @@ export function OfferList() {
       </section>
 
       <section className="space-y-4">
-        <div className="flex items-baseline justify-between gap-3">
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
           <div>
             <p className="hud-label">Conexões</p>
             <h2 className="mt-1 text-[16px] font-semibold text-white">
@@ -308,6 +308,7 @@ export function OfferList() {
           </div>
           <Button
             size="sm"
+            className="min-h-11 sm:min-h-8"
             onClick={() => setShowCreate((value) => !value)}
             variant={showCreate ? 'outline' : 'default'}
           >

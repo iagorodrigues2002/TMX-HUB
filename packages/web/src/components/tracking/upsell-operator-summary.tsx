@@ -9,7 +9,7 @@ export function UpsellOperatorSummary({rows,unattributed,isPrivate}: {
 }) {
   const money = (amounts: Amount[]) => amounts.length
     ? amounts.map(amount=>auditMoney(amount.amount_minor,amount.currency,isPrivate)).join(' · ') : '—';
-  return <div className="overflow-x-auto"><table className="w-full min-w-[420px] text-left text-sm">
+  return <div className="max-w-full min-w-0 overflow-x-auto" role="region" aria-label="Resultados dos upsells por pessoa" tabIndex={0}><table className="w-full min-w-[420px] text-left text-sm">
     <caption className="sr-only">Upsells aprovados e valor bruto total por usuário</caption>
     <thead><tr className="border-b border-border"><th scope="col" className="px-3 py-3">Pessoa</th><th scope="col" className="px-3 py-3 text-right">Upsells aprovados</th><th scope="col" className="px-3 py-3 text-right">Valor total dos upsells</th></tr></thead>
     <tbody>{rows.map(row=><tr key={row.operator_id} className="border-b border-border hover:bg-muted/30"><th scope="row" className="px-3 py-4 font-medium">{row.operator_name || row.operator_id}</th><td className="px-3 py-4 text-right tabular-nums">{row.confirmed_purchases.toLocaleString('pt-BR')}</td><td className="px-3 py-4 text-right font-medium tabular-nums text-emerald-400">{money(row.amounts)}</td></tr>)}

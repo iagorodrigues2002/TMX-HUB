@@ -371,7 +371,7 @@ function Dataset({ dataset }: { dataset: OverviewDataset }) {
         </p>
       </header>
 
-      <div className="animate-[tmx-reveal_220ms_cubic-bezier(0,0,0.2,1)_100ms_both] grid grid-cols-2 gap-3 motion-reduce:animate-none lg:grid-cols-3">
+      <div className="animate-[tmx-reveal_220ms_cubic-bezier(0,0,0.2,1)_100ms_both] grid grid-cols-1 gap-3 motion-reduce:animate-none sm:grid-cols-2 lg:grid-cols-3">
         <Kpi
           label="Cliques"
           value={formatInt(dataset.clicks)}
@@ -425,7 +425,7 @@ function Dataset({ dataset }: { dataset: OverviewDataset }) {
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3" aria-label="Taxas e receita líquida">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label="Taxas e receita líquida">
         {[
           ['Taxas do gateway', dataset.finance?.fees, 'Percentual + tarifa por transação'],
           [
@@ -508,7 +508,7 @@ function OverviewLoadingSkeleton() {
       className="space-y-4 rounded-xl border border-cyan-300/[0.14] bg-cyan-300/[0.025] p-3 sm:p-4"
     >
       <div className="h-12 animate-pulse rounded-lg bg-white/[0.04] motion-reduce:animate-none" />
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {KPI_SKELETONS.map((skeleton) => (
           <div
             key={skeleton}

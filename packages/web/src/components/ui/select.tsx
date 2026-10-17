@@ -75,7 +75,7 @@ const SelectContent = React.forwardRef<
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        'tmx-select-content relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-xl border border-border bg-popover/95 text-popover-foreground shadow-card backdrop-blur-2xl',
+        'tmx-select-content relative z-50 max-h-[min(24rem,var(--radix-select-content-available-height,calc(100dvh-2rem)))] min-w-[8rem] max-w-[calc(100vw-1rem)] overflow-hidden rounded-xl border border-border bg-popover/95 text-popover-foreground shadow-card backdrop-blur-2xl',
         className,
       )}
       position={position}
@@ -118,7 +118,7 @@ const SelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      'relative flex w-full cursor-pointer select-none items-center rounded-lg py-2.5 pl-3 pr-9 text-[13px] text-muted-foreground outline-none transition-colors',
+      'relative flex min-h-11 w-full cursor-pointer select-none items-center whitespace-normal break-words rounded-lg py-2.5 pl-3 pr-9 text-[14px] text-muted-foreground outline-none transition-colors sm:min-h-0 sm:text-[13px]',
       'focus:bg-accent focus:text-accent-foreground data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground',
       'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
       className,

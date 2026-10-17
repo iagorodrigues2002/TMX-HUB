@@ -72,20 +72,21 @@ export function HubShell({
             notificationCount={notificationCount}
             onOpenNotifications={onOpenNotifications}
           />
-          <div className="flex flex-1 overflow-hidden">
+          <div className="flex min-h-0 flex-1 overflow-hidden">
             <Sidebar
               collapsed={sidebarCollapsed}
               mobileOpen={mobileNavOpen}
               onMobileOpenChange={setMobileNavOpen}
             />
             {fullBleed ? (
-              <div id="conteudo-principal" className="min-w-0 flex-1 overflow-hidden">
+              <div id="conteudo-principal" tabIndex={-1} className="min-w-0 flex-1 overflow-hidden">
                 {children}
               </div>
             ) : (
               <main
                 id="conteudo-principal"
-                className="min-w-0 flex-1 scroll-smooth overflow-x-hidden overflow-y-auto p-4 pb-8"
+                tabIndex={-1}
+                className="relative min-h-0 min-w-0 flex-1 scroll-smooth overflow-x-hidden overflow-y-auto overscroll-y-contain p-4 pb-8"
               >
                 <div className="mx-auto w-full max-w-[1440px]">{children}</div>
                 <MicroFooter />

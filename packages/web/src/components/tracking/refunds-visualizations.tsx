@@ -320,7 +320,7 @@ export function RefundTrend({
           {[0, 0.5, 1].map((fraction) => (
             <g key={fraction}>
               <line x1={left} x2={w - pad} y1={y(max * fraction)} y2={y(max * fraction)} stroke="currentColor" opacity=".09" strokeDasharray="4 6" />
-              <text x={left - 12} y={y(max * fraction) + 4} textAnchor="end" fill="#a5b6be" fontSize="11">
+              <text x={left - 12} y={y(max * fraction) + 4} textAnchor="end" fill="var(--text-55)" fontSize="11">
                 {refundMoney(max * fraction, false)}
               </text>
             </g>
@@ -359,7 +359,7 @@ export function RefundTrend({
                 x={x(points.indexOf(p))}
                 y={h - 8}
                 textAnchor="middle"
-                fill="#a5b6be"
+                fill="var(--text-55)"
                 fontSize="12"
               >
                 {p.date.slice(0, 10).split('-').reverse().join('/')}

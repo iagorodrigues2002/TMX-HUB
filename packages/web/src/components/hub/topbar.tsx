@@ -97,17 +97,17 @@ function Breadcrumbs({ items }: { items: BreadcrumbItem[] }) {
   const current = items.at(-1);
 
   return (
-    <nav aria-label="Breadcrumb" className="tmx-breadcrumb min-w-0">
+    <nav aria-label="Breadcrumb" className="tmx-breadcrumb min-w-0 overflow-hidden">
       <div className="flex min-w-0 items-center gap-1.5 text-[13px] md:hidden">
         {parent?.href && (
           <Link
             href={parent.href}
-            className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+            className="block min-h-11 min-w-0 max-w-[50%] truncate leading-[44px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             ← {parent.label}
           </Link>
         )}
-        <span aria-hidden className="text-muted-foreground/50">
+        <span aria-hidden className="shrink-0 text-muted-foreground/50">
           /
         </span>
         <span aria-current="page" className="truncate font-medium text-foreground">
@@ -185,7 +185,7 @@ export function Topbar({
       <Link
         href="/"
         aria-label="Ir para a visão geral"
-        className="flex shrink-0 items-center gap-2"
+        className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <span
           aria-hidden
@@ -222,7 +222,7 @@ export function Topbar({
           variant="outline"
           onClick={onOpenCommandPalette}
           aria-label="Abrir busca e comandos"
-          className="h-9 w-9 shrink-0 justify-center border-border/60 bg-muted/60 px-0 font-normal text-muted-foreground xl:w-auto xl:min-w-[180px] xl:justify-between xl:px-3"
+          className="h-11 w-11 shrink-0 justify-center border-border/60 bg-muted/60 px-0 font-normal text-muted-foreground xl:h-9 xl:w-auto xl:min-w-[180px] xl:justify-between xl:px-3"
         >
           <span className="flex items-center gap-2">
             <Search className="h-3.5 w-3.5" aria-hidden />
@@ -245,7 +245,7 @@ export function Topbar({
               ? `${notificationCount} ${notificationCount === 1 ? 'notificação nova' : 'notificações novas'}`
               : 'Notificações'
           }
-          className="relative h-11 w-11 shrink-0 sm:h-9 sm:w-9"
+          className="relative h-11 w-11 shrink-0 xl:h-9 xl:w-9"
         >
           <Bell className="h-4 w-4" aria-hidden />
           {notificationCount > 0 && (

@@ -177,10 +177,10 @@ function MobileNavigation({
               href={item.href}
               onClick={onNavigate}
               aria-current={active ? 'page' : undefined}
-              className="nav-item min-h-11"
+              className="nav-item min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <Icon className="h-4 w-4" aria-hidden />
-              <span>{item.label}</span>
+              <Icon className="h-4 w-4 shrink-0" aria-hidden />
+              <span className="min-w-0 break-words">{item.label}</span>
             </Link>
             {children.length > 0 && (
               <div className="ml-5 border-l border-border/60 pl-3">
@@ -192,10 +192,10 @@ function MobileNavigation({
                       href={child.href}
                       onClick={onNavigate}
                       aria-current={itemIsActive(child, pathname, search) ? 'page' : undefined}
-                      className="nav-item min-h-11 px-3 py-2.5"
+                      className="nav-item min-h-11 px-3 py-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                      <ChildIcon className="h-4 w-4" aria-hidden />
-                      <span>{child.label}</span>
+                      <ChildIcon className="h-4 w-4 shrink-0" aria-hidden />
+                      <span className="min-w-0 break-words">{child.label}</span>
                     </Link>
                   );
                 })}
@@ -275,7 +275,7 @@ export function Sidebar({ collapsed, mobileOpen, onMobileOpenChange }: SidebarPr
       </aside>
 
       <Dialog open={mobileOpen} onOpenChange={onMobileOpenChange}>
-        <DialogContent className="tmx-sidebar-dialog bottom-0 left-0 top-0 h-dvh max-h-none w-[min(88vw,360px)] max-w-none rounded-none border-y-0 border-l-0 border-r border-border/60 bg-background p-4 sm:h-dvh sm:w-[360px] sm:max-w-none sm:p-4 xl:hidden">
+        <DialogContent className="tmx-sidebar-dialog bottom-0 left-0 top-0 h-dvh max-h-none w-[min(88vw,360px)] max-w-none grid-rows-[auto_minmax(0,1fr)] rounded-none border-y-0 border-l-0 border-r border-border/60 bg-background p-4 sm:h-dvh sm:w-[360px] sm:max-w-none sm:p-4 [&>button]:h-11 [&>button]:w-11 xl:hidden">
           <DialogHeader className="border-b border-border/60 pb-3 pr-12">
             <DialogTitle>TMX HUB</DialogTitle>
             <DialogDescription>Navegue pelas áreas disponíveis.</DialogDescription>

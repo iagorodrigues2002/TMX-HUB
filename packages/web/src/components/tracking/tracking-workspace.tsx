@@ -77,28 +77,28 @@ function TrackingWorkspaceContent() {
     <div data-surface="tracking" className="signal-reveal space-y-4">
       <TrackingBackdrop />
       <header className="rounded-xl border border-[var(--hairline-strong)] bg-bg-elevated/75 p-4 md:p-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex min-w-0 gap-3">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-[var(--hairline-strong)] bg-[var(--hairline)]">
+        <div className="flex flex-wrap items-center justify-between gap-2 sm:items-start sm:gap-4">
+          <div className="flex min-w-0 items-center gap-2 sm:items-start sm:gap-3">
+            <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-[var(--hairline-strong)] bg-[var(--hairline)] sm:h-10 sm:w-10">
               <RadioTower className="h-5 w-5 text-[var(--signal-300)]" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-xl font-semibold tracking-tight text-white md:text-2xl">
+              <h1 className="text-lg font-semibold tracking-tight text-white sm:text-xl md:text-2xl">
                 Rastreamento
               </h1>
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-white/55">
+              <p className="mt-1 hidden max-w-2xl text-sm leading-6 text-white/55 sm:block">
                 Acompanhe cada sinal da entrada à receita e configure somente o ponto em foco.
               </p>
             </div>
           </div>
-          <fieldset className="tmx-currency-toggle">
-            <legend className="tmx-currency-toggle-label">Moeda</legend>
+          <fieldset className="tmx-currency-toggle" aria-label="Moeda">
+            <legend className="tmx-currency-toggle-label hidden sm:block">Moeda</legend>
             {(['BRL', 'USD'] as const).map((code) => (
               <button
                 key={code}
                 type="button"
                 onClick={() => setDisplayCurrency(code)}
-                className="tmx-currency-toggle-btn"
+                className="tmx-currency-toggle-btn max-sm:min-h-11 max-sm:min-w-11 max-sm:px-2!"
                 data-active={displayCurrency === code}
                 aria-pressed={displayCurrency === code}
               >
@@ -108,7 +108,7 @@ function TrackingWorkspaceContent() {
           </fieldset>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-white/[0.07] pt-4">
+        <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-white/[0.07] pt-3 sm:mt-4 sm:gap-3 sm:pt-4">
           <div className="min-w-full flex-1 sm:min-w-72">
             <label htmlFor="tracking-offer" className="text-xs font-medium text-white/55">
               Oferta ativa
@@ -119,7 +119,7 @@ function TrackingWorkspaceContent() {
                 value={activeOfferId}
                 disabled={isLoading || !offers.length}
                 onChange={(event) => setActiveOfferId(event.target.value)}
-                className="h-11 w-full appearance-none rounded-md border border-[var(--hairline-strong)] bg-[var(--surface-inset)] px-3 pr-10 text-sm text-[var(--ink-primary)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--signal-500)]"
+                className="h-11 w-full appearance-none rounded-md border border-[var(--hairline-strong)] bg-[var(--surface-inset)] px-3 pr-10 text-base text-[var(--ink-primary)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--signal-500)] sm:text-sm"
               >
                 {offersByCompany.map((group) => (
                   <optgroup key={group.company} label={group.company}>
@@ -158,12 +158,12 @@ function TrackingWorkspaceContent() {
       </header>
 
       <div className="grid min-w-0 gap-4 xl:grid-cols-[230px_minmax(0,1fr)]">
-        <aside className="h-fit rounded-lg border border-white/[0.08] bg-black/15 p-2 xl:sticky xl:top-20">
+        <aside className="h-fit min-w-0 rounded-lg border border-white/[0.08] bg-black/15 p-2 xl:sticky xl:top-20">
           <div className="px-2 py-2">
             <h2 className="text-sm font-semibold text-white/85">{activeArea.label}</h2>
-            <p className="mt-1 text-xs leading-5 text-white/45">{activeArea.description}</p>
+            <p className="mt-1 hidden text-xs leading-5 text-white/45 xl:block">{activeArea.description}</p>
           </div>
-          <div className="mt-1 flex gap-1.5 overflow-x-auto xl:block xl:overflow-visible">
+          <nav aria-label={`Seções de ${activeArea.label}`} tabIndex={0} className="mt-1 flex gap-1.5 overflow-x-auto rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--signal-500)] xl:block xl:overflow-visible">
             {activeArea.sections.map((item) => {
               const Icon = item.icon;
               return (
@@ -173,7 +173,7 @@ function TrackingWorkspaceContent() {
                   aria-current={section === item.id ? 'page' : undefined}
                   onClick={() => navigate(view, item.id)}
                   className={cn(
-                    'flex min-h-11 min-w-44 shrink-0 items-start gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--signal-500)] xl:mb-1 xl:w-full xl:min-w-0',
+                    'flex min-h-11 min-w-max shrink-0 items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--signal-500)] xl:mb-1 xl:w-full xl:min-w-0 xl:items-start',
                     section === item.id && 'bg-white/[0.06]',
                   )}
                 >
@@ -199,10 +199,10 @@ function TrackingWorkspaceContent() {
                 </button>
               );
             })}
-          </div>
+          </nav>
         </aside>
 
-        <main className="min-w-0">
+        <section className="min-w-0" aria-label={`Conteúdo de ${activeArea.label}`}>
           {isLoading ? (
             <DataState variant="loading" title="Carregando ofertas…" />
           ) : isError ? (
@@ -239,7 +239,7 @@ function TrackingWorkspaceContent() {
               />
             </div>
           )}
-        </main>
+        </section>
       </div>
 
       {isFetching && !isLoading && (

@@ -142,7 +142,7 @@ export function OfferContextSwitcher() {
   if (!isOfferContextPath(pathname)) return null;
 
   return (
-    <div className="min-w-0">
+    <div className="min-w-0 shrink-0">
       <Select
         open={open}
         onOpenChange={setOpen}
@@ -165,7 +165,7 @@ export function OfferContextSwitcher() {
       >
         <SelectTrigger
           aria-label={allowCompany ? 'Selecionar oferta ou empresa' : 'Trocar oferta atual'}
-          className="h-11 w-11 justify-center border-border/60 bg-muted/70 px-0 text-[13px] sm:h-9 sm:w-[min(30vw,240px)] sm:justify-between sm:px-3"
+          className="h-11 w-11 justify-center border-border/60 bg-muted/70 px-0 text-[13px] sm:w-[min(30vw,240px)] sm:justify-between sm:px-3 xl:h-9"
         >
           <Store className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
           <span className="hidden min-w-0 items-center gap-2 sm:flex">
@@ -177,7 +177,10 @@ export function OfferContextSwitcher() {
           </span>
           <span className="sr-only sm:hidden">Trocar oferta atual</span>
         </SelectTrigger>
-        <SelectContent align="start" className="border-border/60">
+        <SelectContent
+          align="start"
+          className="max-w-[calc(100vw-2rem)] border-border/60 [&_[role=option]]:min-h-11 [&_[role=option]]:break-words [&_[role=option]]:whitespace-normal"
+        >
           {isError && <SelectItem value="__retry">Tentar carregar novamente</SelectItem>}
           {offersByCompany.map((group) => (
             <SelectGroup key={group.company}>

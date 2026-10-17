@@ -19,7 +19,7 @@ export function OfferCard({
     <div className="glass-card flex flex-col gap-4 p-4">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1 space-y-1.5">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Link
               href={`/ofertas/${offer.id}`}
               className="truncate text-[15px] font-semibold text-white hover:text-cyan-200"
@@ -52,7 +52,7 @@ export function OfferCard({
         {(onEdit || onDelete) && (
           <div className="flex shrink-0 gap-1">
             {onEdit && (
-              <Button variant="ghost" size="sm" onClick={onEdit} aria-label="Editar oferta">
+              <Button variant="ghost" size="sm" className="h-11 w-11 p-0 sm:h-8 sm:w-auto sm:px-3" onClick={onEdit} aria-label="Editar oferta">
                 <Pencil className="h-3.5 w-3.5" />
               </Button>
             )}
@@ -60,6 +60,7 @@ export function OfferCard({
               <Button
                 variant="ghost"
                 size="sm"
+                className="h-11 w-11 p-0 sm:h-8 sm:w-auto sm:px-3"
                 onClick={() => {
                   if (confirm(`Remover oferta "${offer.name}" e todos os dados?`)) onDelete();
                 }}
@@ -72,7 +73,7 @@ export function OfferCard({
         )}
       </div>
 
-      <Button asChild size="sm" variant="outline" className="w-full">
+      <Button asChild size="sm" variant="outline" className="min-h-11 w-full sm:min-h-8">
         <Link href={`/ofertas/${offer.id}`}>
           <Activity className="h-3.5 w-3.5" />
           Abrir métricas e anúncios
