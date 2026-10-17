@@ -41,12 +41,18 @@ test('missing, ambiguous timezone and mismatched transactions never become valid
   const result=analytics([receipt({event:'chargeback',createdAt:purchase,chargeback_at:'2026-10-01T12:00:00'}),
     receipt({event:'compra.aprovada',transaction_id:'different',createdAt:purchase})]);
   assert.equal(result.delay.sample_count,0);
-  assert.equal(result.observed_delay.sample_count,0);
-  assert.equal(result.delay.missing_paid_at,1);
+  assert.equal(result.observed_delay.sample_count,1);
+  assert.equal(result.delay.missing_paid_at,0);
 });
 test('same external id cannot cross order/account boundaries supplied by SQL',()=>{
-  const result=analytics([receipt({event:'compra.aprovada',createdAt:purchase},{order_id:'other-order'}),receipt({event:'chargeback',chargeback_at:reversal})]);
+  const result=buildRefundAnalytics(recoverRefundDateEvidence([{...row,paid_at:null}], [receipt({event:'compra.aprovada',createdAt:purchase},{order_id:'other-order'}),receipt({event:'chargeback',chargeback_at:reversal})]),'2026-10-01','2026-10-16','day','2026-10-16');
   assert.equal(result.delay.sample_count,0);
+});
+test('persisted approved purchase remains evidence when its original receipt is unavailable',()=>{
+  const result=analytics([receipt({event:'chargeback',createdAt:purchase})]);
+  assert.equal(result.observed_delay.mean_days,45);
+  assert.equal(result.delay.mean_days,null);
+  assert.equal(result.delay.missing_paid_at,0);
 });
 test('proof of same instant remains valid; a negative interval is excluded',()=>{
   const same=analytics([paid,receipt({event:'refund',refunded_at:purchase})]);

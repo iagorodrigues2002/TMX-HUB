@@ -52,9 +52,13 @@ export function recoverRefundDateEvidence(rows: RefundOrder[], receipts: RefundD
     // No evidence for another gateway's date contract: never silently turn
     // an unverified lifecycle timestamp into a valid zero-day measurement.
     const dates = row.provider === 'vendepay' && row.payload_adapter !== 'explodely' ? evidence.get(row.id) : undefined;
+    // paid_at is persisted only on approval by the ingestion route. Retain
+    // this purchase evidence when an older approved receipt is unavailable.
+    const storedPurchase = row.paid_at && Number.isFinite(new Date(row.paid_at).getTime())
+      ? new Date(row.paid_at).toISOString() : undefined;
     return {
       ...row,
-      delay_paid_at: dates?.purchase ?? dates?.purchaseFallback ?? null,
+      delay_paid_at: dates?.purchase ?? storedPurchase ?? dates?.purchaseFallback ?? null,
       delay_reversal_at: dates?.reversal ?? null,
       observed_reversal_at: dates?.received ?? null,
       reversal_date_known: Boolean(dates?.reversal),
