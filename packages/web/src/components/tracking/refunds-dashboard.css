@@ -1,0 +1,188 @@
+/* Financial workspace: scoped so other TMX screens retain their own presentation. */
+.refund-workspace {
+  --refund-ease: cubic-bezier(.22, 1, .36, 1);
+  max-width: 1600px;
+  margin-inline: auto;
+  color: #e4edf3;
+}
+.refund-workspace .refund-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 8px 2px 0;
+}
+.refund-workspace .refund-context,
+.refund-workspace .refund-scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #24414e;
+  border-radius: 999px;
+  padding: 7px 12px;
+  background: #0b202a;
+  color: #bdd5df;
+  font-size: 12px;
+}
+.refund-workspace .refund-context-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #67e8f9;
+}
+.refund-workspace .refund-section-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  border-bottom: 1px solid #223641;
+  padding-bottom: 12px;
+}
+.refund-workspace .refund-section-nav a {
+  padding: 9px 14px;
+  border-radius: 8px;
+  color: #b7cbd5;
+  font-size: 13px;
+  transition: background-color 180ms, color 180ms;
+}
+.refund-workspace .refund-section-nav a:hover,
+.refund-workspace .refund-section-nav a:focus-visible {
+  background: #163542;
+  color: #a5f3fc;
+}
+.refund-workspace .refund-panel {
+  background: #0a1b26;
+  border-color: #243b48;
+  box-shadow: 0 8px 28px #00000018;
+  scroll-margin-top: 24px;
+}
+.refund-workspace .refund-summary {
+  background: linear-gradient(120deg, #102c39, #0a1c27 65%);
+  border-top: 2px solid #5ed5e2;
+}
+.refund-workspace .refund-summary .refund-metric {
+  padding: 16px 0;
+}
+.refund-workspace .refund-summary .refund-impact {
+  padding: 16px;
+  border-radius: 12px;
+  background: #f43f5e0d;
+  border: 1px solid #fb718533;
+}
+.refund-workspace .refund-analytics {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+}
+.refund-workspace .refund-comparison {
+  background: #0b202b;
+}
+.refund-workspace .refund-comparison .refund-metric dd {
+  font-size: 1.5rem;
+}
+.refund-workspace .refund-panel h2 {
+  letter-spacing: -.025em;
+}
+.refund-workspace .refund-panel .text-white\/50 {
+  color: #9db1bd;
+}
+.refund-workspace .refund-panel select:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+.refund-workspace .refund-table-scroll {
+  border: 1px solid #263b47;
+  border-radius: 12px;
+  scrollbar-color: #456577 #0b1d27;
+}
+.refund-workspace table {
+  font-variant-numeric: tabular-nums;
+}
+.refund-workspace thead {
+  background: #122a37;
+}
+.refund-workspace tbody tr {
+  transition: background-color 180ms;
+}
+.refund-workspace tbody tr:hover {
+  background: #1b36404d;
+}
+.refund-workspace .refund-audit td {
+  vertical-align: top;
+}
+.refund-workspace .refund-audit th:first-child,
+.refund-workspace .refund-audit td:first-child {
+  position: sticky;
+  left: 0;
+  background: #102531;
+  box-shadow: 6px 0 12px #00000014;
+  z-index: 1;
+}
+.refund-workspace :is(a, button, select, summary, [tabindex]):focus-visible {
+  outline: 2px solid #67e8f9;
+  outline-offset: 4px;
+}
+@media (min-width: 1280px) {
+  .refund-workspace .refund-analytics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .refund-workspace .refund-analytics > section { grid-column: 1 / -1; }
+  .refund-workspace .refund-analytics > .refund-breakdown { grid-column: auto; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .refund-workspace .refund-header { animation: refund-header-in 650ms var(--refund-ease) both; }
+  .refund-workspace .refund-panel {
+    transition: opacity 600ms var(--refund-ease), transform 650ms var(--refund-ease);
+  }
+  .refund-workspace .refund-panel[data-reveal="pending"] {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  .refund-workspace .refund-panel[data-reveal="visible"],
+  .refund-workspace .refund-panel:focus-within {
+    opacity: 1;
+    transform: none;
+  }
+  .refund-workspace .refund-chart-reveal { animation: refund-chart-in 850ms var(--refund-ease) both; }
+  .refund-workspace path.refund-chart-reveal { animation: refund-line-in 1100ms var(--refund-ease) both; }
+  .refund-workspace .refund-bar-reveal {
+    transform-box: fill-box;
+    transform-origin: center bottom;
+    animation: refund-bar-in 800ms var(--refund-ease) both;
+  }
+  .refund-workspace div.refund-bar-reveal {
+    transform-origin: left center;
+    animation-name: refund-horizontal-bar-in;
+  }
+  .refund-workspace [data-reveal="pending"] :is(.refund-bar-reveal, .refund-chart-reveal) { animation-play-state: paused; }
+  .refund-workspace details[open] > :not(summary) { animation: refund-header-in 300ms var(--refund-ease); }
+  .refund-workspace button:active { transform: scale(.96); }
+  .refund-workspace button:focus-visible { transform: none; }
+}
+@keyframes refund-header-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes refund-chart-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes refund-line-in {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+@keyframes refund-bar-in {
+  from { transform: scaleY(.02); opacity: .2; }
+  to { transform: scaleY(1); opacity: 1; }
+}
+@keyframes refund-horizontal-bar-in {
+  from { transform: scaleX(.02); opacity: .2; }
+  to { transform: scaleX(1); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .refund-workspace *, .refund-workspace *::before, .refund-workspace *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+  .refund-workspace .refund-panel { opacity: 1 !important; transform: none !important; }
+  .refund-workspace button:active { transform: none; }
+}

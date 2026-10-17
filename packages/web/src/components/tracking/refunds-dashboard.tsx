@@ -7,8 +7,9 @@ import { selectedMonthRange } from '@/lib/date-range';
 import { usePrivacy } from '@/lib/privacy-context';
 import { formatRefundDate, formatRefundElapsed } from '@/lib/refund-dates';
 import { useQuery } from '@tanstack/react-query';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { RefundAnalytics, refundMoney, refundPercent } from './refunds-visualizations';
+import './refunds-dashboard.css';
 const TZ = 'America/Sao_Paulo';
 function today() {
   return new Intl.DateTimeFormat('en-CA', {
@@ -22,7 +23,7 @@ function ago(days: number) {
   const [y, m, d] = today().split('-').map(Number);
   return new Date(Date.UTC(y!, m! - 1, d! - days, 12)).toISOString().slice(0, 10);
 }
-const panel = 'rounded-xl border border-white/10 bg-bg-elevated/70 p-5';
+const panel = 'refund-panel rounded-2xl border border-white/10 bg-bg-elevated/70 p-5 sm:p-6';
 const select =
   'h-11 w-full rounded-lg border border-cyan-100/20 bg-bg-elevated px-3 text-sm text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300';
 export function TrackingRefundsSummary({
@@ -96,6 +97,7 @@ export function RefundsDashboard({
 }: {
   initialOfferId?: string;
 }) {
+  const workspace = useRef<HTMLDivElement>(null);
   const [from, setFrom] = useState(() => ago(29));
   const [to, setTo] = useState(today);
   const [offerId, setOfferId] = useState(initialOfferId);
@@ -124,6 +126,28 @@ export function RefundsDashboard({
     retry: false,
   });
   const data = report.data;
+  useEffect(() => {
+    const root = workspace.current;
+    if (!root || !('IntersectionObserver' in window) || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const panels = root.querySelectorAll<HTMLElement>('.refund-panel');
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          (entry.target as HTMLElement).dataset.reveal = 'visible';
+          observer.unobserve(entry.target);
+        }
+      }
+    }, { threshold: 0, rootMargin: '0px 0px -24px 0px' });
+    for (const panel of panels) {
+      if (panel.dataset.reveal === 'visible') continue;
+      panel.dataset.reveal = 'pending';
+      observer.observe(panel);
+    }
+    return () => {
+      observer.disconnect();
+      for (const panel of panels) panel.dataset.reveal = 'visible';
+    };
+  }, [Boolean(data)]);
   const range = (a: string, b: string) => {
     setFrom(a);
     setTo(b);
@@ -131,19 +155,45 @@ export function RefundsDashboard({
   };
   const currentPage = Math.min(page, Math.max(1, Math.ceil((data?.items.length ?? 0) / 50)));
   return (
-    <div className="space-y-6">
-      <section className={panel}>
+    <div ref={workspace} className="refund-workspace space-y-6">
+      <header className="refund-header">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Reembolsos e chargebacks</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">Acompanhe o impacto financeiro, a evolução das devoluções e o prazo desde a compra.</p>
+        </div>
+        <div className="refund-context"><span className="refund-context-dot" aria-hidden="true" /> BRL · São Paulo</div>
+      </header>
+      <nav className="refund-section-nav" aria-label="Seções do relatório">
+        <a href="#refund-overview">Resumo financeiro</a>
+        <a href="#refund-evolution">Evolução</a>
+        <a href="#refund-timing">Prazos</a>
+        <a href="#refund-audit">Auditoria por pedido</a>
+      </nav>
+      <section className={`${panel} refund-filters`} aria-label="Filtros do relatório">
         <div className="flex flex-wrap justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold text-white">Reembolsos e chargebacks</h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">
-              Entenda o impacto das devoluções, sua evolução e a qualidade das vendas de cada mês.
-              Reembolsos e chargebacks são sempre somados.
-            </p>
+            <h2 className="text-base font-semibold text-white">Período e filtros</h2>
+            <p className="mt-1 text-xs text-slate-400">Reembolsos e chargebacks sempre unificados.</p>
           </div>
-          <span className="text-xs text-white/50">BRL · horário de São Paulo</span>
+          <span className="refund-scope">{offerId ? offers.data?.find((o) => o.id === offerId)?.name || 'Oferta selecionada' : 'Minhas ofertas · empresa TMX'}</span>
         </div>
-        <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-5 flex flex-wrap items-center gap-2">
+          {[
+            ['Hoje', today(), today()],
+            ['Ontem', ago(1), ago(1)],
+            ['Últimos 7 dias', ago(6), today()],
+            ['Este mês', `${today().slice(0, 7)}-01`, today()],
+          ].map(([label, a, b]) => (
+            <Button key={label} size="sm" aria-pressed={a === from && b === to}
+              variant={a === from && b === to ? 'default' : 'outline'} onClick={() => range(a!, b!)}>
+              {label}
+            </Button>
+          ))}
+          <Button size="sm" variant="outline" className="sm:ml-auto" disabled={report.isFetching} onClick={() => void report.refetch()}>
+            {report.isFetching ? 'Atualizando…' : 'Atualizar dados'}
+          </Button>
+        </div>
+        <div className="mt-5 grid gap-3 sm:grid-cols-3">
           <Field label="Selecionar mês">
             <Input
               aria-label="Selecionar mês"
@@ -179,6 +229,8 @@ export function RefundsDashboard({
               onChange={(e) => range(from, e.target.value)}
             />
           </Field>
+        </div>
+        <div className="mt-5 grid gap-3 border-t border-white/10 pt-5 sm:grid-cols-2 xl:grid-cols-4">
           <Field label="Oferta">
             <select
               aria-label="Oferta"
@@ -268,31 +320,6 @@ export function RefundsDashboard({
             e vinculadas à empresa TMX. Outras empresas e outros membros não entram neste consolidado.
           </p>
         )}
-        <div className="mt-4 flex flex-wrap gap-2">
-          {[
-            ['Hoje', today(), today()],
-            ['Ontem', ago(1), ago(1)],
-            ['Últimos 7 dias', ago(6), today()],
-            ['Este mês', `${today().slice(0, 7)}-01`, today()],
-          ].map(([label, a, b]) => (
-            <Button
-              key={label}
-              size="sm"
-              variant={a === from && b === to ? 'default' : 'outline'}
-              onClick={() => range(a!, b!)}
-            >
-              {label}
-            </Button>
-          ))}
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={report.isFetching}
-            onClick={() => void report.refetch()}
-          >
-            {report.isFetching ? 'Atualizando…' : 'Atualizar'}
-          </Button>
-        </div>
         {offers.isError && (
           <p role="alert" className="mt-3 text-sm text-amber-200">
             Não foi possível carregar as ofertas.{' '}
@@ -324,7 +351,7 @@ export function RefundsDashboard({
             interval={interval}
             onIntervalChange={setInterval}
           />
-          <section className={panel}>
+          <section id="refund-audit" className={`${panel} refund-audit`}>
             <h2 className="text-lg font-semibold text-white">Auditoria das devoluções</h2>
             <p className="mt-1 text-xs text-white/50">
               Pedidos únicos, com reembolsos e chargebacks unificados. Compare a data da compra
@@ -336,7 +363,8 @@ export function RefundsDashboard({
                 consideram todo o período.
               </p>
             )}
-            <div className="mt-5 overflow-x-auto">
+            <p className="mt-3 text-xs text-slate-400">Deslize a tabela para consultar todos os campos de cada pedido.</p>
+            <div className="refund-table-scroll mt-4 overflow-x-auto" role="region" aria-label="Auditoria das devoluções por pedido" tabIndex={0}>
               <table className="w-full min-w-[1100px] text-sm">
                 <caption className="sr-only">
                   Compras e devoluções por pedido, com o intervalo entre as duas datas.
@@ -354,7 +382,7 @@ export function RefundsDashboard({
                       'Cliente',
                       'Devolução',
                     ].map((h) => (
-                      <th key={h} scope="col" className="whitespace-nowrap px-3 py-3 font-medium">
+                      <th key={h} scope="col" className={`whitespace-nowrap px-3 py-3 font-medium ${h === 'Devolução' ? 'text-right' : ''}`}>
                         {h}
                       </th>
                     ))}
@@ -384,7 +412,7 @@ export function RefundsDashboard({
                       <td className="px-3 py-3 text-xs">
                         {isPrivate ? '****' : item.buyer?.name || item.buyer?.email || '—'}
                       </td>
-                      <td className="px-3 py-3 text-danger">
+                      <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums text-danger">
                         {item.amount_brl_minor == null
                           ? 'Conversão pendente'
                           : refundMoney(item.brl_minor, isPrivate)}
@@ -427,10 +455,10 @@ export function RefundsDashboard({
 }
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="space-y-1.5 text-xs text-white/60">
+    <label className="block min-w-0 space-y-2 text-xs text-slate-300">
       <span>{label}</span>
       {children}
-    </div>
+    </label>
   );
 }
 function Metric({

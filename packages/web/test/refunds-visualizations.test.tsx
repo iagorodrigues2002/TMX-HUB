@@ -23,6 +23,19 @@ const totals = {
   missing_fee_orders: 0,
 };
 const row = { key: 'offer', label: 'PJR_ENG', ...totals };
+test('organized workspace retains financial section anchors and accessible chart regions', () => {
+  const html = renderToStaticMarkup(
+    <RefundAnalytics data={fixture} isPrivate={false} interval="day" onIntervalChange={() => {}} />,
+  );
+  for (const anchor of ['refund-overview', 'refund-evolution', 'refund-timing']) {
+    assert.match(html, new RegExp(`id="${anchor}"`));
+  }
+  assert.match(html, /refund-analytics/);
+  assert.match(html, /refund-impact/);
+  assert.match(html, /role="region"/);
+  assert.match(html, /tabindex="0"/);
+  assert.match(html, /refund-bar-reveal/);
+});
 test('delay distribution shows sample percentages and hides the distribution in private mode', () => {
   const delay = {
     mean_days: 10, median_days: 8, sample_count: 4,
