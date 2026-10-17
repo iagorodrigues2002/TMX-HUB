@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="pt-BR">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Regressão isolada: rolagem de reembolsos</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow-x: hidden; }
+  body { position: relative; min-height: 100vh; background: #061119; color: white; font-family: sans-serif; }
+  .shell { height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
+  header { height: 56px; flex-shrink: 0; padding: 16px; background: #102c39; }
+  main { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 24px; }
+  .spacer { height: 1500px; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 20px; border: 1px solid #456577; }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+  footer { padding: 20px; }
+</style>
+<script>
+  // ?fixed loads the production stylesheet; the baseline reproduces uncontained captions.
+  if (new URLSearchParams(location.search).has('fixed')) {
+    const stylesheet = document.createElement('link');
+    stylesheet.rel = 'stylesheet';
+    stylesheet.href = '../../src/components/tracking/refunds-dashboard.css';
+    document.head.append(stylesheet);
+  }
+</script>
+<div class="shell">
+  <header>Menu e cabeçalho devem continuar na tela</header>
+  <main>
+    <div class="refund-workspace">
+      <a href="#fim">Ir ao último pedido fictício</a>
+      <div class="spacer">Conteúdo de teste; nenhum dado real.</div>
+      <section class="refund-panel">
+        <div class="refund-table-scroll">
+          <table>
+            <caption class="sr-only">Auditoria acessível dos pedidos fictícios</caption>
+            <tbody><tr><td id="fim">Último pedido fictício</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+    <footer>Fim do relatório</footer>
+  </main>
+</div>
+</html>

@@ -96,6 +96,8 @@
   scrollbar-color: #456577 #0b1d27;
 }
 .refund-workspace table {
+  /* Keep absolute sr-only captions inside the table's scroll container, not the body. */
+  position: relative;
   font-variant-numeric: tabular-nums;
 }
 .refund-workspace table td:first-child { white-space: nowrap; }
