@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { type TrackingPeriod, apiClient } from '@/lib/api-client';
 import { selectedMonthRange } from '@/lib/date-range';
 import { usePrivacy } from '@/lib/privacy-context';
+import { formatRefundDate, formatRefundElapsed } from '@/lib/refund-dates';
 import { useQuery } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
 import { RefundAnalytics, refundMoney, refundPercent } from './refunds-visualizations';
@@ -326,7 +327,8 @@ export function RefundsDashboard({
           <section className={panel}>
             <h2 className="text-lg font-semibold text-white">Auditoria das devoluções</h2>
             <p className="mt-1 text-xs text-white/50">
-              Pedidos únicos, com reembolsos e chargebacks unificados.
+              Pedidos únicos, com reembolsos e chargebacks unificados. Compare a data da compra
+              com a devolução; o prazo não inclui registros com datas ausentes ou inconsistentes.
             </p>
             {data.totals.count > data.items.length && (
               <p className="mt-2 text-xs text-amber-200">
@@ -335,18 +337,24 @@ export function RefundsDashboard({
               </p>
             )}
             <div className="mt-5 overflow-x-auto">
-              <table className="w-full min-w-[850px] text-sm">
+              <table className="w-full min-w-[1100px] text-sm">
+                <caption className="sr-only">
+                  Compras e devoluções por pedido, com o intervalo entre as duas datas.
+                </caption>
                 <thead>
                   <tr className="border-b border-white/10 text-left text-xs text-white/50">
                     {[
-                      'Quando',
+                      'Data da compra',
+                      'Data da devolução',
+                      'Tempo decorrido',
+                      'Notificação no TMX',
                       'Oferta / produto',
                       'Gateway / conta',
                       'Pedido',
                       'Cliente',
                       'Devolução',
                     ].map((h) => (
-                      <th key={h} className="px-3 py-3 font-medium">
+                      <th key={h} scope="col" className="whitespace-nowrap px-3 py-3 font-medium">
                         {h}
                       </th>
                     ))}
@@ -355,12 +363,17 @@ export function RefundsDashboard({
                 <tbody>
                   {data.items.slice((currentPage - 1) * 50, currentPage * 50).map((item) => (
                     <tr key={item.id} className="border-b border-white/5">
-                      <td className="px-3 py-3 text-xs">
-                        {new Intl.DateTimeFormat('pt-BR', {
-                          dateStyle: 'short',
-                          timeStyle: 'short',
-                          timeZone: TZ,
-                        }).format(new Date(item.lifecycle_at))}
+                      <td className="whitespace-nowrap px-3 py-3 text-xs tabular-nums text-white/80">
+                        {formatRefundDate(item.delay_paid_at, isPrivate)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-3 text-xs tabular-nums text-white/80">
+                        {formatRefundDate(item.delay_reversal_at, isPrivate)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-3 text-xs tabular-nums text-cyan-200">
+                        {formatRefundElapsed(item.delay_paid_at, item.delay_reversal_at, isPrivate)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-3 text-xs tabular-nums text-white/70">
+                        {formatRefundDate(item.observed_reversal_at, isPrivate)}
                       </td>
                       <td className="px-3 py-3">
                         <p>{item.offer_name}</p>

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { canAccessOffer } from '../services/offer-store.js';
 import { VENDEPAY_PENALTY_MINOR } from '../lib/gateway-fee-model.js';
 import { saoPauloDayRange } from '../services/utmify-sync.js';
+import { recoverRefundDateEvidence, type RefundDateReceipt } from '../services/refund-date-evidence.js';
 import {
   buildRefundAnalytics,
   localDay,
@@ -72,6 +73,7 @@ const plugin: FastifyPluginAsync = async (app) => {
         >`
       WITH scoped AS (
         SELECT o.*,p.offer_id,LEAST(o.refunded_at,o.chargeback_at) reversal_at,
+          COALESCE(vc.payload_adapter,'') payload_adapter,
           COALESCE(NULLIF(o.product->>'name',''),'Produto não identificado') product_name,
           COALESCE(vc.name,gc.name,sc.name,INITCAP(o.provider)) connection_name,
           COALESCE(o.amount_brl_minor,CASE WHEN o.currency='BRL' THEN o.amount_minor WHEN amount_fx.rate IS NOT NULL THEN round(o.amount_minor*amount_fx.rate)::bigint END) brl,
@@ -92,17 +94,28 @@ const plugin: FastifyPluginAsync = async (app) => {
           COALESCE(fee_settings->>'penalty_currency',fee_settings->>'fee_currency') fee_currency FROM scoped
       ) SELECT t.id,t.offer_id,t.provider,t.connection_name,t.product_name,t.external_id,t.status,t.order_kind,
         jsonb_build_object('name',t.buyer->>'name','email',t.buyer->>'email') buyer,
-        t.paid_at,t.reversal_at,t.brl::text amount_brl_minor,
+        t.paid_at,t.reversal_at,t.payload_adapter,t.brl::text amount_brl_minor,
         CASE WHEN t.fee_minor ~ '^[0-9]{1,10}$' THEN CASE WHEN t.fee_minor::numeric=0 THEN 0 WHEN t.fee_currency='BRL' THEN t.fee_minor::numeric WHEN fx.rate IS NOT NULL THEN round(t.fee_minor::numeric*fx.rate) END END::text penalty_brl_minor
       FROM tariffs t LEFT JOIN exchange_rate_cache fx ON fx.base_currency=t.fee_currency AND fx.target_currency='BRL'
     `
       : [];
-    const normalized: RefundOrder[] = rows.map((r) => ({
+    const recoveryIds = rows.filter((r) => r.provider === 'vendepay' && r.payload_adapter !== 'explodely' && r.reversal_at).map((r) => r.id);
+    const receipts = recoveryIds.length ? await app.db<RefundDateReceipt[]>`
+      SELECT wr.order_id,o.external_id,wr.payload,wr.received_at
+      FROM webhook_receipts wr
+      JOIN tracking_orders o ON o.id=wr.order_id AND o.provider='vendepay'
+      JOIN vendepay_connections vc ON vc.id=wr.connection_id
+        AND vc.id=o.vendepay_connection_id AND vc.project_id=o.project_id
+      WHERE wr.order_id=ANY(${recoveryIds}) AND wr.state='processed'
+        AND COALESCE(vc.payload_adapter,'')<>'explodely'
+      ORDER BY wr.received_at,wr.id
+    ` : [];
+    const normalized: RefundOrder[] = recoverRefundDateEvidence(rows.map((r) => ({
       ...r,
       offer_name: names.get(r.offer_id) ?? r.offer_id,
       amount_brl_minor: r.amount_brl_minor === null ? null : Number(r.amount_brl_minor),
       penalty_brl_minor: r.penalty_brl_minor === null ? null : Number(r.penalty_brl_minor),
-    }));
+    })), receipts);
     const analytics = buildRefundAnalytics(normalized, from, to, q.interval, today);
     return {
       from,

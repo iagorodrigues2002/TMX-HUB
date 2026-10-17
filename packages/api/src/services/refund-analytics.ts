@@ -8,6 +8,9 @@ export interface RefundOrder {
   product_name: string;
   paid_at: string | null;
   reversal_at: string | null;
+  delay_paid_at?: string | null;
+  delay_reversal_at?: string | null;
+  observed_reversal_at?: string | null;
   amount_brl_minor: number | null;
   penalty_brl_minor: number | null;
   [key: string]: unknown;
@@ -169,12 +172,25 @@ export function buildRefundAnalytics(
   const reversed = rows.filter(
     (r) => r.reversal_at && localDay(r.reversal_at) >= from && localDay(r.reversal_at) <= to,
   );
+  const delaySummary = (observed = false) => {
+  const purchaseDate = (r: RefundOrder) => r.delay_paid_at === undefined ? r.paid_at : r.delay_paid_at;
+  const reversalDate = (r: RefundOrder) => observed ? r.observed_reversal_at : r.delay_reversal_at === undefined ? r.reversal_at : r.delay_reversal_at;
   const rawDelays = reversed
-    .filter((r) => r.paid_at)
-    .map((r) => (Date.parse(r.reversal_at!) - Date.parse(r.paid_at!)) / 86400000);
+    .filter((r) => purchaseDate(r) && reversalDate(r))
+    .map((r) => (Date.parse(reversalDate(r)!) - Date.parse(purchaseDate(r)!)) / 86400000);
   const delays = rawDelays.filter((d) => d >= 0).sort((a, b) => a - b);
   const bounds = [0, 7, 15, 31, 61, 91, Infinity];
   const labels = ['0–6 dias', '7–14 dias', '15–30 dias', '31–60 dias', '61–90 dias', '91+ dias'];
+  return {
+    mean_days: delays.length ? delays.reduce((s, v) => s + v, 0) / delays.length : null,
+    median_days: delays.length ? (delays[Math.floor((delays.length - 1) / 2)]! + delays[Math.floor(delays.length / 2)]!) / 2 : null,
+    missing_paid_at: reversed.filter((r) => !purchaseDate(r)).length,
+    missing_reversal_at: reversed.filter((r) => !reversalDate(r)).length,
+    negative_delay_orders: rawDelays.filter((d) => d < 0).length,
+    sample_count: delays.length,
+    buckets: labels.map((label, i) => ({ label, count: delays.filter((d) => d >= bounds[i]! && d < bounds[i + 1]!).length })),
+  };
+  };
   return {
     totals,
     trend,
@@ -198,20 +214,8 @@ export function buildRefundAnalytics(
       products: ranking('product_name'),
     },
     cohorts,
-    delay: {
-      mean_days: delays.length ? delays.reduce((s, v) => s + v, 0) / delays.length : null,
-      median_days: delays.length
-        ? (delays[Math.floor((delays.length - 1) / 2)]! + delays[Math.floor(delays.length / 2)]!) /
-          2
-        : null,
-      missing_paid_at: reversed.filter((r) => !r.paid_at).length,
-      negative_delay_orders: rawDelays.filter((d) => d < 0).length,
-      sample_count: delays.length,
-      buckets: labels.map((label, i) => ({
-        label,
-        count: delays.filter((d) => d >= bounds[i]! && d < bounds[i + 1]!).length,
-      })),
-    },
+    delay: delaySummary(),
+    observed_delay: delaySummary(true),
     moving_average_window: 7,
   };
 }

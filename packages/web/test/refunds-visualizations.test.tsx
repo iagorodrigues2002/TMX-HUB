@@ -23,6 +23,28 @@ const totals = {
   missing_fee_orders: 0,
 };
 const row = { key: 'offer', label: 'PJR_ENG', ...totals };
+test('delay distribution shows sample percentages and hides the distribution in private mode', () => {
+  const delay = {
+    mean_days: 10, median_days: 8, sample_count: 4,
+    buckets: [{ label: '0–6 dias', count: 1 }, { label: '7–14 dias', count: 3 }],
+  };
+  const html = renderToStaticMarkup(<RefundDelay delay={delay} isPrivate={false} />);
+  assert.match(html, /25%/);
+  assert.match(html, /75%/);
+  assert.match(html, /<ul/);
+  const privateHtml = renderToStaticMarkup(<RefundDelay delay={delay} isPrivate />);
+  assert.doesNotMatch(privateHtml, /25%|75%|width:/);
+  assert.match(privateHtml, /Distribuição oculta/);
+});
+test('delay empty state never fabricates a zero-day mean', () => {
+  const html = renderToStaticMarkup(<RefundDelay delay={{
+    mean_days: null, median_days: null, sample_count: 0,
+    missing_paid_at: 2, buckets: [{ label: '0–6 dias', count: 0 }],
+  }} isPrivate={false} />);
+  assert.match(html, /Sem intervalo válido/);
+  assert.match(html, /permanecem no resumo financeiro/);
+  assert.doesNotMatch(html, />0 dias</);
+});
 const fixture = {
   from: '2026-09-01',
   to: '2026-09-30',
@@ -47,6 +69,20 @@ const fixture = {
   daily: [],
   items: [],
 } satisfies RefundReport;
+test('distinguishes effective reversal dates from delayed receipt notifications', () => {
+  const data = {
+    ...fixture,
+    delay: { mean_days: null, median_days: null, sample_count: 0, missing_reversal_at: 2, buckets: [] },
+    observed_delay: { mean_days: 45, median_days: 45, sample_count: 2, buckets: [{ label: '31–60 dias', count: 2 }] },
+  };
+  const html = renderToStaticMarkup(<RefundAnalytics data={data} isPrivate={false} interval="day" onIntervalChange={() => {}} />);
+  assert.match(html, /Tempo até o recebimento da notificação no TMX/);
+  assert.match(html, /Não é a data efetiva da devolução/);
+  assert.match(html, /45 dias/);
+  assert.match(html, /<details[^>]*open/);
+  const hidden = renderToStaticMarkup(<RefundAnalytics data={data} isPrivate interval="day" onIntervalChange={() => {}} />);
+  assert.doesNotMatch(hidden, /45 dias|width:/);
+});
 test('renders all five recommendations and unified reversal metrics with fines', () => {
   const html = renderToStaticMarkup(
     <RefundAnalytics data={fixture} isPrivate={false} interval="day" onIntervalChange={() => {}} />,

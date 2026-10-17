@@ -2475,6 +2475,16 @@ export const apiClient = {
       median_days: number | null;
       sample_count?: number;
       missing_paid_at?: number;
+      missing_reversal_at?: number;
+      negative_delay_orders?: number;
+      buckets: Array<{ label: string; count: number }>;
+    };
+    observed_delay?: {
+      mean_days: number | null;
+      median_days: number | null;
+      sample_count?: number;
+      missing_paid_at?: number;
+      missing_reversal_at?: number;
       negative_delay_orders?: number;
       buckets: Array<{ label: string; count: number }>;
     };
@@ -2494,6 +2504,11 @@ export const apiClient = {
       product_name: string;
       order_kind: string;
       lifecycle_at: string;
+      paid_at?: string | null;
+      delay_paid_at?: string | null;
+      delay_reversal_at?: string | null;
+      observed_reversal_at?: string | null;
+      reversal_date_known?: boolean;
       buyer: { name?: string; email?: string };
     }>;
     totals: RefundFinancialTotals;
