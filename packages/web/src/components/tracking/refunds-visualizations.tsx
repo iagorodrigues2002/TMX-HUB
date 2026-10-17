@@ -300,8 +300,9 @@ export function RefundTrend({
   const w = 900;
   const h = 280;
   const pad = 52;
+  const left = 96;
   const max = Math.max(1, ...points.flatMap((p) => [p.brl_minor, p.moving_average_brl_minor]));
-  const x = (i: number) => pad + ((i + 0.5) * (w - 2 * pad)) / points.length;
+  const x = (i: number) => left + ((i + 0.5) * (w - left - pad)) / points.length;
   const y = (v: number) => h - pad - (v / max) * (h - 2 * pad);
   const line = points
     .map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i)},${y(p.moving_average_brl_minor)}`)
@@ -318,14 +319,14 @@ export function RefundTrend({
           <title>Devoluções unificadas e média móvel</title>
           {[0, 0.5, 1].map((fraction) => (
             <g key={fraction}>
-              <line x1={pad} x2={w - pad} y1={y(max * fraction)} y2={y(max * fraction)} stroke="currentColor" opacity=".09" strokeDasharray="4 6" />
-              <text x={pad} y={y(max * fraction) - 8} fill="#a5b6be" fontSize="11">
+              <line x1={left} x2={w - pad} y1={y(max * fraction)} y2={y(max * fraction)} stroke="currentColor" opacity=".09" strokeDasharray="4 6" />
+              <text x={left - 12} y={y(max * fraction) + 4} textAnchor="end" fill="#a5b6be" fontSize="11">
                 {refundMoney(max * fraction, false)}
               </text>
             </g>
           ))}
           <line
-            x1={pad}
+            x1={left}
             x2={w - pad}
             y1={h - pad}
             y2={h - pad}
@@ -337,9 +338,9 @@ export function RefundTrend({
               key={p.date}
               className="refund-bar-reveal"
               style={{ animationDelay: `${Math.min(i * 18, 360)}ms` }}
-              x={x(i) - ((w - 2 * pad) / points.length) * 0.32}
+              x={x(i) - ((w - left - pad) / points.length) * 0.32}
               y={y(p.brl_minor)}
-              width={Math.max(1, ((w - 2 * pad) / points.length) * 0.64)}
+              width={Math.max(1, ((w - left - pad) / points.length) * 0.64)}
               height={Math.max(0, h - pad - y(p.brl_minor))}
               rx="2"
               fill="#fb7185"
