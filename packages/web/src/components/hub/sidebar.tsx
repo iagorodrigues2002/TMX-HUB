@@ -275,7 +275,16 @@ export function Sidebar({ collapsed, mobileOpen, onMobileOpenChange }: SidebarPr
       </aside>
 
       <Dialog open={mobileOpen} onOpenChange={onMobileOpenChange}>
-        <DialogContent className="tmx-sidebar-dialog bottom-0 left-0 top-0 h-dvh max-h-none w-[min(88vw,360px)] max-w-none grid-rows-[auto_minmax(0,1fr)] rounded-none border-y-0 border-l-0 border-r border-border/60 bg-background p-4 sm:h-dvh sm:w-[360px] sm:max-w-none sm:p-4 [&>button]:h-11 [&>button]:w-11 xl:hidden">
+        <DialogContent
+          onCloseAutoFocus={(event) => {
+            const trigger = document.getElementById('tmx-mobile-navigation-trigger');
+            if (trigger && trigger.getClientRects().length > 0) {
+              event.preventDefault();
+              trigger.focus({ preventScroll: true });
+            }
+          }}
+          className="tmx-sidebar-dialog bottom-0 left-0 top-0 h-dvh max-h-none w-[min(88vw,360px)] max-w-none grid-rows-[auto_minmax(0,1fr)] rounded-none border-y-0 border-l-0 border-r border-border/60 bg-background p-4 sm:h-dvh sm:w-[360px] sm:max-w-none sm:p-4 [&>button]:h-11 [&>button]:w-11 xl:hidden"
+        >
           <DialogHeader className="border-b border-border/60 pb-3 pr-12">
             <DialogTitle>TMX HUB</DialogTitle>
             <DialogDescription>Navegue pelas áreas disponíveis.</DialogDescription>

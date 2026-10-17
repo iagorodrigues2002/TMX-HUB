@@ -41,7 +41,7 @@ export function UserMenu() {
         onClick={togglePrivacy}
         aria-label={isPrivate ? 'Mostrar valores financeiros' : 'Ocultar valores financeiros'}
         title={isPrivate ? 'Mostrar valores financeiros' : 'Ocultar valores financeiros'}
-        className="h-11 w-11 sm:h-9 sm:w-9"
+        className="h-11 w-11 xl:h-9 xl:w-9"
       >
         {isPrivate ? <EyeOff aria-hidden /> : <Eye aria-hidden />}
       </Button>
@@ -52,7 +52,7 @@ export function UserMenu() {
         onClick={toggleTheme}
         aria-label={theme === 'dark' ? 'Usar tema claro' : 'Usar tema escuro'}
         title={theme === 'dark' ? 'Usar tema claro' : 'Usar tema escuro'}
-        className="hidden h-11 w-11 sm:inline-flex sm:h-9 sm:w-9"
+        className="hidden h-11 w-11 sm:inline-flex xl:h-9 xl:w-9"
       >
         {theme === 'dark' ? <Sun aria-hidden /> : <Moon aria-hidden />}
       </Button>
@@ -63,7 +63,7 @@ export function UserMenu() {
             type="button"
             aria-label={`Abrir menu de ${user.name}`}
             onClick={() => setMenuOpen(true)}
-            className="ml-0.5 grid h-11 w-11 cursor-pointer place-items-center rounded-md border border-border/60 bg-muted text-[11px] font-semibold text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-accent sm:h-9 sm:w-9"
+            className="ml-0.5 grid h-11 w-11 cursor-pointer place-items-center rounded-md border border-border/60 bg-muted text-[11px] font-semibold text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-accent xl:h-9 xl:w-9"
           >
             {initials || '·'}
           </button>

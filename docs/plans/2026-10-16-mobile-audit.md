@@ -26,6 +26,8 @@ Sem alterar cálculos, permissões, atribuição, webhooks, pixels, filas ou int
 6. Tracking/Upsell: cabeçalho compacto, navegação natural rolável, sem main aninhado, cards/etapas
    com largura mínima zero, botões que acomodam nomes longos e tabelas com região focável.
 7. Reembolsos: estilos de tema claro usando tokens, valores do eixo legíveis e atalhos tocáveis.
+8. Conferência interativa: devolver foco ao botão do menu ao fechar o drawer; controles de conta
+   com alvo de 44px também em tablets; fundo decorativo do tracking contido horizontalmente.
 
 ## Verificação
 

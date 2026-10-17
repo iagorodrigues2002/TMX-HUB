@@ -162,7 +162,8 @@ export function Topbar({
         variant="ghost"
         size="icon"
         onClick={onOpenMobileNavigation}
-        aria-label="Abrir navegação"
+          aria-label="Abrir navegação"
+          id="tmx-mobile-navigation-trigger"
         className="h-11 w-11 xl:hidden"
       >
         <Menu className="h-4 w-4" />
