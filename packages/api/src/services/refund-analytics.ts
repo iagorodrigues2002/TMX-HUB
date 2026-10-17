@@ -214,7 +214,8 @@ export function buildRefundAnalytics(
       products: ranking('product_name'),
     },
     cohorts,
-    delay: delaySummary(),
+    delay: delaySummary(true),
+    effective_delay: delaySummary(),
     observed_delay: delaySummary(true),
     moving_average_window: 7,
   };

@@ -69,17 +69,17 @@ const fixture = {
   daily: [],
   items: [],
 } satisfies RefundReport;
-test('distinguishes effective reversal dates from delayed receipt notifications', () => {
+test('uses first webhook receipt as the primary delay metric', () => {
   const data = {
     ...fixture,
-    delay: { mean_days: null, median_days: null, sample_count: 0, missing_reversal_at: 2, buckets: [] },
+    delay: { mean_days: 45, median_days: 45, sample_count: 2, buckets: [{ label: '31–60 dias', count: 2 }] },
     observed_delay: { mean_days: 45, median_days: 45, sample_count: 2, buckets: [{ label: '31–60 dias', count: 2 }] },
   };
   const html = renderToStaticMarkup(<RefundAnalytics data={data} isPrivate={false} interval="day" onIntervalChange={() => {}} />);
-  assert.match(html, /Tempo até o recebimento da notificação no TMX/);
-  assert.match(html, /Não é a data efetiva da devolução/);
+  assert.match(html, /Data do primeiro recebimento do webhook/);
+  assert.match(html, /não a data contida no payload/);
   assert.match(html, /45 dias/);
-  assert.match(html, /<details[^>]*open/);
+  assert.match(html, /notificações com intervalo válido/);
   const hidden = renderToStaticMarkup(<RefundAnalytics data={data} isPrivate interval="day" onIntervalChange={() => {}} />);
   assert.doesNotMatch(hidden, /45 dias|width:/);
 });

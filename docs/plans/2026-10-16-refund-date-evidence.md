@@ -1,5 +1,13 @@
 # Purchase/reversal date evidence
 
+## Primary interval requested by the owner
+
+The primary `delay` metric and audit-table interval use **first processed reversal
+webhook received_at minus approved purchase date**. Later replays cannot move the
+first receipt. `effective_delay` retains the separate provider-date calculation
+for diagnostics only; it does not drive the primary graph. The UI states the
+receipt basis explicitly. Financial totals and their period basis are unchanged.
+
 Read-only production inspection confirmed a Vendepay approved receipt and a later
 chargeback receipt containing the identical original `createdAt`. That field was
 previously stored for both purchase and chargeback, manufacturing zero-day delays.

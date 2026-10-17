@@ -345,9 +345,9 @@ export function RefundsDashboard({
                   <tr className="border-b border-white/10 text-left text-xs text-white/50">
                     {[
                       'Data da compra',
-                      'Data da devolução',
+                      'Recebimento do webhook',
                       'Tempo decorrido',
-                      'Notificação no TMX',
+                      'Data informada pelo gateway',
                       'Oferta / produto',
                       'Gateway / conta',
                       'Pedido',
@@ -367,13 +367,13 @@ export function RefundsDashboard({
                         {formatRefundDate(item.delay_paid_at, isPrivate)}
                       </td>
                       <td className="whitespace-nowrap px-3 py-3 text-xs tabular-nums text-white/80">
-                        {formatRefundDate(item.delay_reversal_at, isPrivate)}
+                        {formatRefundDate(item.observed_reversal_at, isPrivate)}
                       </td>
                       <td className="whitespace-nowrap px-3 py-3 text-xs tabular-nums text-cyan-200">
-                        {formatRefundElapsed(item.delay_paid_at, item.delay_reversal_at, isPrivate)}
+                        {formatRefundElapsed(item.delay_paid_at, item.observed_reversal_at, isPrivate)}
                       </td>
                       <td className="whitespace-nowrap px-3 py-3 text-xs tabular-nums text-white/70">
-                        {formatRefundDate(item.observed_reversal_at, isPrivate)}
+                        {formatRefundDate(item.delay_reversal_at, isPrivate)}
                       </td>
                       <td className="px-3 py-3">
                         <p>{item.offer_name}</p>

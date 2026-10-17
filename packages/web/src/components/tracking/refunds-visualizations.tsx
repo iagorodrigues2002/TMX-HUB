@@ -197,24 +197,15 @@ export function RefundAnalytics({
       <section className={panel}>
         <h2 className="text-lg font-semibold text-white">Tempo entre compra e devolução</h2>
         <p className="mt-1 max-w-3xl text-sm leading-6 text-white/60">
-          Compra e devolução do mesmo pedido, gateway e conta. A data efetiva só entra no
-          cálculo quando foi informada explicitamente pelo gateway.
+          Data do primeiro recebimento do webhook de reembolso ou chargeback no TMX menos
+          a data da compra, vinculadas ao mesmo pedido, gateway e conta. Reenvios posteriores
+          não alteram o prazo. Considera as devoluções contabilizadas no período selecionado.
         </p>
-        <RefundDelay delay={data.delay} isPrivate={isPrivate} />
-        {data.observed_delay && (
-          <details className="mt-6 border-t border-white/10 pt-5" open={!data.delay.sample_count}>
-            <summary className="cursor-pointer rounded text-sm font-medium text-cyan-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300">
-              Tempo até o recebimento da notificação no TMX
-            </summary>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-amber-100">
-              Indicador operacional: data da primeira notificação recebida menos data da compra.
-              Não é a data efetiva da devolução. Atrasos e reenvios do gateway podem aumentar esse prazo.
-              Considera as devoluções contabilizadas no período selecionado, não apenas as notificações
-              recebidas nele. Os valores financeiros não foram alterados por esta análise de datas.
-            </p>
-            <RefundDelay delay={data.observed_delay} isPrivate={isPrivate} basis="observed" />
-          </details>
-        )}
+        <p className="mt-2 text-xs leading-5 text-white/60">
+          Atrasos no envio original do gateway entram neste intervalo. A base é o recebimento
+          registrado pelo TMX, não a data contida no payload. Valores financeiros preservados.
+        </p>
+        <RefundDelay delay={data.delay} isPrivate={isPrivate} basis="observed" />
       </section>
     </>
   );
@@ -522,7 +513,7 @@ export function RefundDelay({
             <div className="mt-4 rounded-lg border border-dashed border-white/15 px-4 py-6">
               <p className="text-sm font-medium text-white/85">Sem intervalo válido neste filtro</p>
               <p className="mt-2 max-w-xl text-sm leading-6 text-white/60">
-                É preciso identificar a data da compra e a da devolução no mesmo pedido.
+                É preciso identificar a data da compra e a do primeiro recebimento do webhook no mesmo pedido.
                 Sem esse vínculo, o prazo não é calculado como zero.
               </p>
             </div>
@@ -560,7 +551,7 @@ export function RefundDelay({
           Os valores dessas devoluções permanecem no resumo financeiro.
           {!isPrivate && (
             <span className="mt-1 block tabular-nums">
-              Sem data da compra: {delay.missing_paid_at ?? 0}. Sem data de devolução/recebimento: {delay.missing_reversal_at ?? 0}.
+              Sem data da compra: {delay.missing_paid_at ?? 0}. {basis === 'observed' ? 'Sem data do recebimento' : 'Sem data da devolução'}: {delay.missing_reversal_at ?? 0}.
               Intervalos negativos: {delay.negative_delay_orders ?? 0}.
             </span>
           )}

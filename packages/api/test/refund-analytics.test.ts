@@ -17,6 +17,7 @@ const row = (patch: Partial<RefundOrder> = {}): RefundOrder => ({
   product_name: 'Front',
   paid_at: '2026-09-01T12:00:00Z',
   reversal_at: '2026-10-01T12:00:00Z',
+  observed_reversal_at: '2026-10-01T12:00:00Z',
   amount_brl_minor: 10000,
   penalty_brl_minor: 2700,
   ...patch,
