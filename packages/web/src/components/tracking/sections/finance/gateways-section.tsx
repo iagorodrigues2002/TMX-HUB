@@ -210,6 +210,7 @@ export function GatewaysSection({ offerId, canManage }: GatewaysSectionProps) {
         {GATEWAY_PROVIDERS.map((provider) => (
           <GatewayCard
             key={provider}
+            offerId={offerId}
             provider={provider}
             accounts={accounts[provider]}
             canManage={canManage}

@@ -11,8 +11,10 @@ import { cn } from '@/lib/utils';
 import { Check, Copy, Pencil, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { VendepayWebhook } from './vendepay-webhook';
 
 interface GatewayCardProps {
+  offerId: string;
   provider: GatewayProvider;
   accounts: GatewayAccount[];
   canManage: boolean;
@@ -23,7 +25,7 @@ interface GatewayCardProps {
   ) => Promise<{ webhookUrl?: string }>;
 }
 
-export function GatewayCard({ provider, accounts, canManage, onSave }: GatewayCardProps) {
+export function GatewayCard({ offerId, provider, accounts, canManage, onSave }: GatewayCardProps) {
   const registry = gatewayRegistry[provider];
   const Icon = registry.icon;
   const SettingsForm = registry.SettingsForm;
@@ -125,6 +127,13 @@ export function GatewayCard({ provider, accounts, canManage, onSave }: GatewayCa
                 isPending={isSaving}
                 onCancel={() => setEditingAccount(null)}
                 onSubmit={save}
+              />
+            )}
+            {canManage && provider === 'vendepay' && (
+              <VendepayWebhook
+                key={`${offerId}:${account.id}`}
+                offerId={offerId}
+                connectionId={account.id}
               />
             )}
           </div>
