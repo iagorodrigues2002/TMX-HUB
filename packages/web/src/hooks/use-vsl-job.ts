@@ -1,7 +1,7 @@
 'use client';
 
+import { type VslJobView, apiClient } from '@/lib/api-client';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient, type VslJobView } from '@/lib/api-client';
 
 const POLLING_STATES = new Set([
   'queued',

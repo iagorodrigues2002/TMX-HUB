@@ -1,11 +1,11 @@
-import type { Redis } from 'ioredis';
-import { ulid } from 'ulid';
 import type {
   DigiAudit,
   DigiAuditItem,
   DigiAuditStatus,
   UpdateDigiAuditRequest,
 } from '@page-cloner/shared';
+import type { Redis } from 'ioredis';
+import { ulid } from 'ulid';
 import { NotFoundError } from '../lib/problem.js';
 
 const AUDIT_PREFIX = 'digi-audit:';
@@ -40,9 +40,7 @@ export class DigiAuditStore {
     const next: DigiAudit = {
       ...current,
       ...(patch.product_name !== undefined ? { productName: patch.product_name.trim() } : {}),
-      ...(patch.offer_id !== undefined
-        ? { offerId: patch.offer_id.trim() || undefined }
-        : {}),
+      ...(patch.offer_id !== undefined ? { offerId: patch.offer_id.trim() || undefined } : {}),
       ...(patch.status ? { status: patch.status } : {}),
       ...(patch.notes !== undefined ? { notes: patch.notes } : {}),
       // Items are merged (not replaced) so the client only sends changed keys.

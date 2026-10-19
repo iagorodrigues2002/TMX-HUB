@@ -23,6 +23,7 @@ export type {
 };
 
 export interface FetchOptions {
+  signal?: AbortSignal;
   renderMode?: 'static' | 'js';
   userAgent?: string;
   viewport?: { width: number; height: number };
@@ -68,6 +69,10 @@ export interface SanitizeResult {
 }
 
 export interface ResolveAssetsOptions {
+  signal?: AbortSignal;
+  maxTotalBytes?: number;
+  maxAssets?: number;
+  maxCssDepth?: number;
   download?: boolean;
   maxBytes?: number;
   maxConcurrency?: number;

@@ -1,7 +1,8 @@
 import { readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { isJavaScriptUrl } from '../src/sanitize/attr-rules.js';
 import { sanitize } from '../src/sanitize/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -11,6 +12,12 @@ async function loadFixture(name: string): Promise<string> {
 }
 
 describe('sanitize', () => {
+  it('detects script schemes obscured by every ASCII control character', () => {
+    for (let code = 0; code < 32; code += 1) {
+      expect(isJavaScriptUrl(`java${String.fromCharCode(code)}script:alert(1)`)).toBe(true);
+    }
+    expect(isJavaScriptUrl('https://example.com/javascript:')).toBe(false);
+  });
   it('removes scripts, noscripts, inline handlers, and javascript: hrefs', async () => {
     const html = await loadFixture('tracking-pixels.html');
     const result = sanitize(html);

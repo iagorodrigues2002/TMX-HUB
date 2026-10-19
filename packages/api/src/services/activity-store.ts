@@ -1,5 +1,5 @@
-import type { Redis } from 'ioredis';
 import type { ActivityEntry, ActivityKind } from '@page-cloner/shared';
+import type { Redis } from 'ioredis';
 
 /**
  * Per-user activity feed. Stored as a Redis sorted set where the score is the
@@ -44,7 +44,12 @@ export class ActivityStore {
       .exec();
   }
 
-  async updateStatus(userId: string, kind: ActivityKind, id: string, status: string): Promise<void> {
+  async updateStatus(
+    userId: string,
+    kind: ActivityKind,
+    id: string,
+    status: string,
+  ): Promise<void> {
     if (!userId) return;
     await this.redis.hset(entryKey(userId, kind, id), { status });
   }

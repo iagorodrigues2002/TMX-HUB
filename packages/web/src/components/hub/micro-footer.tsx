@@ -12,9 +12,13 @@ export function MicroFooter() {
     >
       <span aria-hidden className="status-dot" />
       <span>STATUS: ONLINE</span>
-      <span aria-hidden className="hidden text-white/20 sm:inline">·</span>
+      <span aria-hidden className="hidden text-white/20 sm:inline">
+        ·
+      </span>
       <span className="hidden sm:inline">NEURAL-LOCK ENCRYPTION ACTIVE</span>
-      <span aria-hidden className="text-white/20">·</span>
+      <span aria-hidden className="text-white/20">
+        ·
+      </span>
       <span>TMX HUB v0.10</span>
     </footer>
   );

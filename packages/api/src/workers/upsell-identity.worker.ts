@@ -3,9 +3,13 @@ import type { FastifyInstance } from 'fastify';
 import { ulid } from 'ulid';
 import { env } from '../env.js';
 import { decryptSecret, encryptSecret } from '../lib/secret-box.js';
-import { collectVendaIdCandidates } from '../services/vendepay-venda-id.js';
 import { checkUpsellCompatibilityDetailed } from '../services/upsell-compatibility.js';
-import { validateUpsellCandidates, MAX_UPSELL_VALIDATION_ATTEMPTS, canRetryUpsellValidation } from '../services/upsell-identity-validation.js';
+import {
+  MAX_UPSELL_VALIDATION_ATTEMPTS,
+  canRetryUpsellValidation,
+  validateUpsellCandidates,
+} from '../services/upsell-identity-validation.js';
+import { collectVendaIdCandidates } from '../services/vendepay-venda-id.js';
 
 /** Postgres-backed queue: survives Redis outages and leases work across replicas. */
 export function startUpsellIdentityWorker(app: Pick<FastifyInstance, 'db' | 'log'>) {
@@ -33,10 +37,16 @@ export function startUpsellIdentityWorker(app: Pick<FastifyInstance, 'db' | 'log
     `;
     if (!job) return;
     try {
-      const [order] = await sql<Array<{
-        project_id: string; external_id: string; visitor_id: string | null;
-        vendepay_connection_id: string; payload: unknown; processing_payload_encrypted: string | null;
-      }>>`
+      const [order] = await sql<
+        Array<{
+          project_id: string;
+          external_id: string;
+          visitor_id: string | null;
+          vendepay_connection_id: string;
+          payload: unknown;
+          processing_payload_encrypted: string | null;
+        }>
+      >`
         SELECT o.project_id,o.external_id,o.visitor_id,o.vendepay_connection_id,
                wr.payload,wr.processing_payload_encrypted
         FROM tracking_orders o
@@ -48,25 +58,37 @@ export function startUpsellIdentityWorker(app: Pick<FastifyInstance, 'db' | 'log
         WHERE o.id=${job.order_id} AND o.status='paid' AND o.order_kind='front'
       `;
       if (!order) throw new Error('approved_front_receipt_unavailable');
-      const stages = await sql<Array<{ destination_url: string; connection_destinations: Record<string,string> | null }>>`
+      const stages = await sql<
+        Array<{ destination_url: string; connection_destinations: Record<string, string> | null }>
+      >`
         SELECT destination_url,connection_destinations FROM tracking_upsell_stages
         WHERE project_id=${order.project_id} AND enabled=true ORDER BY id LIMIT 5
       `;
-      const destinations = [...new Set(stages.map(stage => {
-        const mapping = stage.connection_destinations ?? {};
-        return Object.keys(mapping).length
-          ? mapping[order.vendepay_connection_id]
-          : stage.destination_url;
-      }).filter((url): url is string => Boolean(url)))];
+      const destinations = [
+        ...new Set(
+          stages
+            .map((stage) => {
+              const mapping = stage.connection_destinations ?? {};
+              return Object.keys(mapping).length
+                ? mapping[order.vendepay_connection_id]
+                : stage.destination_url;
+            })
+            .filter((url): url is string => Boolean(url)),
+        ),
+      ];
       const payload = order.processing_payload_encrypted
-        ? JSON.parse(decryptSecret(order.processing_payload_encrypted,encryptionKey))
+        ? JSON.parse(decryptSecret(order.processing_payload_encrypted, encryptionKey))
         : order.payload;
       const result = await validateUpsellCandidates(
-        collectVendaIdCandidates(payload,order.external_id),destinations,
-        (destination,candidate) => checkUpsellCompatibilityDetailed(destination,candidate,true,
-          { timeoutMs: 4_000, retryDelaysMs: [0] }),
+        collectVendaIdCandidates(payload, order.external_id),
+        destinations,
+        (destination, candidate) =>
+          checkUpsellCompatibilityDetailed(destination, candidate, true, {
+            timeoutMs: 4_000,
+            retryDelaysMs: [0],
+          }),
       );
-      await sql.begin(async tx => {
+      await sql.begin(async (tx) => {
         const [locked] = await tx`
           SELECT order_id FROM tracking_upsell_identity_validation
           WHERE order_id=${job.order_id} AND lease_token=${token} AND state='processing' FOR UPDATE
@@ -79,23 +101,32 @@ export function startUpsellIdentityWorker(app: Pick<FastifyInstance, 'db' | 'log
               (id,project_id,visitor_id,vendid_hash,vendid_encrypted,source_order_id,vendepay_connection_id)
             SELECT ${ulid()},${order.project_id},${order.visitor_id ?? `vendepay:${order.external_id}`},
               ${createHash('sha256').update(result.vendid).digest('hex')},
-              ${encryptSecret(result.vendid,encryptionKey)},${job.order_id},${order.vendepay_connection_id}
+              ${encryptSecret(result.vendid, encryptionKey)},${job.order_id},${order.vendepay_connection_id}
             WHERE EXISTS(SELECT 1 FROM tracking_orders WHERE id=${job.order_id} AND status='paid')
               AND NOT EXISTS(SELECT 1 FROM tracking_upsell_identities
                 WHERE project_id=${order.project_id} AND source_order_id=${job.order_id})
             ON CONFLICT(project_id,vendid_hash) DO NOTHING
           `;
         }
-        const [identity] = result.vendid ? await tx`
+        const [identity] = result.vendid
+          ? await tx`
           SELECT 1 FROM tracking_upsell_identities
           WHERE project_id=${order.project_id} AND source_order_id=${job.order_id}
-        ` : [];
-        const state = identity ? 'confirmed' : result.vendid ? 'failed' : result.temporary
-          ? (canRetryUpsellValidation(job.attempts) ? 'retry' : 'failed') : 'rejected';
+        `
+          : [];
+        const state = identity
+          ? 'confirmed'
+          : result.vendid
+            ? 'failed'
+            : result.temporary
+              ? canRetryUpsellValidation(job.attempts)
+                ? 'retry'
+                : 'failed'
+              : 'rejected';
         await tx`
           UPDATE tracking_upsell_identity_validation
           SET state=${state},last_error=${identity ? null : result.vendid ? 'buyer_sale_id_already_bound' : result.reason},
-              next_attempt_at=now()+${Math.min(1800,30*2**(job.attempts-1))}*interval '1 second',
+              next_attempt_at=now()+${Math.min(1800, 30 * 2 ** (job.attempts - 1))}*interval '1 second',
               lease_until=NULL,lease_token=NULL,updated_at=now()
           WHERE order_id=${job.order_id} AND lease_token=${token}
         `;
@@ -130,15 +161,24 @@ export function startUpsellIdentityWorker(app: Pick<FastifyInstance, 'db' | 'log
       WHERE attempts>=${MAX_UPSELL_VALIDATION_ATTEMPTS} AND (state IN ('pending','retry')
         OR (state='processing' AND lease_until<now()))
     `;
-    await Promise.all([processOne(),processOne()]);
+    await Promise.all([processOne(), processOne()]);
   };
   const tick = () => {
     if (stopped || running) return;
-    running = cycle().catch(error => app.log.error({error},'upsell identity queue cycle failed'))
-      .finally(() => { running=null; });
+    running = cycle()
+      .catch((error) => app.log.error({ error }, 'upsell identity queue cycle failed'))
+      .finally(() => {
+        running = null;
+      });
   };
-  const timer=setInterval(tick,10_000);
+  const timer = setInterval(tick, 10_000);
   timer.unref();
   tick();
-  return { close: async () => { stopped=true;clearInterval(timer);await running; } };
+  return {
+    close: async () => {
+      stopped = true;
+      clearInterval(timer);
+      await running;
+    },
+  };
 }

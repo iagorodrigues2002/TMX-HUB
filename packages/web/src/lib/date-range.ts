@@ -61,8 +61,10 @@ export function selectedMonthRange(month: string, anchor = todayIso()): DateRang
   const [year, monthNumber] = month.split('-').map(Number);
   return {
     from: `${month}-01`,
-    to: month === anchor.slice(0, 7) ? anchor
-      : new Date(Date.UTC(year!, monthNumber!, 0, 12)).toISOString().slice(0, 10),
+    to:
+      month === anchor.slice(0, 7)
+        ? anchor
+        : new Date(Date.UTC(year!, monthNumber!, 0, 12)).toISOString().slice(0, 10),
   };
 }
 
@@ -93,6 +95,6 @@ export const PERIOD_DATE_PRESETS: readonly DateRangePreset[] = [
   ...MONTH_DATE_PRESETS,
 ];
 
-export const UPSELL_LOG_DATE_PRESETS = DASHBOARD_DATE_PRESETS.filter(preset =>
-  ['today','yesterday','last-7-days','current-month'].includes(preset.id),
+export const UPSELL_LOG_DATE_PRESETS = DASHBOARD_DATE_PRESETS.filter((preset) =>
+  ['today', 'yesterday', 'last-7-days', 'current-month'].includes(preset.id),
 );

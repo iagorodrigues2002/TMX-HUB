@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { prepareMediaProcess } from '@page-cloner/core';
 import { Worker } from 'bullmq';
 import type { Logger } from 'pino';
 import { env } from '../env.js';
@@ -71,51 +72,69 @@ function videoCompressionArgs(mode: PhaseCancelFfmpegArgs['compression']): strin
   }
 }
 
-export function runPhaseCancelFfmpeg(args: PhaseCancelFfmpegArgs, log: Logger): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const useWhiteAudio = Boolean(args.whiteAudio);
-    const ffArgs = [
-      '-y',
-      '-hide_banner',
-      '-loglevel',
-      'warning',
-      '-i',
-      args.inputVideo,
-      ...(args.whiteAudio ? ['-i', args.whiteAudio] : []),
-      '-filter_complex',
-      buildFilterComplex(args.whiteVolumeDb, useWhiteAudio),
-      '-map',
-      '0:v',
-      '-map',
-      '[outA]',
-      ...videoCompressionArgs(args.compression),
-      '-c:a',
-      'aac',
-      '-b:a',
-      '192k',
-      '-movflags',
-      '+faststart',
-      '-map_metadata',
-      '-1',
-      '-shortest',
-      args.output,
-    ];
-
-    log.debug({ cmd: 'ffmpeg', args: ffArgs.join(' ') }, 'spawning ffmpeg');
-    const proc = spawn('ffmpeg', ffArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
-
-    let stderr = '';
-    proc.stderr.on('data', (d) => {
-      const line = d.toString();
-      stderr += line;
-      log.debug({ line: line.trim() }, 'ffmpeg');
-    });
-    proc.on('error', (err) => reject(err));
-    proc.on('close', (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`ffmpeg exit ${code}: ${stderr.slice(-2000)}`));
-    });
+export async function runPhaseCancelFfmpeg(
+  args: PhaseCancelFfmpegArgs,
+  log: Logger,
+): Promise<void> {
+  const prepared = await prepareMediaProcess({
+    executable: 'ffmpeg',
+    mode: 'local',
+    inputFiles: [args.inputVideo, ...(args.whiteAudio ? [args.whiteAudio] : [])],
+    outputFiles: [args.output],
   });
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const useWhiteAudio = Boolean(args.whiteAudio);
+      const ffArgs = [
+        '-y',
+        '-hide_banner',
+        '-loglevel',
+        'warning',
+        '-protocol_whitelist',
+        'file,pipe',
+        '-i',
+        args.inputVideo,
+        ...(args.whiteAudio ? ['-protocol_whitelist', 'file,pipe', '-i', args.whiteAudio] : []),
+        '-filter_complex',
+        buildFilterComplex(args.whiteVolumeDb, useWhiteAudio),
+        '-map',
+        '0:v',
+        '-map',
+        '[outA]',
+        ...videoCompressionArgs(args.compression),
+        '-c:a',
+        'aac',
+        '-b:a',
+        '192k',
+        '-movflags',
+        '+faststart',
+        '-map_metadata',
+        '-1',
+        '-shortest',
+        args.output,
+      ];
+
+      log.debug({ cmd: 'ffmpeg', args: ffArgs.join(' ') }, 'spawning ffmpeg');
+      const proc = spawn(prepared.executablePath, ffArgs, {
+        env: prepared.env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+
+      let stderr = '';
+      proc.stderr.on('data', (d) => {
+        const line = d.toString();
+        stderr += line;
+        log.debug({ line: line.trim() }, 'ffmpeg');
+      });
+      proc.on('error', (err) => reject(err));
+      proc.on('close', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`ffmpeg exit ${code}: ${stderr.slice(-2000)}`));
+      });
+    });
+  } finally {
+    await prepared.close();
+  }
 }
 
 /**

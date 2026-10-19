@@ -1,12 +1,5 @@
 'use client';
 
-import {
-  KpiGrid,
-  formatCurrency,
-  formatInt,
-  formatPercent,
-  formatRoas,
-} from '@/components/dashboard/kpi-cards';
 import { HubShell } from '@/components/hub/hub-shell';
 import { OfferAiAnalysis } from '@/components/ofertas/offer-ai-analysis';
 import { OfferCard } from '@/components/ofertas/offer-card';
@@ -14,269 +7,66 @@ import { OfferEditDialog } from '@/components/ofertas/offer-edit-dialog';
 import { Button } from '@/components/ui/button';
 import { DataState } from '@/components/ui/data-state';
 import { DateRangeFilter } from '@/components/ui/date-range-filter';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  type IntradayAdView,
-  type IntradayRangeSummaryView,
-  type IntradaySummaryView,
-  type MetricsView,
-  apiClient,
-  canAccessOfferAi,
-} from '@/lib/api-client';
-import { useAuth } from '@/lib/auth-context';
-import {
-  PERIOD_DATE_PRESETS,
-  SAO_PAULO_TIME_ZONE,
-  rollingDateRange,
-  singleDayRange,
-  todayIso,
-} from '@/lib/date-range';
-import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, ChevronDown, Clock3, Loader2, Pencil, Search, Target } from 'lucide-react';
+import { PERIOD_DATE_PRESETS, todayIso } from '@/lib/date-range';
+import { ArrowLeft, ChevronDown, Loader2, Pencil, Target } from 'lucide-react';
 import Link from 'next/link';
-import { use, useMemo, useState } from 'react';
-
-export const dynamic = 'force-dynamic';
-
-function WindowMetrics({ metrics, currency }: { metrics: MetricsView; currency: string }) {
-  return (
-    <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
-      <div>
-        <dt className="hud-label">Investido</dt>
-        <dd className="mt-1 font-mono text-base text-amber-300">
-          {formatCurrency(metrics.spend, currency)}
-        </dd>
-      </div>
-      <div>
-        <dt className="hud-label">Vendas</dt>
-        <dd className="mt-1 font-mono text-base text-emerald-300">{formatInt(metrics.sales)}</dd>
-      </div>
-      <div>
-        <dt className="hud-label">CPA</dt>
-        <dd className="mt-1 font-mono text-base text-white/85">
-          {formatCurrency(metrics.cpa, currency)}
-        </dd>
-      </div>
-      <div>
-        <dt className="hud-label">IC</dt>
-        <dd className="mt-1 font-mono text-base text-cyan-300">{formatInt(metrics.ic)}</dd>
-      </div>
-      <div>
-        <dt className="hud-label">Faturamento</dt>
-        <dd className="mt-1 font-mono text-base text-emerald-300">
-          {formatCurrency(metrics.revenue, currency)}
-        </dd>
-      </div>
-      <div>
-        <dt className="hud-label">CPA IC</dt>
-        <dd className="mt-1 font-mono text-base text-white/85">
-          {formatCurrency(metrics.icCpa, currency)}
-        </dd>
-      </div>
-      <div>
-        <dt className="hud-label">Conv. IC</dt>
-        <dd className="mt-1 font-mono text-base text-white/85">
-          {formatPercent(metrics.conversionRate)}
-        </dd>
-      </div>
-      <div>
-        <dt className="hud-label">ROAS</dt>
-        <dd className="mt-1 font-mono text-base text-cyan-300">{formatRoas(metrics.roas)}</dd>
-      </div>
-    </dl>
-  );
-}
+import { renderSnapshotMetrics } from './page-render-snapshot-metrics';
+import { useOfertaDetailPageState } from './page-use-oferta-detail-page-state';
 
 export default function OfertaDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
-  const { user } = useAuth();
-  const canManage = user?.role === 'admin';
-  const canUseAi = canAccessOfferAi(user);
-  const [period, setPeriod] = useState(() => rollingDateRange(7));
-  const { from, to } = period;
-  const [editing, setEditing] = useState(false);
-  const [adSearch, setAdSearch] = useState('');
-  const [compareLeft, setCompareLeft] = useState('');
-  const [compareRight, setCompareRight] = useState('');
-  const [intradayMode, setIntradayMode] = useState<'overview' | 'ads'>('overview');
-  const [intradayPeriod, setIntradayPeriod] = useState(() => singleDayRange(0));
-  const { from: intradayFrom, to: intradayTo } = intradayPeriod;
-  const [intradayAdWindow, setIntradayAdWindow] = useState('overall');
-  const [intradayAdSearch, setIntradayAdSearch] = useState('');
-  const [adCompareLeft, setAdCompareLeft] = useState('');
-  const [adCompareRight, setAdCompareRight] = useState('');
-
-  // Pull the offer (with links/status) from the offers list cache when possible.
-  const offerQuery = useQuery({
-    queryKey: ['offer-detail', id],
-    queryFn: async () => {
-      const all = await apiClient.listOffers();
-      return all.find((o) => o.id === id) ?? null;
-    },
-  });
-  const offer = offerQuery.data;
-
-  const capabilitiesQuery = useQuery({
-    queryKey: ['utmify-capabilities', id],
-    queryFn: () => apiClient.getUtmifyCapabilities(id),
-    enabled: Boolean(offer?.utmifyConfigured) && offer?.utmifyAccessEnabled !== false && canManage,
-    staleTime: 30 * 60 * 1000,
-    retry: false,
-  });
-
-  const snapshotsQuery = useQuery({
-    queryKey: ['offer-snapshots', id, from, to],
-    queryFn: () => apiClient.getOfferSnapshots(id, { from, to }),
-    refetchOnWindowFocus: false,
-  });
-  const data = snapshotsQuery.data;
-
-  const isIntradayRange = intradayFrom !== intradayTo;
-  const intradayQuery = useQuery<IntradaySummaryView | IntradayRangeSummaryView>({
-    queryKey: ['offer-intraday', id, intradayFrom, intradayTo],
-    queryFn: () =>
-      isIntradayRange
-        ? apiClient.getOfferIntradayRange(id, intradayFrom, intradayTo)
-        : apiClient.getOfferIntraday(id, intradayFrom),
-    enabled: Boolean(offer?.utmifyConfigured),
-    refetchInterval: !isIntradayRange && intradayFrom === todayIso() ? 60_000 : false,
-    refetchOnWindowFocus: false,
-  });
-  const intraday = intradayQuery.data;
-
-  const adsetTotals = useMemo(() => {
-    if (!data)
-      return [] as Array<{
-        name: string;
-        spend: number;
-        sales: number;
-        revenue: number;
-        ic: number;
-      }>;
-    const map = new Map<
-      string,
-      { name: string; spend: number; sales: number; revenue: number; ic: number }
-    >();
-    for (const snap of data.snapshots) {
-      for (const a of snap.adsets ?? []) {
-        const existing = map.get(a.name);
-        if (existing) {
-          existing.spend += a.spend;
-          existing.sales += a.sales;
-          existing.revenue += a.revenue;
-          existing.ic += a.ic;
-        } else {
-          map.set(a.name, {
-            name: a.name,
-            spend: a.spend,
-            sales: a.sales,
-            revenue: a.revenue,
-            ic: a.ic,
-          });
-        }
-      }
-    }
-    return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
-  }, [data]);
-
-  const adTotals = useMemo(() => {
-    const map = new Map<
-      string,
-      {
-        name: string;
-        spend: number;
-        sales: number;
-        revenue: number;
-        ic: number;
-        impressions: number;
-        clicks: number;
-      }
-    >();
-    for (const snapshot of data?.snapshots ?? []) {
-      for (const ad of snapshot.ads ?? []) {
-        const current = map.get(ad.name) ?? {
-          name: ad.name,
-          spend: 0,
-          sales: 0,
-          revenue: 0,
-          ic: 0,
-          impressions: 0,
-          clicks: 0,
-        };
-        current.spend += ad.spend;
-        current.sales += ad.sales;
-        current.revenue += ad.revenue;
-        current.ic += ad.ic;
-        current.impressions += ad.impressions ?? 0;
-        current.clicks += ad.clicks ?? 0;
-        map.set(ad.name, current);
-      }
-    }
-    const query = adSearch.trim().toLocaleLowerCase('pt-BR');
-    return [...map.values()]
-      .filter((ad) => !query || ad.name.toLocaleLowerCase('pt-BR').includes(query))
-      .sort((a, b) => b.revenue - a.revenue);
-  }, [data, adSearch]);
-
-  const offerName = offer?.name ?? data?.offer.name ?? id.slice(-6).toUpperCase();
-  const currency = offer?.currency ?? data?.offer.currency ?? 'BRL';
-  const money = (value: number | null | undefined) => formatCurrency(value, currency);
-  const availableWindows = intraday?.windows.filter((window) => window.available) ?? [];
-  const defaultLeft = availableWindows.at(-2)?.index ?? availableWindows.at(-1)?.index;
-  const defaultRight = availableWindows.at(-1)?.index;
-  const leftWindow = intraday?.windows.find(
-    (window) => window.index === (compareLeft ? Number(compareLeft) : defaultLeft),
-  );
-  const rightWindow = intraday?.windows.find(
-    (window) => window.index === (compareRight ? Number(compareRight) : defaultRight),
-  );
-  const currentWindow =
-    !isIntradayRange && intraday && 'currentWindowIndex' in intraday
-      ? intraday.windows.find(
-          (window) =>
-            window.index ===
-            (intradayFrom === todayIso()
-              ? intraday.currentWindowIndex
-              : availableWindows.at(-1)?.index),
-        )
-      : undefined;
-  const selectedAdWindow =
-    intradayAdWindow === 'overall'
-      ? undefined
-      : intraday?.windows.find((window) => window.index === Number(intradayAdWindow));
-  const intradayAds =
-    intradayAdWindow === 'overall' ? (intraday?.overallAds ?? []) : (selectedAdWindow?.ads ?? []);
-  const intradayAdQuery = intradayAdSearch.trim().toLocaleLowerCase('pt-BR');
-  const filteredIntradayAds = intradayAds.filter(
-    (ad) => !intradayAdQuery || ad.name.toLocaleLowerCase('pt-BR').includes(intradayAdQuery),
-  );
-  const availableAdWindows = intraday?.windows.filter((window) => window.adsAvailable) ?? [];
-  const defaultAdLeft = availableAdWindows.at(-2)?.index;
-  const defaultAdRight = availableAdWindows.at(-1)?.index;
-  const leftAdWindow = intraday?.windows.find(
-    (window) => window.index === (adCompareLeft ? Number(adCompareLeft) : defaultAdLeft),
-  );
-  const rightAdWindow = intraday?.windows.find(
-    (window) => window.index === (adCompareRight ? Number(adCompareRight) : defaultAdRight),
-  );
-  const comparedAds = useMemo(() => {
-    const byName = new Map<
-      string,
-      { name: string; left?: IntradayAdView; right?: IntradayAdView }
-    >();
-    for (const ad of leftAdWindow?.ads ?? []) byName.set(ad.name, { name: ad.name, left: ad });
-    for (const ad of rightAdWindow?.ads ?? []) {
-      const row = byName.get(ad.name) ?? { name: ad.name };
-      row.right = ad;
-      byName.set(ad.name, row);
-    }
-    return [...byName.values()]
-      .filter(
-        (row) => !intradayAdQuery || row.name.toLocaleLowerCase('pt-BR').includes(intradayAdQuery),
-      )
-      .sort((a, b) => (b.right?.revenue ?? 0) - (a.right?.revenue ?? 0));
-  }, [leftAdWindow, rightAdWindow, intradayAdQuery]);
+  const {
+    id,
+    canManage,
+    canUseAi,
+    period,
+    setPeriod,
+    from,
+    to,
+    editing,
+    setEditing,
+    adSearch,
+    setAdSearch,
+    compareLeft,
+    setCompareLeft,
+    compareRight,
+    setCompareRight,
+    intradayMode,
+    setIntradayMode,
+    setIntradayPeriod,
+    intradayFrom,
+    intradayTo,
+    intradayAdWindow,
+    setIntradayAdWindow,
+    intradayAdSearch,
+    setIntradayAdSearch,
+    adCompareLeft,
+    setAdCompareLeft,
+    adCompareRight,
+    setAdCompareRight,
+    offerQuery,
+    offer,
+    capabilitiesQuery,
+    snapshotsQuery,
+    data,
+    isIntradayRange,
+    intradayQuery,
+    intraday,
+    adsetTotals,
+    adTotals,
+    offerName,
+    currency,
+    money,
+    availableWindows,
+    leftWindow,
+    rightWindow,
+    currentWindow,
+    selectedAdWindow,
+    filteredIntradayAds,
+    availableAdWindows,
+    leftAdWindow,
+    rightAdWindow,
+    comparedAds,
+  } = useOfertaDetailPageState({ params });
 
   if (offerQuery.isLoading) {
     return (
@@ -452,706 +242,54 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
           description="Altere as datas ou aguarde a próxima sincronização UTMify."
         />
       ) : (
-        <div className="space-y-6">
-          {snapshotsQuery.isError && (
-            <output
-              aria-live="polite"
-              className="block rounded-xl border border-warning/25 bg-warning/[0.07] px-4 py-3 text-sm text-warning"
-            >
-              Não foi possível atualizar agora. Exibindo as últimas métricas carregadas.
-            </output>
-          )}
-          <KpiGrid metrics={data.totals} currency={currency} />
-
-          <section className="glass-card overflow-hidden p-0">
-            <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3">
-              <div>
-                <h3 className="text-sm font-semibold text-white">Anúncios</h3>
-                <p className="mt-0.5 text-[10px] uppercase tracking-[0.14em] text-white/40">
-                  Dados UTMify em nível de ad
-                </p>
-              </div>
-              <div className="relative w-full sm:w-[280px]">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/35" />
-                <Input
-                  value={adSearch}
-                  onChange={(event) => setAdSearch(event.target.value)}
-                  placeholder="Buscar anúncio pelo nome…"
-                  className="h-9 pl-9"
-                />
-              </div>
-            </header>
-            {adTotals.length === 0 ? (
-              <div className="p-8 text-center text-sm text-white/45">
-                {adSearch
-                  ? 'Nenhum anúncio corresponde à busca.'
-                  : 'Os anúncios aparecerão após a primeira sincronização UTMify.'}
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[900px] text-xs">
-                  <thead className="bg-white/[0.03] text-left text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
-                    <tr>
-                      <th className="px-3 py-2">Anúncio</th>
-                      <th className="px-3 py-2 text-right">Investido</th>
-                      <th className="px-3 py-2 text-right">Faturamento</th>
-                      <th className="px-3 py-2 text-right">Vendas</th>
-                      <th className="px-3 py-2 text-right">IC</th>
-                      <th className="px-3 py-2 text-right">CPA</th>
-                      <th className="px-3 py-2 text-right">ROAS</th>
-                      <th className="px-3 py-2 text-right">CTR</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {adTotals.map((ad) => {
-                      const cpa = ad.sales > 0 ? ad.spend / ad.sales : null;
-                      const roas = ad.spend > 0 ? ad.revenue / ad.spend : null;
-                      const ctr = ad.impressions > 0 ? ad.clicks / ad.impressions : null;
-                      return (
-                        <tr key={ad.name} className="border-t border-white/[0.04]">
-                          <td className="max-w-[420px] px-3 py-2 text-white/85" title={ad.name}>
-                            {ad.name}
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono text-amber-300">
-                            {money(ad.spend)}
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono text-emerald-300">
-                            {money(ad.revenue)}
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono text-white/75">
-                            {formatInt(ad.sales)}
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono text-cyan-300">
-                            {formatInt(ad.ic)}
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono text-white/75">
-                            {money(cpa)}
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono text-cyan-300">
-                            {formatRoas(roas)}
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono text-white/75">
-                            {formatPercent(ctr)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-
-          <section className="glass-card overflow-hidden p-0">
-            <header className="flex items-baseline justify-between border-b border-white/[0.06] px-4 py-3">
-              <h3 className="text-sm font-semibold text-white">Série diária</h3>
-              <span className="hud-label">{data.snapshots.length} dia(s)</span>
-            </header>
-            {data.snapshots.length === 0 ? (
-              <div className="p-8 text-center text-sm text-white/45">
-                Nenhum dado sincronizado nesse período. Verifique a conexão UTMify da oferta.
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[860px] text-xs">
-                  <thead className="bg-white/[0.03] text-left text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
-                    <tr>
-                      <th className="px-3 py-2">Data</th>
-                      <th className="px-3 py-2 text-right">Vendas</th>
-                      <th className="px-3 py-2 text-right">Faturamento</th>
-                      <th className="px-3 py-2 text-right">Investido</th>
-                      <th className="px-3 py-2 text-right">IC</th>
-                      <th className="px-3 py-2 text-right">CPA</th>
-                      <th className="px-3 py-2 text-right">CPA IC</th>
-                      <th className="px-3 py-2 text-right">Conv.</th>
-                      <th className="px-3 py-2 text-right">ROAS</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.snapshots.map((s) => (
-                      <tr key={s.date} className="border-t border-white/[0.04]">
-                        <td className="px-3 py-2 font-mono text-white/85">{s.date}</td>
-                        <td className="px-3 py-2 text-right font-mono text-emerald-300">
-                          {formatInt(s.sales)}
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono text-emerald-300">
-                          {money(s.revenue)}
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono text-amber-300">
-                          {money(s.spend)}
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono text-white/75">
-                          {formatInt(s.ic)}
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono text-white/75">
-                          {money(s.metrics.cpa)}
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono text-white/75">
-                          {money(s.metrics.icCpa)}
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono text-white/75">
-                          {formatPercent(s.metrics.conversionRate)}
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono text-cyan-300">
-                          {formatRoas(s.metrics.roas)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-
-          {adsetTotals.length > 0 && (
-            <section className="glass-card overflow-hidden p-0">
-              <header className="flex items-baseline justify-between border-b border-white/[0.06] px-4 py-3">
-                <h3 className="text-sm font-semibold text-white">Adsets</h3>
-                <span className="hud-label">
-                  {adsetTotals.length} no período · ranqueado por faturamento
-                </span>
-              </header>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px] text-xs">
-                  <thead className="bg-white/[0.03] text-left text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
-                    <tr>
-                      <th className="px-3 py-2">Adset</th>
-                      <th className="px-3 py-2 text-right">Vendas</th>
-                      <th className="px-3 py-2 text-right">Faturamento</th>
-                      <th className="px-3 py-2 text-right">Investido</th>
-                      <th className="px-3 py-2 text-right">IC</th>
-                      <th className="px-3 py-2 text-right">CPA</th>
-                      <th className="px-3 py-2 text-right">ROAS</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {adsetTotals.map((a) => {
-                      const cpa = a.sales > 0 ? a.spend / a.sales : null;
-                      const roas = a.spend > 0 ? a.revenue / a.spend : null;
-                      return (
-                        <tr key={a.name} className="border-t border-white/[0.04]">
-                          <td className="max-w-[280px] truncate px-3 py-2 text-white/85">
-                            {a.name}
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono text-emerald-300">
-                            {formatInt(a.sales)}
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono text-emerald-300">
-                            {money(a.revenue)}
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono text-amber-300">
-                            {money(a.spend)}
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono text-white/75">
-                            {formatInt(a.ic)}
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono text-white/75">
-                            {money(cpa)}
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono text-cyan-300">
-                            {formatRoas(roas)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          )}
-        </div>
+        renderSnapshotMetrics({
+          adSearch,
+          setAdSearch,
+          snapshotsQuery,
+          data,
+          adsetTotals,
+          adTotals,
+          currency,
+          money,
+        })
       )}
 
-      <section className="mt-8 space-y-4 border-t border-cyan-300/10 pt-8">
-        <header>
-          <div>
-            <div className="flex items-center gap-2">
-              <Clock3 className="h-4 w-4 text-cyan-300" />
-              <h2 className="text-[16px] font-semibold text-white">Janelas intradiárias</h2>
-            </div>
-            <p className="mt-1 text-xs text-white/45">
-              Checkpoints a cada 30 minutos · janelas fixas de 2 horas · horário de São Paulo ·
-              selecione um período pra somar vários dias
-            </p>
-          </div>
-        </header>
-
-        <DateRangeFilter
-          value={{ from: intradayFrom, to: intradayTo }}
-          onChange={(range) => {
-            setIntradayPeriod(range);
-            setCompareLeft('');
-            setCompareRight('');
-            setIntradayAdWindow('overall');
-            setAdCompareLeft('');
-            setAdCompareRight('');
-          }}
-          max={todayIso()}
-          status={
-            intraday?.updatedAt ? (
-              <span className="hud-label pb-2.5">
-                Atualizado{' '}
-                {new Date(intraday.updatedAt).toLocaleTimeString('pt-BR', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  timeZone: SAO_PAULO_TIME_ZONE,
-                })}
-              </span>
-            ) : null
-          }
-        />
-
-        <div
-          className="relative inline-grid w-fit grid-cols-2 rounded-lg border border-white/10 bg-black/15 p-1"
-          role="tablist"
-          aria-label="Visualização intradiária"
-        >
-          <span
-            aria-hidden="true"
-            className={`pointer-events-none absolute bottom-1 left-1 h-px w-[calc(50%-0.25rem)] bg-cyan-300 shadow-[0_0_8px_rgba(34,211,238,0.6)] transition-transform duration-[180ms] ease-out motion-reduce:transition-none ${intradayMode === 'ads' ? 'translate-x-full' : 'translate-x-0'}`}
-          />
-          <button
-            type="button"
-            onClick={() => setIntradayMode('overview')}
-            role="tab"
-            aria-selected={intradayMode === 'overview'}
-            className={`min-h-11 rounded-md px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] transition-colors duration-[180ms] ${intradayMode === 'overview' ? 'bg-cyan-300/10 text-cyan-200' : 'text-white/45 hover:text-white/75'}`}
-          >
-            Visão geral
-          </button>
-          <button
-            type="button"
-            onClick={() => setIntradayMode('ads')}
-            role="tab"
-            aria-selected={intradayMode === 'ads'}
-            className={`min-h-11 rounded-md px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] transition-colors duration-[180ms] ${intradayMode === 'ads' ? 'bg-cyan-300/10 text-cyan-200' : 'text-white/45 hover:text-white/75'}`}
-          >
-            Por anúncios
-          </button>
-        </div>
-
-        {intradayQuery.isLoading ? (
-          <DataState variant="loading" title="Carregando janelas intradiárias…" />
-        ) : intradayQuery.isError && !intraday ? (
-          <DataState
-            variant="error"
-            title="Não foi possível carregar as janelas intradiárias"
-            description="As demais métricas da oferta continuam disponíveis acima."
-            isRetrying={intradayQuery.isFetching}
-            onRetry={() => void intradayQuery.refetch()}
-          />
-        ) : !intraday ? (
-          <DataState
-            variant="empty"
-            title="Coleta intradiária ainda não iniciada"
-            description="Os dados aparecerão após a próxima sincronização UTMify."
-          />
-        ) : intradayMode === 'overview' ? (
-          <>
-            <div className={`grid gap-4 ${isIntradayRange ? '' : 'xl:grid-cols-2'}`}>
-              <article className="glass-card p-4">
-                <p className="hud-label">
-                  {isIntradayRange
-                    ? `Acumulado no período · ${new Date(`${intradayFrom}T12:00:00`).toLocaleDateString('pt-BR')} a ${new Date(`${intradayTo}T12:00:00`).toLocaleDateString('pt-BR')}`
-                    : `Janela geral · ${new Date(`${intradayFrom}T12:00:00`).toLocaleDateString('pt-BR')}`}
-                </p>
-                <p className="mt-1 text-xs text-white/45">
-                  {isIntradayRange
-                    ? `Soma de ${'days' in intraday ? intraday.days : 0} dia(s)`
-                    : 'Acumulado desde 00h'}
-                </p>
-                <WindowMetrics metrics={intraday.overall} currency={currency} />
-              </article>
-              {!isIntradayRange && (
-                <article className="glass-card border-cyan-300/15 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="hud-label">
-                        {intradayFrom === todayIso() ? 'Janela atual' : 'Última janela disponível'}
-                      </p>
-                      <p className="mt-1 text-xs text-white/45">
-                        {currentWindow?.label ?? 'Aguardando checkpoint'}
-                      </p>
-                    </div>
-                    {currentWindow?.partial && (
-                      <span className="rounded-full border border-amber-300/20 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-amber-200">
-                        Parcial
-                      </span>
-                    )}
-                  </div>
-                  {currentWindow?.available ? (
-                    <WindowMetrics metrics={currentWindow.metrics} currency={currency} />
-                  ) : (
-                    <p className="mt-5 text-xs text-white/45">
-                      É necessário um checkpoint anterior ao início da janela para calcular a
-                      diferença.
-                    </p>
-                  )}
-                </article>
-              )}
-            </div>
-
-            <div className="glass-card overflow-hidden p-0">
-              <header className="border-b border-white/[0.06] px-4 py-3">
-                <h3 className="text-sm font-semibold text-white">Janelas de 2 horas</h3>
-                <p className="mt-1 text-xs text-white/40">
-                  Cada valor representa somente o que aconteceu dentro daquela faixa.
-                </p>
-              </header>
-              <div className="grid gap-px bg-white/[0.04] sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {intraday.windows.map((window) => (
-                  <article key={window.index} className="bg-[#07151b] p-4">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="font-mono text-sm font-semibold text-white/85">
-                        {window.label}
-                      </p>
-                      <span className="text-[10px] uppercase tracking-[0.12em] text-white/30">
-                        {isIntradayRange && 'daysAvailable' in window
-                          ? `${window.daysAvailable}/${'days' in intraday ? intraday.days : 0} dias`
-                          : `${window.samples} coleta(s)`}
-                      </span>
-                    </div>
-                    {window.available ? (
-                      <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                        <div>
-                          <dt className="text-white/35">Investido</dt>
-                          <dd className="font-mono text-amber-300">
-                            {money(window.metrics.spend)}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt className="text-white/35">Vendas</dt>
-                          <dd className="font-mono text-emerald-300">
-                            {formatInt(window.metrics.sales)}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt className="text-white/35">CPA</dt>
-                          <dd className="font-mono text-white/75">{money(window.metrics.cpa)}</dd>
-                        </div>
-                        <div>
-                          <dt className="text-white/35">IC</dt>
-                          <dd className="font-mono text-cyan-300">
-                            {formatInt(window.metrics.ic)}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt className="text-white/35">CPA IC</dt>
-                          <dd className="font-mono text-white/75">{money(window.metrics.icCpa)}</dd>
-                        </div>
-                        <div>
-                          <dt className="text-white/35">ROAS</dt>
-                          <dd className="font-mono text-cyan-300">
-                            {formatRoas(window.metrics.roas)}
-                          </dd>
-                        </div>
-                      </dl>
-                    ) : (
-                      <p className="mt-3 text-xs text-white/30">
-                        {window.partial
-                          ? 'Coleta iniciada no meio desta janela.'
-                          : 'Sem dados coletados.'}
-                      </p>
-                    )}
-                  </article>
-                ))}
-              </div>
-            </div>
-
-            <div className="glass-card p-4">
-              <div className="flex flex-wrap items-end gap-3">
-                <div className="mr-auto">
-                  <h3 className="text-sm font-semibold text-white">Comparar janelas</h3>
-                  <p className="mt-1 text-xs text-white/40">Selecione duas faixas já calculadas.</p>
-                </div>
-                <Label className="space-y-1">
-                  <span className="hud-label">Janela A</span>
-                  <select
-                    value={compareLeft}
-                    onChange={(event) => setCompareLeft(event.target.value)}
-                    className="block h-9 rounded-md border border-white/10 bg-bg-elevated px-3 text-xs text-white"
-                  >
-                    <option value="">Anterior disponível</option>
-                    {availableWindows.map((window) => (
-                      <option key={window.index} value={window.index}>
-                        {window.label}
-                      </option>
-                    ))}
-                  </select>
-                </Label>
-                <Label className="space-y-1">
-                  <span className="hud-label">Janela B</span>
-                  <select
-                    value={compareRight}
-                    onChange={(event) => setCompareRight(event.target.value)}
-                    className="block h-9 rounded-md border border-white/10 bg-bg-elevated px-3 text-xs text-white"
-                  >
-                    <option value="">Mais recente disponível</option>
-                    {availableWindows.map((window) => (
-                      <option key={window.index} value={window.index}>
-                        {window.label}
-                      </option>
-                    ))}
-                  </select>
-                </Label>
-              </div>
-              {leftWindow?.available && rightWindow?.available ? (
-                <div className="mt-4 grid gap-3 lg:grid-cols-2">
-                  {[leftWindow, rightWindow].map((window) => (
-                    <article
-                      key={window.index}
-                      className="rounded-xl border border-white/[0.06] bg-black/10 p-4"
-                    >
-                      <p className="font-mono text-sm font-semibold text-cyan-200">
-                        {window.label}
-                      </p>
-                      <WindowMetrics metrics={window.metrics} currency={currency} />
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-4 text-xs text-white/40">
-                  A comparação ficará disponível após duas janelas completas.
-                </p>
-              )}
-            </div>
-          </>
-        ) : (
-          <div className="glass-card overflow-hidden p-0">
-            <header className="flex flex-wrap items-end gap-3 border-b border-white/[0.06] px-4 py-4">
-              <div className="mr-auto">
-                <h3 className="text-sm font-semibold text-white">Desempenho por anúncio</h3>
-                <p className="mt-1 text-xs text-white/40">
-                  Anúncios com o mesmo nome são agrupados em uma única linha.
-                </p>
-              </div>
-              <Label className="space-y-1">
-                <span className="hud-label">Janela</span>
-                <select
-                  value={intradayAdWindow}
-                  onChange={(event) => setIntradayAdWindow(event.target.value)}
-                  className="block h-10 min-w-[190px] rounded-md border border-white/10 bg-bg-elevated px-3 text-xs text-white"
-                >
-                  <option value="overall">
-                    {isIntradayRange ? 'Acumulado do período' : 'Acumulado do dia'}
-                  </option>
-                  {intraday.windows.map((window) => (
-                    <option key={window.index} value={window.index} disabled={!window.adsAvailable}>
-                      {window.label}
-                      {window.adsAvailable ? '' : ' · aguardando dados'}
-                    </option>
-                  ))}
-                </select>
-              </Label>
-              <Label className="relative min-w-[240px] space-y-1">
-                <span className="hud-label">Buscar anúncio</span>
-                <Search className="absolute bottom-3 left-3 h-3.5 w-3.5 text-white/35" />
-                <Input
-                  value={intradayAdSearch}
-                  onChange={(event) => setIntradayAdSearch(event.target.value)}
-                  placeholder="Digite o nome..."
-                  className="h-10 pl-9"
-                />
-              </Label>
-            </header>
-
-            {selectedAdWindow?.adsPartial && (
-              <div className="border-b border-amber-300/10 bg-amber-300/[0.04] px-4 py-3 text-xs text-amber-100/70">
-                Janela parcial: o cálculo começa no primeiro checkpoint com anúncios disponível
-                nesta faixa.
-              </div>
-            )}
-
-            {filteredIntradayAds.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[900px] text-xs">
-                  <thead className="bg-white/[0.03] text-left text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
-                    <tr>
-                      <th className="px-4 py-3">Anúncio</th>
-                      <th className="px-3 py-3 text-right">Investido</th>
-                      <th className="px-3 py-3 text-right">Faturamento</th>
-                      <th className="px-3 py-3 text-right">Vendas</th>
-                      <th className="px-3 py-3 text-right">CPA</th>
-                      <th className="px-3 py-3 text-right">IC</th>
-                      <th className="px-3 py-3 text-right">CPA IC</th>
-                      <th className="px-4 py-3 text-right">ROAS</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredIntradayAds.map((ad) => (
-                      <tr
-                        key={ad.name}
-                        className="border-t border-white/[0.05] hover:bg-cyan-300/[0.025]"
-                      >
-                        <td
-                          className="max-w-[360px] truncate px-4 py-3 font-medium text-white/85"
-                          title={ad.name}
-                        >
-                          {ad.name}
-                        </td>
-                        <td className="px-3 py-3 text-right font-mono text-amber-300">
-                          {money(ad.spend)}
-                        </td>
-                        <td className="px-3 py-3 text-right font-mono text-emerald-300">
-                          {money(ad.revenue)}
-                        </td>
-                        <td className="px-3 py-3 text-right font-mono text-emerald-300">
-                          {formatInt(ad.sales)}
-                        </td>
-                        <td className="px-3 py-3 text-right font-mono text-white/75">
-                          {money(ad.cpa)}
-                        </td>
-                        <td className="px-3 py-3 text-right font-mono text-cyan-300">
-                          {formatInt(ad.ic)}
-                        </td>
-                        <td className="px-3 py-3 text-right font-mono text-white/75">
-                          {money(ad.icCpa)}
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono text-cyan-300">
-                          {formatRoas(ad.roas)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="px-4 py-12 text-center text-xs text-white/40">
-                {intradayAdSearch.trim()
-                  ? 'Nenhum anúncio encontrado nesta janela.'
-                  : 'Aguardando checkpoints com dados de anúncios para esta janela.'}
-              </div>
-            )}
-
-            <section className="border-t border-cyan-300/10">
-              <header className="flex flex-wrap items-end gap-3 px-4 py-4">
-                <div className="mr-auto">
-                  <h3 className="text-sm font-semibold text-white">Comparar janelas por anúncio</h3>
-                  <p className="mt-1 text-xs text-white/40">
-                    Compare o mesmo anúncio em duas faixas de 2 horas.
-                  </p>
-                </div>
-                <Label className="space-y-1">
-                  <span className="hud-label">Janela A</span>
-                  <select
-                    value={adCompareLeft}
-                    onChange={(event) => setAdCompareLeft(event.target.value)}
-                    className="block h-9 min-w-[150px] rounded-md border border-white/10 bg-bg-elevated px-3 text-xs text-white"
-                  >
-                    <option value="">Anterior disponível</option>
-                    {availableAdWindows.map((window) => (
-                      <option key={window.index} value={window.index}>
-                        {window.label}
-                      </option>
-                    ))}
-                  </select>
-                </Label>
-                <Label className="space-y-1">
-                  <span className="hud-label">Janela B</span>
-                  <select
-                    value={adCompareRight}
-                    onChange={(event) => setAdCompareRight(event.target.value)}
-                    className="block h-9 min-w-[150px] rounded-md border border-white/10 bg-bg-elevated px-3 text-xs text-white"
-                  >
-                    <option value="">Mais recente disponível</option>
-                    {availableAdWindows.map((window) => (
-                      <option key={window.index} value={window.index}>
-                        {window.label}
-                      </option>
-                    ))}
-                  </select>
-                </Label>
-              </header>
-
-              {leftAdWindow?.adsAvailable && rightAdWindow?.adsAvailable ? (
-                <div className="overflow-x-auto border-t border-white/[0.05]">
-                  <table className="w-full min-w-[980px] text-xs">
-                    <thead className="bg-white/[0.03] text-[10px] font-semibold uppercase tracking-[0.14em] text-white/50">
-                      <tr>
-                        <th rowSpan={2} className="px-4 py-3 text-left">
-                          Anúncio
-                        </th>
-                        <th
-                          colSpan={4}
-                          className="border-l border-white/[0.05] px-3 py-2 text-center text-cyan-200"
-                        >
-                          {leftAdWindow.label}
-                        </th>
-                        <th
-                          colSpan={4}
-                          className="border-l border-white/[0.05] px-3 py-2 text-center text-emerald-200"
-                        >
-                          {rightAdWindow.label}
-                        </th>
-                      </tr>
-                      <tr>
-                        {[
-                          { key: 'left-investment', label: 'Invest.' },
-                          { key: 'left-sales', label: 'Vendas' },
-                          { key: 'left-cpa', label: 'CPA' },
-                          { key: 'left-roas', label: 'ROAS' },
-                          { key: 'right-investment', label: 'Invest.' },
-                          { key: 'right-sales', label: 'Vendas' },
-                          { key: 'right-cpa', label: 'CPA' },
-                          { key: 'right-roas', label: 'ROAS' },
-                        ].map((column) => (
-                          <th
-                            key={column.key}
-                            className="border-l border-white/[0.05] px-3 py-2 text-right"
-                          >
-                            {column.label}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {comparedAds.map((row) => (
-                        <tr key={row.name} className="border-t border-white/[0.05]">
-                          <td
-                            className="max-w-[300px] truncate px-4 py-3 font-medium text-white/85"
-                            title={row.name}
-                          >
-                            {row.name}
-                          </td>
-                          <td className="border-l border-white/[0.05] px-3 py-3 text-right font-mono text-amber-300">
-                            {money(row.left?.spend)}
-                          </td>
-                          <td className="px-3 py-3 text-right font-mono text-white/75">
-                            {formatInt(row.left?.sales)}
-                          </td>
-                          <td className="px-3 py-3 text-right font-mono text-white/75">
-                            {money(row.left?.cpa)}
-                          </td>
-                          <td className="px-3 py-3 text-right font-mono text-cyan-300">
-                            {formatRoas(row.left?.roas)}
-                          </td>
-                          <td className="border-l border-white/[0.05] px-3 py-3 text-right font-mono text-amber-300">
-                            {money(row.right?.spend)}
-                          </td>
-                          <td className="px-3 py-3 text-right font-mono text-white/75">
-                            {formatInt(row.right?.sales)}
-                          </td>
-                          <td className="px-3 py-3 text-right font-mono text-white/75">
-                            {money(row.right?.cpa)}
-                          </td>
-                          <td className="px-3 py-3 text-right font-mono text-emerald-300">
-                            {formatRoas(row.right?.roas)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className="border-t border-white/[0.05] px-4 py-8 text-center text-xs text-white/40">
-                  A comparação por anúncio ficará disponível após duas janelas com checkpoints de
-                  anúncios.
-                </p>
-              )}
-            </section>
-          </div>
-        )}
-      </section>
+      {renderIntradaySection({
+        from,
+        to,
+        compareLeft,
+        setCompareLeft,
+        compareRight,
+        setCompareRight,
+        intradayMode,
+        setIntradayMode,
+        setIntradayPeriod,
+        intradayFrom,
+        intradayTo,
+        intradayAdWindow,
+        setIntradayAdWindow,
+        intradayAdSearch,
+        setIntradayAdSearch,
+        adCompareLeft,
+        setAdCompareLeft,
+        adCompareRight,
+        setAdCompareRight,
+        isIntradayRange,
+        intradayQuery,
+        intraday,
+        currency,
+        money,
+        availableWindows,
+        leftWindow,
+        rightWindow,
+        currentWindow,
+        selectedAdWindow,
+        filteredIntradayAds,
+        availableAdWindows,
+        leftAdWindow,
+        rightAdWindow,
+        comparedAds,
+      })}
 
       {canUseAi && <OfferAiAnalysis offerId={id} />}
 
@@ -1161,3 +299,6 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
     </HubShell>
   );
 }
+export const dynamic = 'force-dynamic';
+
+import { renderIntradaySection } from './page-render-intraday-section';

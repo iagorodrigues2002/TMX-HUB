@@ -1,9 +1,9 @@
 import type { Offer } from '@page-cloner/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  buildFunnelSummaries,
   DEFAULT_AI_ROLE,
   DEFAULT_AI_TEMPLATE,
+  buildFunnelSummaries,
   generateCampaignAnalysis,
 } from '../src/services/campaign-ai.js';
 import type { IntradaySummary } from '../src/services/intraday-store.js';

@@ -36,7 +36,7 @@ export function shiftDay(day: string, count: number) {
   return d.toISOString().slice(0, 10);
 }
 export function bucketDay(day: string, interval: 'day' | 'week' | 'month') {
-  if (interval === 'month') return day.slice(0, 7) + '-01';
+  if (interval === 'month') return `${day.slice(0, 7)}-01`;
   if (interval === 'week') {
     const dow = new Date(`${day}T12:00:00Z`).getUTCDay();
     return shiftDay(day, -((dow + 6) % 7));
@@ -95,10 +95,10 @@ export function buildRefundAnalytics(
   today: string,
 ) {
   const span = Math.round((Date.parse(to) - Date.parse(from)) / 86400000) + 1;
-  const previousTo = shiftDay(from, -1),
-    previousFrom = shiftDay(from, -span);
-  const totals = summarizeRefunds(rows, from, to),
-    previous = summarizeRefunds(rows, previousFrom, previousTo);
+  const previousTo = shiftDay(from, -1);
+  const previousFrom = shiftDay(from, -span);
+  const totals = summarizeRefunds(rows, from, to);
+  const previous = summarizeRefunds(rows, previousFrom, previousTo);
   const groups = new Map<string, RefundOrder[]>();
   for (let day = from; day <= to; day = shiftDay(day, 1)) groups.set(bucketDay(day, interval), []);
   for (const r of rows) {
@@ -173,23 +173,35 @@ export function buildRefundAnalytics(
     (r) => r.reversal_at && localDay(r.reversal_at) >= from && localDay(r.reversal_at) <= to,
   );
   const delaySummary = (observed = false) => {
-  const purchaseDate = (r: RefundOrder) => r.delay_paid_at === undefined ? r.paid_at : r.delay_paid_at;
-  const reversalDate = (r: RefundOrder) => observed ? r.observed_reversal_at : r.delay_reversal_at === undefined ? r.reversal_at : r.delay_reversal_at;
-  const rawDelays = reversed
-    .filter((r) => purchaseDate(r) && reversalDate(r))
-    .map((r) => (Date.parse(reversalDate(r)!) - Date.parse(purchaseDate(r)!)) / 86400000);
-  const delays = rawDelays.filter((d) => d >= 0).sort((a, b) => a - b);
-  const bounds = [0, 7, 15, 31, 61, 91, Infinity];
-  const labels = ['0–6 dias', '7–14 dias', '15–30 dias', '31–60 dias', '61–90 dias', '91+ dias'];
-  return {
-    mean_days: delays.length ? delays.reduce((s, v) => s + v, 0) / delays.length : null,
-    median_days: delays.length ? (delays[Math.floor((delays.length - 1) / 2)]! + delays[Math.floor(delays.length / 2)]!) / 2 : null,
-    missing_paid_at: reversed.filter((r) => !purchaseDate(r)).length,
-    missing_reversal_at: reversed.filter((r) => !reversalDate(r)).length,
-    negative_delay_orders: rawDelays.filter((d) => d < 0).length,
-    sample_count: delays.length,
-    buckets: labels.map((label, i) => ({ label, count: delays.filter((d) => d >= bounds[i]! && d < bounds[i + 1]!).length })),
-  };
+    const purchaseDate = (r: RefundOrder) =>
+      r.delay_paid_at === undefined ? r.paid_at : r.delay_paid_at;
+    const reversalDate = (r: RefundOrder) =>
+      observed
+        ? r.observed_reversal_at
+        : r.delay_reversal_at === undefined
+          ? r.reversal_at
+          : r.delay_reversal_at;
+    const rawDelays = reversed
+      .filter((r) => purchaseDate(r) && reversalDate(r))
+      .map((r) => (Date.parse(reversalDate(r)!) - Date.parse(purchaseDate(r)!)) / 86400000);
+    const delays = rawDelays.filter((d) => d >= 0).sort((a, b) => a - b);
+    const bounds = [0, 7, 15, 31, 61, 91, Number.POSITIVE_INFINITY];
+    const labels = ['0–6 dias', '7–14 dias', '15–30 dias', '31–60 dias', '61–90 dias', '91+ dias'];
+    return {
+      mean_days: delays.length ? delays.reduce((s, v) => s + v, 0) / delays.length : null,
+      median_days: delays.length
+        ? (delays[Math.floor((delays.length - 1) / 2)]! + delays[Math.floor(delays.length / 2)]!) /
+          2
+        : null,
+      missing_paid_at: reversed.filter((r) => !purchaseDate(r)).length,
+      missing_reversal_at: reversed.filter((r) => !reversalDate(r)).length,
+      negative_delay_orders: rawDelays.filter((d) => d < 0).length,
+      sample_count: delays.length,
+      buckets: labels.map((label, i) => ({
+        label,
+        count: delays.filter((d) => d >= bounds[i]! && d < bounds[i + 1]!).length,
+      })),
+    };
   };
   return {
     totals,

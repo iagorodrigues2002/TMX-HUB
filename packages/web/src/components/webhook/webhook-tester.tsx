@@ -1,143 +1,36 @@
 'use client';
 
-import { getPersonalStorageOwner } from '@/lib/personal-storage';
-
-import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, Send, Trash2, XCircle } from 'lucide-react';
-import { toast } from 'sonner';
-import { apiClient } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { hmacHex } from '@/lib/webhook/hmac';
-import {
-  type WebhookHistoryEntry,
-  clearHistory,
-  listHistory,
-  pushHistory,
-} from '@/lib/webhook/storage';
-import {
-  WEBHOOK_PLATFORMS,
-  type WebhookPlatform,
-  findTemplate,
-  platformOf,
-} from '@/lib/webhook/templates';
-
-const SELECT_CLASS =
-  'flex h-11 w-full rounded-md border border-white/[0.10] bg-white/[0.04] px-4 text-[14px] text-white focus-visible:outline-none focus-visible:border-cyan-300/40';
+import { clearHistory } from '@/lib/webhook/storage';
+import { WEBHOOK_PLATFORMS, type WebhookPlatform } from '@/lib/webhook/templates';
+import { CheckCircle2, Send, Trash2, XCircle } from 'lucide-react';
+import { SELECT_CLASS } from './webhook-tester-select-class';
+import { useWebhookTesterState } from './webhook-tester-use-webhook-tester-state';
 
 export function WebhookTester() {
-  const [platform, setPlatform] = useState<WebhookPlatform>('hotmart');
-  const [templateId, setTemplateId] = useState<string>('hotmart.purchase_approved');
-  const [url, setUrl] = useState('');
-  const [secret, setSecret] = useState('');
-  const [headersText, setHeadersText] = useState('');
-  const [bodyText, setBodyText] = useState('');
-  const [hmacInfo, setHmacInfo] = useState<{ header: string; algorithm: 'sha256' | 'sha1'; prefix?: string } | null>(null);
-
-  const [sending, setSending] = useState(false);
-  const [result, setResult] = useState<Awaited<ReturnType<typeof apiClient.fireWebhook>> | null>(
-    null,
-  );
-  const [history, setHistory] = useState<WebhookHistoryEntry[]>([]);
-
-  useEffect(() => setHistory(listHistory()), []);
-
-  const platformDef = useMemo(
-    () => WEBHOOK_PLATFORMS.find((p) => p.id === platform),
-    [platform],
-  );
-
-  // Loading a template fills the editable fields.
-  const loadTemplate = (id: string) => {
-    setTemplateId(id);
-    const t = findTemplate(id);
-    if (!t) return;
-    setHeadersText(JSON.stringify(t.headers, null, 2));
-    setBodyText(JSON.stringify(t.body, null, 2));
-    setHmacInfo(t.hmac ?? null);
-  };
-
-  // Switching platform → load first template of new platform.
-  const switchPlatform = (p: WebhookPlatform) => {
-    setPlatform(p);
-    const def = WEBHOOK_PLATFORMS.find((x) => x.id === p);
-    const first = def?.templates[0];
-    if (first) loadTemplate(first.id);
-  };
-
-  // Initial load.
-  useEffect(() => {
-    loadTemplate('hotmart.purchase_approved');
-  }, []);
-
-  // Keep platform select in sync if user picks a template from another group.
-  useEffect(() => {
-    const p = platformOf(templateId);
-    if (p && p !== platform) setPlatform(p);
-  }, [templateId, platform]);
-
-  const handleFire = async () => {
-    const requestOwner = getPersonalStorageOwner();
-    if (!requestOwner) return;
-    if (!url.trim()) {
-      toast.error('Cole a URL do webhook destino.');
-      return;
-    }
-    let parsedHeaders: Record<string, string> = {};
-    try {
-      parsedHeaders = headersText.trim() ? JSON.parse(headersText) : {};
-    } catch {
-      toast.error('Headers não são JSON válido.');
-      return;
-    }
-    let parsedBody: unknown;
-    try {
-      parsedBody = bodyText.trim() ? JSON.parse(bodyText) : {};
-    } catch {
-      toast.error('Body não é JSON válido.');
-      return;
-    }
-
-    // If template defines an HMAC scheme and user provided a secret, sign and
-    // inject the signature header before firing.
-    if (hmacInfo && secret.trim()) {
-      const bodyStr = JSON.stringify(parsedBody);
-      const digest = await hmacHex(hmacInfo.algorithm, secret.trim(), bodyStr);
-      if (requestOwner !== getPersonalStorageOwner()) return;
-      const value = hmacInfo.prefix ? `${hmacInfo.prefix}${digest}` : digest;
-      parsedHeaders[hmacInfo.header] = value;
-    }
-
-    setSending(true);
-    setResult(null);
-    try {
-      const res = await apiClient.fireWebhook({
-        url: url.trim(),
-        method: 'POST',
-        headers: parsedHeaders,
-        body: parsedBody,
-      });
-      if (requestOwner !== getPersonalStorageOwner()) return;
-      setResult(res);
-      pushHistory({
-        templateId,
-        url: url.trim(),
-        status: res.status,
-        ok: res.ok,
-        durationMs: res.duration_ms,
-      });
-      setHistory(listHistory());
-      if (res.ok) toast.success(`HTTP ${res.status} em ${res.duration_ms}ms`);
-      else if (res.status > 0) toast.error(`HTTP ${res.status} em ${res.duration_ms}ms`);
-      else toast.error(res.error ?? 'Falha ao chamar destino');
-    } catch (err) {
-      if (requestOwner !== getPersonalStorageOwner()) return;
-      toast.error((err as Error).message);
-    } finally {
-      setSending(false);
-    }
-  };
+  const {
+    platform,
+    templateId,
+    url,
+    setUrl,
+    secret,
+    setSecret,
+    headersText,
+    setHeadersText,
+    bodyText,
+    setBodyText,
+    hmacInfo,
+    sending,
+    result,
+    history,
+    setHistory,
+    platformDef,
+    loadTemplate,
+    switchPlatform,
+    handleFire,
+  } = useWebhookTesterState();
 
   return (
     <div className="space-y-6">
@@ -243,7 +136,7 @@ export function WebhookTester() {
           />
         </div>
         <div className="flex justify-end">
-          <Button onClick={handleFire} disabled={sending} size="lg">
+          <Button onClick={() => void handleFire()} disabled={sending} size="lg">
             <Send className="h-4 w-4" />
             {sending ? 'Disparando…' : 'Disparar webhook'}
           </Button>
@@ -254,9 +147,7 @@ export function WebhookTester() {
       {result && (
         <section
           className={`glass-card space-y-4 p-6 ${
-            result.ok
-              ? 'ring-1 ring-emerald-400/30'
-              : 'ring-1 ring-red-400/30'
+            result.ok ? 'ring-1 ring-emerald-400/30' : 'ring-1 ring-red-400/30'
           }`}
         >
           <header className="flex items-center justify-between">

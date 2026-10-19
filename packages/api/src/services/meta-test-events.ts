@@ -12,9 +12,7 @@ export function buildMetaTestEvent(args: {
   now?: Date;
 }) {
   const userData: Record<string, string | string[]> = {
-    external_id: [
-      createHash('sha256').update(args.externalId.trim().toLowerCase()).digest('hex'),
-    ],
+    external_id: [createHash('sha256').update(args.externalId.trim().toLowerCase()).digest('hex')],
   };
   if (args.clientIp) userData.client_ip_address = args.clientIp;
   if (args.userAgent) userData.client_user_agent = args.userAgent;

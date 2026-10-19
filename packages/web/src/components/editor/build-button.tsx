@@ -1,11 +1,5 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Download, Hammer } from 'lucide-react';
-import { toast } from 'sonner';
-import type { BundleFormat } from '@page-cloner/shared';
-import { useBuildJob, useCreateBuild } from '@/hooks/use-build-job';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -25,6 +19,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useBuildJob, useCreateBuild } from '@/hooks/use-build-job';
+import type { BundleFormat } from '@page-cloner/shared';
+import { Download, Hammer } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+import { toast } from 'sonner';
 
 interface BuildButtonProps {
   jobId: string;
@@ -103,7 +103,10 @@ export function BuildButton({ jobId, disabled }: BuildButtonProps) {
                 checked={inlineAssets}
                 onChange={(e) => setInlineAssets(e.target.checked)}
               />
-              <Label htmlFor="inline" className="cursor-pointer normal-case tracking-normal text-[13px] text-white/80">
+              <Label
+                htmlFor="inline"
+                className="cursor-pointer normal-case tracking-normal text-[13px] text-white/80"
+              >
                 Incluir assets (imagens, fontes, CSS)
               </Label>
             </div>
@@ -126,7 +129,7 @@ export function BuildButton({ jobId, disabled }: BuildButtonProps) {
 
         <DialogFooter>
           {!activeBuildId ? (
-            <Button onClick={onSubmit} disabled={create.isPending}>
+            <Button onClick={() => void onSubmit()} disabled={create.isPending}>
               {create.isPending ? 'Iniciando…' : 'Iniciar geração'}
             </Button>
           ) : (

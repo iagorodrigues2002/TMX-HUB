@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
-import { ulid } from 'ulid';
 import type { FastifyInstance } from 'fastify';
+import { ulid } from 'ulid';
 import { env } from '../env.js';
 import { decryptSecret } from '../lib/secret-box.js';
 
@@ -115,7 +115,9 @@ export async function sendMetaPaymentPushcut(input: {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        title: input.test ? `Teste de alerta · ${input.dashboardName}` : `Conta travada por pagamento · ${input.dashboardName}`,
+        title: input.test
+          ? `Teste de alerta · ${input.dashboardName}`
+          : `Conta travada por pagamento · ${input.dashboardName}`,
         text: `${input.accountName} · act_${input.accountExternalId} · ${input.businessName ?? 'Conta pessoal'} · ${balance}`,
         ...(input.devices.length ? { devices: input.devices } : {}),
       }),
@@ -132,7 +134,8 @@ export async function syncMetaMarketingConnection(
   app: FastifyInstance,
   connection: MetaConnectionRow,
 ): Promise<{ accounts: number; campaigns: number }> {
-  if (!app.db || !env.TRACKING_ENCRYPTION_KEY) throw new Error('Banco ou criptografia indisponível.');
+  if (!app.db || !env.TRACKING_ENCRYPTION_KEY)
+    throw new Error('Banco ou criptografia indisponível.');
   const token = decryptSecret(connection.access_token_encrypted, env.TRACKING_ENCRYPTION_KEY);
   const secret = decryptSecret(connection.app_secret_encrypted, env.TRACKING_ENCRYPTION_KEY);
   try {
@@ -156,7 +159,9 @@ export async function syncMetaMarketingConnection(
     });
     let campaignCount = 0;
     for (const account of accounts) {
-      const externalId = String(account.account_id ?? String(account.id ?? '').replace(/^act_/, ''));
+      const externalId = String(
+        account.account_id ?? String(account.id ?? '').replace(/^act_/, ''),
+      );
       const business = (account.business ?? {}) as Record<string, unknown>;
       const [storedAccount] = await app.db<{ id: string; payment_alert_active: boolean }[]>`
         INSERT INTO meta_ad_accounts
@@ -194,9 +199,14 @@ export async function syncMetaMarketingConnection(
       ) {
         try {
           await sendMetaPaymentPushcut({
-            secret: decryptSecret(pushcut.payment_pushcut_secret_encrypted, env.TRACKING_ENCRYPTION_KEY),
+            secret: decryptSecret(
+              pushcut.payment_pushcut_secret_encrypted,
+              env.TRACKING_ENCRYPTION_KEY,
+            ),
             notificationName: pushcut.payment_pushcut_notification_name,
-            devices: Array.isArray(pushcut.payment_pushcut_devices) ? pushcut.payment_pushcut_devices : [],
+            devices: Array.isArray(pushcut.payment_pushcut_devices)
+              ? pushcut.payment_pushcut_devices
+              : [],
             dashboardName: pushcut.name,
             accountName: String(account.name ?? externalId),
             accountExternalId: externalId,
@@ -247,7 +257,9 @@ export async function syncMetaMarketingConnection(
             last_synced_at=now(), updated_at=now()
         `;
       }
-      const insight = Array.isArray(insightPage.data) ? (insightPage.data[0] as JsonObject | undefined) : undefined;
+      const insight = Array.isArray(insightPage.data)
+        ? (insightPage.data[0] as JsonObject | undefined)
+        : undefined;
       const purchases = actionValue(insight?.actions, [
         'purchase',
         'omni_purchase',

@@ -3,9 +3,9 @@ import type { FastifyPluginAsync } from 'fastify';
 import { ulid } from 'ulid';
 import { z } from 'zod';
 import { env } from '../env.js';
+import { gatewayFeesSchema } from '../lib/gateway-fee-model.js';
 import { BadRequestError, NotFoundError } from '../lib/problem.js';
 import { decryptSecret, encryptSecret } from '../lib/secret-box.js';
-import { gatewayFeesSchema } from '../lib/gateway-fee-model.js';
 import { verifySyzepaySignature } from '../lib/syzepay-contract.js';
 import {
   classifySyzepayOrder,
@@ -87,7 +87,7 @@ export const syzepayPublicRoutes: FastifyPluginAsync<{
         0,
         256,
       );
-      let receipt;
+      let receipt: { id: string; attempts: number } | null | undefined;
       try {
         if (options.receive)
           receipt = await options.receive(syzeHash(token), body, contentType, headers);
@@ -175,17 +175,15 @@ export const syzepayAdminRoutes: FastifyPluginAsync = async (app) => {
         .strict()
         .safeParse(req.body);
       if (!parsed.success) throw new BadRequestError('Selecione oferta e etapa.');
-      return reply
-        .code(202)
-        .send(
-          await classifySyzepayOrder(app, {
-            connectionId: req.params.id,
-            ownerId: req.user!.sub,
-            orderId: req.params.orderId,
-            offerId: parsed.data.offer_id,
-            kind: parsed.data.order_kind as 'front' | 'upsell' | `upsell_${number}`,
-          }),
-        );
+      return reply.code(202).send(
+        await classifySyzepayOrder(app, {
+          connectionId: req.params.id,
+          ownerId: req.user!.sub,
+          orderId: req.params.orderId,
+          offerId: parsed.data.offer_id,
+          kind: parsed.data.order_kind as 'front' | 'upsell' | `upsell_${number}`,
+        }),
+      );
     },
   );
   const companies = async (owner: string) => {

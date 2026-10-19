@@ -1,0 +1,66 @@
+import {
+  Boxes,
+  ChartNoAxesCombined,
+  CircleGauge,
+  RefreshCcw,
+  RotateCcw,
+  Target,
+} from 'lucide-react';
+import type { NavItem } from './nav-config-nav-item';
+
+export const nav_items_offers: NavItem = {
+  id: 'offers',
+  label: 'Ofertas',
+  href: '/ofertas',
+  icon: Target,
+  group: 'Ofertas',
+  requiresTool: 'ofertas',
+  keywords: ['produtos', 'campanhas'],
+  children: [
+    {
+      id: 'ads-intelligence',
+      label: 'Ads Intelligence',
+      href: '/ads-intelligence',
+      icon: ChartNoAxesCombined,
+      group: 'Ofertas',
+      requiresTool: 'ofertas',
+      roles: ['admin'],
+      keywords: ['levas', 'anúncios', 'roas', 'roi', 'utmify'],
+    },
+    {
+      id: 'offers-all',
+      label: 'Todas as ofertas',
+      href: '/ofertas',
+      icon: Boxes,
+      group: 'Ofertas',
+      requiresTool: 'ofertas',
+    },
+    {
+      id: 'offer-detail',
+      label: 'Detalhe da oferta',
+      href: '/ofertas/[id]',
+      icon: CircleGauge,
+      group: 'Ofertas',
+      requiresTool: 'ofertas',
+      keywords: ['métricas', 'anúncios'],
+    },
+    {
+      id: 'refunds',
+      label: 'Reembolsos',
+      href: '/reembolsos',
+      icon: RotateCcw,
+      group: 'Ofertas',
+      requiresTool: 'ofertas',
+      keywords: ['chargeback', 'financeiro'],
+    },
+    {
+      id: 'recovery',
+      label: 'TMX Recovery',
+      href: '/recovery',
+      icon: RefreshCcw,
+      group: 'Ofertas',
+      requiresTool: 'ofertas',
+      hidden: true,
+    },
+  ],
+};

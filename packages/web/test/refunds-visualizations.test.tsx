@@ -32,14 +32,23 @@ test('organized workspace retains financial section anchors and accessible chart
   }
   assert.match(html, /refund-analytics/);
   assert.match(html, /refund-impact/);
-  assert.match(html, /role="region"/);
-  assert.match(html, /tabindex="0"/);
+  const scrollRegions = [...html.matchAll(/<section\b[^>]*\btabindex="0"[^>]*>/g)];
+  assert.equal(scrollRegions.length, 3);
+  for (const [region] of scrollRegions) {
+    assert.match(region, /aria-label="[^"]+"/);
+    assert.match(region, /overflow-x-auto/);
+  }
   assert.match(html, /refund-bar-reveal/);
 });
 test('delay distribution shows sample percentages and hides the distribution in private mode', () => {
   const delay = {
-    mean_days: 10, median_days: 8, sample_count: 4,
-    buckets: [{ label: '0–6 dias', count: 1 }, { label: '7–14 dias', count: 3 }],
+    mean_days: 10,
+    median_days: 8,
+    sample_count: 4,
+    buckets: [
+      { label: '0–6 dias', count: 1 },
+      { label: '7–14 dias', count: 3 },
+    ],
   };
   const html = renderToStaticMarkup(<RefundDelay delay={delay} isPrivate={false} />);
   assert.match(html, /25%/);
@@ -50,10 +59,18 @@ test('delay distribution shows sample percentages and hides the distribution in 
   assert.match(privateHtml, /Distribuição oculta/);
 });
 test('delay empty state never fabricates a zero-day mean', () => {
-  const html = renderToStaticMarkup(<RefundDelay delay={{
-    mean_days: null, median_days: null, sample_count: 0,
-    missing_paid_at: 2, buckets: [{ label: '0–6 dias', count: 0 }],
-  }} isPrivate={false} />);
+  const html = renderToStaticMarkup(
+    <RefundDelay
+      delay={{
+        mean_days: null,
+        median_days: null,
+        sample_count: 0,
+        missing_paid_at: 2,
+        buckets: [{ label: '0–6 dias', count: 0 }],
+      }}
+      isPrivate={false}
+    />,
+  );
   assert.match(html, /Sem intervalo válido/);
   assert.match(html, /permanecem no resumo financeiro/);
   assert.doesNotMatch(html, />0 dias</);
@@ -85,15 +102,29 @@ const fixture = {
 test('uses first webhook receipt as the primary delay metric', () => {
   const data = {
     ...fixture,
-    delay: { mean_days: 45, median_days: 45, sample_count: 2, buckets: [{ label: '31–60 dias', count: 2 }] },
-    observed_delay: { mean_days: 45, median_days: 45, sample_count: 2, buckets: [{ label: '31–60 dias', count: 2 }] },
+    delay: {
+      mean_days: 45,
+      median_days: 45,
+      sample_count: 2,
+      buckets: [{ label: '31–60 dias', count: 2 }],
+    },
+    observed_delay: {
+      mean_days: 45,
+      median_days: 45,
+      sample_count: 2,
+      buckets: [{ label: '31–60 dias', count: 2 }],
+    },
   };
-  const html = renderToStaticMarkup(<RefundAnalytics data={data} isPrivate={false} interval="day" onIntervalChange={() => {}} />);
+  const html = renderToStaticMarkup(
+    <RefundAnalytics data={data} isPrivate={false} interval="day" onIntervalChange={() => {}} />,
+  );
   assert.match(html, /Data do primeiro recebimento do webhook/);
   assert.match(html, /não a data contida no payload/);
   assert.match(html, /45 dias/);
   assert.match(html, /notificações com intervalo válido/);
-  const hidden = renderToStaticMarkup(<RefundAnalytics data={data} isPrivate interval="day" onIntervalChange={() => {}} />);
+  const hidden = renderToStaticMarkup(
+    <RefundAnalytics data={data} isPrivate interval="day" onIntervalChange={() => {}} />,
+  );
   assert.doesNotMatch(hidden, /45 dias|width:/);
 });
 test('renders all five recommendations and unified reversal metrics with fines', () => {

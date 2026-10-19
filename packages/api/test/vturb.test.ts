@@ -3,13 +3,15 @@ import { findVturbConversionKey, findVturbConversionKeyInUrl } from '../src/serv
 
 describe('VTurb conversion attribution', () => {
   it('prioritizes the parameter selected for the offer', () => {
-    expect(findVturbConversionKey({ src: 'campaign', sub19: 'v3_session_player_770' }, 'sub19'))
-      .toBe('v3_session_player_770');
+    expect(
+      findVturbConversionKey({ src: 'campaign', sub19: 'v3_session_player_770' }, 'sub19'),
+    ).toBe('v3_session_player_770');
   });
 
   it('finds a valid VTurb key without confusing the TMX src', () => {
-    expect(findVturbConversionKey({ src: 'tmx-visitor', vtid: 'v3_session_player_720' }, 'src'))
-      .toBe('v3_session_player_720');
+    expect(
+      findVturbConversionKey({ src: 'tmx-visitor', vtid: 'v3_session_player_720' }, 'src'),
+    ).toBe('v3_session_player_720');
   });
 
   it('does not deliver an ordinary attribution parameter', () => {
@@ -17,7 +19,10 @@ describe('VTurb conversion attribution', () => {
   });
 
   it('recovers the conversion key injected into a checkout link', () => {
-    expect(findVturbConversionKeyInUrl('https://checkout.example/?utm_source=meta&vtid=v3_session_player_770'))
-      .toBe('v3_session_player_770');
+    expect(
+      findVturbConversionKeyInUrl(
+        'https://checkout.example/?utm_source=meta&vtid=v3_session_player_770',
+      ),
+    ).toBe('v3_session_player_770');
   });
 });

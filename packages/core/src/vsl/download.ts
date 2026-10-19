@@ -2,8 +2,10 @@ import { spawn } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ulid } from 'ulid';
 import type { VslManifestKind } from '@page-cloner/shared';
+import { ulid } from 'ulid';
+import { prepareMediaProcess } from '../fetch/media-process.js';
+import { assertPublicUrl } from '../fetch/public-network.js';
 
 export interface DownloadOptions {
   /** Override path to ffmpeg binary. Default: 'ffmpeg' (PATH lookup). */
@@ -74,6 +76,7 @@ export async function downloadManifestToFile(
   manifestKind: VslManifestKind,
   opts: DownloadOptions = {},
 ): Promise<DownloadResult> {
+  await assertPublicUrl(manifestUrl);
   const ffmpegPath = opts.ffmpegPath ?? 'ffmpeg';
   const timeoutMs = opts.timeoutMs ?? 10 * 60 * 1000;
   const maxBytes = opts.maxBytes ?? 2 * 1024 * 1024 * 1024;
@@ -87,104 +90,133 @@ export async function downloadManifestToFile(
   // segments into one file; for DASH it muxes the chosen variant; for MP4 it
   // just copies. Keeping codec parameters is fine — every modern browser/OS
   // can play a copied H.264/AAC stream inside MP4.
-  const args = [
-    '-hide_banner',
-    '-loglevel', 'error',
-    '-stats',
-    '-y', // overwrite
-    ...(headerArg ? ['-headers', headerArg] : []),
-    '-protocol_whitelist', 'file,http,https,tcp,tls,crypto,httpproxy',
-    // For HLS we explicitly tell ffmpeg the format, which avoids a probe step
-    // that some CDNs reject as a HEAD request.
-    ...(manifestKind === 'hls' ? ['-f', 'hls'] : []),
-    '-i', manifestUrl,
-    '-c', 'copy',
-    '-bsf:a', 'aac_adtstoasc', // needed when remuxing AAC-in-HLS to MP4
-    '-movflags', '+faststart',
-    '-fs', String(maxBytes),
-    outPath,
-  ];
-
-  log(`spawn: ${ffmpegPath} ${args.filter((a) => a !== headerArg).join(' ')} (manifest=${manifestKind})`);
-
-  return await new Promise<DownloadResult>((resolve, reject) => {
-    const child = spawn(ffmpegPath, args, { stdio: ['ignore', 'pipe', 'pipe'] });
-
-    let stderrBuffer = '';
-    let durationSec: number | undefined;
-
-    const killTimer = setTimeout(() => {
-      log(`ffmpeg timeout after ${timeoutMs}ms — sending SIGKILL`);
-      child.kill('SIGKILL');
-    }, timeoutMs);
-
-    child.stderr.on('data', (chunk: Buffer) => {
-      const s = chunk.toString('utf8');
-      stderrBuffer += s;
-      // Keep buffer bounded so a chatty ffmpeg doesn't OOM us.
-      if (stderrBuffer.length > 64 * 1024) {
-        stderrBuffer = stderrBuffer.slice(-32 * 1024);
-      }
-      if (durationSec === undefined) {
-        const d = parseDuration(s);
-        if (d !== undefined) {
-          durationSec = d;
-          log(`detected duration: ${d}s`);
-        }
-      }
-    });
-
-    child.on('error', (err) => {
-      clearTimeout(killTimer);
-      reject(
-        Object.assign(new Error(`ffmpeg spawn failed: ${err.message}`), {
-          code: 'ffmpeg_spawn_failed',
-        }),
-      );
-    });
-
-    child.on('close', async (code, signal) => {
-      clearTimeout(killTimer);
-      if (signal === 'SIGKILL') {
-        await fs.unlink(outPath).catch(() => undefined);
-        reject(
-          Object.assign(new Error('ffmpeg killed: download exceeded time budget.'), {
-            code: 'download_timeout',
-          }),
-        );
-        return;
-      }
-      if (code !== 0) {
-        await fs.unlink(outPath).catch(() => undefined);
-        const tail = stderrBuffer.split('\n').slice(-15).join('\n').trim();
-        reject(
-          Object.assign(new Error(`ffmpeg exited ${code}: ${tail || 'no stderr'}`), {
-            code: 'ffmpeg_failed',
-            stderr: tail,
-          }),
-        );
-        return;
-      }
-      try {
-        const stat = await fs.stat(outPath);
-        if (stat.size === 0) {
-          await fs.unlink(outPath).catch(() => undefined);
-          reject(
-            Object.assign(new Error('ffmpeg produced an empty file.'), {
-              code: 'empty_output',
-            }),
-          );
-          return;
-        }
-        log(`download done: ${stat.size} bytes -> ${outPath}`);
-        resolve({ filePath: outPath, bytes: stat.size, durationSec });
-      } catch (err) {
-        reject(
-          Object.assign(new Error(`stat failed: ${(err as Error).message}`), {
-            code: 'stat_failed',
-          }),
-        );
-      }
-    });
+  const prepared = await prepareMediaProcess({
+    executable: ffmpegPath,
+    mode: 'public',
+    outputFiles: [outPath],
   });
+  try {
+    const args = [
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-stats',
+      '-y', // overwrite
+      ...(headerArg ? ['-headers', headerArg] : []),
+      '-protocol_whitelist',
+      'http,https,tcp,tls,crypto,httpproxy',
+      '-http_proxy',
+      prepared.proxyUrl,
+      // For HLS we explicitly tell ffmpeg the format, which avoids a probe step
+      // that some CDNs reject as a HEAD request.
+      ...(manifestKind === 'hls' ? ['-f', 'hls'] : []),
+      '-i',
+      manifestUrl,
+      '-c',
+      'copy',
+      '-bsf:a',
+      'aac_adtstoasc', // needed when remuxing AAC-in-HLS to MP4
+      '-movflags',
+      '+faststart',
+      '-fs',
+      String(maxBytes),
+      outPath,
+    ];
+
+    log(
+      `spawn: ${ffmpegPath} ${args.filter((a) => a !== headerArg).join(' ')} (manifest=${manifestKind})`,
+    );
+
+    const result = await new Promise<DownloadResult>((resolve, reject) => {
+      const child = spawn(prepared.executablePath, args, {
+        env: prepared.env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+
+      let stderrBuffer = '';
+      let durationSec: number | undefined;
+
+      const killTimer = setTimeout(() => {
+        log(`ffmpeg timeout after ${timeoutMs}ms — sending SIGKILL`);
+        child.kill('SIGKILL');
+      }, timeoutMs);
+
+      child.stderr.on('data', (chunk: Buffer) => {
+        const s = chunk.toString('utf8');
+        stderrBuffer += s;
+        // Keep buffer bounded so a chatty ffmpeg doesn't OOM us.
+        if (stderrBuffer.length > 64 * 1024) {
+          stderrBuffer = stderrBuffer.slice(-32 * 1024);
+        }
+        if (durationSec === undefined) {
+          const d = parseDuration(s);
+          if (d !== undefined) {
+            durationSec = d;
+            log(`detected duration: ${d}s`);
+          }
+        }
+      });
+
+      child.on('error', (err) => {
+        clearTimeout(killTimer);
+        reject(
+          Object.assign(new Error(`ffmpeg spawn failed: ${err.message}`), {
+            code: 'ffmpeg_spawn_failed',
+          }),
+        );
+      });
+
+      child.on('close', (code, signal) => {
+        void (async () => {
+          clearTimeout(killTimer);
+          if (signal === 'SIGKILL') {
+            await fs.unlink(outPath).catch(() => undefined);
+            reject(
+              Object.assign(new Error('ffmpeg killed: download exceeded time budget.'), {
+                code: 'download_timeout',
+              }),
+            );
+            return;
+          }
+          if (code !== 0) {
+            await fs.unlink(outPath).catch(() => undefined);
+            const tail = stderrBuffer.split('\n').slice(-15).join('\n').trim();
+            reject(
+              Object.assign(new Error(`ffmpeg exited ${code}: ${tail || 'no stderr'}`), {
+                code: 'ffmpeg_failed',
+                stderr: tail,
+              }),
+            );
+            return;
+          }
+          try {
+            const stat = await fs.stat(outPath);
+            if (stat.size === 0) {
+              await fs.unlink(outPath).catch(() => undefined);
+              reject(
+                Object.assign(new Error('ffmpeg produced an empty file.'), {
+                  code: 'empty_output',
+                }),
+              );
+              return;
+            }
+            log(`download done: ${stat.size} bytes -> ${outPath}`);
+            resolve({ filePath: outPath, bytes: stat.size, durationSec });
+          } catch (err) {
+            reject(
+              Object.assign(new Error(`stat failed: ${(err as Error).message}`), {
+                code: 'stat_failed',
+              }),
+            );
+          }
+        })().catch(reject);
+      });
+    });
+    await prepared.close();
+    return result;
+  } catch (error) {
+    await fs.unlink(outPath).catch(() => undefined);
+    await prepared.close().catch(() => undefined);
+    throw error;
+  }
 }

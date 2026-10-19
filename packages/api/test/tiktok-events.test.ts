@@ -6,20 +6,57 @@ import { TIKTOK_EVENTS_API_URL, buildTikTokPayload } from '../src/workers/tiktok
 
 describe('TikTok Events API payload', () => {
   it('sends a cart product without inventing a purchase or order', () => {
-    const payload = buildTikTokPayload({pixelCode:'P1',eventId:'cart-event-1',eventName:'AddToCart',occurredAt:new Date(),eventUrl:'https://theminex.com/cart',value:17,currency:'USD',contentId:'169476832',contentName:'Product'});
+    const payload = buildTikTokPayload({
+      pixelCode: 'P1',
+      eventId: 'cart-event-1',
+      eventName: 'AddToCart',
+      occurredAt: new Date(),
+      eventUrl: 'https://theminex.com/cart',
+      value: 17,
+      currency: 'USD',
+      contentId: '169476832',
+      contentName: 'Product',
+    });
     expect(payload.data[0]?.event).toBe('AddToCart');
-    expect(payload.data[0]?.properties).toMatchObject({content_id:'169476832',currency:'USD',value:17,contents:[{content_id:'169476832',quantity:1,price:17}]});
+    expect(payload.data[0]?.properties).toMatchObject({
+      content_id: '169476832',
+      currency: 'USD',
+      value: 17,
+      contents: [{ content_id: '169476832', quantity: 1, price: 17 }],
+    });
     expect(payload.data[0]?.properties).not.toHaveProperty('order_id');
     expect(payload).not.toHaveProperty('test_event_code');
-    expect(()=>buildTikTokPayload({pixelCode:'P1',eventId:'cart-event-1',eventName:'AddToCart',occurredAt:new Date(),eventUrl:'https://theminex.com/cart',value:17,currency:'USD'})).toThrow('product');
-    expect(()=>buildTikTokPayload({pixelCode:'P1',eventId:'purchase-event-1',eventName:'Purchase',occurredAt:new Date(),eventUrl:'https://theminex.com/cart',value:17,currency:'USD'})).toThrow('order');
+    expect(() =>
+      buildTikTokPayload({
+        pixelCode: 'P1',
+        eventId: 'cart-event-1',
+        eventName: 'AddToCart',
+        occurredAt: new Date(),
+        eventUrl: 'https://theminex.com/cart',
+        value: 17,
+        currency: 'USD',
+      }),
+    ).toThrow('product');
+    expect(() =>
+      buildTikTokPayload({
+        pixelCode: 'P1',
+        eventId: 'purchase-event-1',
+        eventName: 'Purchase',
+        occurredAt: new Date(),
+        eventUrl: 'https://theminex.com/cart',
+        value: 17,
+        currency: 'USD',
+      }),
+    ).toThrow('order');
   });
   it('registers both browser pixels in the SDK and preserves an existing loader', () => {
     const inserted: unknown[] = [];
-    const window: any = {};
+    const window = {} as { ttq: { _i: Record<string, unknown[][]>; load: unknown } };
     const document = {
       createElement: () => ({}),
-      getElementsByTagName: () => [{ parentNode: { insertBefore: (s: unknown) => inserted.push(s) } }],
+      getElementsByTagName: () => [
+        { parentNode: { insertBefore: (s: unknown) => inserted.push(s) } },
+      ],
       addEventListener: () => {},
     };
     runInNewContext(buildTikTokPixelScript(['FIRST', 'SECOND']), { window, document });

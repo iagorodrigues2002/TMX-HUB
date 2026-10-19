@@ -1,9 +1,9 @@
 import { readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { resolveAssets } from '../src/assets/resolve.js';
 import { walkCss } from '../src/assets/css-walker.js';
+import { resolveAssets } from '../src/assets/resolve.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 

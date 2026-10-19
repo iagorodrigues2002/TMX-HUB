@@ -16,9 +16,7 @@
     ],
     "baseUrl": ".",
     "paths": {
-      "@/*": [
-        "./src/*"
-      ]
+      "@/*": ["./src/*"]
     }
   },
   "include": [
@@ -28,9 +26,5 @@
     "src/**/*.ts",
     "src/**/*.tsx"
   ],
-  "exclude": [
-    "node_modules",
-    ".next",
-    "dist"
-  ]
+  "exclude": ["node_modules", ".next", "dist"]
 }

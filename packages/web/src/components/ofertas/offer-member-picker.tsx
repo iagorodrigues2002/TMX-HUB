@@ -3,6 +3,7 @@
 import { Checkbox } from '@/components/ui/checkbox';
 import type { AuthUser } from '@/lib/api-client';
 import { Users } from 'lucide-react';
+import { useId } from 'react';
 
 interface Props {
   members: AuthUser[];
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export function OfferMemberPicker({ members, selected, onChange, loading }: Props) {
+  const id = useId();
   const eligible = members.filter((member) => member.role === 'user');
 
   return (
@@ -42,9 +44,11 @@ export function OfferMemberPicker({ members, selected, onChange, loading }: Prop
             return (
               <label
                 key={member.id}
+                htmlFor={`${id}-${member.id}`}
                 className="flex cursor-pointer items-center gap-3 rounded-md border border-white/[0.06] bg-black/10 px-3 py-3 hover:border-cyan-300/20"
               >
                 <Checkbox
+                  id={`${id}-${member.id}`}
                   checked={checked}
                   onChange={() =>
                     onChange(

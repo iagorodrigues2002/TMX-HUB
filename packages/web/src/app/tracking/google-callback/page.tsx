@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
 import { apiClient } from '@/lib/api-client';
+import Link from 'next/link';
+import { useEffect, useRef, useState } from 'react';
 
 export default function GoogleCallback() {
   const started = useRef(false);
@@ -19,14 +19,33 @@ export default function GoogleCallback() {
         sessionStorage.removeItem('tmx-google-oauth');
         if (query.get('error')) throw new Error('A autorização não foi concluída no Google.');
         if (!saved || !query.get('code') || query.get('state') !== saved.state) {
-          throw new Error('Esta autorização expirou ou foi aberta em outro navegador. Inicie novamente pelo destino da oferta.');
+          throw new Error(
+            'Esta autorização expirou ou foi aberta em outro navegador. Inicie novamente pelo destino da oferta.',
+          );
         }
-        await apiClient.googleAdsOAuthComplete(saved.offerId, saved.destinationId, { code: query.get('code')!, state: saved.state });
-        setMessage('Autorização salva. A validação da conta é a próxima etapa; os envios continuam desativados.');
+        await apiClient.googleAdsOAuthComplete(saved.offerId, saved.destinationId, {
+          code: query.get('code')!,
+          state: saved.state,
+        });
+        setMessage(
+          'Autorização salva. A validação da conta é a próxima etapa; os envios continuam desativados.',
+        );
       } catch (error) {
-        setMessage(error instanceof Error ? error.message : 'Não foi possível conectar. Inicie novamente pelo TMX.');
+        setMessage(
+          error instanceof Error
+            ? error.message
+            : 'Não foi possível conectar. Inicie novamente pelo TMX.',
+        );
       }
     })();
   }, []);
-  return <main className="mx-auto max-w-xl space-y-6 p-8"><h1 className="text-xl font-semibold">Conexão Google Ads</h1><p role="status">{message}</p><Link className="underline" href="/tracking">Voltar ao tracking</Link></main>;
+  return (
+    <main className="mx-auto max-w-xl space-y-6 p-8">
+      <h1 className="text-xl font-semibold">Conexão Google Ads</h1>
+      <output className="block">{message}</output>
+      <Link className="underline" href="/tracking">
+        Voltar ao tracking
+      </Link>
+    </main>
+  );
 }

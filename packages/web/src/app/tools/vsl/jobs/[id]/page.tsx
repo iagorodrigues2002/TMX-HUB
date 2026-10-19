@@ -1,7 +1,8 @@
 'use client';
 
-import Link from 'next/link';
-import { use } from 'react';
+import { HubShell } from '@/components/hub/hub-shell';
+import { Button } from '@/components/ui/button';
+import { useVslJob } from '@/hooks/use-vsl-job';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -12,9 +13,8 @@ import {
   Video,
   XCircle,
 } from 'lucide-react';
-import { HubShell } from '@/components/hub/hub-shell';
-import { Button } from '@/components/ui/button';
-import { useVslJob } from '@/hooks/use-vsl-job';
+import Link from 'next/link';
+import { use } from 'react';
 
 const STATUS_LABEL: Record<string, string> = {
   queued: 'Na fila',

@@ -1,4 +1,11 @@
 export { fetchPage } from './fetch/fetch-page.js';
+export {
+  assertPublicUrl,
+  isPublicAddress,
+  publicHttpUrl,
+  publicFetch,
+  publicRequest,
+} from './fetch/public-network.js';
 export { inspectHtml } from './extract/inspect.js';
 export { sanitize } from './sanitize/index.js';
 export { resolveAssets } from './assets/resolve.js';
@@ -8,6 +15,7 @@ export { bundle } from './bundle/index.js';
 export { clone } from './clone.js';
 
 export { disposeBrowser, getBrowser } from './fetch/browser-pool.js';
+export { prepareMediaProcess } from './fetch/media-process.js';
 export { extractVisibleText } from './diff/extract-text.js';
 export { diffLines } from './diff/lcs-diff.js';
 export type { DiffEntry, DiffResult, DiffSummary, DiffOp } from './diff/lcs-diff.js';

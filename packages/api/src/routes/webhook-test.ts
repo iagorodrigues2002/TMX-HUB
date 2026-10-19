@@ -1,3 +1,4 @@
+import { publicFetch } from '@page-cloner/core';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { zodToProblem } from '../lib/problem.js';
@@ -49,7 +50,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     };
 
     try {
-      const res = await fetch(url, {
+      const res = await publicFetch(url, {
         method,
         headers: finalHeaders,
         body: bodyStr,
@@ -99,10 +100,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         sent: { url, method, headers: finalHeaders, body: bodyStr },
       });
     } catch (err) {
-      const message =
-        ac.signal.aborted
-          ? `Timeout: o destino não respondeu em ${timeout_ms}ms.`
-          : (err as Error)?.message ?? 'Falha ao chamar o destino.';
+      const message = ac.signal.aborted
+        ? `Timeout: o destino não respondeu em ${timeout_ms}ms.`
+        : ((err as Error)?.message ?? 'Falha ao chamar o destino.');
       return reply.code(200).send({
         ok: false,
         status: 0,

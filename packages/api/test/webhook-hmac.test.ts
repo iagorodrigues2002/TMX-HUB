@@ -50,6 +50,7 @@ async function createApp(provider: Provider) {
   vi.stubEnv('JWT_SECRET', 'test-only-jwt-secret-at-least-32-characters');
   vi.stubEnv('TRACKING_ENCRYPTION_KEY', encryptionKey);
   vi.stubEnv('WEBHOOK_SIGNATURE_REQUIRED', 'true');
+  vi.stubEnv('VENDEPAY_SIGNATURE_DISABLED', 'false');
   const { default: trackingPublicRoutes } = await import('../src/routes/tracking-public.js');
   const app = Fastify();
   app.decorate('db', createDb(provider) as never);
@@ -75,7 +76,8 @@ describe('gateway webhook HMAC', () => {
         payload: rawPayload,
       });
 
-      expect(response.statusCode).toBe(200);
+      expect(response.statusCode).toBe(provider === 'vendepay' ? 202 : 200);
+      expect(response.json()).toEqual({ accepted: true, state: 'quarantined' });
       await app.close();
     });
 
@@ -92,7 +94,30 @@ describe('gateway webhook HMAC', () => {
       });
 
       expect(response.statusCode).toBe(401);
+      expect(response.json()).toEqual({ accepted: false, error: 'invalid_signature' });
       await app.close();
+    });
+
+    it(`${provider} rejects a signature over reserialized JSON instead of the raw body`, async () => {
+      const app = await createApp(provider);
+      try {
+        const signature = createHmac('sha256', webhookSecret)
+          .update(JSON.stringify(JSON.parse(rawPayload)))
+          .digest('hex');
+        const response = await app.inject({
+          method: 'POST',
+          url: `/webhooks/${provider}?token=${token}`,
+          headers: {
+            'content-type': 'application/json',
+            [`x-${provider}-signature`]: signature,
+          },
+          payload: rawPayload,
+        });
+        expect(response.statusCode).toBe(401);
+        expect(response.json()).toEqual({ accepted: false, error: 'invalid_signature' });
+      } finally {
+        await app.close();
+      }
     });
   }
 });

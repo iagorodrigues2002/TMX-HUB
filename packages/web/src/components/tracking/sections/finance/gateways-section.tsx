@@ -7,12 +7,12 @@ import {
   type GatewayFormValues,
   type GatewayProvider,
 } from '@/components/tracking/sections/finance/gateway-registry';
+import { SyzepayFeeForm } from '@/components/tracking/syzepay-fees';
 import { TRACKING_DASHBOARD_STALE_TIME } from '@/components/tracking/tracking-query';
 import { DataState } from '@/components/ui/data-state';
 import { apiClient, authToken } from '@/lib/api-client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { SyzepayFeeForm } from '@/components/tracking/syzepay-fees';
 
 interface GatewaysSectionProps {
   offerId: string;

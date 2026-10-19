@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
-import { ExternalLink, FileCode2, ShoppingCart, X } from 'lucide-react';
-import type { InspectResult, LinkReplacement } from '@page-cloner/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import type { InspectResult, LinkReplacement } from '@page-cloner/shared';
+import { ExternalLink, FileCode2, ShoppingCart, X } from 'lucide-react';
+import { useState } from 'react';
 
 interface InspectionPanelProps {
   result: InspectResult;
@@ -62,13 +62,18 @@ export function InspectionPanel({ result, onClone, onCancel, submitting }: Inspe
         ) : (
           <div className="space-y-2 pl-2">
             {result.checkoutLinks.map((link) => (
-              <div key={link.href} className="space-y-1 rounded-md border border-white/[0.07] bg-white/[0.02] p-3">
+              <div
+                key={link.href}
+                className="space-y-1 rounded-md border border-white/[0.07] bg-white/[0.02] p-3"
+              >
                 <div className="flex items-start gap-2">
                   <ExternalLink className="mt-0.5 h-3 w-3 shrink-0 text-white/30" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-mono text-[11px] text-white/60">{link.href}</p>
                     {link.text && (
-                      <p className="text-[11px] text-white/35">{link.text} · {link.occurrences}×</p>
+                      <p className="text-[11px] text-white/35">
+                        {link.text} · {link.occurrences}×
+                      </p>
                     )}
                   </div>
                 </div>

@@ -6,14 +6,7 @@ export interface DiscoveredStep {
   /** Visible text of the link/button — used to label the step in the UI. */
   label: string;
   /** Where the candidate came from. */
-  source:
-    | 'a'
-    | 'form'
-    | 'data-attr'
-    | 'js-redirect'
-    | 'meta-refresh'
-    | 'onclick'
-    | 'back-redirect';
+  source: 'a' | 'form' | 'data-attr' | 'js-redirect' | 'meta-refresh' | 'onclick' | 'back-redirect';
   /** Heuristic confidence (0..1) — higher = more likely a funnel-step CTA. */
   score: number;
 }
@@ -132,11 +125,12 @@ function isSkipped(url: string): boolean {
 
 function scoreCandidate(label: string, url: string, source: DiscoveredStep['source']): number {
   // Strong sources start higher because they're explicit funnel transitions.
-  let score = source === 'meta-refresh' || source === 'back-redirect' || source === 'js-redirect'
-    ? 0.7
-    : source === 'onclick'
-      ? 0.55
-      : 0.35;
+  let score =
+    source === 'meta-refresh' || source === 'back-redirect' || source === 'js-redirect'
+      ? 0.7
+      : source === 'onclick'
+        ? 0.55
+        : 0.35;
 
   const lblLow = label.toLowerCase().trim();
   const urlLow = url.toLowerCase();
@@ -192,7 +186,8 @@ function extractScriptRedirects(
   return out;
 }
 
-const ONCLICK_URL_RE = /(?:location(?:\.href)?|window\.location(?:\.href)?)\s*=\s*['"`]([^'"`]+)['"`]/i;
+const ONCLICK_URL_RE =
+  /(?:location(?:\.href)?|window\.location(?:\.href)?)\s*=\s*['"`]([^'"`]+)['"`]/i;
 const ONCLICK_OPEN_RE = /window\.open\s*\(\s*['"`]([^'"`]+)['"`]/i;
 
 function extractFromOnclick(attr: string | undefined): string | null {
@@ -278,7 +273,7 @@ export function discoverNextSteps(html: string, baseUrl: string): DiscoveredStep
   // 5) <meta http-equiv="refresh" content="0; url=/next">
   $('meta[http-equiv="refresh" i]').each((_, el) => {
     const m = META_REFRESH_RE.exec($(el).attr('content') ?? '');
-    if (m && m[1]) push(m[1], '(meta refresh)', 'meta-refresh');
+    if (m?.[1]) push(m[1], '(meta refresh)', 'meta-refresh');
   });
 
   // 6) Inline scripts: redirect-like statements (incl. popstate back-redirects).

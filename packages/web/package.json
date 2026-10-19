@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start -p ${PORT:-3100}",
     "lint": "next lint",
+    "test": "tsx --tsconfig tsconfig.test.json --test test/*.test.ts test/*.test.tsx test/*.node.tsx test/*.test.mjs",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf .next dist node_modules/.cache"
   },

@@ -1,8 +1,8 @@
 import * as cheerio from 'cheerio';
 import type { Element } from 'domhandler';
 import { ulid } from 'ulid';
-import type { Link } from '../types.js';
 import { hostnameOf, resolveUrl, shouldSkipUrl } from '../assets/url-utils.js';
+import type { Link } from '../types.js';
 import { generateSelector } from './selectors.js';
 
 export interface ExtractLinksOptions {
@@ -23,11 +23,7 @@ export function extractLinks(html: string, opts: ExtractLinksOptions = {}): Link
 
     if (tag === 'a' && (!rawHref || shouldSkipUrl(rawHref))) return;
 
-    const absHref = rawHref
-      ? opts.baseUrl
-        ? resolveUrl(rawHref, opts.baseUrl)
-        : rawHref
-      : '';
+    const absHref = rawHref ? (opts.baseUrl ? resolveUrl(rawHref, opts.baseUrl) : rawHref) : '';
 
     const text = (node.text() ?? '').trim().slice(0, 256);
     const rel = node.attr('rel') ?? undefined;

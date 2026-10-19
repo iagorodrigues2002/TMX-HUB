@@ -1,12 +1,12 @@
-import { Worker } from 'bullmq';
-import archiver from 'archiver';
 import { PassThrough } from 'node:stream';
 import type { FunnelPage } from '@page-cloner/shared';
+import archiver from 'archiver';
+import { Worker } from 'bullmq';
 import { logger } from '../lib/logger.js';
 import { makeRedis } from '../lib/redis.js';
 import { FUNNEL_QUEUE_NAME, type FunnelJobData } from '../queues/index.js';
-import type { StorageService } from '../services/storage.js';
 import type { FunnelJobStore } from '../services/funnel-job-store.js';
+import type { StorageService } from '../services/storage.js';
 
 interface DiscoveredStep {
   url: string;
@@ -57,9 +57,7 @@ function buildIndexHtml(rootUrl: string, pages: FunnelPage[]): string {
     .map((p, i) => {
       const folder = pageFolderName(i, p);
       const safeUrl = (p.finalUrl ?? p.url).replace(/&/g, '&amp;').replace(/</g, '&lt;');
-      const safeLabel = (p.label || '(sem label)')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;');
+      const safeLabel = (p.label || '(sem label)').replace(/&/g, '&amp;').replace(/</g, '&lt;');
       const errBadge = p.error
         ? `<span style="color:#f87171;margin-left:8px">⚠ ${p.error}</span>`
         : '';
@@ -69,7 +67,7 @@ function buildIndexHtml(rootUrl: string, pages: FunnelPage[]): string {
         <td>${p.depth}</td>
         <td>${safeLabel}${errBadge}</td>
         <td><code>${safeUrl}</code></td>
-        <td>${p.bytes ? Math.round(p.bytes / 1024) + ' KB' : '—'}</td>
+        <td>${p.bytes ? `${Math.round(p.bytes / 1024)} KB` : '—'}</td>
         <td>${p.error ? '—' : `<a href="./${folder}/index.html">abrir</a>`}</td>
       </tr>`;
     })
@@ -229,9 +227,15 @@ export function createFunnelWorker(args: {
           const folder = pageFolderName(page.index, page);
           archive.append(html, { name: `${folder}/index.html` });
         }
-        archive.append(buildIndexHtml(meta.rootUrl, results.map((r) => r.page)), {
-          name: 'index.html',
-        });
+        archive.append(
+          buildIndexHtml(
+            meta.rootUrl,
+            results.map((r) => r.page),
+          ),
+          {
+            name: 'index.html',
+          },
+        );
         await archive.finalize();
         await done;
 

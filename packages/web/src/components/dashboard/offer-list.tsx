@@ -34,8 +34,8 @@ export function OfferList() {
         ...(dashboardId.trim() ? { dashboard_id: dashboardId.trim() } : {}),
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['offers'] });
-      qc.invalidateQueries({ queryKey: ['dashboard-summary'] });
+      void qc.invalidateQueries({ queryKey: ['offers'] });
+      void qc.invalidateQueries({ queryKey: ['dashboard-summary'] });
       setShowCreate(false);
       setName('');
       setDashboardId('');
@@ -47,8 +47,8 @@ export function OfferList() {
   const deleteMut = useMutation({
     mutationFn: (id: string) => apiClient.deleteOffer(id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['offers'] });
-      qc.invalidateQueries({ queryKey: ['dashboard-summary'] });
+      void qc.invalidateQueries({ queryKey: ['offers'] });
+      void qc.invalidateQueries({ queryKey: ['dashboard-summary'] });
       toast.success('Dashboard removido.');
     },
     onError: (err) => toast.error((err as Error).message),

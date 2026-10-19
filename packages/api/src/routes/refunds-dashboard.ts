@@ -1,17 +1,20 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { canAccessOffer } from '../services/offer-store.js';
 import { VENDEPAY_PENALTY_MINOR } from '../lib/gateway-fee-model.js';
-import { saoPauloDayRange } from '../services/utmify-sync.js';
-import { recoverRefundDateEvidence, type RefundDateReceipt } from '../services/refund-date-evidence.js';
+import { canAccessOffer } from '../services/offer-store.js';
 import {
+  type RefundOrder,
   buildRefundAnalytics,
   localDay,
   shiftDay,
-  validDate,
   summarizeRefunds,
-  type RefundOrder,
+  validDate,
 } from '../services/refund-analytics.js';
+import {
+  type RefundDateReceipt,
+  recoverRefundDateEvidence,
+} from '../services/refund-date-evidence.js';
+import { saoPauloDayRange } from '../services/utmify-sync.js';
 
 const schema = z.object({
   from: z.string().refine(validDate).optional(),
@@ -32,10 +35,10 @@ const plugin: FastifyPluginAsync = async (app) => {
     const parsed = schema.safeParse(req.query);
     if (!parsed.success) return reply.code(400).send({ error: 'invalid_refund_filter' });
     const asOf = new Date();
-    const q = parsed.data,
-      today = localDay(asOf),
-      from = q.from ?? today,
-      to = q.to ?? today;
+    const q = parsed.data;
+    const today = localDay(asOf);
+    const from = q.from ?? today;
+    const to = q.to ?? today;
     if (from > to || to > today || Number(to.slice(0, 4)) - Number(from.slice(0, 4)) > 10)
       return reply.code(400).send({ error: 'invalid_range' });
     const accessible = (
@@ -50,11 +53,11 @@ const plugin: FastifyPluginAsync = async (app) => {
         );
     if (q.offer_id && !offers.length) return reply.code(404).send({ error: 'offer_not_found' });
     const span = Math.round((Date.parse(to) - Date.parse(from)) / 86400000) + 1;
-    const previousFrom = shiftDay(from, -span),
-      start = new Date(saoPauloDayRange(previousFrom).from),
-      end = new Date(saoPauloDayRange(to).to);
-    const ids = offers.map((o) => o.id),
-      names = new Map(offers.map((o) => [o.id, o.name]));
+    const previousFrom = shiftDay(from, -span);
+    const start = new Date(saoPauloDayRange(previousFrom).from);
+    const end = new Date(saoPauloDayRange(to).to);
+    const ids = offers.map((o) => o.id);
+    const names = new Map(offers.map((o) => [o.id, o.name]));
     const rows = ids.length
       ? await app.db<
           Array<
@@ -99,8 +102,13 @@ const plugin: FastifyPluginAsync = async (app) => {
       FROM tariffs t LEFT JOIN exchange_rate_cache fx ON fx.base_currency=t.fee_currency AND fx.target_currency='BRL'
     `
       : [];
-    const recoveryIds = rows.filter((r) => r.provider === 'vendepay' && r.payload_adapter !== 'explodely' && r.reversal_at).map((r) => r.id);
-    const receipts = recoveryIds.length ? await app.db<RefundDateReceipt[]>`
+    const recoveryIds = rows
+      .filter(
+        (r) => r.provider === 'vendepay' && r.payload_adapter !== 'explodely' && r.reversal_at,
+      )
+      .map((r) => r.id);
+    const receipts = recoveryIds.length
+      ? await app.db<RefundDateReceipt[]>`
       SELECT wr.order_id,o.external_id,wr.payload,wr.received_at
       FROM webhook_receipts wr
       JOIN tracking_orders o ON o.id=wr.order_id AND o.provider='vendepay'
@@ -109,13 +117,17 @@ const plugin: FastifyPluginAsync = async (app) => {
       WHERE wr.order_id=ANY(${recoveryIds}) AND wr.state='processed'
         AND COALESCE(vc.payload_adapter,'')<>'explodely'
       ORDER BY wr.received_at,wr.id
-    ` : [];
-    const normalized: RefundOrder[] = recoverRefundDateEvidence(rows.map((r) => ({
-      ...r,
-      offer_name: names.get(r.offer_id) ?? r.offer_id,
-      amount_brl_minor: r.amount_brl_minor === null ? null : Number(r.amount_brl_minor),
-      penalty_brl_minor: r.penalty_brl_minor === null ? null : Number(r.penalty_brl_minor),
-    })), receipts);
+    `
+      : [];
+    const normalized: RefundOrder[] = recoverRefundDateEvidence(
+      rows.map((r) => ({
+        ...r,
+        offer_name: names.get(r.offer_id) ?? r.offer_id,
+        amount_brl_minor: r.amount_brl_minor === null ? null : Number(r.amount_brl_minor),
+        penalty_brl_minor: r.penalty_brl_minor === null ? null : Number(r.penalty_brl_minor),
+      })),
+      receipts,
+    );
     const analytics = buildRefundAnalytics(normalized, from, to, q.interval, today);
     return {
       from,

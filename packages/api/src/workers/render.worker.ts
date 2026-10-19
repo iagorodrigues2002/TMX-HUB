@@ -1,8 +1,8 @@
 import type { CloneState } from '@page-cloner/shared';
 import { Worker } from 'bullmq';
 import { env } from '../env.js';
-import { makeRedis } from '../lib/redis.js';
 import { logger } from '../lib/logger.js';
+import { makeRedis } from '../lib/redis.js';
 import { RENDER_QUEUE_NAME, type RenderJobData } from '../queues/index.js';
 import type { JobStore } from '../services/job-store.js';
 import type { StorageService } from '../services/storage.js';
@@ -29,6 +29,7 @@ interface CoreModule {
       entries: Array<{
         id: string;
         url: string;
+        originalUrl: string;
         mime: string;
         size: number;
         storageKey?: string;
@@ -42,7 +43,6 @@ interface CoreModule {
 }
 
 async function loadCore(): Promise<CoreModule> {
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-expect-error - core dist may not be present at type-check time.
   return (await import('@page-cloner/core')) as CoreModule;
 }
@@ -65,10 +65,13 @@ export function createRenderWorker(args: {
 
       const core = await loadCore();
       const meta = await jobStore.getCloneMeta(jobId);
+      const controller = new AbortController();
+      const signal = controller.signal;
 
       try {
         await withTimeout(
           (async () => {
+            signal.throwIfAborted();
             // 1. Fetch
             await jobStore.setCloneStatus(jobId, 'rendering', { progress: 10 });
             const fetched = await core.fetchPage(url, {
@@ -76,7 +79,9 @@ export function createRenderWorker(args: {
               userAgent: meta.options.userAgent,
               viewport: meta.options.viewport,
               timeoutMs: env.MAX_RENDER_TIMEOUT_MS,
+              signal,
             });
+            signal.throwIfAborted();
 
             // 2. Sanitize (optionally preserve specific scripts chosen by the user)
             await jobStore.setCloneStatus(jobId, 'sanitizing', { progress: 35 });
@@ -85,17 +90,21 @@ export function createRenderWorker(args: {
               stripTemplates: true,
               keepScriptSrcs: meta.options.keepScriptSrcs ?? [],
             });
+            signal.throwIfAborted();
 
             // 3. Resolve assets (download enabled)
             await jobStore.setCloneStatus(jobId, 'resolving_assets', { progress: 60 });
             const resolved = await core.resolveAssets(sanitized.html, fetched.finalUrl, {
               download: true,
               maxBytes: env.MAX_ASSET_BYTES,
+              maxTotalBytes: env.MAX_TOTAL_BYTES,
+              signal,
               rewriteHtml: true,
             });
 
             // 4. Upload assets to S3
             for (const entry of resolved.assets.entries) {
+              signal.throwIfAborted();
               if (entry.data && Buffer.isBuffer(entry.data)) {
                 await storage.put(jobStore.assetKey(jobId, entry.id), entry.data, {
                   contentType: entry.mime,
@@ -113,7 +122,9 @@ export function createRenderWorker(args: {
             const replacements = meta.options.linkReplacements ?? [];
             const links = replacements.length
               ? rawLinks.map((lnk) => {
-                  const match = replacements.find((r) => lnk.originalHref === r.from || lnk.currentHref === r.from);
+                  const match = replacements.find(
+                    (r) => lnk.originalHref === r.from || lnk.currentHref === r.from,
+                  );
                   return match ? { ...lnk, currentHref: match.to } : lnk;
                 })
               : rawLinks;
@@ -132,7 +143,7 @@ export function createRenderWorker(args: {
                 entries: resolved.assets.entries.map((e) => ({
                   id: e.id,
                   url: e.url,
-                  originalUrl: e.url,
+                  originalUrl: e.originalUrl,
                   kind: 'other',
                   mime: e.mime,
                   size: e.size,
@@ -146,8 +157,10 @@ export function createRenderWorker(args: {
               createdAt: meta.createdAt,
               updatedAt: new Date().toISOString(),
             };
+            signal.throwIfAborted();
             await jobStore.saveCloneState(state);
 
+            signal.throwIfAborted();
             await jobStore.setCloneStatus(jobId, 'ready', {
               progress: 100,
               finalUrl: fetched.finalUrl,
@@ -164,6 +177,10 @@ export function createRenderWorker(args: {
           })(),
           env.MAX_RENDER_TIMEOUT_MS + 5_000,
           'render_timeout',
+          () =>
+            controller.abort(
+              Object.assign(new Error('Render timed out.'), { code: 'render_timeout' }),
+            ),
         );
 
         if (webhookUrl) {
@@ -178,6 +195,7 @@ export function createRenderWorker(args: {
           });
         }
       } catch (err) {
+        controller.abort(err);
         const code = classifyError(err);
         const message = err instanceof Error ? err.message : String(err);
         jobLog.error({ err, code }, 'render failed');
@@ -211,12 +229,18 @@ export function createRenderWorker(args: {
   return worker;
 }
 
-async function withTimeout<T>(promise: Promise<T>, ms: number, code: string): Promise<T> {
+async function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  code: string,
+  onTimeout: () => void,
+): Promise<T> {
   let timer: NodeJS.Timeout | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
       const err = new Error(`Operation timed out after ${ms}ms`) as Error & { code?: string };
       err.code = code;
+      onTimeout();
       reject(err);
     }, ms);
   });

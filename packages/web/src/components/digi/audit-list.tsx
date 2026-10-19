@@ -1,15 +1,15 @@
 'use client';
 
-import Link from 'next/link';
-import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, Loader2, Plus, Trash2 } from 'lucide-react';
-import { toast } from 'sonner';
-import { apiClient, type DigiAuditView } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { CHECKLIST, totalItems, totalCriticalItems, itemKey } from './checklist-data';
+import { type DigiAuditView, apiClient } from '@/lib/api-client';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowRight, Loader2, Plus, Trash2 } from 'lucide-react';
+import Link from 'next/link';
+import { useState } from 'react';
+import { toast } from 'sonner';
+import { CHECKLIST, itemKey, totalCriticalItems, totalItems } from './checklist-data';
 
 const STATUS_LABEL: Record<DigiAuditView['status'], string> = {
   draft: 'Rascunho',
@@ -63,7 +63,7 @@ export function AuditList() {
   const createMut = useMutation({
     mutationFn: () => apiClient.createDigiAudit({ product_name: productName.trim() }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['digi-audits'] });
+      void qc.invalidateQueries({ queryKey: ['digi-audits'] });
       setShowCreate(false);
       setProductName('');
       toast.success('Auditoria criada.');
@@ -74,7 +74,7 @@ export function AuditList() {
   const deleteMut = useMutation({
     mutationFn: (id: string) => apiClient.deleteDigiAudit(id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['digi-audits'] });
+      void qc.invalidateQueries({ queryKey: ['digi-audits'] });
       toast.success('Auditoria removida.');
     },
     onError: (err) => toast.error((err as Error).message),
@@ -139,7 +139,8 @@ export function AuditList() {
           {audits.map((a) => {
             const { done, total, critical } = progressOf(a);
             const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-            const critPct = critical.total > 0 ? Math.round((critical.done / critical.total) * 100) : 0;
+            const critPct =
+              critical.total > 0 ? Math.round((critical.done / critical.total) * 100) : 0;
             return (
               <div key={a.id} className="glass-card flex flex-col gap-3 p-4">
                 <div className="flex items-start justify-between gap-2">

@@ -1,9 +1,9 @@
-import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { test } from 'node:test';
 import {
+  formatRefundRevenuePercentage,
   overviewFinancials,
   refundRevenuePercentage,
-  formatRefundRevenuePercentage,
 } from '../src/lib/overview-financial';
 
 const row = (id: string) => ({

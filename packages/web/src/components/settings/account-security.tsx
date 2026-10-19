@@ -76,7 +76,11 @@ export function AccountSecurity() {
         A mesma senha funciona em qualquer navegador. Sua sessão atual permanece ativa depois da
         alteração.
       </p>
-      <form className="grid gap-4 md:grid-cols-3" noValidate onSubmit={changePassword}>
+      <form
+        className="grid gap-4 md:grid-cols-3"
+        noValidate
+        onSubmit={(event) => void changePassword(event)}
+      >
         <FormField id="current-password" label="Senha atual" error={currentPasswordError}>
           <Input
             type="password"

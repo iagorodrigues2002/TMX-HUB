@@ -8,7 +8,10 @@ test('shows the elapsed interval without inventing missing or reversed dates', (
   assert.equal(formatRefundElapsed(purchase, '2026-09-02T12:00:00Z', false), '1 dia');
   assert.equal(formatRefundElapsed(purchase, '2026-09-01T13:00:00Z', false), 'Menos de 1 dia');
   assert.equal(formatRefundElapsed(purchase, purchase, false), 'Mesmo instante registrado');
-  assert.equal(formatRefundElapsed(purchase, '2026-08-31T12:00:00Z', false), 'Datas inconsistentes');
+  assert.equal(
+    formatRefundElapsed(purchase, '2026-08-31T12:00:00Z', false),
+    'Datas inconsistentes',
+  );
   assert.equal(formatRefundElapsed(null, purchase, false), 'Sem datas suficientes');
   assert.equal(formatRefundElapsed('invalid', purchase, false), 'Sem datas suficientes');
 });

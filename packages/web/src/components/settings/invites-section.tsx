@@ -5,65 +5,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { type InviteView, type ToolKey, apiClient } from '@/lib/api-client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Copy, Loader2, Mail, Plus, Trash2, UserPlus } from 'lucide-react';
+import { Loader2, Mail, Plus, UserPlus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-
-function inviteUrl(token: string): string {
-  if (typeof window === 'undefined') return `/register?invite=${token}`;
-  return `${window.location.origin}/register?invite=${token}`;
-}
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return iso;
-  }
-}
-
-function daysLeft(iso: string): number {
-  const ms = new Date(iso).getTime() - Date.now();
-  return Math.max(0, Math.ceil(ms / (24 * 60 * 60 * 1000)));
-}
-
-function copyText(text: string, label: string): void {
-  navigator.clipboard.writeText(text).then(
-    () => toast.success(`${label} copiado.`),
-    () => toast.error(`Não consegui copiar ${label}.`),
-  );
-}
-
-type AccessScope = 'full' | 'video-shield' | 'custom';
-
-const SCOPE_LABEL: Record<AccessScope, string> = {
-  full: 'Completo (todas as ferramentas)',
-  'video-shield': 'Apenas Video Studio',
-  custom: 'Personalizado…',
-};
-
-const CUSTOM_TOOL_OPTIONS: { key: ToolKey; label: string }[] = [
-  { key: 'video-shield', label: 'Video Studio' },
-  { key: 'cloner', label: 'Page Cloner' },
-  { key: 'funnel-clone', label: 'Funnel Full Clone' },
-  { key: 'upsell-analyzer', label: 'Upsell Analyzer' },
-  { key: 'webhook-tester', label: 'Webhook Tester' },
-  { key: 'vsl', label: 'VSL Downloader' },
-  { key: 'ofertas', label: 'Ofertas e tracking' },
-  { key: 'ofertas-ia', label: 'IA de Ofertas' },
-  { key: 'logs', label: 'Logs' },
-];
-
-function scopeToAllowedTools(scope: AccessScope, custom: ToolKey[]): ToolKey[] | undefined {
-  if (scope === 'full') return undefined;
-  if (scope === 'video-shield') return ['video-shield'];
-  return custom.length > 0 ? custom : ['video-shield'];
-}
+import { InviteRow } from './invites-section-invite-row';
+import {
+  type AccessScope,
+  CUSTOM_TOOL_OPTIONS,
+  SCOPE_LABEL,
+  copyText,
+  inviteUrl,
+  scopeToAllowedTools,
+} from './invites-section-support';
 
 export function InvitesSection() {
   const qc = useQueryClient();
@@ -91,7 +44,7 @@ export function InvitesSection() {
       });
     },
     onSuccess: (invite) => {
-      qc.invalidateQueries({ queryKey: ['invites'] });
+      void qc.invalidateQueries({ queryKey: ['invites'] });
       setShowForm(false);
       setEmail('');
       setName('');
@@ -108,7 +61,7 @@ export function InvitesSection() {
   const revokeMut = useMutation({
     mutationFn: (token: string) => apiClient.revokeInvite(token),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['invites'] });
+      void qc.invalidateQueries({ queryKey: ['invites'] });
       toast.success('Convite revogado.');
     },
     onError: (err) => toast.error((err as Error).message),
@@ -290,67 +243,5 @@ export function InvitesSection() {
         </ul>
       )}
     </section>
-  );
-}
-
-function InviteRow({
-  invite,
-  onRevoke,
-}: {
-  invite: InviteView;
-  onRevoke: () => void;
-}) {
-  const url = inviteUrl(invite.token);
-  const remaining = daysLeft(invite.expiresAt);
-  const expiringSoon = remaining <= 1;
-
-  return (
-    <li className="rounded-md border border-white/[0.06] bg-black/15 p-3">
-      <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="min-w-0 flex-1 truncate text-[13px] font-semibold text-white">
-              {invite.email || invite.name || 'Convite sem destinatário'}
-            </p>
-            <span
-              className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
-                expiringSoon
-                  ? 'border-amber-300/40 bg-amber-300/10 text-amber-200'
-                  : 'border-white/[0.10] bg-white/[0.04] text-white/55'
-              }`}
-            >
-              expira em {remaining}d
-            </span>
-            {invite.allowedTools && invite.allowedTools.length > 0 && (
-              <span className="rounded-full border border-cyan-300/30 bg-cyan-300/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-200">
-                {invite.allowedTools.length === 1
-                  ? invite.allowedTools[0]
-                  : `${invite.allowedTools.length} tools`}
-              </span>
-            )}
-          </div>
-          {invite.name && invite.email && (
-            <p className="text-[11px] text-white/55">{invite.name}</p>
-          )}
-          <p className="break-all font-mono text-[11px] text-white/65" title={url}>
-            {url}
-          </p>
-          <p className="text-[10px] text-white/40">
-            criado em {formatDate(invite.createdAt)}
-            {invite.invitedBy && <> · por {invite.invitedBy}</>}
-          </p>
-        </div>
-        <div className="flex w-full shrink-0 flex-row gap-1 sm:w-auto sm:flex-col">
-          <Button size="sm" variant="outline" onClick={() => copyText(url, 'Link')}>
-            <Copy className="h-3 w-3" />
-            Copiar
-          </Button>
-          <Button size="sm" variant="ghost" onClick={onRevoke}>
-            <Trash2 className="h-3 w-3" />
-            Revogar
-          </Button>
-        </div>
-      </div>
-    </li>
   );
 }

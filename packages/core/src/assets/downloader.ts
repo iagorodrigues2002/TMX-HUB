@@ -1,9 +1,11 @@
 import { createHash } from 'node:crypto';
 import pLimit from 'p-limit';
-import { request } from 'undici';
+import { publicRequest as request } from '../fetch/public-network.js';
 import type { DownloadedAsset } from '../types.js';
 
 export interface DownloadOptions {
+  signal?: AbortSignal;
+  budget?: { limit: number; consumed: number };
   maxBytes: number;
   maxConcurrency: number;
   timeoutMs: number;
@@ -17,12 +19,17 @@ export async function downloadOne(
   url: string,
   opts: DownloadOptions,
 ): Promise<DownloadedAsset | null> {
+  opts.signal?.throwIfAborted();
+  if (opts.budget && opts.budget.consumed >= opts.budget.limit) {
+    throw Object.assign(new Error('Aggregate asset budget exceeded.'), { code: 'too_large' });
+  }
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), opts.timeoutMs);
+  const signal = opts.signal ? AbortSignal.any([opts.signal, ac.signal]) : ac.signal;
   try {
     const res = await request(url, {
       method: 'GET',
-      signal: ac.signal,
+      signal,
       headers: {
         'user-agent': opts.userAgent ?? DEFAULT_UA,
         accept: '*/*',
@@ -36,6 +43,13 @@ export async function downloadOne(
     let total = 0;
     for await (const chunk of res.body) {
       const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      if (opts.budget) {
+        opts.budget.consumed += buf.length;
+        if (opts.budget.consumed > opts.budget.limit) {
+          ac.abort();
+          throw Object.assign(new Error('Aggregate asset budget exceeded.'), { code: 'too_large' });
+        }
+      }
       total += buf.length;
       if (total > opts.maxBytes) {
         ac.abort();
@@ -53,13 +67,15 @@ export async function downloadOne(
     const hash = createHash('sha256').update(data).digest('hex');
     return {
       originalUrl: url,
-      resolvedUrl: url,
+      resolvedUrl: res.finalUrl,
       data,
       mime,
       size: data.length,
       hash,
     };
-  } catch {
+  } catch (error) {
+    if (opts.signal?.aborted) throw opts.signal.reason;
+    if ((error as { code?: string })?.code === 'too_large') throw error;
     return null;
   } finally {
     clearTimeout(timer);
@@ -76,6 +92,7 @@ export async function downloadMany(
   await Promise.all(
     unique.map((u) =>
       limit(async () => {
+        opts.signal?.throwIfAborted();
         const result = await downloadOne(u, opts);
         if (result) out.set(u, result);
       }),

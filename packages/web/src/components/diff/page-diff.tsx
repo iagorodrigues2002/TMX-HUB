@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
-import { GitCompare, Loader2, Minus, Plus } from 'lucide-react';
-import { toast } from 'sonner';
-import { apiClient } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { apiClient } from '@/lib/api-client';
+import { GitCompare, Loader2, Minus, Plus } from 'lucide-react';
+import { useState } from 'react';
+import { toast } from 'sonner';
 
 const SELECT =
   'flex h-11 w-full rounded-md border border-white/[0.10] bg-white/[0.04] px-4 text-[14px] text-white focus-visible:outline-none focus-visible:border-cyan-300/40';
@@ -17,7 +17,12 @@ export function PageDiff() {
   const [renderMode, setRenderMode] = useState<'static' | 'js'>('js');
   const [filter, setFilter] = useState<'all' | 'changed'>('changed');
   const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<Awaited<ReturnType<typeof apiClient.pageDiff>> | null>(null);
+  const [result, setResult] = useState<
+    | (Omit<Awaited<ReturnType<typeof apiClient.pageDiff>>, 'entries'> & {
+        entries: Array<{ id: number; op: 'equal' | 'add' | 'remove'; text: string }>;
+      })
+    | null
+  >(null);
 
   const validate = (u: string) => {
     try {
@@ -38,7 +43,7 @@ export function PageDiff() {
     setResult(null);
     try {
       const out = await apiClient.pageDiff({ url_a: urlA, url_b: urlB, render_mode: renderMode });
-      setResult(out);
+      setResult({ ...out, entries: out.entries.map((entry, id) => ({ ...entry, id })) });
       toast.success(
         `Diff pronto: +${out.summary.added} / -${out.summary.removed} (${out.duration_ms}ms)`,
       );
@@ -57,7 +62,7 @@ export function PageDiff() {
 
   return (
     <div className="space-y-6">
-      <form onSubmit={handleSubmit} className="glass-card space-y-4 p-6">
+      <form onSubmit={(event) => void handleSubmit(event)} className="glass-card space-y-4 p-6">
         <header>
           <p className="hud-label">1 · URLs para comparar</p>
           <h2 className="mt-1 text-[16px] font-semibold text-white">
@@ -175,9 +180,9 @@ export function PageDiff() {
               </p>
             ) : (
               <ul className="divide-y divide-white/[0.04] font-mono text-[12px] leading-5">
-                {visibleEntries.map((e, i) => (
+                {visibleEntries.map((e) => (
                   <li
-                    key={i}
+                    key={e.id}
                     className={`flex gap-2 px-3 py-1.5 ${
                       e.op === 'add'
                         ? 'bg-emerald-500/[0.08] text-emerald-200'
@@ -187,7 +192,13 @@ export function PageDiff() {
                     }`}
                   >
                     <span className="shrink-0 select-none text-white/30">
-                      {e.op === 'add' ? <Plus className="h-3 w-3" /> : e.op === 'remove' ? <Minus className="h-3 w-3" /> : ' '}
+                      {e.op === 'add' ? (
+                        <Plus className="h-3 w-3" />
+                      ) : e.op === 'remove' ? (
+                        <Minus className="h-3 w-3" />
+                      ) : (
+                        ' '
+                      )}
                     </span>
                     <span className="break-words">{e.text}</span>
                   </li>

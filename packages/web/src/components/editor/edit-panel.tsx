@@ -40,7 +40,7 @@ export function EditPanel({ jobId, forms, links }: EditPanelProps) {
     }
     return (
       <div className="h-full bg-background/40">
-        <FormEditor jobId={jobId} form={form} />
+        <FormEditor key={form.id} jobId={jobId} form={form} />
       </div>
     );
   }
@@ -55,7 +55,7 @@ export function EditPanel({ jobId, forms, links }: EditPanelProps) {
   }
   return (
     <div className="h-full bg-background/40">
-      <LinkEditor jobId={jobId} link={link} />
+      <LinkEditor key={link.id} jobId={jobId} link={link} />
     </div>
   );
 }

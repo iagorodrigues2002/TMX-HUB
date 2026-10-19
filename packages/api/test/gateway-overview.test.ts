@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  gatewayOverviewForOffers,
   type GatewayOverviewRow,
+  gatewayOverviewForOffers,
 } from '../src/services/gateway-overview.js';
 const row = (offer_id: string, provider: string, amount: string): GatewayOverviewRow => ({
   offer_id,

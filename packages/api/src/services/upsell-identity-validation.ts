@@ -11,7 +11,8 @@ export async function validateUpsellCandidates(
   destinations: string[],
   check: (destination: string, candidate: string) => Promise<UpsellCompatibilityResult>,
 ): Promise<{ vendid?: string; temporary: boolean; reason: string }> {
-  if (!destinations.length) return { temporary: true, reason: 'account_destination_not_configured' };
+  if (!destinations.length)
+    return { temporary: true, reason: 'account_destination_not_configured' };
   if (!candidates.length) return { temporary: false, reason: 'buyer_sale_id_missing' };
   let temporary = false;
   let reason = 'vendepay_not_eligible';

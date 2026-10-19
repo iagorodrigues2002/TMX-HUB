@@ -29,8 +29,8 @@ import { createShieldQueue } from '../queues/shield.queue.js';
 import { createTikTokQueue } from '../queues/tiktok.queue.js';
 import { createUtmifyDeliveryQueue } from '../queues/utmify-delivery.queue.js';
 import { createUtmifyWebEventQueue } from '../queues/utmify-web-event.queue.js';
-import { createVslQueue } from '../queues/vsl.queue.js';
 import { createVendepayWebhookQueue } from '../queues/vendepay-webhook.queue.js';
+import { createVslQueue } from '../queues/vsl.queue.js';
 
 declare module 'fastify' {
   interface FastifyInstance {

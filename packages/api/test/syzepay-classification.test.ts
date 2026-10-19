@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
 import { createHmac } from 'node:crypto';
+import { describe, expect, it, vi } from 'vitest';
 const config = vi.hoisted(() => ({
   TRACKING_ENCRYPTION_KEY: 'unit-encryption-key-32-characters-long',
   WEBHOOK_SECRET: 'unit-tracking-source-secret',
@@ -11,20 +11,20 @@ vi.mock('../src/env.js', () => ({ env: config }));
 vi.mock('../src/services/exchange-rate.js', () => ({
   convertToBrlMinor: vi.fn(async (minor: number) => ({ brlMinor: minor, rate: 1 })),
 }));
+import { buildUtmifyOrderPayload } from '../src/integrations/utmify/sales.js';
 import { encryptSecret } from '../src/lib/secret-box.js';
-import { createTrackingToken } from '../src/lib/tracking-token.js';
 import {
-  verifySyzepaySignature,
   parseSyzepayEvent,
   syzepayPurchaseAllowed,
+  verifySyzepaySignature,
 } from '../src/lib/syzepay-contract.js';
+import { createTrackingToken } from '../src/lib/tracking-token.js';
 import { classifySyzepayOrder } from '../src/services/syzepay-classification.js';
-import { buildUtmifyOrderPayload } from '../src/integrations/utmify/sales.js';
 const time = new Date('2026-10-10T03:38:16Z');
 const stamp = String(time.getTime() / 1000);
 const key = 'unit-signing-key-not-a-real-provider-secret';
 const event = (type = 'order.paid', project = 'project-a') => ({
-  id: 'event-' + type,
+  id: `event-${type}`,
   type,
   created: Number(stamp),
   api_version: '2026-08-11',
@@ -52,10 +52,7 @@ const event = (type = 'order.paid', project = 'project-a') => ({
   },
 });
 const sign = (body: Buffer, t = stamp) =>
-  `t=${t},v1=${createHmac('sha256', key)
-    .update(t + '.')
-    .update(body)
-    .digest('hex')}`;
+  `t=${t},v1=${createHmac('sha256', key).update(`${t}.`).update(body).digest('hex')}`;
 describe('actual SyzePay envelope and signature contract', () => {
   it('verifies exact raw bytes and rejects tampering, wrong keys, expired timestamps and duplicate timestamps', () => {
     const raw = Buffer.from(JSON.stringify(event()));
@@ -66,7 +63,7 @@ describe('actual SyzePay envelope and signature contract', () => {
     );
     expect(verifySyzepaySignature(raw, h, 'wrong', time)).toBe(false);
     expect(verifySyzepaySignature(raw, h, key, new Date(time.getTime() + 301000))).toBe(false);
-    expect(verifySyzepaySignature(raw, h + `,t=${stamp}`, key, time)).toBe(false);
+    expect(verifySyzepaySignature(raw, `${h},t=${stamp}`, key, time)).toBe(false);
   });
   it('does not treat order.created as a purchase even if its snapshot is succeeded', () => {
     expect(
@@ -108,7 +105,7 @@ function fixture(project = 'project-a', providerKind = 'sale') {
     payload.data.object.kind = providerKind;
     const body = Buffer.from(JSON.stringify(payload));
     return {
-      id: 'receipt-' + index,
+      id: `receipt-${index}`,
       received_at: time,
       body_encrypted: encryptSecret(body.toString('base64'), config.TRACKING_ENCRYPTION_KEY),
       headers_encrypted: encryptSecret(
@@ -155,7 +152,7 @@ function fixture(project = 'project-a', providerKind = 'sale') {
     if (s.includes('FROM meta_pixels')) return [{ id: 'pixel-a' }];
     if (s.includes('INSERT INTO meta_deliveries')) return [{ id: 'meta-delivery' }];
     if (s.includes('INSERT INTO tracking_delivery_outbox'))
-      return [{ id: 'delivery-' + values[2] }];
+      return [{ id: `delivery-${values[2]}` }];
     return [];
   };
   const db = Object.assign(query, {

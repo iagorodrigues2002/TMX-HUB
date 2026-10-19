@@ -1,19 +1,31 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  UtmifySyncService,
   buildDays,
   canonicalAdIdentity,
   detectCurrency,
   detectDashboardCurrency,
   saoPauloDayRange,
   toSnapshot,
-  UtmifySyncService,
 } from '../src/services/utmify-sync.js';
 
-it('does not read credentials or authenticate when dashboard access is disabled', async()=>{
-  const offer={id:'offer-opt-out',name:'Sem acesso',status:'testando',createdAt:new Date().toISOString(),userId:'owner-a',dashboardId:'dashboard-a',utmifyConfigured:true,utmifyAccessEnabled:false};
-  const credentials=vi.fn();
-  const store={getUtmifyCredentials:credentials,listAll:async()=>[offer]};
-  const service=new UtmifySyncService({} as never,store as never,{} as never,{} as never,{info:()=>{},warn:()=>{}});
+it('does not read credentials or authenticate when dashboard access is disabled', async () => {
+  const offer = {
+    id: 'offer-opt-out',
+    name: 'Sem acesso',
+    status: 'testando',
+    createdAt: new Date().toISOString(),
+    userId: 'owner-a',
+    dashboardId: 'dashboard-a',
+    utmifyConfigured: true,
+    utmifyAccessEnabled: false,
+  };
+  const credentials = vi.fn();
+  const store = { getUtmifyCredentials: credentials, listAll: async () => [offer] };
+  const service = new UtmifySyncService({} as never, store as never, {} as never, {} as never, {
+    info: () => {},
+    warn: () => {},
+  });
   await expect(service.syncOffer(offer as never)).rejects.toThrow('desativado');
   await expect(service.inspectCapabilities(offer as never)).rejects.toThrow('desativado');
   await service.syncAll();

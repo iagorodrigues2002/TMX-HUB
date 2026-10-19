@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs';
 import { Worker } from 'bullmq';
 import { logger } from '../lib/logger.js';
 import { makeRedis } from '../lib/redis.js';
+import { settleDownloads } from '../lib/settle-downloads.js';
 import { VSL_QUEUE_NAME, type VslJobData } from '../queues/index.js';
 import type { StorageService } from '../services/storage.js';
 import type { VslJobStore } from '../services/vsl-job-store.js';
@@ -89,9 +90,7 @@ export function createVslWorker(args: {
           manifestUrl: black.manifestUrl,
           manifestKind: black.manifestKind,
           cloakerDetected: probe.cloakerDetected,
-          ...(probe.cloakerDetected && white
-            ? { whiteManifestUrl: white.manifestUrl }
-            : {}),
+          ...(probe.cloakerDetected && white ? { whiteManifestUrl: white.manifestUrl } : {}),
         });
         jobLog.info(
           {
@@ -106,12 +105,14 @@ export function createVslWorker(args: {
         await jobStore.setStatus(jobId, 'downloading', { progress: 40 });
 
         // Download black (always) and white (only if cloaker detected) in parallel.
-        const downloadJobs: Array<Promise<{
-          variant: 'black' | 'white';
-          filePath: string;
-          bytes: number;
-          durationSec?: number;
-        }>> = [];
+        const downloadJobs: Array<
+          Promise<{
+            variant: 'black' | 'white';
+            filePath: string;
+            bytes: number;
+            durationSec?: number;
+          }>
+        > = [];
 
         downloadJobs.push(
           core
@@ -137,8 +138,7 @@ export function createVslWorker(args: {
           );
         }
 
-        const results = await Promise.all(downloadJobs);
-        for (const r of results) tempPaths.push(r.filePath);
+        const results = await settleDownloads(downloadJobs, tempPaths);
 
         const blackResult = results.find((r) => r.variant === 'black')!;
         const whiteResult = results.find((r) => r.variant === 'white');

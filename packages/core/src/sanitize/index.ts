@@ -2,7 +2,7 @@ import * as cheerio from 'cheerio';
 import createDOMPurify from 'dompurify';
 import { JSDOM } from 'jsdom';
 import type { SanitizeOptions, SanitizeRemovalCounts, SanitizeResult } from '../types.js';
-import { isCspMeta, isJavaScriptUrl, isOnEventAttr, URL_ATTRS } from './attr-rules.js';
+import { URL_ATTRS, isCspMeta, isJavaScriptUrl, isOnEventAttr } from './attr-rules.js';
 import { isTrackingUrl } from './tracking-hosts.js';
 
 export function sanitize(html: string, opts: SanitizeOptions = {}): SanitizeResult {

@@ -1,16 +1,12 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { type MetaControlAccount, type MetaControlCampaign, apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Activity,
   AlertTriangle,
   BellRing,
   Building2,
-  ChevronDown,
-  ChevronRight,
   CircleDollarSign,
   LayoutDashboard,
   Link2,
@@ -19,252 +15,57 @@ import {
   Plus,
   RefreshCw,
   Search,
-  Send,
   ShieldAlert,
   Signal,
   WalletCards,
   Zap,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
-
-type Filter = 'all' | 'delivering' | 'idle' | 'disabled' | 'unsettled' | 'attention';
-
-const statusCopy: Record<MetaControlAccount['operational_state'], string> = {
-  delivering: 'Veiculando',
-  idle: 'Ativa sem veiculação',
-  disabled: 'Desativada',
-  unsettled: 'Pendência financeira',
-  attention: 'Requer atenção',
-};
-
-const statusTone: Record<MetaControlAccount['operational_state'], string> = {
-  delivering: 'border-emerald-300/20 bg-emerald-300/[0.07] text-emerald-200',
-  idle: 'border-cyan-300/20 bg-cyan-300/[0.06] text-cyan-100',
-  disabled: 'border-danger/20 bg-danger/[0.06] text-danger',
-  unsettled: 'border-amber-300/20 bg-amber-300/[0.07] text-amber-100',
-  attention: 'border-orange-300/20 bg-orange-300/[0.07] text-orange-100',
-};
-
-function money(minor: string | number, currency: string): string {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(
-    Number(minor) / 100,
-  );
-}
-
-function dateTime(value?: string | null): string {
-  if (!value) return 'Nunca';
-  return new Intl.DateTimeFormat('pt-BR', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-    timeZone: 'America/Sao_Paulo',
-  }).format(new Date(value));
-}
-
-function HealthRing({ score }: { score: number }) {
-  const color = score >= 80 ? 'text-emerald-300' : score >= 50 ? 'text-amber-300' : 'text-danger';
-  return (
-    <div
-      className={cn(
-        'grid h-12 w-12 shrink-0 place-items-center rounded-full border bg-black/20 font-mono text-sm',
-        color,
-        score >= 80
-          ? 'border-emerald-300/20'
-          : score >= 50
-            ? 'border-amber-300/20'
-            : 'border-danger/20',
-      )}
-    >
-      {score}
-    </div>
-  );
-}
+import { renderAccountList } from './meta-accounts-control-render-account-list';
+import { renderConnectionSettings } from './meta-accounts-control-render-connection-settings';
+import { renderPushcutSettings } from './meta-accounts-control-render-pushcut-settings';
+import { type Filter, dateTime, money } from './meta-accounts-control-support';
+import { useMetaAccountsControlState } from './meta-accounts-control-use-meta-accounts-control-state';
 
 export function MetaAccountsControl() {
-  const queryClient = useQueryClient();
-  const [filter, setFilter] = useState<Filter>('all');
-  const [search, setSearch] = useState('');
-  const [business, setBusiness] = useState('all');
-  const [currency, setCurrency] = useState('all');
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const [showConnection, setShowConnection] = useState(false);
-  const [showPushcut, setShowPushcut] = useState(false);
-  const [selectedConnectionId, setSelectedConnectionId] = useState('');
-  const [pushcutForm, setPushcutForm] = useState({
-    secret: '',
-    notification_name: '',
-    devices: '',
-    enabled: true,
-  });
-  const [connectionForm, setConnectionForm] = useState({
-    name: 'Meta · TheMinex',
-    app_id: '',
-    app_secret: '',
-    access_token: '',
-  });
-
-  const connections = useQuery({
-    queryKey: ['meta-control-connections'],
-    queryFn: () => apiClient.getMetaControlConnections(),
-    refetchInterval: 15_000,
-  });
-  useEffect(() => {
-    if (!selectedConnectionId && connections.data?.[0]) {
-      setSelectedConnectionId(connections.data[0].id);
-    }
-  }, [connections.data, selectedConnectionId]);
-  const selectedConnection =
-    connections.data?.find((item) => item.id === selectedConnectionId) ?? null;
-  const dashboard = useQuery({
-    queryKey: ['meta-control-dashboard', selectedConnectionId],
-    queryFn: () => apiClient.getMetaControlDashboard(selectedConnectionId),
-    enabled: Boolean(selectedConnectionId),
-    refetchInterval: 15_000,
-  });
-  const pushcutConfig = useQuery({
-    queryKey: ['meta-payment-pushcut', selectedConnectionId],
-    queryFn: () => apiClient.getMetaPaymentPushcut(selectedConnectionId),
-    enabled: Boolean(selectedConnectionId),
-  });
-  useEffect(() => {
-    if (!pushcutConfig.data) return;
-    setPushcutForm({
-      secret: '',
-      notification_name: pushcutConfig.data.notification_name ?? '',
-      devices: pushcutConfig.data.devices.join(', '),
-      enabled: pushcutConfig.data.enabled,
-    });
-  }, [pushcutConfig.data]);
-  const sync = useMutation({
-    mutationFn: () => apiClient.syncMetaControl(selectedConnectionId),
-    onSuccess: (result) => {
-      toast.success(`${result.accounts} contas e ${result.campaigns} campanhas sincronizadas.`);
-      void queryClient.invalidateQueries({ queryKey: ['meta-control-dashboard'] });
-      void queryClient.invalidateQueries({ queryKey: ['meta-control-connections'] });
-    },
-    onError: (error) =>
-      toast.error(error instanceof Error ? error.message : 'Falha na sincronização.'),
-  });
-  const saveConnection = useMutation({
-    mutationFn: () => apiClient.saveMetaControlConnection(connectionForm),
-    onSuccess: (result) => {
-      toast.success(
-        result.syncing
-          ? 'Dashboard conectado. Importando contas em segundo plano…'
-          : result.warning
-            ? `Conexão salva: ${result.warning}`
-            : 'Conexão validada e salva.',
-      );
-      setShowConnection(false);
-      setSelectedConnectionId(result.connection.id);
-      setConnectionForm((current) => ({ ...current, app_secret: '', access_token: '' }));
-      void queryClient.invalidateQueries({ queryKey: ['meta-control-connections'] });
-      void queryClient.invalidateQueries({ queryKey: ['meta-control-dashboard'] });
-    },
-    onError: (error) =>
-      toast.error(error instanceof Error ? error.message : 'Não foi possível conectar.'),
-  });
-  const savePushcut = useMutation({
-    mutationFn: () =>
-      apiClient.saveMetaPaymentPushcut(selectedConnectionId, {
-        ...(pushcutForm.secret.trim() ? { secret: pushcutForm.secret.trim() } : {}),
-        notification_name: pushcutForm.notification_name.trim(),
-        devices: pushcutForm.devices
-          .split(',')
-          .map((item) => item.trim())
-          .filter(Boolean),
-        enabled: pushcutForm.enabled,
-      }),
-    onSuccess: () => {
-      toast.success('Alerta de pagamento Pushcut salvo.');
-      setPushcutForm((current) => ({ ...current, secret: '' }));
-      void queryClient.invalidateQueries({
-        queryKey: ['meta-payment-pushcut', selectedConnectionId],
-      });
-    },
-    onError: (error) =>
-      toast.error(error instanceof Error ? error.message : 'Falha ao salvar o Pushcut.'),
-  });
-  const testPushcut = useMutation({
-    mutationFn: () => apiClient.testMetaPaymentPushcut(selectedConnectionId),
-    onSuccess: () => toast.success('Notificação de teste enviada ao Pushcut.'),
-    onError: (error) =>
-      toast.error(error instanceof Error ? error.message : 'O Pushcut recusou o teste.'),
-  });
-  const assignAccount = useMutation({
-    mutationFn: ({ accountId, offerId }: { accountId: string; offerId: string | null }) =>
-      apiClient.assignMetaAccountOffer(accountId, offerId),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['meta-control-dashboard'] }),
-    onError: () => toast.error('Não foi possível associar a oferta.'),
-  });
-  const assignCampaign = useMutation({
-    mutationFn: ({ campaignId, offerId }: { campaignId: string; offerId: string | null }) =>
-      apiClient.assignMetaCampaignOffer(campaignId, offerId),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['meta-control-dashboard'] }),
-    onError: () => toast.error('Não foi possível associar a campanha.'),
-  });
-
-  const accounts = dashboard.data?.accounts ?? [];
-  const businesses = useMemo(
-    () => [...new Set(accounts.map((account) => account.business_name ?? 'Sem BM'))].sort(),
-    [accounts],
-  );
-  const businessStates = useMemo(() => {
-    const grouped = new Map<string, MetaControlAccount[]>();
-    for (const account of accounts) {
-      if (!account.business_name) continue;
-      grouped.set(account.business_name, [...(grouped.get(account.business_name) ?? []), account]);
-    }
-    return new Map(
-      [...grouped.entries()].map(([name, items]) => [
-        name,
-        {
-          usable: items.filter((item) => item.account_status === 1).length,
-          total: items.length,
-          off: !items.some((item) => item.account_status === 1),
-        },
-      ]),
-    );
-  }, [accounts]);
-  const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    return accounts.filter((account) => {
-      if (filter !== 'all' && account.operational_state !== filter) return false;
-      if (business !== 'all' && (account.business_name ?? 'Sem BM') !== business) return false;
-      if (currency !== 'all' && account.currency !== currency) return false;
-      if (
-        term &&
-        !`${account.name} ${account.external_id} ${account.business_name ?? ''} ${account.primary_offer_name ?? ''}`
-          .toLowerCase()
-          .includes(term)
-      )
-        return false;
-      return true;
-    });
-  }, [accounts, business, currency, filter, search]);
-  const campaignsByAccount = useMemo(() => {
-    const map = new Map<string, MetaControlCampaign[]>();
-    for (const campaign of dashboard.data?.campaigns ?? []) {
-      map.set(campaign.account_id, [...(map.get(campaign.account_id) ?? []), campaign]);
-    }
-    return map;
-  }, [dashboard.data?.campaigns]);
-  const counts = useMemo(
-    () => ({
-      delivering: accounts.filter((item) => item.operational_state === 'delivering').length,
-      idle: accounts.filter((item) => item.operational_state === 'idle').length,
-      disabled: accounts.filter((item) => item.operational_state === 'disabled').length,
-      unsettled: accounts.filter((item) => item.operational_state === 'unsettled').length,
-      attention: accounts.filter((item) => item.operational_state === 'attention').length,
-    }),
-    [accounts],
-  );
-  const totals = useMemo(() => {
-    const out: Record<string, number> = {};
-    for (const account of accounts)
-      out[account.currency] = (out[account.currency] ?? 0) + Number(account.amount_spent_minor);
-    return out;
-  }, [accounts]);
+  const {
+    filter,
+    setFilter,
+    search,
+    setSearch,
+    business,
+    setBusiness,
+    currency,
+    setCurrency,
+    expanded,
+    setExpanded,
+    showConnection,
+    setShowConnection,
+    showPushcut,
+    setShowPushcut,
+    selectedConnectionId,
+    setSelectedConnectionId,
+    pushcutForm,
+    setPushcutForm,
+    connectionForm,
+    setConnectionForm,
+    connections,
+    selectedConnection,
+    dashboard,
+    pushcutConfig,
+    sync,
+    saveConnection,
+    savePushcut,
+    testPushcut,
+    assignAccount,
+    assignCampaign,
+    accounts,
+    businesses,
+    businessStates,
+    filtered,
+    campaignsByAccount,
+    counts,
+    totals,
+  } = useMetaAccountsControlState();
 
   return (
     <div className="signal-reveal space-y-6">
@@ -319,154 +120,19 @@ export function MetaAccountsControl() {
         </div>
       </header>
 
-      {(showConnection || (!connections.isLoading && !connections.data?.length)) && (
-        <section className="rounded-2xl border border-cyan-300/15 bg-bg-elevated/90 p-5 sm:p-6">
-          <div className="flex items-start gap-3">
-            <ShieldAlert className="mt-0.5 h-5 w-5 text-cyan-300" />
-            <div>
-              <h2 className="font-semibold text-white">Criar dashboard independente</h2>
-              <p className="mt-1 text-xs leading-5 text-white/40">
-                Defina um nome e conecte outro aplicativo Meta. As contas e campanhas ficarão
-                isoladas dos demais dashboards.
-              </p>
-            </div>
-          </div>
-          <div className="mt-5 grid gap-3 md:grid-cols-2">
-            <input
-              aria-label="Nome da conexão"
-              value={connectionForm.name}
-              onChange={(event) =>
-                setConnectionForm({ ...connectionForm, name: event.target.value })
-              }
-              placeholder="Nome da conexão"
-              className="h-11 rounded-lg border border-white/10 bg-black/20 px-4 text-sm text-white outline-none focus:border-cyan-300/40"
-            />
-            <input
-              aria-label="ID do aplicativo"
-              value={connectionForm.app_id}
-              onChange={(event) =>
-                setConnectionForm({ ...connectionForm, app_id: event.target.value })
-              }
-              placeholder="ID do aplicativo"
-              className="h-11 rounded-lg border border-white/10 bg-black/20 px-4 text-sm text-white outline-none focus:border-cyan-300/40"
-            />
-            <input
-              type="password"
-              aria-label="Secret do aplicativo"
-              value={connectionForm.app_secret}
-              onChange={(event) =>
-                setConnectionForm({ ...connectionForm, app_secret: event.target.value })
-              }
-              placeholder="App Secret"
-              className="h-11 rounded-lg border border-white/10 bg-black/20 px-4 text-sm text-white outline-none focus:border-cyan-300/40"
-            />
-            <input
-              type="password"
-              aria-label="Token de acesso"
-              value={connectionForm.access_token}
-              onChange={(event) =>
-                setConnectionForm({ ...connectionForm, access_token: event.target.value })
-              }
-              placeholder="Token de usuário do sistema"
-              className="h-11 rounded-lg border border-white/10 bg-black/20 px-4 text-sm text-white outline-none focus:border-cyan-300/40"
-            />
-          </div>
-          <div className="mt-4 flex justify-end">
-            <Button
-              onClick={() => saveConnection.mutate()}
-              disabled={
-                saveConnection.isPending ||
-                !connectionForm.app_id ||
-                !connectionForm.app_secret ||
-                !connectionForm.access_token
-              }
-            >
-              {saveConnection.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{' '}
-              Validar e conectar
-            </Button>
-          </div>
-        </section>
-      )}
+      {(showConnection || (!connections.isLoading && !connections.data?.length)) &&
+        renderConnectionSettings({ connectionForm, setConnectionForm, saveConnection })}
 
-      {showPushcut && selectedConnection && (
-        <section className="rounded-2xl border border-amber-300/20 bg-gradient-to-br from-amber-300/[0.07] via-bg-elevated to-transparent p-5 sm:p-6">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <BellRing className="mt-0.5 h-5 w-5 text-amber-300" />
-              <div>
-                <h2 className="font-semibold text-white">Conta travada por pagamento</h2>
-                <p className="mt-1 text-xs leading-5 text-white/40">
-                  Configuração exclusiva do dashboard {selectedConnection.name}. O alerta dispara
-                  uma vez por bloqueio e rearma quando a conta normaliza.
-                </p>
-              </div>
-            </div>
-            <label className="flex items-center gap-2 text-xs text-white/60">
-              <input
-                type="checkbox"
-                checked={pushcutForm.enabled}
-                onChange={(event) =>
-                  setPushcutForm({ ...pushcutForm, enabled: event.target.checked })
-                }
-                className="h-4 w-4 accent-amber-300"
-              />{' '}
-              Alertas ativos
-            </label>
-          </div>
-          <div className="mt-5 grid gap-3 md:grid-cols-2">
-            <input
-              type="password"
-              aria-label="Secret Pushcut"
-              value={pushcutForm.secret}
-              onChange={(event) => setPushcutForm({ ...pushcutForm, secret: event.target.value })}
-              placeholder={
-                pushcutConfig.data?.secret_configured
-                  ? 'Secret já salvo — deixe vazio para manter'
-                  : 'Secret da API Pushcut'
-              }
-              className="h-11 rounded-lg border border-white/10 bg-black/20 px-4 text-sm text-white outline-none focus:border-amber-300/40"
-            />
-            <input
-              aria-label="Nome da notificação Pushcut"
-              value={pushcutForm.notification_name}
-              onChange={(event) =>
-                setPushcutForm({ ...pushcutForm, notification_name: event.target.value })
-              }
-              placeholder="Nome ou Reference ID da notificação"
-              className="h-11 rounded-lg border border-white/10 bg-black/20 px-4 text-sm text-white outline-none focus:border-amber-300/40"
-            />
-            <input
-              aria-label="Dispositivos Pushcut"
-              value={pushcutForm.devices}
-              onChange={(event) => setPushcutForm({ ...pushcutForm, devices: event.target.value })}
-              placeholder="Dispositivos opcionais, separados por vírgula"
-              className="h-11 rounded-lg border border-white/10 bg-black/20 px-4 text-sm text-white outline-none focus:border-amber-300/40 md:col-span-2"
-            />
-          </div>
-          <div className="mt-4 flex flex-wrap justify-end gap-2">
-            <Button
-              variant="outline"
-              onClick={() => testPushcut.mutate()}
-              disabled={!pushcutConfig.data?.secret_configured || testPushcut.isPending}
-              className="gap-2 border-white/10"
-            >
-              <Send className="h-4 w-4" /> Enviar teste
-            </Button>
-            <Button
-              onClick={() => savePushcut.mutate()}
-              disabled={
-                savePushcut.isPending ||
-                !pushcutForm.notification_name.trim() ||
-                (!pushcutForm.secret.trim() && !pushcutConfig.data?.secret_configured)
-              }
-              className="bg-amber-300 text-accent-on hover:bg-amber-200"
-            >
-              {savePushcut.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Salvar
-              alerta
-            </Button>
-          </div>
-        </section>
-      )}
+      {showPushcut &&
+        selectedConnection &&
+        renderPushcutSettings({
+          pushcutForm,
+          setPushcutForm,
+          selectedConnection,
+          pushcutConfig,
+          savePushcut,
+          testPushcut,
+        })}
 
       {!!connections.data?.length && (
         <section className="rounded-2xl border border-cyan-300/15 bg-gradient-to-r from-cyan-300/[0.055] to-transparent p-4 sm:p-5">
@@ -641,183 +307,17 @@ export function MetaAccountsControl() {
           <Loader2 className="mr-2 inline h-5 w-5 animate-spin" /> Carregando contas…
         </div>
       ) : (
-        <div className="space-y-3">
-          {filtered.map((account) => {
-            const accountCampaigns = campaignsByAccount.get(account.id) ?? [];
-            const isOpen = expanded === account.id;
-            const businessState = account.business_name
-              ? businessStates.get(account.business_name)
-              : null;
-            return (
-              <article
-                key={account.id}
-                className="overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.022]"
-              >
-                <div className="grid gap-4 p-4 sm:p-5 xl:grid-cols-[1.5fr_1fr_1fr_1fr_auto] xl:items-center">
-                  <div className="flex items-start gap-3">
-                    <HealthRing score={account.health_score} />
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="truncate font-semibold text-white">{account.name}</h2>
-                        <span
-                          className={cn(
-                            'rounded-full border px-2 py-1 text-[10px] uppercase tracking-wider',
-                            statusTone[account.operational_state],
-                          )}
-                        >
-                          {statusCopy[account.operational_state]}
-                        </span>
-                        {businessState?.off && (
-                          <span className="rounded-full border border-danger/25 bg-danger/[0.08] px-2 py-1 text-[10px] uppercase tracking-wider text-danger">
-                            BM sem contas utilizáveis
-                          </span>
-                        )}
-                      </div>
-                      <p className="mt-1 font-mono text-[11px] text-white/35">
-                        act_{account.external_id}
-                      </p>
-                      <p className="mt-2 flex items-center gap-1.5 text-xs text-white/45">
-                        <Building2 className="h-3.5 w-3.5" />{' '}
-                        {account.business_name ?? 'Conta pessoal'}
-                        {businessState && (
-                          <span
-                            className={businessState.off ? 'text-danger/70' : 'text-emerald-200/60'}
-                          >
-                            · {businessState.usable}/{businessState.total} utilizável(is)
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="hud-label">Gasto histórico</p>
-                    <p className="mt-2 font-mono text-lg text-white">
-                      {money(account.amount_spent_minor, account.currency)}
-                    </p>
-                    <p className="mt-1 text-xs text-white/35">
-                      30 dias: {money(account.spend_30d_minor, account.currency)}
-                    </p>
-                    {account.operational_state === 'unsettled' && (
-                      <div className="mt-3 rounded-lg border border-amber-300/15 bg-amber-300/[0.06] px-3 py-2">
-                        <p className="text-[10px] uppercase tracking-[0.14em] text-amber-200/55">
-                          Pendência informada
-                        </p>
-                        <p className="mt-1 font-mono text-base text-amber-100">
-                          {money(account.balance_minor, account.currency)}
-                        </p>
-                        {Number(account.balance_minor) === 0 && (
-                          <p className="mt-1 text-[10px] leading-4 text-white/35">
-                            A Meta sinalizou a conta, mas retornou saldo financeiro zero.
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <p className="hud-label">Operação</p>
-                    <p className="mt-2 text-sm text-white/70">
-                      {account.campaigns_active} ativa(s) · {account.campaigns_total} total
-                    </p>
-                    <p className="mt-1 text-xs text-white/35">
-                      {Number(account.impressions_30d).toLocaleString('pt-BR')} impressões
-                    </p>
-                  </div>
-                  <div>
-                    <p className="hud-label">Oferta principal</p>
-                    <select
-                      aria-label={`Oferta da conta ${account.name}`}
-                      value={account.primary_offer_id ?? ''}
-                      onChange={(event) =>
-                        assignAccount.mutate({
-                          accountId: account.id,
-                          offerId: event.target.value || null,
-                        })
-                      }
-                      className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-bg-elevated px-3 text-sm text-white"
-                    >
-                      <option value="">Não associada</option>
-                      {(dashboard.data?.offers ?? []).map((offer) => (
-                        <option key={offer.id} value={offer.id}>
-                          {offer.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setExpanded(isOpen ? null : account.id)}
-                    className="flex h-10 items-center justify-center gap-2 rounded-lg border border-white/10 px-3 text-xs text-white/50 hover:bg-white/[0.04] hover:text-white"
-                  >
-                    {isOpen ? (
-                      <ChevronDown className="h-4 w-4" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4" />
-                    )}{' '}
-                    Campanhas
-                  </button>
-                </div>
-                {isOpen && (
-                  <div className="border-t border-white/[0.07] bg-black/10 p-4 sm:p-5">
-                    <div className="space-y-2">
-                      {accountCampaigns.length ? (
-                        accountCampaigns.map((campaign) => (
-                          <div
-                            key={campaign.id}
-                            className="grid gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3 md:grid-cols-[1fr_auto_240px] md:items-center"
-                          >
-                            <div className="min-w-0">
-                              <p className="truncate text-sm text-white/75">{campaign.name}</p>
-                              <p className="mt-1 font-mono text-[10px] text-white/30">
-                                {campaign.external_id}
-                              </p>
-                            </div>
-                            <span
-                              className={cn(
-                                'w-fit rounded-full border px-2 py-1 text-[10px]',
-                                campaign.effective_status === 'ACTIVE'
-                                  ? 'border-emerald-300/15 text-emerald-200'
-                                  : 'border-white/10 text-white/35',
-                              )}
-                            >
-                              {campaign.effective_status ?? campaign.configured_status ?? '—'}
-                            </span>
-                            <select
-                              aria-label={`Oferta da campanha ${campaign.name}`}
-                              value={campaign.offer_id ?? account.primary_offer_id ?? ''}
-                              onChange={(event) =>
-                                assignCampaign.mutate({
-                                  campaignId: campaign.id,
-                                  offerId: event.target.value || null,
-                                })
-                              }
-                              className="h-9 rounded-lg border border-white/10 bg-bg-elevated px-3 text-xs text-white"
-                            >
-                              <option value="">Herdar / sem oferta</option>
-                              {(dashboard.data?.offers ?? []).map((offer) => (
-                                <option key={offer.id} value={offer.id}>
-                                  {offer.name}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="py-5 text-center text-sm text-white/35">
-                          Nenhuma campanha encontrada.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </article>
-            );
-          })}
-          {!filtered.length && (
-            <div className="rounded-2xl border border-dashed border-white/10 p-12 text-center text-sm text-white/35">
-              Nenhuma conta encontrada para estes filtros.
-            </div>
-          )}
-        </div>
+        renderAccountList({
+          currency,
+          expanded,
+          setExpanded,
+          dashboard,
+          assignAccount,
+          assignCampaign,
+          businessStates,
+          filtered,
+          campaignsByAccount,
+        })
       )}
     </div>
   );

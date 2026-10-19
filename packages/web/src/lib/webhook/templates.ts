@@ -223,7 +223,7 @@ export const WEBHOOK_PLATFORMS: WebhookPlatformDef[] = [
       {
         id: 'perfectpay.sale_approved',
         label: 'sale.approved',
-        headers: { 'token': 'YOUR_TOKEN_HERE' },
+        headers: { token: 'YOUR_TOKEN_HERE' },
         body: {
           token: 'YOUR_TOKEN_HERE',
           code: 'PP12345',

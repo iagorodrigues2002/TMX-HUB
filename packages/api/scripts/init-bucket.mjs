@@ -1,4 +1,4 @@
-import { S3Client, CreateBucketCommand, HeadBucketCommand } from '@aws-sdk/client-s3';
+import { CreateBucketCommand, HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
 
 const s3 = new S3Client({
   endpoint: 'http://localhost:9000',

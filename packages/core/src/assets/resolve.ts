@@ -7,7 +7,7 @@ import type {
   ResolveAssetsResult,
 } from '../types.js';
 import { walkCss } from './css-walker.js';
-import { downloadMany, type DownloadOptions } from './downloader.js';
+import { type DownloadOptions, downloadMany } from './downloader.js';
 import { emptyManifest, makeEntryFromDownloaded, makeEntryFromUrl } from './manifest.js';
 import { parseSrcset, serializeSrcset } from './srcset.js';
 import { resolveUrl, shouldSkipUrl } from './url-utils.js';
@@ -40,6 +40,14 @@ export async function resolveAssets(
 ): Promise<ResolveAssetsResult> {
   const $ = cheerio.load(html, { xml: false });
   const collected = new Set<string>();
+  const maxAssets = opts.maxAssets ?? 1024;
+  const collect = (url: string) => {
+    opts.signal?.throwIfAborted();
+    if (!collected.has(url) && collected.size >= maxAssets) {
+      throw Object.assign(new Error('Asset count budget exceeded.'), { code: 'too_large' });
+    }
+    collected.add(url);
+  };
   const inlineStyleEdits: Array<() => void> = [];
 
   for (const [tag, attrs] of Object.entries(HTML_URL_ATTRS)) {
@@ -49,7 +57,7 @@ export async function resolveAssets(
         const v = node.attr(attr);
         if (!v || shouldSkipUrl(v)) continue;
         const abs = resolveUrl(v, baseUrl);
-        collected.add(abs);
+        collect(abs);
         node.attr(attr, abs);
       }
     });
@@ -64,7 +72,7 @@ export async function resolveAssets(
     const rewritten = candidates.map((c) => {
       if (shouldSkipUrl(c.url)) return c;
       const abs = resolveUrl(c.url, baseUrl);
-      collected.add(abs);
+      collect(abs);
       return { url: abs, descriptor: c.descriptor };
     });
     node.attr('srcset', serializeSrcset(rewritten));
@@ -77,7 +85,7 @@ export async function resolveAssets(
     const result = walkCss(css, {
       cssBaseUrl: baseUrl,
       visit: (_raw, abs) => {
-        collected.add(abs);
+        collect(abs);
         return abs;
       },
     });
@@ -92,7 +100,7 @@ export async function resolveAssets(
     const result = walkCss(wrapped, {
       cssBaseUrl: baseUrl,
       visit: (_raw, abs) => {
-        collected.add(abs);
+        collect(abs);
         return abs;
       },
     });
@@ -117,6 +125,8 @@ export async function resolveAssets(
   }
 
   const downloadOpts: DownloadOptions = {
+    signal: opts.signal,
+    budget: { limit: opts.maxTotalBytes ?? 250 * 1024 * 1024, consumed: 0 },
     maxBytes: opts.maxBytes ?? DEFAULT_DOWNLOAD.maxBytes,
     maxConcurrency: opts.maxConcurrency ?? DEFAULT_DOWNLOAD.maxConcurrency,
     timeoutMs: opts.timeoutMs ?? DEFAULT_DOWNLOAD.timeoutMs,
@@ -138,7 +148,9 @@ export async function resolveAssets(
 
   // CSS recursion: each downloaded stylesheet may import or reference more.
   const seenCss = new Set<string>(cssQueue);
+  let cssDepth = 0;
   while (true) {
+    opts.signal?.throwIfAborted();
     const nextUrls: string[] = [];
     for (const cssUrl of cssQueue) {
       const dl = allDownloaded.get(cssUrl);
@@ -146,9 +158,9 @@ export async function resolveAssets(
       if (!isCssMime(dl.mime, cssUrl)) continue;
       const cssText = dl.data.toString('utf8');
       const result = walkCss(cssText, {
-        cssBaseUrl: cssUrl,
+        cssBaseUrl: dl.resolvedUrl,
         visit: (_raw, abs) => {
-          collected.add(abs);
+          collect(abs);
           return abs;
         },
       });
@@ -160,6 +172,9 @@ export async function resolveAssets(
       }
     }
     if (nextUrls.length === 0) break;
+    if (++cssDepth > (opts.maxCssDepth ?? 8)) {
+      throw Object.assign(new Error('CSS import depth exceeded.'), { code: 'too_large' });
+    }
     const more = await downloadMany(nextUrls, downloadOpts);
     for (const [k, v] of more) allDownloaded.set(k, v);
     cssQueue = nextUrls.filter((u) => isCssLikely(u, allDownloaded.get(u)?.mime));
@@ -188,6 +203,6 @@ function isCssMime(mime: string, url: string): boolean {
 }
 
 function isCssLikely(url: string, mime?: string): boolean {
-  if (mime && mime.toLowerCase().includes('css')) return true;
+  if (mime?.toLowerCase().includes('css')) return true;
   return url.toLowerCase().includes('.css');
 }

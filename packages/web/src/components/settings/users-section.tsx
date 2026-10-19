@@ -7,55 +7,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Crown, Loader2, Pencil, Save, Shield, Trash2, Users as UsersIcon, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-
-type AccessScope = 'full' | 'video-shield' | 'custom';
-
-const CUSTOM_TOOL_OPTIONS: { key: ToolKey; label: string }[] = [
-  { key: 'video-shield', label: 'Video Studio' },
-  { key: 'cloner', label: 'Page Cloner' },
-  { key: 'funnel-clone', label: 'Funnel Full Clone' },
-  { key: 'upsell-analyzer', label: 'Upsell Analyzer' },
-  { key: 'webhook-tester', label: 'Webhook Tester' },
-  { key: 'vsl', label: 'VSL Downloader' },
-  { key: 'ofertas', label: 'Ofertas e tracking' },
-  { key: 'ofertas-ia', label: 'IA de Ofertas' },
-  { key: 'logs', label: 'Logs' },
-];
-
-const SCOPE_LABEL: Record<AccessScope, string> = {
-  full: 'Completo (todas as ferramentas)',
-  'video-shield': 'Apenas Video Studio',
-  custom: 'Personalizado…',
-};
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
-  } catch {
-    return iso;
-  }
-}
-
-function detectScope(user: AuthUser): AccessScope {
-  if (user.role === 'admin') return 'full';
-  if (!user.allowedTools || user.allowedTools.length === 0) return 'full';
-  if (
-    user.allowedTools.length === 1 &&
-    (user.allowedTools[0] === 'video-shield' || user.allowedTools[0] === 'creative-studio')
-  )
-    return 'video-shield';
-  return 'custom';
-}
-
-function scopeToAllowedTools(scope: AccessScope, custom: ToolKey[]): ToolKey[] | null {
-  if (scope === 'full') return null;
-  if (scope === 'video-shield') return ['video-shield'];
-  return custom.length > 0 ? custom : null;
-}
+import {
+  type AccessScope,
+  CUSTOM_TOOL_OPTIONS,
+  SCOPE_LABEL,
+  detectScope,
+  formatDate,
+  scopeToAllowedTools,
+} from './users-section-support';
 
 export function UsersSection() {
   const qc = useQueryClient();
@@ -83,8 +42,8 @@ export function UsersSection() {
       });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['users-list'] });
-      qc.invalidateQueries({ queryKey: ['auth-me'] });
+      void qc.invalidateQueries({ queryKey: ['users-list'] });
+      void qc.invalidateQueries({ queryKey: ['auth-me'] });
       setEditingId(null);
       toast.success('Acesso atualizado.');
     },
@@ -94,7 +53,7 @@ export function UsersSection() {
   const deleteMut = useMutation({
     mutationFn: (id: string) => apiClient.deleteUser(id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['users-list'] });
+      void qc.invalidateQueries({ queryKey: ['users-list'] });
       toast.success('Usuário removido.');
     },
     onError: (err) => toast.error((err as Error).message),

@@ -1,10 +1,22 @@
 import { describe, expect, it, vi } from 'vitest';
-import { currentMonthRange, previousMonthRange, selectedMonthRange, DASHBOARD_DATE_PRESETS, PERIOD_DATE_PRESETS } from '../../web/src/lib/date-range.js';
+import {
+  DASHBOARD_DATE_PRESETS,
+  PERIOD_DATE_PRESETS,
+  currentMonthRange,
+  previousMonthRange,
+  selectedMonthRange,
+} from '../../web/src/lib/date-range.js';
 
 describe('calendar month presets', () => {
   it('selects a specific month without future days', () => {
-    expect(selectedMonthRange('2026-09', '2026-10-08')).toEqual({ from: '2026-09-01', to: '2026-09-30' });
-    expect(selectedMonthRange('2026-10', '2026-10-08')).toEqual({ from: '2026-10-01', to: '2026-10-08' });
+    expect(selectedMonthRange('2026-09', '2026-10-08')).toEqual({
+      from: '2026-09-01',
+      to: '2026-09-30',
+    });
+    expect(selectedMonthRange('2026-10', '2026-10-08')).toEqual({
+      from: '2026-10-01',
+      to: '2026-10-08',
+    });
     expect(selectedMonthRange('2024-02', '2026-10-08')?.to).toBe('2024-02-29');
     expect(selectedMonthRange('2026-11', '2026-10-08')).toBeNull();
     expect(selectedMonthRange('2026-13', '2026-10-08')).toBeNull();
@@ -23,9 +35,17 @@ describe('calendar month presets', () => {
     try {
       vi.setSystemTime(new Date('2026-11-01T01:00:00Z'));
       for (const presets of [DASHBOARD_DATE_PRESETS, PERIOD_DATE_PRESETS]) {
-        expect(presets.find(p => p.id === 'current-month')!.getRange()).toEqual({ from: '2026-10-01', to: '2026-10-31' });
-        expect(presets.find(p => p.id === 'previous-month')!.getRange()).toEqual({ from: '2026-09-01', to: '2026-09-30' });
+        expect(presets.find((p) => p.id === 'current-month')!.getRange()).toEqual({
+          from: '2026-10-01',
+          to: '2026-10-31',
+        });
+        expect(presets.find((p) => p.id === 'previous-month')!.getRange()).toEqual({
+          from: '2026-09-01',
+          to: '2026-09-30',
+        });
       }
-    } finally { vi.useRealTimers(); }
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

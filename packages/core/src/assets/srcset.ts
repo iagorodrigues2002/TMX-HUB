@@ -26,7 +26,5 @@ export function parseSrcset(value: string): SrcsetCandidate[] {
 }
 
 export function serializeSrcset(items: SrcsetCandidate[]): string {
-  return items
-    .map((c) => (c.descriptor ? `${c.url} ${c.descriptor}` : c.url))
-    .join(', ');
+  return items.map((c) => (c.descriptor ? `${c.url} ${c.descriptor}` : c.url)).join(', ');
 }

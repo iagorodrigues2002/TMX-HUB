@@ -18,12 +18,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { type OfferStatus, type OfferView, apiClient } from '@/lib/api-client';
+import { useAuth } from '@/lib/auth-context';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { STATUS_LIST, statusLabel } from './status-badge';
 import { OfferMemberPicker } from './offer-member-picker';
-import { useAuth } from '@/lib/auth-context';
+import { STATUS_LIST, statusLabel } from './status-badge';
 
 interface Props {
   offer: OfferView;

@@ -1,13 +1,13 @@
-import Fastify from 'fastify';
+import Fastify, { type FastifyRequest } from 'fastify';
 import { describe, expect, it, vi } from 'vitest';
-import { NicheStore } from '../src/services/niche-store.js';
 import { HttpProblem } from '../src/lib/problem.js';
-import previewRoutes from '../src/routes/preview.js';
-import nicheRoutes from '../src/routes/niches.js';
-import metaControlRoutes from '../src/routes/meta-control.js';
-import utmifyGlobalRoutes from '../src/routes/utmify-global-admin.js';
 import mediaRoutes from '../src/routes/media-jobs.js';
+import metaControlRoutes from '../src/routes/meta-control.js';
+import nicheRoutes from '../src/routes/niches.js';
+import previewRoutes from '../src/routes/preview.js';
 import shieldRoutes from '../src/routes/shield-jobs.js';
+import utmifyGlobalRoutes from '../src/routes/utmify-global-admin.js';
+import { NicheStore } from '../src/services/niche-store.js';
 
 vi.mock('../src/env.js', () => ({ env: {} }));
 
@@ -151,10 +151,17 @@ describe('member tool isolation', () => {
     app.setErrorHandler((error, _req, reply) =>
       reply.code(error instanceof HttpProblem ? error.status : 500).send({ error: error.message }),
     );
-    app.decorate('requireAuth', async (req: any) => {
+    app.decorate('requireAuth', async (req: FastifyRequest) => {
       const user = req.headers['x-test-user'];
-      if (!user) throw new HttpProblem({ status: 401, title: 'Unauthorized' });
-      req.user = { sub: user, role: user === 'admin' ? 'admin' : 'user' };
+      if (typeof user !== 'string' || !user)
+        throw new HttpProblem({ status: 401, title: 'Unauthorized' });
+      req.user = {
+        sub: user,
+        role: user === 'admin' ? 'admin' : 'user',
+        email: 'fixture@example.test',
+        iat: 0,
+        exp: 0,
+      };
     });
     app.decorate('redis', { hget: vi.fn(async () => 'a') });
     const meta = vi.fn(async () => ({ status: 'ready', etag: 'private-etag' }));

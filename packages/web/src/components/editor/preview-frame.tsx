@@ -20,8 +20,12 @@ export function PreviewFrame({ jobId, status }: PreviewFrameProps) {
     setPreview(null);
     setFailed(false);
     void loadPrivatePreview(apiClient.previewUrl(jobId), authToken.get(), controller.signal)
-      .then((html) => { if (!controller.signal.aborted) setPreview({ jobId, html }); })
-      .catch(() => { if (!controller.signal.aborted) setFailed(true); });
+      .then((html) => {
+        if (!controller.signal.aborted) setPreview({ jobId, html });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setFailed(true);
+      });
     return () => controller.abort();
   }, [jobId, status]);
 
@@ -47,9 +51,11 @@ export function PreviewFrame({ jobId, status }: PreviewFrameProps) {
   }
 
   if (failed || !preview || preview.jobId !== jobId) {
-    return <div role="status" className="grid h-full place-items-center text-sm text-muted-foreground">
-      {failed ? 'Não foi possível carregar o preview autorizado.' : 'Carregando preview…'}
-    </div>;
+    return (
+      <output className="grid h-full place-items-center text-sm text-muted-foreground">
+        {failed ? 'Não foi possível carregar o preview autorizado.' : 'Carregando preview…'}
+      </output>
+    );
   }
 
   return (

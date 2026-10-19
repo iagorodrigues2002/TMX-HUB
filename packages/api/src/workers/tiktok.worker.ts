@@ -22,8 +22,10 @@ const safeUrl = (value: string | null | undefined) => {
 };
 
 export function buildTikTokPayload(input: TikTokEventInput) {
-  if (input.eventName === 'Purchase' && !input.orderId) throw new Error('Purchase requires an order');
-  if (input.eventName === 'AddToCart' && !input.contentId) throw new Error('AddToCart requires a product');
+  if (input.eventName === 'Purchase' && !input.orderId)
+    throw new Error('Purchase requires an order');
+  if (input.eventName === 'AddToCart' && !input.contentId)
+    throw new Error('AddToCart requires a product');
   const user: Record<string, string> = {};
   if (input.email) user.email = sha256(input.email);
   if (input.phone) user.phone = sha256(input.phone.replace(/\D/g, ''));
@@ -126,10 +128,16 @@ export function createTikTokWorker(): Worker<TikTokJobData> | null {
     `;
     if (!row) return;
     const isCart = row.event_name === 'AddToCart';
-    if (row.event_name !== 'Purchase' && !isCart) throw new Error('TikTok: unsupported delivery event');
-    const minor = isCart ? row.cart_amount_minor : row.amount_brl_minor ?? row.amount_minor;
-    const currency = isCart ? row.cart_currency : row.amount_brl_minor != null ? 'BRL' : row.currency;
-    if (isCart && (row.order_id || !row.cart_product_id || !minor || !currency)) throw new Error('TikTok: persisted cart required');
+    if (row.event_name !== 'Purchase' && !isCart)
+      throw new Error('TikTok: unsupported delivery event');
+    const minor = isCart ? row.cart_amount_minor : (row.amount_brl_minor ?? row.amount_minor);
+    const currency = isCart
+      ? row.cart_currency
+      : row.amount_brl_minor != null
+        ? 'BRL'
+        : row.currency;
+    if (isCart && (row.order_id || !row.cart_product_id || !minor || !currency))
+      throw new Error('TikTok: persisted cart required');
     if (!isCart && !row.test_event_code && (!row.order_id || !minor || !currency || !row.paid_at))
       throw new Error('TikTok: compra aprovada sem valor, moeda ou data.');
     // TODO(LGPD consent gate): before outbound delivery, load
@@ -145,7 +153,7 @@ export function createTikTokWorker(): Worker<TikTokJobData> | null {
       referrer: row.referrer ?? undefined,
       value: Number(((minor ?? 1) / 100).toFixed(2)),
       currency: currency ?? 'BRL',
-      orderId: isCart ? undefined : row.external_id ?? `TMX-TEST-${row.id}`,
+      orderId: isCart ? undefined : (row.external_id ?? `TMX-TEST-${row.id}`),
       ttclid,
       ttp: row.source._ttp ?? row.source.ttp,
       email: row.buyer.email ?? row.test_context.email ?? undefined,
@@ -153,8 +161,8 @@ export function createTikTokWorker(): Worker<TikTokJobData> | null {
       externalId: row.visitor_id ?? row.order_id ?? row.id,
       ip: row.client_ip ?? row.source.client_ip ?? undefined,
       userAgent: row.user_agent ?? undefined,
-      contentId: isCart ? row.cart_product_id! : row.product?.planId ?? row.product?.id,
-      contentName: isCart ? row.cart_product_name! : row.product?.planName ?? row.product?.name,
+      contentId: isCart ? row.cart_product_id! : (row.product?.planId ?? row.product?.id),
+      contentName: isCart ? row.cart_product_name! : (row.product?.planName ?? row.product?.name),
       testEventCode: row.test_event_code ?? undefined,
     });
     try {

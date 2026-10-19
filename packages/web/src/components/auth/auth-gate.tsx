@@ -1,9 +1,9 @@
 'use client';
 
+import { useAuth } from '@/lib/auth-context';
+import { Loader2 } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { type ReactNode, useEffect } from 'react';
-import { Loader2 } from 'lucide-react';
-import { useAuth } from '@/lib/auth-context';
 
 /**
  * Client-side guard. Renders children only when a user is loaded; otherwise

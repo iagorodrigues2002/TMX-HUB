@@ -1,6 +1,6 @@
+import type { Niche, NicheWhite } from '@page-cloner/shared';
 import type { Redis } from 'ioredis';
 import { ulid } from 'ulid';
-import type { Niche, NicheWhite } from '@page-cloner/shared';
 import { ConflictError, HttpProblem, NotFoundError } from '../lib/problem.js';
 
 const NICHE_PREFIX = 'niche:';

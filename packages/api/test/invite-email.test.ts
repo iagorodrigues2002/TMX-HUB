@@ -1,11 +1,16 @@
-import { describe, it, expect } from 'vitest';
 import { cp, mkdtemp, rm } from 'node:fs/promises';
-import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { describe, expect, it } from 'vitest';
 import { loadInviteTemplates, renderInviteEmail } from '../src/lib/invite-email.js';
 
-const data = { inviterName: 'Iago', roleLabel: 'Membro', acceptUrl: 'https://theminex.com/register?invite=test-only', expiresIn: '7 dias' };
+const data = {
+  inviterName: 'Iago',
+  roleLabel: 'Membro',
+  acceptUrl: 'https://theminex.com/register?invite=test-only',
+  expiresIn: '7 dias',
+};
 describe('invite HTML and production assets', () => {
   it('loads the actual HTML and text templates in source', async () => {
     const templates = await loadInviteTemplates();
@@ -26,7 +31,12 @@ describe('invite HTML and production assets', () => {
     expect(result.htmlContent).not.toContain('Acesso completo');
   });
   it('escapes dynamic HTML without changing plain text', async () => {
-    const result = await renderInviteEmail({ ...data, inviterName: '<img src=x>', allowedTools: ['<script>'], acceptUrl: data.acceptUrl + '&a="bad"' });
+    const result = await renderInviteEmail({
+      ...data,
+      inviterName: '<img src=x>',
+      allowedTools: ['<script>'],
+      acceptUrl: `${data.acceptUrl}&a="bad"`,
+    });
     expect(result.htmlContent).toContain('&lt;img src=x&gt;');
     expect(result.htmlContent).toContain('&lt;script&gt;');
     expect(result.htmlContent).toContain('&amp;a=&quot;bad&quot;');
@@ -36,9 +46,13 @@ describe('invite HTML and production assets', () => {
   it('loads assets beside a flattened production bundle', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'tmx-invite-assets-'));
     try {
-      await cp(new URL('../src/templates', import.meta.url), join(directory, 'templates'), { recursive: true });
+      await cp(new URL('../src/templates', import.meta.url), join(directory, 'templates'), {
+        recursive: true,
+      });
       const templates = await loadInviteTemplates(pathToFileURL(join(directory, 'server.js')).href);
       expect(templates.html).toContain('{{acceptUrl}}');
-    } finally { await rm(directory, { recursive: true, force: true }); }
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 });

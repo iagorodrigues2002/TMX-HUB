@@ -18,18 +18,28 @@ describe('CORS preflight', () => {
     app.post('/v1/track/ab/assign', async () => ({ active: false }));
     app.put('/v1/offers/:id/ai-config', async () => ({ ok: true }));
     for (const url of ['/v1/track/bootstrap', '/v1/track/events', '/v1/track/ab/assign']) {
-      const response = await app.inject({ method: 'OPTIONS', url, headers: {
-        origin: 'https://clearmeadowx.online', 'access-control-request-method': 'POST',
-        'access-control-request-headers': 'content-type',
-      } });
+      const response = await app.inject({
+        method: 'OPTIONS',
+        url,
+        headers: {
+          origin: 'https://clearmeadowx.online',
+          'access-control-request-method': 'POST',
+          'access-control-request-headers': 'content-type',
+        },
+      });
       expect(response.statusCode).toBe(204);
       expect(response.headers['access-control-allow-origin']).toBe('*');
       expect(response.headers['access-control-allow-credentials']).toBeUndefined();
       expect(response.headers['access-control-allow-headers']).not.toContain('authorization');
     }
-    const admin = await app.inject({ method: 'OPTIONS', url: '/v1/offers/x/ai-config', headers: {
-      origin: 'https://clearmeadowx.online', 'access-control-request-method': 'PUT',
-    } });
+    const admin = await app.inject({
+      method: 'OPTIONS',
+      url: '/v1/offers/x/ai-config',
+      headers: {
+        origin: 'https://clearmeadowx.online',
+        'access-control-request-method': 'PUT',
+      },
+    });
     expect(admin.headers['access-control-allow-origin']).toBeUndefined();
   });
   it('allows the dashboard to save AI config with PUT', async () => {

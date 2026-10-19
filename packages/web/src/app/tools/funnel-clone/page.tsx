@@ -1,7 +1,7 @@
-import { Network } from 'lucide-react';
 import { ToolGuard } from '@/components/auth/tool-guard';
-import { HubShell } from '@/components/hub/hub-shell';
 import { FunnelInputForm } from '@/components/funnel/funnel-input-form';
+import { HubShell } from '@/components/hub/hub-shell';
+import { Network } from 'lucide-react';
 
 export default function FunnelClonePage() {
   return (

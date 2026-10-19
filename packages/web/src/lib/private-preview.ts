@@ -19,6 +19,8 @@ export async function loadPrivatePreview(
   const html = await response.text();
   // srcDoc does not inherit response headers. Preserve the endpoint's policy
   // and disallow scripts even if an upstream proxy ever removes that header.
-  const policy = response.headers.get('content-security-policy') || "default-src 'none'; img-src https: data:; style-src 'unsafe-inline' https:; font-src https: data:; script-src 'none'; form-action 'none'";
+  const policy =
+    response.headers.get('content-security-policy') ||
+    "default-src 'none'; img-src https: data:; style-src 'unsafe-inline' https:; font-src https: data:; script-src 'none'; form-action 'none'";
   return `<!doctype html><meta http-equiv="Content-Security-Policy" content="${escapeAttribute(policy)}"><meta name="referrer" content="no-referrer">${html}`;
 }

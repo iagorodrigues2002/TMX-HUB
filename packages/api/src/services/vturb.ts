@@ -1,12 +1,20 @@
 import type postgres from 'postgres';
 import { env } from '../env.js';
-import { decryptSecret } from '../lib/secret-box.js';
 import { logger } from '../lib/logger.js';
+import { decryptSecret } from '../lib/secret-box.js';
 
 type Sql = ReturnType<typeof postgres>;
 
 const VTURB_ANALYTICS_BASE = 'https://analytics.vturb.net';
-const conversionKeys = ['vtid', 'sck', 'sid', 'src', 'subid', 'xcod', ...Array.from({ length: 20 }, (_, index) => `sub${index + 1}`)];
+const conversionKeys = [
+  'vtid',
+  'sck',
+  'sid',
+  'src',
+  'subid',
+  'xcod',
+  ...Array.from({ length: 20 }, (_, index) => `sub${index + 1}`),
+];
 
 export function findVturbConversionKeyInUrl(value?: string | null) {
   if (!value) return null;
@@ -14,13 +22,17 @@ export function findVturbConversionKeyInUrl(value?: string | null) {
     const url = new URL(value, 'https://tmx.invalid');
     return findVturbConversionKey(Object.fromEntries(url.searchParams.entries()));
   } catch {
-    const match = value.match(/(?:^|[?&])(vtid|sck|sid|src|subid|xcod|sub(?:[1-9]|1[0-9]|20))=(v3_[^&#\s]+)/i);
+    const match = value.match(
+      /(?:^|[?&])(vtid|sck|sid|src|subid|xcod|sub(?:[1-9]|1[0-9]|20))=(v3_[^&#\s]+)/i,
+    );
     return match?.[2] ? decodeURIComponent(match[2]) : null;
   }
 }
 
 export function findVturbConversionKey(source: Record<string, unknown>, preferred?: string | null) {
-  const keys = preferred ? [preferred, ...conversionKeys.filter((key) => key !== preferred)] : conversionKeys;
+  const keys = preferred
+    ? [preferred, ...conversionKeys.filter((key) => key !== preferred)]
+    : conversionKeys;
   for (const key of keys) {
     const value = source[key];
     if (typeof value === 'string' && value.trim().startsWith('v3_')) return value.trim();
@@ -31,7 +43,11 @@ export function findVturbConversionKey(source: Record<string, unknown>, preferre
   return null;
 }
 
-export async function vturbAnalyticsRequest<T>(token: string, path: string, body?: unknown): Promise<T> {
+export async function vturbAnalyticsRequest<T>(
+  token: string,
+  path: string,
+  body?: unknown,
+): Promise<T> {
   const response = await fetch(`${VTURB_ANALYTICS_BASE}${path}`, {
     method: body === undefined ? 'GET' : 'POST',
     headers: {
@@ -43,7 +59,8 @@ export async function vturbAnalyticsRequest<T>(token: string, path: string, body
     signal: AbortSignal.timeout(20_000),
   });
   const text = await response.text();
-  if (!response.ok) throw new Error(`VTurb Analytics HTTP ${response.status}: ${text.slice(0, 500)}`);
+  if (!response.ok)
+    throw new Error(`VTurb Analytics HTTP ${response.status}: ${text.slice(0, 500)}`);
   return (text ? JSON.parse(text) : null) as T;
 }
 
@@ -67,13 +84,23 @@ export async function runVturbDeliveries(db: Sql) {
     queued += inserted.length;
   }
 
-  const rows = await db<Array<{
-    id: string; attempts: number; endpoint_url: string; conversion_param: string;
-    external_id: string; amount_minor: number | null; currency: string | null;
-    occurred_at: Date; client_ip: string | null; product: Record<string, unknown>;
-    attribution_source: Record<string, unknown>; event_source: Record<string, unknown> | null;
-    checkout_href: string | null;
-  }>>`
+  const rows = await db<
+    Array<{
+      id: string;
+      attempts: number;
+      endpoint_url: string;
+      conversion_param: string;
+      external_id: string;
+      amount_minor: number | null;
+      currency: string | null;
+      occurred_at: Date;
+      client_ip: string | null;
+      product: Record<string, unknown>;
+      attribution_source: Record<string, unknown>;
+      event_source: Record<string, unknown> | null;
+      checkout_href: string | null;
+    }>
+  >`
     SELECT d.id,d.attempts,i.endpoint_url,i.conversion_param,o.external_id,o.amount_minor,
       o.currency,o.occurred_at,o.product,o.attribution_source,vt.event_source,vt.checkout_href,
       (SELECT e.client_ip FROM tracking_events e

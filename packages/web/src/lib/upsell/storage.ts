@@ -1,6 +1,6 @@
-import type { CheckoutPlatform } from './checkout-presets';
-import type { ColumnMap, FrontConfig, FunnelStepConfig } from './calc';
 import { readPersonalStorage, writePersonalStorage } from '../personal-storage';
+import type { ColumnMap, FrontConfig, FunnelStepConfig } from './calc';
+import type { CheckoutPlatform } from './checkout-presets';
 
 const STORAGE_KEY = 'tmx-hub:upsell-presets:v1';
 

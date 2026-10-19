@@ -105,7 +105,7 @@ export function UrlInputForm() {
     return (
       <InspectionPanel
         result={inspectResult}
-        onClone={handleClone}
+        onClone={(options) => void handleClone(options)}
         onCancel={() => setStep('idle')}
         submitting={step === 'cloning'}
       />
@@ -193,7 +193,7 @@ export function UrlInputForm() {
       <div className="space-y-2">
         <Button
           type="button"
-          onClick={handleInspect}
+          onClick={() => void handleInspect()}
           disabled={busy || !url}
           size="lg"
           className="w-full gap-2"
@@ -213,7 +213,7 @@ export function UrlInputForm() {
 
         <button
           type="button"
-          onClick={handleCloneDirect}
+          onClick={() => void handleCloneDirect()}
           disabled={busy || !url}
           className="w-full text-center text-[11px] text-white/35 transition hover:text-white/60 disabled:cursor-not-allowed disabled:opacity-40"
         >

@@ -1,5 +1,5 @@
-import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -16,7 +16,12 @@ describe.skipIf(!url)('paid attribution snapshot (PostgreSQL)', () => {
       CREATE TABLE tracking_events (id text PRIMARY KEY,project_id text,visitor_id text,
       received_at timestamptz,client_at timestamptz,event_name text,source jsonb,click_ids jsonb);
       INSERT INTO tracking_orders VALUES ('legacy','p','v','paid','2026-10-01','2026-10-01','{"ad_id":"legacy"}');`);
-    await db.unsafe(await readFile(new URL('../migrations/099_paid_attribution_snapshot.sql', import.meta.url), 'utf8'));
+    await db.unsafe(
+      await readFile(
+        new URL('../migrations/099_paid_attribution_snapshot.sql', import.meta.url),
+        'utf8',
+      ),
+    );
     await db.unsafe(`INSERT INTO tracking_events VALUES
       ('old','p','v','2026-10-01 10:00Z','2026-10-01 10:00Z','PageView','{"ad_id":"old","campaign_id":"do-not-inherit"}','{}'),
       ('last','p','v','2026-10-01 11:00Z','2026-10-01 11:00Z','Click','{"ad_id":"last"}','{"fbclid":"last-click"}'),
@@ -37,7 +42,11 @@ describe.skipIf(!url)('paid attribution snapshot (PostgreSQL)', () => {
     const [o] = await db`SELECT * FROM tracking_orders WHERE id='confirmed'`;
     expect(o!.attribution_event_id).toBe('last');
     expect(o!.attribution_locked_at).not.toBeNull();
-    expect(o!.attribution_source).toEqual({ ad_id: 'last', fbclid: 'last-click', gateway_fee_in_cents: '10' });
+    expect(o!.attribution_source).toEqual({
+      ad_id: 'last',
+      fbclid: 'last-click',
+      gateway_fee_in_cents: '10',
+    });
   });
   it('freezes empty attribution too, including visitor, across replay/refund/admin repairs', async () => {
     await sale('empty', 'unknown-visitor');
@@ -94,7 +103,12 @@ describe.skipIf(!url)('paid attribution snapshot (PostgreSQL)', () => {
 });
 
 describe('snapshot consumers', () => {
-  for (const file of ['workers/meta.worker.ts','workers/tiktok.worker.ts','workers/utmify-delivery.worker.ts','routes/ads-intelligence.ts']) {
+  for (const file of [
+    'workers/meta.worker.ts',
+    'workers/tiktok.worker.ts',
+    'workers/utmify-delivery.worker.ts',
+    'routes/ads-intelligence/get-ads-intelligence.ts',
+  ]) {
     it(`${file} uses the frozen order before live visitor attribution`, async () => {
       const source = await readFile(new URL(`../src/${file}`, import.meta.url), 'utf8');
       expect(source).toContain('o.attribution_locked_at IS NOT NULL');

@@ -10,7 +10,6 @@ const parsed = ClientEnvSchema.safeParse({
 
 if (!parsed.success) {
   // Surface a readable error during build/runtime if env is malformed.
-  // eslint-disable-next-line no-console
   console.error('Invalid client env:', parsed.error.flatten().fieldErrors);
   throw new Error('Invalid NEXT_PUBLIC_* environment variables.');
 }

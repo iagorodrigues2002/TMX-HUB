@@ -1,192 +1,21 @@
-import type { Browser, BrowserContext, Frame, Page, Request, Response } from 'playwright';
 import type { VslManifestKind } from '@page-cloner/shared';
+import type { Browser, BrowserContext, Request, Response } from 'playwright';
 import { getBrowser } from '../fetch/browser-pool.js';
+import { assertPublicUrl, guardBrowserContext } from '../fetch/public-network.js';
 
-export interface DetectOptions {
-  /** Wall clock cap for the whole detection run (ms). Default 90s. */
-  timeoutMs?: number;
-  /** Override locale fingerprint. Default pt-BR. */
-  locale?: string;
-  /** Override geo timezone. Default America/Sao_Paulo. */
-  timezone?: string;
-  /** Override user-agent. Default: realistic Chrome on Mac. */
-  userAgent?: string;
-  /** Override viewport. Default 1366x768. */
-  viewport?: { width: number; height: number };
-  /**
-   * 'paid'  : add fbclid + Facebook referer (visit looks like FB ad click)
-   * 'organic': strip ad params (fbclid, gclid, utm_*) + no spoofed referer
-   * If omitted (or `true`), behaves as 'paid' for backward compat.
-   */
-  trafficMode?: 'paid' | 'organic';
-  /** @deprecated use trafficMode. true = paid, false = organic. */
-  spoofAdClick?: boolean;
-  /** Logger hook. */
-  onLog?: (msg: string) => void;
-}
-
-export interface ObservedMedia {
-  url: string;
-  kind: VslManifestKind | 'segment' | 'unknown';
-  source: 'extension' | 'content-type' | 'body-sniff' | 'segment-inference';
-}
-
-export interface DetectResult {
-  manifestUrl: string;
-  manifestKind: VslManifestKind;
-  finalPageUrl: string;
-  /** Headers the manifest was fetched with — needed by ffmpeg for protected CDNs. */
-  headers: Record<string, string>;
-  observed: ObservedMedia[];
-}
+import type { DetectOptions, DetectResult, ObservedMedia } from './detect.types.js';
+import {
+  classifyByBody,
+  classifyByContentType,
+  classifyByExtension,
+  pickBest,
+} from './media-classification.js';
+import { attemptVideoStart, humanize } from './player-interaction.js';
+export type { DetectOptions, DetectResult, ObservedMedia } from './detect.types.js';
 
 const DEFAULT_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
   '(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36';
-
-function classifyByExtension(u: string): VslManifestKind | 'segment' | null {
-  // Strip query so foo.m3u8?token=... is still detected.
-  const path = u.split('?')[0]?.toLowerCase() ?? u.toLowerCase();
-  if (path.endsWith('.m3u8')) return 'hls';
-  if (path.endsWith('.mpd')) return 'dash';
-  if (path.endsWith('.mp4') || path.endsWith('.m4v')) return 'mp4';
-  if (
-    path.endsWith('.ts') ||
-    path.endsWith('.m4s') ||
-    path.endsWith('.aac') ||
-    path.endsWith('.vtt')
-  ) {
-    return 'segment';
-  }
-  return null;
-}
-
-function classifyByContentType(ct: string | undefined): VslManifestKind | null {
-  if (!ct) return null;
-  const c = ct.toLowerCase();
-  if (c.includes('mpegurl') || c.includes('vnd.apple.mpegurl')) return 'hls';
-  if (c.includes('dash+xml')) return 'dash';
-  return null;
-}
-
-function classifyByBody(body: string): VslManifestKind | null {
-  const head = body.slice(0, 1024);
-  if (head.startsWith('#EXTM3U')) return 'hls';
-  if (head.includes('<MPD ') || head.includes('<MPD\n') || head.includes('xmlns="urn:mpeg:dash:')) {
-    return 'dash';
-  }
-  return null;
-}
-
-function pickBest(observed: ObservedMedia[]): ObservedMedia | undefined {
-  // Strong preference: HLS > DASH > MP4. Segments are clues, not picks.
-  return (
-    observed.find((o) => o.kind === 'hls') ||
-    observed.find((o) => o.kind === 'dash') ||
-    observed.find((o) => o.kind === 'mp4')
-  );
-}
-
-async function humanize(page: Page, log: (s: string) => void): Promise<void> {
-  try {
-    await page.mouse.move(120, 200, { steps: 8 });
-    await page.waitForTimeout(350);
-    await page.mouse.move(540, 380, { steps: 12 });
-    await page.waitForTimeout(450);
-    await page.evaluate(() => window.scrollTo({ top: 200, behavior: 'smooth' }));
-    await page.waitForTimeout(600);
-    await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
-    await page.waitForTimeout(300);
-    log('humanized: mouse + scroll');
-  } catch (err) {
-    log(`humanize skipped: ${(err as Error).message}`);
-  }
-}
-
-const PLAY_SELECTORS = [
-  '.vjs-big-play-button',
-  '.vjs-play-control',
-  'button[aria-label*="play" i]',
-  'button[title*="play" i]',
-  '[role="button"][aria-label*="play" i]',
-  '.smartplayer-poster',
-  '.true-play-button',
-  '.smartplayer-icon-play',
-  '.vsl-play-overlay',
-  '.play-button',
-  '.player-button',
-  '[data-testid="play-button"]',
-  // VTURB / converteai
-  '.true-play-svg',
-  // Wistia
-  '.w-big-play-button',
-  // Panda
-  '.panda-poster',
-  '.panda-button-play',
-  // JW
-  '.jw-display-icon-display',
-];
-
-async function clickPlayInFrame(frame: Frame, log: (s: string) => void): Promise<boolean> {
-  for (const sel of PLAY_SELECTORS) {
-    try {
-      const el = await frame.$(sel);
-      if (!el) continue;
-      await el.scrollIntoViewIfNeeded({ timeout: 2000 }).catch(() => undefined);
-      // force:true bypasses overlapping overlays (privacy banners, etc.)
-      await el.click({ delay: 80, force: true, timeout: 4000 }).catch(() => undefined);
-      log(`clicked candidate ${sel} in frame ${frame.url()}`);
-      return true;
-    } catch {
-      // try next
-    }
-  }
-  // Fallback: click center of the largest visual rect (likely the player)
-  try {
-    const box = await frame.evaluate(() => {
-      const els = Array.from(
-        document.querySelectorAll<HTMLElement>(
-          'video, [class*=player i], [id*=player i], [class*=poster i]',
-        ),
-      );
-      let best: { x: number; y: number; w: number; h: number } | null = null;
-      for (const el of els) {
-        const r = el.getBoundingClientRect();
-        if (r.width < 200 || r.height < 100) continue;
-        if (!best || r.width * r.height > best.w * best.h) {
-          best = { x: r.left, y: r.top, w: r.width, h: r.height };
-        }
-      }
-      return best;
-    });
-    if (box) {
-      // For child frames, scroll/click via JS — we don't have absolute coords
-      // for cross-origin frames from the parent page's mouse.
-      await frame.evaluate(
-        ({ x, y }) => {
-          const target = document.elementFromPoint(x, y) as HTMLElement | null;
-          target?.click?.();
-        },
-        { x: box.x + box.w / 2, y: box.y + box.h / 2 },
-      );
-      log(`js-clicked center of ${box.w}x${box.h} player in frame ${frame.url()}`);
-      return true;
-    }
-  } catch (err) {
-    log(`fallback click failed in frame ${frame.url()}: ${(err as Error).message}`);
-  }
-  return false;
-}
-
-async function attemptVideoStart(page: Page, log: (s: string) => void): Promise<void> {
-  // Try to click play in EVERY frame (the VTURB-style player iframe is what
-  // matters in most VSL pages). We try the main frame first, then iframes.
-  const frames = page.frames();
-  log(`page has ${frames.length} frame(s)`);
-  for (const frame of frames) {
-    await clickPlayInFrame(frame, log);
-  }
-}
 
 export async function detectVideoManifest(
   rawUrl: string,
@@ -212,7 +41,16 @@ export async function detectVideoManifest(
       }
     } else {
       // organic: strip every known ad-attribution param
-      for (const p of ['fbclid', 'gclid', 'twclid', 'msclkid', 'ttclid', 'wbraid', 'gbraid', 'yclid']) {
+      for (const p of [
+        'fbclid',
+        'gclid',
+        'twclid',
+        'msclkid',
+        'ttclid',
+        'wbraid',
+        'gbraid',
+        'yclid',
+      ]) {
         u.searchParams.delete(p);
       }
       for (const p of [...u.searchParams.keys()]) {
@@ -226,7 +64,9 @@ export async function detectVideoManifest(
   log(`url after trafficMode=${trafficMode}: ${url}`);
 
   const browser: Browser = await getBrowser();
+  await assertPublicUrl(url);
   const ctx: BrowserContext = await browser.newContext({
+    serviceWorkers: 'block',
     userAgent,
     viewport,
     deviceScaleFactor: 2,
@@ -245,6 +85,7 @@ export async function detectVideoManifest(
     ignoreHTTPSErrors: true,
   });
 
+  await guardBrowserContext(ctx);
   await ctx.addInitScript(() => {
     Object.defineProperty(navigator, 'webdriver', { get: () => false });
     Object.defineProperty(navigator, 'languages', { get: () => ['pt-BR', 'pt', 'en'] });
@@ -304,7 +145,13 @@ export async function detectVideoManifest(
     // multi-MB payloads. Manifests are tiny (<1MB) and text/plain.
     const len = Number.parseInt(resp.headers()['content-length'] ?? '', 10);
     if (Number.isFinite(len) && len > 1024 * 1024) return; // skip > 1MB
-    if (ct && !ct.includes('text') && !ct.includes('application/octet-stream') && !ct.includes('json') && !ct.includes('xml')) {
+    if (
+      ct &&
+      !ct.includes('text') &&
+      !ct.includes('application/octet-stream') &&
+      !ct.includes('json') &&
+      !ct.includes('xml')
+    ) {
       return; // only sniff plausibly-text bodies
     }
     try {
@@ -441,8 +288,7 @@ export async function detectBothManifests(
   const white = organicR.status === 'fulfilled' ? organicR.value : undefined;
   const errors: DetectCloakerResult['errors'] = {};
   if (paidR.status === 'rejected') {
-    errors.paid =
-      paidR.reason instanceof Error ? paidR.reason.message : String(paidR.reason);
+    errors.paid = paidR.reason instanceof Error ? paidR.reason.message : String(paidR.reason);
   }
   if (organicR.status === 'rejected') {
     errors.organic =
@@ -473,7 +319,7 @@ export async function detectBothManifests(
 
   const sameManifest = manifestKey(black) === manifestKey(white);
   if (sameManifest) {
-    log(`cloaker probe: same manifest both sides — no cloaker`);
+    log('cloaker probe: same manifest both sides — no cloaker');
     return {
       cloakerDetected: false,
       shared: black,
@@ -482,7 +328,7 @@ export async function detectBothManifests(
       errors,
     };
   }
-  log(`cloaker probe: different manifests — CLOAKER DETECTED`);
+  log('cloaker probe: different manifests — CLOAKER DETECTED');
   log(`  black: ${black.manifestUrl}`);
   log(`  white: ${white.manifestUrl}`);
   return {

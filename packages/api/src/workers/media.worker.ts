@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { prepareMediaProcess } from '@page-cloner/core';
 import type { MediaJob } from '@page-cloner/shared';
 import { Worker } from 'bullmq';
 import { env } from '../env.js';
@@ -33,29 +34,44 @@ function videoFilter(job: MediaJob): string[] {
   return filters;
 }
 
-function runFfmpeg(job: MediaJob, input: string, output: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const args = ['-y', '-hide_banner', '-loglevel', 'warning'];
-    if (job.extensionMode === 'loop') args.push('-stream_loop', '-1');
-    args.push('-i', input);
-    if (job.targetSeconds && job.extensionMode !== 'none')
-      args.push('-t', String(job.targetSeconds));
-    const vf = videoFilter(job);
-    if (vf.length > 0) args.push('-vf', vf.join(','));
-    const crf = job.compression === 'small' ? '28' : job.compression === 'balanced' ? '23' : '18';
-    args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', crf, '-pix_fmt', 'yuv420p');
-    if (job.normalizeAudio) args.push('-af', 'loudnorm=I=-16:LRA=11:TP=-1.5');
-    args.push('-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart');
-    if (job.stripMetadata) args.push('-map_metadata', '-1', '-map_chapters', '-1');
-    args.push(output);
-    const proc = spawn('ffmpeg', args, { stdio: ['ignore', 'ignore', 'pipe'] });
-    let stderr = '';
-    proc.stderr.on('data', (d) => {
-      stderr += d.toString();
-    });
-    proc.on('error', reject);
-    proc.on('close', (code) => (code === 0 ? resolve() : reject(new Error(stderr.slice(-2_000)))));
+async function runFfmpeg(job: MediaJob, input: string, output: string): Promise<void> {
+  const prepared = await prepareMediaProcess({
+    executable: 'ffmpeg',
+    mode: 'local',
+    inputFiles: [input],
+    outputFiles: [output],
   });
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const args = ['-y', '-hide_banner', '-loglevel', 'warning'];
+      if (job.extensionMode === 'loop') args.push('-stream_loop', '-1');
+      args.push('-protocol_whitelist', 'file,pipe', '-i', input);
+      if (job.targetSeconds && job.extensionMode !== 'none')
+        args.push('-t', String(job.targetSeconds));
+      const vf = videoFilter(job);
+      if (vf.length > 0) args.push('-vf', vf.join(','));
+      const crf = job.compression === 'small' ? '28' : job.compression === 'balanced' ? '23' : '18';
+      args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', crf, '-pix_fmt', 'yuv420p');
+      if (job.normalizeAudio) args.push('-af', 'loudnorm=I=-16:LRA=11:TP=-1.5');
+      args.push('-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart');
+      if (job.stripMetadata) args.push('-map_metadata', '-1', '-map_chapters', '-1');
+      args.push(output);
+      const proc = spawn(prepared.executablePath, args, {
+        env: prepared.env,
+        stdio: ['ignore', 'ignore', 'pipe'],
+      });
+      let stderr = '';
+      proc.stderr.on('data', (d) => {
+        stderr += d.toString();
+      });
+      proc.on('error', reject);
+      proc.on('close', (code) =>
+        code === 0 ? resolve() : reject(new Error(stderr.slice(-2_000))),
+      );
+    });
+  } finally {
+    await prepared.close();
+  }
 }
 
 export function createMediaWorker(args: {

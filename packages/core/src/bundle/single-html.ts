@@ -1,13 +1,14 @@
 import * as cheerio from 'cheerio';
-import { request } from 'undici';
-import type { CloneState, Form, Link } from '../types.js';
 import { walkCss } from '../assets/css-walker.js';
+import { publicRequest as request } from '../fetch/public-network.js';
+import type { CloneState, Form, Link } from '../types.js';
 
 const MAX_INLINE_BYTES = 5 * 1024 * 1024;
 
 interface AssetData {
   data: Buffer;
   mime: string;
+  resolvedUrl?: string;
 }
 
 export interface SingleHtmlOptions {
@@ -16,10 +17,7 @@ export interface SingleHtmlOptions {
   fetchUrl?: (url: string) => Promise<AssetData | null>;
 }
 
-export async function buildSingleHtml(
-  state: CloneState,
-  opts: SingleHtmlOptions,
-): Promise<Buffer> {
+export async function buildSingleHtml(state: CloneState, opts: SingleHtmlOptions): Promise<Buffer> {
   const $ = cheerio.load(state.html, { xml: false });
 
   if (opts.applyEdits) {
@@ -121,7 +119,7 @@ async function inlineStylesheets(
     const fetched = await getOrFetch(href, fetcher, cache);
     if (!fetched) continue;
     const cssText = fetched.data.toString('utf8');
-    const inlined = await inlineCssReferences(cssText, href, fetcher, cache);
+    const inlined = await inlineCssReferences(cssText, fetched.resolvedUrl ?? href, fetcher, cache);
     const styleTag = `<style>${inlined}</style>`;
     node.replaceWith(styleTag);
   }
@@ -238,7 +236,7 @@ async function defaultFetch(url: string): Promise<AssetData | null> {
         : Array.isArray(ct)
           ? (ct[0] ?? 'application/octet-stream')
           : 'application/octet-stream';
-    return { data: Buffer.concat(chunks), mime };
+    return { data: Buffer.concat(chunks), mime, resolvedUrl: res.finalUrl };
   } catch {
     return null;
   }

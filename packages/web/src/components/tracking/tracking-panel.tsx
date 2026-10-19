@@ -4,6 +4,7 @@ import { TRACKING_DASHBOARD_STALE_TIME } from '@/components/tracking/tracking-qu
 import { Button } from '@/components/ui/button';
 import { DataState } from '@/components/ui/data-state';
 import { apiClient } from '@/lib/api-client';
+import { copyText } from '@/lib/clipboard';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Activity, CheckCircle2, Copy, Radio } from 'lucide-react';
 import { toast } from 'sonner';
@@ -41,8 +42,7 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
     onError: (error) => toast.error((error as Error).message),
   });
   const copy = async (value: string) => {
-    await navigator.clipboard.writeText(value);
-    toast.success('Copiado.');
+    await copyText(value, 'Copiado.');
   };
 
   return (
@@ -101,7 +101,7 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
                   variant="outline"
                   size="icon"
                   aria-label="Copiar código de instalação"
-                  onClick={() => copy(config.data?.project?.install_code ?? '')}
+                  onClick={() => void copy(config.data?.project?.install_code ?? '')}
                 >
                   <Copy className="h-4 w-4" />
                 </Button>
@@ -121,7 +121,7 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
                   variant="outline"
                   size="icon"
                   aria-label="Copiar parâmetros da URL do Meta"
-                  onClick={() => copy(META_URL_PARAMETERS)}
+                  onClick={() => void copy(META_URL_PARAMETERS)}
                 >
                   <Copy className="h-4 w-4" />
                 </Button>

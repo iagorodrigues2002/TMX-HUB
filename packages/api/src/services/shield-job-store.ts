@@ -1,10 +1,10 @@
-import type { Redis } from 'ioredis';
 import type {
   ShieldCompressionMode,
   ShieldJob,
   ShieldJobStatus,
   ShieldVerifyStatus,
 } from '@page-cloner/shared';
+import type { Redis } from 'ioredis';
 import { NotFoundError } from '../lib/problem.js';
 
 const SHIELD_PREFIX = 'shield:';
@@ -195,9 +195,7 @@ export class ShieldJobStore {
       ...(d.outputFilename ? { outputFilename: d.outputFilename } : {}),
       ...(d.outputBytes ? { outputBytes: Number(d.outputBytes) } : {}),
       ...(d.transcript ? { transcript: d.transcript } : {}),
-      ...(d.transcriptStatus
-        ? { transcriptStatus: d.transcriptStatus as ShieldVerifyStatus }
-        : {}),
+      ...(d.transcriptStatus ? { transcriptStatus: d.transcriptStatus as ShieldVerifyStatus } : {}),
       ...(d.transcriptError ? { transcriptError: d.transcriptError } : {}),
       ...(d.errorMessage ? { errorMessage: d.errorMessage } : {}),
       createdAt: d.createdAt ?? '',

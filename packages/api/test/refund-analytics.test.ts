@@ -1,12 +1,12 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import Fastify from 'fastify';
 import postgres from 'postgres';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import plugin from '../src/routes/refunds-dashboard.js';
 import {
+  type RefundOrder,
   buildRefundAnalytics,
   validDate,
-  type RefundOrder,
 } from '../src/services/refund-analytics.js';
 const row = (patch: Partial<RefundOrder> = {}): RefundOrder => ({
   id: 'a',
@@ -99,14 +99,14 @@ describe('unified reversal analytics', () => {
 const url = process.env.REFUNDS_TEST_DATABASE_URL;
 describe.skipIf(!url)('refund dashboard SQL against disposable PostgreSQL', () => {
   const db = postgres(url ?? 'postgres://unused', { max: 1 });
-  const id = 'refund-' + randomUUID();
+  const id = `refund-${randomUUID()}`;
   beforeAll(async () => {
     await db`INSERT INTO tracking_projects(id,offer_id,public_key) VALUES(${id},${id},${id})`;
     await db`INSERT INTO vendepay_connections(id,project_id,token_hash,name) VALUES(${id},${id},${id},'VendePay Mainex')`;
     await db`INSERT INTO tracking_orders(id,project_id,provider,external_id,status,order_kind,paid_at,occurred_at,refunded_at,chargeback_at,amount_minor,amount_brl_minor,currency,vendepay_connection_id) VALUES(${id},${id},'vendepay',${id},'chargeback','front','2026-09-01T12:00Z','2026-09-01T12:00Z','2026-10-01T12:00Z','2026-10-02T12:00Z',10000,10000,'BRL',${id})`;
-    await db`INSERT INTO tracking_gateway_connections(id,project_id,provider,name,fee_settings) VALUES(${id + '-gc'},${id},'paysight','Custom tariff',${db.json({ refund_fee_minor: 125, chargeback_fee_minor: 450, penalty_currency: 'BRL' })})`;
-    await db`INSERT INTO tracking_orders(id,project_id,provider,external_id,status,order_kind,paid_at,occurred_at,refunded_at,chargeback_at,amount_minor,amount_brl_minor,currency,gateway_connection_id) VALUES(${id + '-custom'},${id},'paysight',${id + '-custom'},'chargeback','front','2026-08-01T12:00Z','2026-08-01T12:00Z','2026-10-03T12:00Z','2026-10-03T12:00Z',1000,1000,'BRL',${id + '-gc'})`;
-    await db`INSERT INTO tracking_orders(id,project_id,provider,external_id,status,order_kind,occurred_at,refunded_at,amount_minor,amount_brl_minor,currency,vendepay_connection_id) VALUES(${id + '-unknown-paid'},${id},'vendepay',${id + '-unknown-paid'},'refunded','front','2026-10-04T12:00Z','2026-10-04T12:00Z',500,500,'BRL',${id})`;
+    await db`INSERT INTO tracking_gateway_connections(id,project_id,provider,name,fee_settings) VALUES(${`${id}-gc`},${id},'paysight','Custom tariff',${db.json({ refund_fee_minor: 125, chargeback_fee_minor: 450, penalty_currency: 'BRL' })})`;
+    await db`INSERT INTO tracking_orders(id,project_id,provider,external_id,status,order_kind,paid_at,occurred_at,refunded_at,chargeback_at,amount_minor,amount_brl_minor,currency,gateway_connection_id) VALUES(${`${id}-custom`},${id},'paysight',${`${id}-custom`},'chargeback','front','2026-08-01T12:00Z','2026-08-01T12:00Z','2026-10-03T12:00Z','2026-10-03T12:00Z',1000,1000,'BRL',${`${id}-gc`})`;
+    await db`INSERT INTO tracking_orders(id,project_id,provider,external_id,status,order_kind,occurred_at,refunded_at,amount_minor,amount_brl_minor,currency,vendepay_connection_id) VALUES(${`${id}-unknown-paid`},${id},'vendepay',${`${id}-unknown-paid`},'refunded','front','2026-10-04T12:00Z','2026-10-04T12:00Z',500,500,'BRL',${id})`;
   });
   afterAll(async () => {
     await db`DELETE FROM tracking_projects WHERE id=${id}`;
@@ -117,11 +117,23 @@ describe.skipIf(!url)('refund dashboard SQL against disposable PostgreSQL', () =
     app.decorate('db', db);
     app.decorate('offerStore', {
       listAccessible: async () => [
-        { id, name: 'Oferta fixture', companyName: 'TMX', userId: 'owner', memberIds: ['legacy-member'] },
+        {
+          id,
+          name: 'Oferta fixture',
+          companyName: 'TMX',
+          userId: 'owner',
+          memberIds: ['legacy-member'],
+        },
       ],
     });
     app.addHook('preHandler', async (req) => {
-      req.user = { sub: owner ? 'owner' : 'legacy-member', role: 'user' } as any;
+      req.user = {
+        sub: owner ? 'owner' : 'legacy-member',
+        role: 'user',
+        email: 'fixture@example.test',
+        iat: 0,
+        exp: 0,
+      };
     });
     await app.register(plugin);
     try {

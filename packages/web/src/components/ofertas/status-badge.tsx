@@ -1,5 +1,5 @@
-import { cn } from '@/lib/utils';
 import type { OfferStatus } from '@/lib/api-client';
+import { cn } from '@/lib/utils';
 
 const STATUS_META: Record<OfferStatus, { label: string; className: string }> = {
   testando: {

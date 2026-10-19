@@ -1,15 +1,15 @@
 'use client';
 
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Loader2, UserPlus } from 'lucide-react';
-import { toast } from 'sonner';
-import { apiClient } from '@/lib/api-client';
-import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { apiClient } from '@/lib/api-client';
+import { useAuth } from '@/lib/auth-context';
+import { AlertTriangle, CheckCircle2, Loader2, UserPlus } from 'lucide-react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 
 /**
  * Form do registro. Lê `?invite=` de `window.location.search` num useEffect
@@ -46,7 +46,7 @@ export function RegisterForm() {
   useEffect(() => {
     if (!inviteToken) return;
     let cancelled = false;
-    (async () => {
+    void (async () => {
       try {
         const res = await apiClient.checkInvite(inviteToken);
         if (cancelled) return;
@@ -102,11 +102,11 @@ export function RegisterForm() {
               aria-hidden
               className="grid h-10 w-10 place-items-center rounded-md border border-cyan-300/30 shadow-glow"
               style={{
-                background:
-                  'linear-gradient(135deg, rgba(20,184,166,0.25), rgba(34,211,238,0.05))',
+                background: 'linear-gradient(135deg, rgba(20,184,166,0.25), rgba(34,211,238,0.05))',
               }}
             >
               <svg
+                aria-hidden="true"
                 viewBox="0 0 24 24"
                 className="h-5 w-5 text-cyan-300"
                 fill="none"
@@ -128,9 +128,7 @@ export function RegisterForm() {
               </span>
             </span>
           </Link>
-          <p className="mt-4 text-[12px] uppercase tracking-[0.18em] text-white/45">
-            Criar conta
-          </p>
+          <p className="mt-4 text-[12px] uppercase tracking-[0.18em] text-white/45">Criar conta</p>
         </div>
 
         {inviteState.kind === 'checking' && (
@@ -160,14 +158,12 @@ export function RegisterForm() {
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-300" />
             <div className="space-y-0.5">
               <p className="font-semibold text-rose-200">{inviteState.detail}</p>
-              <p className="text-white/55">
-                Solicite um novo link a um administrador.
-              </p>
+              <p className="text-white/55">Solicite um novo link a um administrador.</p>
             </div>
           </div>
         )}
 
-        <form onSubmit={onSubmit} className="glass-card space-y-4 p-6">
+        <form onSubmit={(event) => void onSubmit(event)} className="glass-card space-y-4 p-6">
           <div className="space-y-2">
             <Label htmlFor="email" className="hud-label">
               Email

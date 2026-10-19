@@ -158,8 +158,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       'retry-after': true,
     },
     keyGenerator: (req) => {
-      const apiKey = req.headers['x-api-key'];
-      if (typeof apiKey === 'string' && apiKey.length > 0) return `key:${apiKey}`;
+      // This service authenticates bearer tokens, not x-api-key. Unverified
+      // caller input must never create fresh quota buckets.
       return `ip:${req.ip}`;
     },
   });

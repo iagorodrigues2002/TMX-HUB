@@ -1,13 +1,13 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
-import { Loader2, Video } from 'lucide-react';
-import { toast } from 'sonner';
-import { apiClient } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { apiClient } from '@/lib/api-client';
+import { Loader2, Video } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+import { toast } from 'sonner';
 
 export function VslInputForm() {
   const router = useRouter();
@@ -41,7 +41,7 @@ export function VslInputForm() {
   };
 
   return (
-    <form onSubmit={onSubmit} className="space-y-6">
+    <form onSubmit={(event) => void onSubmit(event)} className="space-y-6">
       <div className="space-y-2">
         <Label htmlFor="vsl-url" className="hud-label">
           URL da página com a VSL

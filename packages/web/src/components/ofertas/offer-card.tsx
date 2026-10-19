@@ -52,7 +52,13 @@ export function OfferCard({
         {(onEdit || onDelete) && (
           <div className="flex shrink-0 gap-1">
             {onEdit && (
-              <Button variant="ghost" size="sm" className="h-11 w-11 p-0 sm:h-8 sm:w-auto sm:px-3" onClick={onEdit} aria-label="Editar oferta">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-11 w-11 p-0 sm:h-8 sm:w-auto sm:px-3"
+                onClick={onEdit}
+                aria-label="Editar oferta"
+              >
                 <Pencil className="h-3.5 w-3.5" />
               </Button>
             )}

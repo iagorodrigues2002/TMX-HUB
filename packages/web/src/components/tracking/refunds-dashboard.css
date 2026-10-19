@@ -1,6 +1,6 @@
 /* Financial workspace: scoped so other TMX screens retain their own presentation. */
 .refund-workspace {
-  --refund-ease: cubic-bezier(.22, 1, .36, 1);
+  --refund-ease: cubic-bezier(0.22, 1, 0.36, 1);
   max-width: 1600px;
   margin-inline: auto;
   color: #e4edf3;
@@ -88,7 +88,7 @@
 }
 .refund-workspace .refund-panel select:disabled {
   cursor: not-allowed;
-  opacity: .5;
+  opacity: 0.5;
 }
 .refund-workspace .refund-table-scroll {
   border: 1px solid #263b47;
@@ -100,7 +100,9 @@
   position: relative;
   font-variant-numeric: tabular-nums;
 }
-.refund-workspace table td:first-child { white-space: nowrap; }
+.refund-workspace table td:first-child {
+  white-space: nowrap;
+}
 .refund-workspace thead {
   background: #122a37;
 }
@@ -141,7 +143,9 @@ html[data-theme="light"] .refund-workspace :is(.refund-context, .refund-scope, t
   color: var(--text-65);
   border-color: var(--border-soft);
 }
-html[data-theme="light"] .refund-workspace :is(.text-slate-300, .text-slate-400, .text-white\/50, .refund-section-nav a) {
+html[data-theme="light"]
+  .refund-workspace
+  :is(.text-slate-300, .text-slate-400, .text-white\/50, .refund-section-nav a) {
   color: var(--text-55);
 }
 html[data-theme="light"] .refund-workspace .refund-section-nav a:is(:hover, :focus-visible) {
@@ -151,20 +155,40 @@ html[data-theme="light"] .refund-workspace .refund-section-nav a:is(:hover, :foc
 html[data-theme="light"] .refund-workspace .refund-audit :is(th:first-child, td:first-child) {
   background: var(--color-bg-elevated);
 }
-html[data-theme="light"] .refund-workspace .text-rose-300 { color: var(--color-danger); }
-html[data-theme="light"] .refund-workspace :is(.text-cyan-200, .text-cyan-300) { color: var(--color-primary); }
-html[data-theme="light"] .refund-workspace .text-emerald-300 { color: var(--color-success); }
-html[data-theme="light"] .refund-workspace .text-amber-200 { color: var(--color-warning); }
+html[data-theme="light"] .refund-workspace .text-rose-300 {
+  color: var(--color-danger);
+}
+html[data-theme="light"] .refund-workspace :is(.text-cyan-200, .text-cyan-300) {
+  color: var(--color-primary);
+}
+html[data-theme="light"] .refund-workspace .text-emerald-300 {
+  color: var(--color-success);
+}
+html[data-theme="light"] .refund-workspace .text-amber-200 {
+  color: var(--color-warning);
+}
 @media (max-width: 639px) {
-  .refund-workspace .refund-section-nav a { min-height: 44px; display: inline-flex; align-items: center; }
-  .refund-workspace summary { min-height: 44px; }
+  .refund-workspace .refund-section-nav a {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .refund-workspace summary {
+    min-height: 44px;
+  }
 }
 @media (min-width: 1280px) {
-  .refund-workspace .refund-analytics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .refund-workspace .refund-analytics > section { grid-column: 1 / -1; }
+  .refund-workspace .refund-analytics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .refund-workspace .refund-analytics > section {
+    grid-column: 1 / -1;
+  }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .refund-workspace .refund-header { animation: refund-header-in 650ms var(--refund-ease) both; }
+  .refund-workspace .refund-header {
+    animation: refund-header-in 650ms var(--refund-ease) both;
+  }
   .refund-workspace .refund-panel {
     transition: opacity 600ms var(--refund-ease), transform 650ms var(--refund-ease);
   }
@@ -177,8 +201,12 @@ html[data-theme="light"] .refund-workspace .text-amber-200 { color: var(--color-
     opacity: 1;
     transform: none;
   }
-  .refund-workspace .refund-chart-reveal { animation: refund-chart-in 850ms var(--refund-ease) both; }
-  .refund-workspace path.refund-chart-reveal { animation: refund-line-in 1100ms var(--refund-ease) both; }
+  .refund-workspace .refund-chart-reveal {
+    animation: refund-chart-in 850ms var(--refund-ease) both;
+  }
+  .refund-workspace path.refund-chart-reveal {
+    animation: refund-line-in 1100ms var(--refund-ease) both;
+  }
   .refund-workspace .refund-bar-reveal {
     transform-box: fill-box;
     transform-origin: center bottom;
@@ -188,37 +216,80 @@ html[data-theme="light"] .refund-workspace .text-amber-200 { color: var(--color-
     transform-origin: left center;
     animation-name: refund-horizontal-bar-in;
   }
-  .refund-workspace [data-reveal="pending"] :is(.refund-bar-reveal, .refund-chart-reveal) { animation-play-state: paused; }
-  .refund-workspace details[open] > :not(summary) { animation: refund-header-in 300ms var(--refund-ease); }
-  .refund-workspace button:active { transform: scale(.96); }
-  .refund-workspace button:focus-visible { transform: none; }
+  .refund-workspace [data-reveal="pending"] :is(.refund-bar-reveal, .refund-chart-reveal) {
+    animation-play-state: paused;
+  }
+  .refund-workspace details[open] > :not(summary) {
+    animation: refund-header-in 300ms var(--refund-ease);
+  }
+  .refund-workspace button:active {
+    transform: scale(0.96);
+  }
+  .refund-workspace button:focus-visible {
+    transform: none;
+  }
 }
 @keyframes refund-header-in {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 @keyframes refund-chart-in {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 @keyframes refund-line-in {
-  from { clip-path: inset(0 100% 0 0); }
-  to { clip-path: inset(0 0 0 0); }
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
 }
 @keyframes refund-bar-in {
-  from { transform: scaleY(.02); opacity: .2; }
-  to { transform: scaleY(1); opacity: 1; }
+  from {
+    transform: scaleY(0.02);
+    opacity: 0.2;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+  }
 }
 @keyframes refund-horizontal-bar-in {
-  from { transform: scaleX(.02); opacity: .2; }
-  to { transform: scaleX(1); opacity: 1; }
+  from {
+    transform: scaleX(0.02);
+    opacity: 0.2;
+  }
+  to {
+    transform: scaleX(1);
+    opacity: 1;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  .refund-workspace *, .refund-workspace *::before, .refund-workspace *::after {
+  .refund-workspace *,
+  .refund-workspace *::before,
+  .refund-workspace *::after {
     animation: none !important;
     transition: none !important;
     scroll-behavior: auto !important;
   }
-  .refund-workspace .refund-panel { opacity: 1 !important; transform: none !important; }
-  .refund-workspace button:active { transform: none; }
+  .refund-workspace .refund-panel {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .refund-workspace button:active {
+    transform: none;
+  }
 }

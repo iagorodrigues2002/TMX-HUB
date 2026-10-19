@@ -54,9 +54,7 @@ export interface CalcOutput {
 }
 
 function csvList(values: string[]): string[] {
-  return values
-    .map((v) => v.trim().toLowerCase())
-    .filter((v) => v.length > 0);
+  return values.map((v) => v.trim().toLowerCase()).filter((v) => v.length > 0);
 }
 
 function matches(rowValue: string | undefined, candidate: string): boolean {
@@ -176,9 +174,7 @@ export function runCalculation(input: CalcInput): CalcOutput {
         continue;
       }
       const anyApproved = matching.some((r) =>
-        upsell.columns.status
-          ? isApprovedStatus(r[upsell.columns.status], preset)
-          : false,
+        upsell.columns.status ? isApprovedStatus(r[upsell.columns.status], preset) : false,
       );
       if (anyApproved) accepted += 1;
       else rejected += 1;

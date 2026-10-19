@@ -1,10 +1,10 @@
 import { ulid } from 'ulid';
-import type { CloneState, CloneOpts } from './types.js';
-import { fetchPage } from './fetch/fetch-page.js';
-import { sanitize } from './sanitize/index.js';
 import { resolveAssets } from './assets/resolve.js';
 import { extractForms } from './extract/forms.js';
 import { extractLinks } from './extract/links.js';
+import { fetchPage } from './fetch/fetch-page.js';
+import { sanitize } from './sanitize/index.js';
+import type { CloneOpts, CloneState } from './types.js';
 
 export async function clone(url: string, opts: CloneOpts = {}): Promise<CloneState> {
   const jobId = ulid();

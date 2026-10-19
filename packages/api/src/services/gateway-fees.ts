@@ -1,4 +1,4 @@
-import { gatewayFeesSchema, VENDEPAY_PENALTY_MINOR } from '../lib/gateway-fee-model.js';
+import { VENDEPAY_PENALTY_MINOR, gatewayFeesSchema } from '../lib/gateway-fee-model.js';
 export { gatewayFeesSchema } from '../lib/gateway-fee-model.js';
 import type { Sql } from 'postgres';
 import { convertToBrlMinor } from './exchange-rate.js';

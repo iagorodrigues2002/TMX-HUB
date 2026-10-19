@@ -45,9 +45,16 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     // paths retain the exact administrative origin policy above.
     delegator: async (req: FastifyRequest) => {
       const path = req.url.split('?')[0];
-      if (['/v1/track/bootstrap', '/v1/track/events', '/v1/track/ab/assign'].includes(path ?? '') &&
-          ['POST', 'OPTIONS'].includes(req.method)) {
-        return { origin: '*', credentials: false, methods: ['POST', 'OPTIONS'], allowedHeaders: ['content-type'] };
+      if (
+        ['/v1/track/bootstrap', '/v1/track/events', '/v1/track/ab/assign'].includes(path ?? '') &&
+        ['POST', 'OPTIONS'].includes(req.method)
+      ) {
+        return {
+          origin: '*',
+          credentials: false,
+          methods: ['POST', 'OPTIONS'],
+          allowedHeaders: ['content-type'],
+        };
       }
       return administrativeOptions;
     },

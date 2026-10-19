@@ -3,9 +3,22 @@ import { CreateOfferRequestSchema, UpdateOfferRequestSchema } from '../src/schem
 
 describe('Offer UTMify connection schema', () => {
   it('allows explicit opt-out without credentials and rejects contradictory credentials', () => {
-    expect(CreateOfferRequestSchema.safeParse({name:'Sem acesso',utmify_access_enabled:false}).success).toBe(true);
-    expect(CreateOfferRequestSchema.safeParse({name:'Sem acesso',utmify_access_enabled:false,utmify_login:'operator@example.com',utmify_password:'unit-secret'}).success).toBe(false);
-    expect(CreateOfferRequestSchema.safeParse({name:'Com acesso',utmify_access_enabled:true}).success).toBe(false);
+    expect(
+      CreateOfferRequestSchema.safeParse({ name: 'Sem acesso', utmify_access_enabled: false })
+        .success,
+    ).toBe(true);
+    expect(
+      CreateOfferRequestSchema.safeParse({
+        name: 'Sem acesso',
+        utmify_access_enabled: false,
+        utmify_login: 'operator@example.com',
+        utmify_password: 'unit-secret',
+      }).success,
+    ).toBe(false);
+    expect(
+      CreateOfferRequestSchema.safeParse({ name: 'Com acesso', utmify_access_enabled: true })
+        .success,
+    ).toBe(false);
   });
   it('accepts a complete read-only UTMify connection', () => {
     expect(
@@ -24,9 +37,12 @@ describe('Offer UTMify connection schema', () => {
       CreateOfferRequestSchema.safeParse({ name: 'Oferta BR', dashboard_id: 'dashboard-123' })
         .success,
     ).toBe(false);
-    expect(UpdateOfferRequestSchema.safeParse({ utmify_login: 'operator@example.com' }).success)
-      .toBe(true);
-    expect(UpdateOfferRequestSchema.safeParse({ utmify_password: 'new-secret' }).success).toBe(true);
+    expect(
+      UpdateOfferRequestSchema.safeParse({ utmify_login: 'operator@example.com' }).success,
+    ).toBe(true);
+    expect(UpdateOfferRequestSchema.safeParse({ utmify_password: 'new-secret' }).success).toBe(
+      true,
+    );
   });
 
   it('keeps legacy offers without a UTMify connection valid', () => {

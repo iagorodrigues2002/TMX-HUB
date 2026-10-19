@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, type ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
-import { Loader2, Lock } from 'lucide-react';
-import { canAccessTool, type ToolKey } from '@/lib/api-client';
+import { type ToolKey, canAccessTool } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
+import { Loader2, Lock } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { type ReactNode, useEffect } from 'react';
 
 /**
  * Guard de página por ferramenta. Renderiza children quando o usuário tem
@@ -45,8 +45,8 @@ export function ToolGuard({
         </div>
         <h1 className="text-[20px] font-semibold text-white">Acesso restrito</h1>
         <p className="mt-2 text-[13px] text-white/55">
-          Sua conta não tem acesso à ferramenta <strong>{tool}</strong>. Solicite
-          um novo convite a um administrador.
+          Sua conta não tem acesso à ferramenta <strong>{tool}</strong>. Solicite um novo convite a
+          um administrador.
         </p>
         <p className="mt-3 text-[11px] uppercase tracking-[0.14em] text-white/35">
           Redirecionando para Tools…

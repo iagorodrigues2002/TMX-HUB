@@ -1,5 +1,6 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import {
   type ReactNode,
@@ -12,9 +13,8 @@ import {
   useState,
 } from 'react';
 import { type AuthUser, apiClient, authToken } from './api-client';
-import { ApiError } from './query-client';
-import { useQueryClient } from '@tanstack/react-query';
 import { setPersonalStorageOwner } from './personal-storage';
+import { ApiError } from './query-client';
 import { resetSessionData } from './session-data';
 
 interface AuthState {
@@ -22,12 +22,7 @@ interface AuthState {
   /** True while we're checking the existing token at boot. */
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (
-    email: string,
-    name: string,
-    password: string,
-    inviteToken?: string,
-  ) => Promise<void>;
+  register: (email: string, name: string, password: string, inviteToken?: string) => Promise<void>;
   logout: () => void;
   /** Force a refresh of the user from /auth/me. */
   refresh: () => Promise<void>;
@@ -86,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [resetSession]);
 
   useEffect(() => {
-    refresh();
+    void refresh();
   }, [refresh]);
 
   useEffect(() => {
@@ -120,12 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = useCallback(
     async (email: string, name: string, password: string, inviteToken?: string) => {
       const currentRevision = revision.current;
-      const { user: u, token } = await apiClient.register(
-        email,
-        name,
-        password,
-        inviteToken,
-      );
+      const { user: u, token } = await apiClient.register(email, name, password, inviteToken);
       if (currentRevision !== revision.current) return;
       resetSession();
       authToken.set(token);
@@ -149,7 +139,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [user, loading, login, register, logout, refresh],
   );
 
-  return <AuthContext.Provider key={sessionEpoch} value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider key={sessionEpoch} value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth(): AuthState {

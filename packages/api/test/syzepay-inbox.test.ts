@@ -10,12 +10,12 @@ vi.mock('../src/env.js', () => ({
   },
 }));
 import {
-  syzepayPublicRoutes,
-  syzepayAdminRoutes,
-  syzeHash,
   syzeCompanyKey,
-  syzeReceiptIdentity,
   syzeFeesSchema,
+  syzeHash,
+  syzeReceiptIdentity,
+  syzepayAdminRoutes,
+  syzepayPublicRoutes,
 } from '../src/routes/syzepay.js';
 
 const apps: ReturnType<typeof Fastify>[] = [];
@@ -100,7 +100,7 @@ describe('SyzePay isolated reception', () => {
     const { app, receive } = fixture();
     for (const suffix of ['', '?token=short'])
       expect(
-        (await app.inject({ method: 'POST', url: '/webhooks/syzepay' + suffix, payload: 'x' }))
+        (await app.inject({ method: 'POST', url: `/webhooks/syzepay${suffix}`, payload: 'x' }))
           .statusCode,
       ).toBe(401);
     expect(receive).not.toHaveBeenCalled();
@@ -228,7 +228,9 @@ describe('SyzePay company permissions', () => {
       req.user = { sub: 'owner-a', role: 'user' } as never;
     });
     app.setErrorHandler((error, _req, reply) =>
-      reply.code((error as any).status ?? 500).send({ error: error.message }),
+      reply
+        .code((error as Error & { status?: number }).status ?? 500)
+        .send({ error: error.message }),
     );
     app.register(syzepayAdminRoutes);
     const fees = {
@@ -281,7 +283,9 @@ describe('SyzePay company permissions', () => {
       req.user = { sub: 'intruder', role: 'admin' } as never;
     });
     app.setErrorHandler((error, _req, reply) =>
-      reply.code((error as any).status ?? 500).send({ error: error.message }),
+      reply
+        .code((error as Error & { status?: number }).status ?? 500)
+        .send({ error: error.message }),
     );
     app.register(syzepayAdminRoutes);
     expect((await app.inject('/tracking/syzepay/connections/other/receipts')).statusCode).toBe(404);

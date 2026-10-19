@@ -161,9 +161,14 @@ function TrackingWorkspaceContent() {
         <aside className="h-fit min-w-0 rounded-lg border border-white/[0.08] bg-black/15 p-2 xl:sticky xl:top-20">
           <div className="px-2 py-2">
             <h2 className="text-sm font-semibold text-white/85">{activeArea.label}</h2>
-            <p className="mt-1 hidden text-xs leading-5 text-white/45 xl:block">{activeArea.description}</p>
+            <p className="mt-1 hidden text-xs leading-5 text-white/45 xl:block">
+              {activeArea.description}
+            </p>
           </div>
-          <nav aria-label={`Seções de ${activeArea.label}`} tabIndex={0} className="mt-1 flex gap-1.5 overflow-x-auto rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--signal-500)] xl:block xl:overflow-visible">
+          <nav
+            aria-label={`Seções de ${activeArea.label}`}
+            className="mt-1 flex gap-1.5 overflow-x-auto rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--signal-500)] xl:block xl:overflow-visible"
+          >
             {activeArea.sections.map((item) => {
               const Icon = item.icon;
               return (

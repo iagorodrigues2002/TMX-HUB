@@ -1,8 +1,8 @@
 'use client';
-import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient, type SyzepayFees } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
+import { type SyzepayFees, apiClient } from '@/lib/api-client';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { toast } from 'sonner';
 
 export function SyzepayFeeForm({
@@ -65,8 +65,8 @@ export function SyzepayFeeForm({
             {settings.fee_source === 'webhook'
               ? `Taxa real por transação recebida no webhook. Reserva configurada separadamente: ${settings.reserve_pct ?? 0}% (não confirmada pelo webhook).`
               : settings.fee_pct === undefined
-              ? 'Não configuradas — nenhuma taxa da VendePay será herdada.'
-              : `${settings.fee_pct}% por transação + tarifa fixa em ${settings.fee_currency}. Reserva: ${settings.reserve_pct}%.`}
+                ? 'Não configuradas — nenhuma taxa da VendePay será herdada.'
+                : `${settings.fee_pct}% por transação + tarifa fixa em ${settings.fee_currency}. Reserva: ${settings.reserve_pct}%.`}
           </p>
         </div>
         <Button variant="outline" onClick={() => setOpen(!open)}>
@@ -84,12 +84,19 @@ export function SyzepayFeeForm({
           {gatewayLabel === 'SyzePay' && (
             <label className="block text-sm text-white/65">
               Origem da taxa por transação
-              <select aria-label="Origem das taxas SyzePay" value={source}
-                onChange={(e) => setSource(e.target.value as 'configured' | 'webhook')} className={input}>
+              <select
+                aria-label="Origem das taxas SyzePay"
+                value={source}
+                onChange={(e) => setSource(e.target.value as 'configured' | 'webhook')}
+                className={input}
+              >
                 <option value="webhook">Valor real informado no webhook</option>
                 <option value="configured">Modelo manual: porcentagem + tarifa fixa</option>
               </select>
-              <span className="mt-2 block text-xs">No modo webhook, porcentagem e tarifa fixa abaixo não são utilizadas. Taxa ausente fica sinalizada, sem estimativa silenciosa.</span>
+              <span className="mt-2 block text-xs">
+                No modo webhook, porcentagem e tarifa fixa abaixo não são utilizadas. Taxa ausente
+                fica sinalizada, sem estimativa silenciosa.
+              </span>
             </label>
           )}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

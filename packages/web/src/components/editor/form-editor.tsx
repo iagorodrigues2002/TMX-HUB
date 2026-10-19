@@ -1,9 +1,5 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
-import { toast } from 'sonner';
-import type { Form, FormMode, UpdateFormRequest } from '@page-cloner/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,6 +11,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useUpdateForm } from '@/hooks/use-update-form';
+import type { Form, FormMode, UpdateFormRequest } from '@page-cloner/shared';
+import { useEffect, useId } from 'react';
+import { useForm } from 'react-hook-form';
+import { toast } from 'sonner';
 
 interface FormEditorProps {
   jobId: string;
@@ -28,6 +28,7 @@ interface FormValues {
 }
 
 export function FormEditor({ jobId, form }: FormEditorProps) {
+  const id = useId();
   const update = useUpdateForm(jobId);
   const { register, handleSubmit, watch, setValue, reset } = useForm<FormValues>({
     defaultValues: {
@@ -37,14 +38,14 @@ export function FormEditor({ jobId, form }: FormEditorProps) {
     },
   });
 
-  // Re-sync form when selection changes.
+  // Selection changes remount the editor; synchronize saved values here.
   useEffect(() => {
     reset({
       mode: form.mode,
       currentAction: form.currentAction,
       redirectTo: form.redirectTo ?? '',
     });
-  }, [form.id, form.mode, form.currentAction, form.redirectTo, reset]);
+  }, [form.mode, form.currentAction, form.redirectTo, reset]);
 
   const mode = watch('mode');
 
@@ -65,7 +66,10 @@ export function FormEditor({ jobId, form }: FormEditorProps) {
   });
 
   return (
-    <form onSubmit={onSubmit} className="flex h-full flex-col gap-5 overflow-y-auto p-5">
+    <form
+      onSubmit={(event) => void onSubmit(event)}
+      className="flex h-full flex-col gap-5 overflow-y-auto p-5"
+    >
       <header className="space-y-1">
         <p className="hud-label">Form Editor</p>
         <h3 className="text-[14px] font-semibold text-white">Formulário</h3>
@@ -73,14 +77,20 @@ export function FormEditor({ jobId, form }: FormEditorProps) {
       </header>
 
       <div className="space-y-2">
-        <Label>URL de envio original</Label>
-        <Input value={form.originalAction} readOnly disabled className="font-mono text-[12px]" />
+        <Label htmlFor={`${id}-original`}>URL de envio original</Label>
+        <Input
+          id={`${id}-original`}
+          value={form.originalAction}
+          readOnly
+          disabled
+          className="font-mono text-[12px]"
+        />
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="mode">Modo</Label>
+        <Label htmlFor={`${id}-mode`}>Modo</Label>
         <Select value={mode} onValueChange={(v) => setValue('mode', v as FormMode)}>
-          <SelectTrigger id="mode">
+          <SelectTrigger id={`${id}-mode`}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -94,9 +104,9 @@ export function FormEditor({ jobId, form }: FormEditorProps) {
 
       {(mode === 'replace' || mode === 'capture_redirect') && (
         <div className="space-y-2">
-          <Label htmlFor="currentAction">Nova URL de envio</Label>
+          <Label htmlFor={`${id}-current-action`}>Nova URL de envio</Label>
           <Input
-            id="currentAction"
+            id={`${id}-current-action`}
             type="url"
             placeholder="HTTPS://MEUSITE.COM/LEADS"
             {...register('currentAction', { required: true })}
@@ -106,9 +116,9 @@ export function FormEditor({ jobId, form }: FormEditorProps) {
 
       {mode === 'capture_redirect' && (
         <div className="space-y-2">
-          <Label htmlFor="redirectTo">Redirecionar usuário para</Label>
+          <Label htmlFor={`${id}-redirect-to`}>Redirecionar usuário para</Label>
           <Input
-            id="redirectTo"
+            id={`${id}-redirect-to`}
             type="url"
             placeholder="HTTPS://MEUSITE.COM/OBRIGADO"
             {...register('redirectTo', { required: true })}
@@ -121,7 +131,7 @@ export function FormEditor({ jobId, form }: FormEditorProps) {
       </Button>
 
       <section className="space-y-2">
-        <Label>Campos ({form.fields.length})</Label>
+        <p className="hud-label">Campos ({form.fields.length})</p>
         <ul className="space-y-1 rounded-md border border-white/[0.08] bg-white/[0.02] p-3 text-[12px]">
           {form.fields.length === 0 ? (
             <li className="text-white/45">Nenhum campo detectado.</li>

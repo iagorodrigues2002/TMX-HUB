@@ -1,4 +1,5 @@
 import { createHmac } from 'node:crypto';
+import { publicFetch } from '@page-cloner/core';
 import { env } from '../env.js';
 import { logger } from '../lib/logger.js';
 
@@ -16,11 +17,11 @@ export async function fireWebhook(webhookUrl: string, payload: WebhookPayload): 
   const body = JSON.stringify(payload);
   const signature = createHmac('sha256', env.WEBHOOK_SECRET).update(body).digest('hex');
   const log = logger.child({ webhook: webhookUrl, jobId: payload.id });
+  const ctrl = new AbortController();
+  const timeout = setTimeout(() => ctrl.abort(), 10_000);
 
   try {
-    const ctrl = new AbortController();
-    const timeout = setTimeout(() => ctrl.abort(), 10_000);
-    const res = await fetch(webhookUrl, {
+    const res = await publicFetch(webhookUrl, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -30,7 +31,7 @@ export async function fireWebhook(webhookUrl: string, payload: WebhookPayload): 
       body,
       signal: ctrl.signal,
     });
-    clearTimeout(timeout);
+    await res.body?.cancel();
     if (!res.ok) {
       log.warn({ status: res.status }, 'webhook delivery returned non-2xx');
     } else {
@@ -38,5 +39,7 @@ export async function fireWebhook(webhookUrl: string, payload: WebhookPayload): 
     }
   } catch (err) {
     log.error({ err }, 'webhook delivery failed');
+  } finally {
+    clearTimeout(timeout);
   }
 }

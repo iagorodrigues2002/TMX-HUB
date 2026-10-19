@@ -1,9 +1,6 @@
 import { create } from 'zustand';
 
-export type SelectedEntity =
-  | { kind: 'form'; id: string }
-  | { kind: 'link'; id: string }
-  | null;
+export type SelectedEntity = { kind: 'form'; id: string } | { kind: 'link'; id: string } | null;
 
 interface SelectionState {
   selected: SelectedEntity;

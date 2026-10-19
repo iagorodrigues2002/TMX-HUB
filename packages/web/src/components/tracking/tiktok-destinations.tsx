@@ -3,91 +3,32 @@
 import { Button } from '@/components/ui/button';
 import { DataState } from '@/components/ui/data-state';
 import { Input } from '@/components/ui/input';
-import { type TikTokDestination, type TikTokDestinationInput, apiClient } from '@/lib/api-client';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
-
-const TIKTOK_TEST_EVENTS_DOCS =
-  'https://business-api.tiktok.com/portal/docs?id=1799004129683458#item-link-Verify%20TikTok%20Events%20API%20Setup';
-const empty: TikTokDestinationInput = {
-  name: '',
-  pixel_code: '',
-  access_token: '',
-  test_event_code: null,
-  enabled: true,
-};
-type TikTokTestContext = { code: string; eventUrl: string; email: string; phone: string };
-const emptyTest: TikTokTestContext = { code: '', eventUrl: '', email: '', phone: '' };
+import {
+  TIKTOK_TEST_EVENTS_DOCS,
+  type TikTokTestContext,
+  empty,
+  emptyTest,
+} from './tiktok-destinations-support';
+import { useTikTokDestinationsState } from './tiktok-destinations-use-tik-tok-destinations-state';
 
 export function TikTokDestinations({ offerId }: { offerId: string }) {
-  const qc = useQueryClient();
-  const key = ['tiktok-destinations', offerId];
-  const [form, setForm] = useState<TikTokDestinationInput>(empty);
-  const [editing, setEditing] = useState<TikTokDestination | null>(null);
-  const [testContext, setTestContext] = useState<Record<string, TikTokTestContext>>({});
-  const [testDelivery, setTestDelivery] = useState<string | null>(null);
-  const destinations = useQuery({
-    queryKey: key,
-    queryFn: () => apiClient.tiktokDestinations(offerId),
-    retry: false,
-  });
-  const delivery = useQuery({
-    queryKey: ['tiktok-delivery', offerId, testDelivery],
-    queryFn: () => apiClient.tiktokDelivery(offerId, testDelivery!),
-    enabled: Boolean(testDelivery),
-    refetchInterval: (query) =>
-      ['pending', 'processing', 'test'].includes(query.state.data?.delivery.state ?? '')
-        ? 1500
-        : false,
-  });
-  useEffect(() => {
-    if (delivery.data?.delivery.state === 'delivered')
-      toast.success(
-        'TikTok confirmou o evento de teste. Confira também a aba Test Events no Events Manager.',
-      );
-  }, [delivery.data?.delivery.state]);
-  const save = useMutation({
-    mutationFn: () =>
-      apiClient.saveTikTokDestination(
-        offerId,
-        { ...form, test_event_code: form.test_event_code?.trim() || null },
-        editing?.id,
-      ),
-    onSuccess: () => {
-      setForm(empty);
-      setEditing(null);
-      void qc.invalidateQueries({ queryKey: key });
-      toast.success('Pixel TikTok salvo com credencial protegida.');
-    },
-  });
-  const remove = useMutation({
-    mutationFn: (id: string) => apiClient.deleteTikTokDestination(offerId, id),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: key }),
-  });
-  const test = useMutation({
-    mutationFn: ({ id, context }: { id: string; context: TikTokTestContext }) =>
-      apiClient.testTikTokDestination(offerId, id, {
-        test_event_code: context.code,
-        ...(context.eventUrl.trim() ? { event_url: context.eventUrl.trim() } : {}),
-        ...(context.email.trim() ? { email: context.email.trim() } : {}),
-        ...(context.phone.trim() ? { phone: context.phone.trim() } : {}),
-      }),
-    onSuccess: (result) => {
-      setTestDelivery(result.delivery_id);
-      toast.success('Evento enviado. Aguardando confirmação da Events API…');
-    },
-  });
-  const edit = (d: TikTokDestination) => {
-    setEditing(d);
-    setForm({
-      name: d.name,
-      pixel_code: d.pixel_code,
-      access_token: '',
-      test_event_code: d.test_event_code,
-      enabled: d.enabled,
-    });
-  };
+  const {
+    key,
+    form,
+    setForm,
+    editing,
+    setEditing,
+    testContext,
+    setTestContext,
+    testDelivery,
+    destinations,
+    delivery,
+    save,
+    remove,
+    test,
+    edit,
+  } = useTikTokDestinationsState({ offerId });
+
   return (
     <section className="space-y-5" aria-label="Destinos TikTok Ads">
       <div className="rounded-xl border border-fuchsia-300/20 bg-fuchsia-300/5 p-4 text-sm text-fuchsia-50">

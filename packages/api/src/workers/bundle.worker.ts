@@ -12,7 +12,6 @@ interface CoreBundleModule {
 }
 
 async function loadCore(): Promise<CoreBundleModule> {
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-expect-error - core dist may not be present at type-check time.
   return (await import('@page-cloner/core')) as CoreBundleModule;
 }

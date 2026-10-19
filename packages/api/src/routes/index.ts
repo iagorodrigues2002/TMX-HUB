@@ -2,6 +2,7 @@ import type { ToolKey } from '@page-cloner/shared';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { HttpProblem } from '../lib/problem.js';
 import activityRoutes from './activity.js';
+import adsIntelligenceRoutes from './ads-intelligence.js';
 import authRoutes from './auth.js';
 import buildsRoutes from './builds.js';
 import clonesRoutes from './clones.js';
@@ -16,13 +17,14 @@ import mediaJobsRoutes from './media-jobs.js';
 import metaAdminRoutes from './meta-admin.js';
 import metaControlRoutes from './meta-control.js';
 import nichesRoutes from './niches.js';
-import offersRoutes from './offers.js';
 import offerCartRoutes from './offer-cart.js';
+import offersRoutes from './offers.js';
 import previewRoutes from './preview.js';
 import pushcutAdminRoutes from './pushcut-admin.js';
 import recoveryAdminRoutes from './recovery-admin.js';
 import refundsDashboardRoutes from './refunds-dashboard.js';
 import shieldJobsRoutes from './shield-jobs.js';
+import { syzepayAdminRoutes, syzepayPublicRoutes } from './syzepay.js';
 import tiktokAdsAdminRoutes from './tiktok-ads-admin.js';
 import trackingAdminRoutes from './tracking-admin.js';
 import trackingAdvancedRoutes from './tracking-advanced.js';
@@ -30,12 +32,10 @@ import trackingOverviewRoutes from './tracking-overview.js';
 import trackingPublicRoutes from './tracking-public.js';
 import usersRoutes from './users.js';
 import utmifyGlobalAdminRoutes from './utmify-global-admin.js';
-import adsIntelligenceRoutes from './ads-intelligence.js';
 import utmifyTrackingAdminRoutes from './utmify-tracking-admin.js';
 import vslJobsRoutes from './vsl-jobs.js';
 import webhookTestRoutes from './webhook-test.js';
 import explodelyWebhookRoutes from './webhooks-explodely.js';
-import { syzepayAdminRoutes, syzepayPublicRoutes } from './syzepay.js';
 
 /**
  * Mapeia prefixos de path (sob /v1) → ToolKey requerida. Paths não listados

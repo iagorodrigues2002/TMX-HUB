@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
-import { toast } from 'sonner';
-import type { Link } from '@page-cloner/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useUpdateLink } from '@/hooks/use-update-link';
+import type { Link } from '@page-cloner/shared';
+import { useEffect, useId } from 'react';
+import { useForm } from 'react-hook-form';
+import { toast } from 'sonner';
 
 interface LinkEditorProps {
   jobId: string;
@@ -19,6 +19,7 @@ interface LinkValues {
 }
 
 export function LinkEditor({ jobId, link }: LinkEditorProps) {
+  const id = useId();
   const update = useUpdateLink(jobId);
   const { register, handleSubmit, reset } = useForm<LinkValues>({
     defaultValues: { currentHref: link.currentHref },
@@ -26,7 +27,7 @@ export function LinkEditor({ jobId, link }: LinkEditorProps) {
 
   useEffect(() => {
     reset({ currentHref: link.currentHref });
-  }, [link.id, link.currentHref, reset]);
+  }, [link.currentHref, reset]);
 
   const onSubmit = handleSubmit(async (values) => {
     try {
@@ -41,7 +42,10 @@ export function LinkEditor({ jobId, link }: LinkEditorProps) {
   });
 
   return (
-    <form onSubmit={onSubmit} className="flex h-full flex-col gap-5 overflow-y-auto p-5">
+    <form
+      onSubmit={(event) => void onSubmit(event)}
+      className="flex h-full flex-col gap-5 overflow-y-auto p-5"
+    >
       <header className="space-y-1">
         <p className="hud-label">Link Editor</p>
         <h3 className="text-[14px] font-semibold text-white">Link</h3>
@@ -69,14 +73,20 @@ export function LinkEditor({ jobId, link }: LinkEditorProps) {
       </div>
 
       <div className="space-y-2">
-        <Label>URL original</Label>
-        <Input value={link.originalHref} readOnly disabled className="font-mono text-[12px]" />
+        <Label htmlFor={`${id}-original`}>URL original</Label>
+        <Input
+          id={`${id}-original`}
+          value={link.originalHref}
+          readOnly
+          disabled
+          className="font-mono text-[12px]"
+        />
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="currentHref">Nova URL</Label>
+        <Label htmlFor={`${id}-current-href`}>Nova URL</Label>
         <Input
-          id="currentHref"
+          id={`${id}-current-href`}
           type="url"
           placeholder="HTTPS://SEU-DESTINO.COM/PAGINA"
           {...register('currentHref', { required: true })}

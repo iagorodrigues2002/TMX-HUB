@@ -1,6 +1,6 @@
+import type { ToolKey } from '@page-cloner/shared';
 import type { Redis } from 'ioredis';
 import { ulid } from 'ulid';
-import type { ToolKey } from '@page-cloner/shared';
 import { NotFoundError } from '../lib/problem.js';
 
 const INVITE_PREFIX = 'invite:';
@@ -16,10 +16,10 @@ export interface Invite {
   email?: string;
   /** Nome opcional pra pré-preencher. */
   name?: string;
-  createdBy: string;        // userId do admin que gerou
+  createdBy: string; // userId do admin que gerou
   createdByName?: string;
-  createdAt: string;        // ISO
-  expiresAt: string;        // ISO
+  createdAt: string; // ISO
+  expiresAt: string; // ISO
   /**
    * Quando definido, o user criado por esse convite terá `allowedTools`
    * setado pra esse mesmo array (acesso restrito). Vazio/undefined = acesso completo.
@@ -95,20 +95,12 @@ export class InviteStore {
   async consume(token: string): Promise<Invite> {
     const invite = await this.get(token);
     if (!invite) throw new NotFoundError('Convite inválido ou expirado.');
-    await this.redis
-      .multi()
-      .del(this.key(token))
-      .zrem(INVITE_INDEX, token)
-      .exec();
+    await this.redis.multi().del(this.key(token)).zrem(INVITE_INDEX, token).exec();
     return invite;
   }
 
   async revoke(token: string): Promise<void> {
-    await this.redis
-      .multi()
-      .del(this.key(token))
-      .zrem(INVITE_INDEX, token)
-      .exec();
+    await this.redis.multi().del(this.key(token)).zrem(INVITE_INDEX, token).exec();
   }
 
   private key(token: string): string {

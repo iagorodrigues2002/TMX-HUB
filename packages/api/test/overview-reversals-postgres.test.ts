@@ -43,7 +43,7 @@ describe.skipIf(!url)('overview reversal accounting (disposable PostgreSQL)', ()
       getOrSet: async (_key: unknown, callback: () => unknown) => callback(),
     });
     app.addHook('preHandler', async (req) => {
-      req.user = { sub: 'owner', role: 'user' } as any;
+      req.user = { sub: 'owner', role: 'user', email: 'fixture@example.test', iat: 0, exp: 0 };
     });
     await app.register(overview);
     try {

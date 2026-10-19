@@ -1,13 +1,14 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { DataState } from '@/components/ui/data-state';
+import { apiClient } from '@/lib/api-client';
+import { copyText } from '@/lib/clipboard';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Building2, Copy, RefreshCw, Webhook } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useState } from 'react';
 import { toast } from 'sonner';
-import { Building2, Copy, Webhook, RefreshCw } from 'lucide-react';
 import { SyzepayFeeForm } from './syzepay-fees';
 import { SyzepayOrders } from './syzepay-orders';
 
@@ -188,16 +189,7 @@ export function SyzepayInbox() {
                     value={urls[c.id]}
                     className="h-11 min-w-48 flex-1 rounded-md border border-white/15 bg-bg px-3 text-xs"
                   />
-                  <Button
-                    onClick={async () => {
-                      try {
-                        await navigator.clipboard.writeText(urls[c.id]!);
-                        toast.success('Webhook copiado.');
-                      } catch {
-                        toast.error('Selecione a URL e copie manualmente.');
-                      }
-                    }}
-                  >
+                  <Button onClick={() => void copyText(urls[c.id]!, 'Webhook copiado.')}>
                     <Copy className="h-4 w-4" />
                     Copiar
                   </Button>

@@ -1,8 +1,8 @@
 import * as cheerio from 'cheerio';
 import type { Element } from 'domhandler';
 import { ulid } from 'ulid';
-import type { Form, FormField } from '../types.js';
 import { resolveUrl } from '../assets/url-utils.js';
+import type { Form, FormField } from '../types.js';
 import { generateSelector } from './selectors.js';
 
 export interface ExtractFormsOptions {
@@ -20,7 +20,7 @@ export function extractForms(html: string, opts: ExtractFormsOptions = {}): Form
       ? opts.baseUrl
         ? resolveUrl(rawAction, opts.baseUrl)
         : rawAction
-      : opts.baseUrl ?? '';
+      : (opts.baseUrl ?? '');
     const methodAttr = (node.attr('method') ?? 'GET').toUpperCase();
     const method: 'GET' | 'POST' = methodAttr === 'POST' ? 'POST' : 'GET';
     const selector = generateSelector($, el as Element);

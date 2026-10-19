@@ -1,3 +1,5 @@
+import { publicFetch } from '@page-cloner/core';
+
 export type UpsellCompatibilityState =
   | 'recoverable'
   | 'already_converted'
@@ -26,7 +28,7 @@ const sleep = (delayMs: number) =>
 async function resolveUpsellId(destinationUrl: string, timeoutMs: number) {
   const cached = upsellIdCache.get(destinationUrl);
   if (cached && cached.expiresAt > Date.now()) return cached.upsellId;
-  const pageResponse = await fetch(destinationUrl, {
+  const pageResponse = await publicFetch(destinationUrl, {
     signal: AbortSignal.timeout(timeoutMs),
     headers: { 'user-agent': 'TMX-Upsell-Validator/2.0' },
   });
@@ -80,7 +82,7 @@ export async function checkUpsellCompatibilityDetailed(
         signal: AbortSignal.timeout(timeoutMs),
         headers: { accept: 'application/json', 'user-agent': 'TMX-Upsell-Validator/2.0' },
       });
-      const body = await response.json().catch(() => null) as {
+      const body = (await response.json().catch(() => null)) as {
         error?: boolean;
         message?: string;
         data?: { vendaId?: string; upsellId?: string; vendaGeradaId?: string | null };
@@ -98,7 +100,8 @@ export async function checkUpsellCompatibilityDetailed(
         };
         break;
       }
-      const temporary = response.status === 408 || response.status === 429 || response.status >= 500;
+      const temporary =
+        response.status === 408 || response.status === 429 || response.status >= 500;
       result = {
         compatible: false,
         state: temporary ? 'temporary_failure' : 'definitive_failure',
@@ -118,7 +121,11 @@ export async function checkUpsellCompatibilityDetailed(
     }
   }
 
-  const ttl = result.compatible ? 10 * 60_000 : result.state === 'temporary_failure' ? 30_000 : 5 * 60_000;
+  const ttl = result.compatible
+    ? 10 * 60_000
+    : result.state === 'temporary_failure'
+      ? 30_000
+      : 5 * 60_000;
   resultCache.set(cacheKey, { result, expiresAt: Date.now() + ttl });
   return result;
 }

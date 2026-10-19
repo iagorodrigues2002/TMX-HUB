@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
-import type { FastifyInstance } from 'fastify';
 import { Worker } from 'bullmq';
+import type { FastifyInstance } from 'fastify';
 import { env } from '../env.js';
 import { makeRedis } from '../lib/redis.js';
 import { VENDEPAY_WEBHOOK_QUEUE_NAME, type VendepayWebhookJobData } from '../queues/index.js';
@@ -13,7 +13,7 @@ const signatureFor = (receiptId: string) =>
  * route only after the external caller has received a durable 202 response.
  */
 export function createVendepayWebhookWorker(
-  app: FastifyInstance<any, any, any, any, any>,
+  app: Pick<FastifyInstance, 'inject' | 'db'>,
 ): Worker<VendepayWebhookJobData> {
   return new Worker<VendepayWebhookJobData>(
     VENDEPAY_WEBHOOK_QUEUE_NAME,
@@ -28,7 +28,9 @@ export function createVendepayWebhookWorker(
           },
         });
         if (result.statusCode >= 500) {
-          throw new Error(`VendePay receipt ${job.data.receiptId} worker HTTP ${result.statusCode}`);
+          throw new Error(
+            `VendePay receipt ${job.data.receiptId} worker HTTP ${result.statusCode}`,
+          );
         }
         if (result.statusCode >= 400) {
           throw new Error(

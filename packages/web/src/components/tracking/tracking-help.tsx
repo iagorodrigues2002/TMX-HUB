@@ -1,262 +1,22 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
-import { apiClient } from '@/lib/api-client';
-import { useMutation } from '@tanstack/react-query';
 import {
   AlertTriangle,
-  Check,
-  CheckCircle2,
   ChevronRight,
-  Clipboard,
   Cloud,
   Code2,
-  Database,
   ExternalLink,
   FlaskConical,
-  Loader2,
   MousePointerClick,
-  PlayCircle,
   Radio,
   RefreshCw,
   Send,
   ShoppingCart,
   Webhook,
 } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
-
-const steps = [
-  { id: 'railway', label: 'Infraestrutura', icon: Database },
-  { id: 'projeto', label: 'Oferta', icon: Radio },
-  { id: 'script', label: 'Script', icon: Code2 },
-  { id: 'webhook', label: 'Webhook', icon: Webhook },
-  { id: 'meta', label: 'Meta CAPI', icon: Send },
-  { id: 'ab-test', label: 'Teste A/B', icon: FlaskConical },
-  { id: 'testes', label: 'Testes', icon: CheckCircle2 },
-  { id: 'diagnostico', label: 'Diagnóstico', icon: AlertTriangle },
-];
-
-function CopyBlock({
-  children,
-  label,
-  copyable = true,
-}: {
-  children: string;
-  label: string;
-  copyable?: boolean;
-}) {
-  const [copied, setCopied] = useState(false);
-
-  async function copy() {
-    await navigator.clipboard.writeText(children);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1600);
-  }
-
-  return (
-    <div className="overflow-hidden rounded-xl border border-cyan-100/[0.12] bg-[#020b12]">
-      <div className="flex items-center justify-between border-b border-cyan-100/[0.09] bg-cyan-100/[0.025] px-3 py-2">
-        <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
-          {label}
-        </span>
-        {copyable ? (
-          <button
-            type="button"
-            onClick={copy}
-            className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-cyan-200/70 transition hover:text-cyan-200"
-          >
-            {copied ? <Check className="h-3.5 w-3.5" /> : <Clipboard className="h-3.5 w-3.5" />}
-            {copied ? 'Copiado' : 'Copiar'}
-          </button>
-        ) : (
-          <span className="text-[10px] uppercase tracking-[0.14em] text-amber-200/65">
-            apenas exemplo
-          </span>
-        )}
-      </div>
-      <pre className="overflow-x-auto p-4 font-mono text-xs leading-6 text-cyan-50/85">
-        <code>{children}</code>
-      </pre>
-    </div>
-  );
-}
-
-function Section({
-  id,
-  number,
-  title,
-  subtitle,
-  icon,
-  children,
-}: {
-  id: string;
-  number: string;
-  title: string;
-  subtitle: string;
-  icon: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <section id={id} className="surface-panel scroll-mt-8 rounded-2xl p-5 md:p-7">
-      <header className="mb-6 flex items-start gap-4">
-        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-md border border-cyan-300/20 bg-cyan-300/[0.06] text-cyan-300">
-          {icon}
-        </div>
-        <div>
-          <p className="hud-label">Etapa {number}</p>
-          <h2 className="mt-1 text-xl font-semibold text-white">{title}</h2>
-          <p className="mt-1 text-sm leading-6 text-white/65">{subtitle}</p>
-        </div>
-      </header>
-      {children}
-    </section>
-  );
-}
-
-function Checklist({ items }: { items: Array<{ id: string; content: ReactNode }> }) {
-  return (
-    <ul className="space-y-3">
-      {items.map((item) => (
-        <li key={item.id} className="flex gap-3 text-sm leading-6 text-white/75">
-          <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-emerald-300" />
-          <span>{item.content}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function Result({
-  title,
-  detail,
-  tone = 'ok',
-}: {
-  title: string;
-  detail: string;
-  tone?: 'ok' | 'warn';
-}) {
-  const warn = tone === 'warn';
-  return (
-    <div
-      className={`rounded-md border p-4 ${
-        warn
-          ? 'border-amber-300/15 bg-amber-300/[0.04]'
-          : 'border-emerald-300/15 bg-emerald-300/[0.04]'
-      }`}
-    >
-      <p className={`text-sm font-medium ${warn ? 'text-amber-200' : 'text-emerald-200'}`}>
-        {title}
-      </p>
-      <p className="mt-1 text-xs leading-5 text-white/65">{detail}</p>
-    </div>
-  );
-}
-
-function TestCenter({ offerId }: { offerId: string }) {
-  const test = useMutation({
-    mutationFn: async () => {
-      if (!offerId) throw new Error('Selecione uma oferta para executar os testes.');
-      const [diagnostics, config, advanced, receipts] = await Promise.all([
-        apiClient.getTrackingDiagnostics(offerId),
-        apiClient.getTrackingConfig(offerId),
-        apiClient.getAdvancedTracking(offerId),
-        apiClient.listVendepayReceipts(offerId),
-      ]);
-      const liveDomains = advanced.domains.filter((domain) => domain.status === 'live').length;
-      return [
-        {
-          label: 'Banco e migrations',
-          ok: diagnostics.database === 'ready' && diagnostics.migrations === 'ready',
-          detail:
-            diagnostics.database === 'ready' && diagnostics.migrations === 'ready'
-              ? `Estrutura v${diagnostics.schema_version ?? '?'} pronta`
-              : diagnostics.detail,
-        },
-        {
-          label: 'Criptografia',
-          ok: diagnostics.encryption === 'ready',
-          detail:
-            diagnostics.encryption === 'ready'
-              ? 'Segredos protegidos'
-              : 'Chave de criptografia indisponível',
-        },
-        {
-          label: 'Tracker da oferta',
-          ok: config.configured && Boolean(config.project?.public_key),
-          detail: config.configured ? 'Chave pública e script disponíveis' : 'Tracking não criado',
-        },
-        {
-          label: 'Vendepay',
-          ok: Boolean(config.vendepay?.configured && config.vendepay.enabled),
-          detail: config.vendepay?.configured
-            ? `${receipts.receipts.length} webhook(s) registrado(s)`
-            : 'Webhook ainda não configurado',
-        },
-        {
-          label: 'Domínios',
-          ok: liveDomains > 0,
-          detail:
-            liveDomains > 0
-              ? `${liveDomains} domínio(s) recebendo eventos`
-              : 'Nenhum domínio confirmou PageView',
-        },
-        {
-          label: 'Fila do Meta',
-          ok: diagnostics.meta.failed === 0,
-          detail:
-            diagnostics.meta.failed === 0
-              ? `${diagnostics.meta.pending} entrega(s) pendente(s), nenhuma falha`
-              : `${diagnostics.meta.failed} entrega(s) com falha`,
-        },
-      ];
-    },
-  });
-  return (
-    <section className="rounded-2xl border border-emerald-300/20 bg-emerald-300/[0.045] p-5">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="hud-label text-emerald-200">Central de homologação</p>
-          <h3 className="mt-2 text-lg font-semibold text-white">
-            Testar a instalação automaticamente
-          </h3>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-white/65">
-            Verifica infraestrutura, tracker, Vendepay, domínios e fila do Meta sem criar uma venda
-            real ou disparar conversões.
-          </p>
-        </div>
-        <Button disabled={!offerId || test.isPending} onClick={() => test.mutate()}>
-          {test.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <PlayCircle className="h-4 w-4" />
-          )}
-          Executar diagnóstico
-        </Button>
-      </div>
-      {test.isError && <p className="mt-4 text-sm text-red-200">{test.error.message}</p>}
-      {test.data && (
-        <div className="mt-5 grid gap-3 md:grid-cols-2">
-          {test.data.map((item) => (
-            <div
-              key={item.label}
-              className="flex gap-3 rounded-xl border border-white/[0.08] bg-black/15 p-3"
-            >
-              {item.ok ? (
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />
-              ) : (
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
-              )}
-              <div>
-                <p className="text-sm font-medium text-white/85">{item.label}</p>
-                <p className="mt-1 text-xs leading-5 text-white/55">{item.detail}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
+import { renderTroubleshooting } from './tracking-help-render-troubleshooting';
+import { Checklist, CopyBlock, Result, Section, steps } from './tracking-help-support';
+import { TestCenter } from './tracking-help-test-center';
 
 export function TrackingHelp({ offerId = '' }: { offerId?: string }) {
   return (
@@ -291,37 +51,7 @@ export function TrackingHelp({ offerId = '' }: { offerId?: string }) {
           </div>
         </div>
 
-        <Section
-          id="railway"
-          number="01"
-          title="Infraestrutura automática"
-          subtitle="Banco, migrations e criptografia são administrados pelo próprio TMXHUB."
-          icon={<Database className="h-5 w-5" />}
-        >
-          <Checklist
-            items={[
-              {
-                id: 'managed-db',
-                content:
-                  'O PostgreSQL é provisionado uma única vez pela operação do TMXHUB e fica disponível para todas as ofertas autorizadas.',
-              },
-              {
-                id: 'managed-migrations',
-                content:
-                  'As migrations são executadas automaticamente antes de cada inicialização da API.',
-              },
-              {
-                id: 'managed-health',
-                content:
-                  'A própria tela mostra a saúde do banco, da estrutura e da criptografia. Você não precisa acessar o Railway.',
-              },
-            ]}
-          />
-          <Result
-            title="Nenhuma ação externa necessária"
-            detail="Se algum componente ficar indisponível, o TMXHUB exibe o diagnóstico e a operação técnica corrige a infraestrutura sem expor credenciais."
-          />
-        </Section>
+        {renderInfrastructureHelp()}
 
         <Section
           id="projeto"
@@ -572,84 +302,7 @@ export function TrackingHelp({ offerId = '' }: { offerId?: string }) {
           </div>
         </Section>
 
-        <Section
-          id="diagnostico"
-          number="08"
-          title="Status, quarentena e troubleshooting"
-          subtitle="Use o estado recebido e o diagnóstico do webhook para encontrar o ponto exato da falha."
-          icon={<AlertTriangle className="h-5 w-5" />}
-        >
-          <div className="grid gap-3 md:grid-cols-2">
-            <Result title="Pago" detail="Pagamento confirmado. Conta como venda aprovada." />
-            <Result
-              title="Pendente"
-              detail="Pedido criado, mas o pagamento ainda não foi confirmado."
-            />
-            <Result
-              title="Recusado ou cancelado"
-              detail="A transação existe, porém não deve entrar no faturamento."
-              tone="warn"
-            />
-            <Result
-              title="Reembolso ou chargeback"
-              detail="A venda foi revertida. Esse estado tem prioridade e não volta para pendente."
-              tone="warn"
-            />
-            <Result
-              title="Sem atribuição"
-              detail="A venda chegou, mas sem src válido. Revise o link do CTA e a propagação do identificador."
-              tone="warn"
-            />
-            <Result
-              title="Quarentena"
-              detail="O webhook chegou, mas faltam dados essenciais ou o formato não foi reconhecido. Consulte o motivo e preserve o payload para ajuste."
-              tone="warn"
-            />
-          </div>
-
-          <div className="mt-6 overflow-hidden rounded-md border border-white/[0.07]">
-            {[
-              [
-                'Nenhum PageView',
-                'Confirme o script no HTML final, a chave pública, bloqueadores e erros no console do navegador.',
-              ],
-              [
-                'Sem src no checkout',
-                'O CTA deve ser um link clicável. Confirme se outro script substitui a URL depois do clique.',
-              ],
-              [
-                'Webhook 401',
-                'A URL foi copiada incompleta ou o token não corresponde à oferta. Gere uma nova configuração se o segredo vazou.',
-              ],
-              [
-                'Webhook em quarentena',
-                'Abra os diagnósticos. Normalmente falta ID da transação ou o payload da Vendepay mudou.',
-              ],
-              [
-                'Venda duplicada',
-                'Não altere o ID da transação. Retries normais atualizam o mesmo pedido de forma idempotente.',
-              ],
-              [
-                'Tracking indisponível',
-                'Consulte o diagnóstico automático na área de tracking. Não é necessário acessar o Railway.',
-              ],
-              [
-                'Purchase não aparece no Meta',
-                'Confira Pixel ID, token, Test Event Code e a entrega Meta no painel. Falhas temporárias são reenviadas automaticamente.',
-              ],
-            ].map(([problem, action], index) => (
-              <div
-                key={problem}
-                className={`grid gap-1 p-4 md:grid-cols-[180px_1fr] md:gap-5 ${
-                  index ? 'border-t border-white/[0.06]' : ''
-                }`}
-              >
-                <p className="text-xs font-medium text-white/75">{problem}</p>
-                <p className="text-xs leading-5 text-white/40">{action}</p>
-              </div>
-            ))}
-          </div>
-        </Section>
+        {renderTroubleshooting()}
 
         <div className="flex flex-col items-start justify-between gap-3 rounded-lg border border-white/[0.07] bg-white/[0.02] p-5 sm:flex-row sm:items-center">
           <div>
@@ -674,3 +327,5 @@ export function TrackingHelp({ offerId = '' }: { offerId?: string }) {
     </div>
   );
 }
+
+import { renderInfrastructureHelp } from './tracking-help-render-infrastructure-help';

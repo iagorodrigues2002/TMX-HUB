@@ -1,6 +1,6 @@
-import { ulid } from 'ulid';
-import type { Redis } from 'ioredis';
 import type { ToolKey, User } from '@page-cloner/shared';
+import type { Redis } from 'ioredis';
+import { ulid } from 'ulid';
 import { ConflictError, NotFoundError } from '../lib/problem.js';
 
 const USER_BY_ID_PREFIX = 'user:';
@@ -27,12 +27,11 @@ export class UserStore {
     passwordHash: string;
     role: 'admin' | 'user';
     allowedTools?: ToolKey[];
+    /** Registration-only preconditions, checked in the same Redis operation. */
+    requireEmptyStore?: boolean;
+    invite?: { token: string; createdAt: string };
   }): Promise<UserRecord> {
     const email = args.email.trim().toLowerCase();
-    const existingId = await this.redis.get(emailKey(email));
-    if (existingId) {
-      throw new ConflictError(`Já existe um usuário com o email ${email}.`);
-    }
     const rec: UserRecord = {
       id: ulid(),
       email,
@@ -44,11 +43,48 @@ export class UserStore {
         : {}),
       createdAt: new Date().toISOString(),
     };
-    await this.redis
-      .multi()
-      .hset(idKey(rec.id), this.serialize(rec))
-      .set(emailKey(email), rec.id)
-      .exec();
+    // One atomic decision: no email race, no second bootstrap administrator,
+    // and no account surviving an already-used/revoked invitation.
+    const result = Number(
+      await this.redis.eval(
+        `
+      if redis.call('EXISTS', KEYS[2]) == 1 then return 0 end
+      if ARGV[2] == '1' then
+        local cursor = '0'
+        repeat
+          local page = redis.call('SCAN', cursor, 'MATCH', 'user:*', 'COUNT', 100)
+          cursor = page[1]
+          if #page[2] > 0 then return -1 end
+        until cursor == '0'
+      end
+      if ARGV[4] ~= '' then
+        if ARGV[3] == '' or redis.call('HGET', KEYS[3], 'createdAt') ~= ARGV[3] then return -2 end
+      end
+      local fields = cjson.decode(ARGV[1])
+      for key, value in pairs(fields) do redis.call('HSET', KEYS[1], key, value) end
+      redis.call('SET', KEYS[2], fields.id)
+      if ARGV[4] ~= '' then
+        redis.call('DEL', KEYS[3])
+        redis.call('ZREM', KEYS[4], ARGV[4])
+      end
+      return 1
+    `,
+        4,
+        idKey(rec.id),
+        emailKey(email),
+        args.invite ? `invite:${args.invite.token}` : 'invite:unused',
+        'invite-index',
+        JSON.stringify(this.serialize(rec)),
+        args.requireEmptyStore ? '1' : '0',
+        args.invite?.createdAt ?? '',
+        args.invite?.token ?? '',
+      ),
+    );
+    if (result === 0) throw new ConflictError(`Já existe um usuário com o email ${email}.`);
+    if (result === -1)
+      throw new ConflictError('O cadastro inicial já foi concluído. Atualize a página.');
+    if (result === -2) throw new ConflictError('Convite inválido, expirado ou já utilizado.');
+    if (result !== 1) throw new Error('Atomic account creation failed.');
     return rec;
   }
 
@@ -141,22 +177,15 @@ export class UserStore {
     },
   ): Promise<UserRecord> {
     const current = await this.getById(id);
+    const { allowedTools: _allowedTools, ...withoutTools } = current;
     const next: UserRecord = {
-      ...current,
+      ...(patch.allowedTools === null ? withoutTools : current),
+      ...(patch.allowedTools != null ? { allowedTools: patch.allowedTools } : {}),
       ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
       ...(patch.role !== undefined ? { role: patch.role } : {}),
     };
-    if (patch.allowedTools === null) {
-      delete next.allowedTools;
-    } else if (patch.allowedTools !== undefined) {
-      next.allowedTools = patch.allowedTools;
-    }
     // Re-grava a hash inteira pra que campos removidos sumam.
-    await this.redis
-      .multi()
-      .del(idKey(id))
-      .hset(idKey(id), this.serialize(next))
-      .exec();
+    await this.redis.multi().del(idKey(id)).hset(idKey(id), this.serialize(next)).exec();
     return next;
   }
 
@@ -173,11 +202,7 @@ export class UserStore {
   async delete(id: string): Promise<void> {
     const rec = await this.maybeGetById(id);
     if (!rec) return;
-    await this.redis
-      .multi()
-      .del(idKey(id))
-      .del(emailKey(rec.email))
-      .exec();
+    await this.redis.multi().del(idKey(id)).del(emailKey(rec.email)).exec();
   }
 
   toPublic(rec: UserRecord): User {

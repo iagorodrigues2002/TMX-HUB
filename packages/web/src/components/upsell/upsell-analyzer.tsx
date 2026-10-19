@@ -3,189 +3,45 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  type CalcOutput,
-  type ColumnMap,
-  type FrontConfig,
-  type FunnelStepConfig,
-  runCalculation,
-} from '@/lib/upsell/calc';
-import {
-  CHECKOUT_PRESETS,
-  type CheckoutPlatform,
-  PLATFORM_OPTIONS,
-  autoMapAllColumns,
-} from '@/lib/upsell/checkout-presets';
-import { type ParsedSheet, parseSpreadsheet } from '@/lib/upsell/parse-spreadsheet';
-import {
-  type SavedPreset,
-  deletePreset,
-  getPreset,
-  listPresets,
-  savePreset,
-} from '@/lib/upsell/storage';
-import { Plus, Save, Trash2, Upload, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
+import { type CheckoutPlatform, PLATFORM_OPTIONS } from '@/lib/upsell/checkout-presets';
+import { Plus, Save, Trash2, Upload } from 'lucide-react';
 import { ResultsChart } from './results-chart';
-
-const EMPTY_COLS: ColumnMap = {
-  customerId: '',
-  product: '',
-  offer: '',
-  status: '',
-  dateTime: '',
-};
+import { ColumnMapper } from './upsell-analyzer-column-mapper';
+import { FunnelRow } from './upsell-analyzer-funnel-row';
+import { FilePicker } from './upsell-analyzer-support';
+import { useUpsellAnalyzerState } from './upsell-analyzer-use-upsell-analyzer-state';
 
 export function UpsellAnalyzer() {
-  const [platform, setPlatform] = useState<CheckoutPlatform>('hotmart');
-
-  const [frontSheet, setFrontSheet] = useState<ParsedSheet | null>(null);
-  const [upsellSheet, setUpsellSheet] = useState<ParsedSheet | null>(null);
-  const [frontFileName, setFrontFileName] = useState('');
-  const [upsellFileName, setUpsellFileName] = useState('');
-
-  const [frontCols, setFrontCols] = useState<ColumnMap>(EMPTY_COLS);
-  const [upsellCols, setUpsellCols] = useState<ColumnMap>(EMPTY_COLS);
-
-  const [frontConfig, setFrontConfig] = useState<FrontConfig>({
-    name: 'Front',
-    product: '',
-    offers: [],
-    startTime: '',
-  });
-  const [steps, setSteps] = useState<FunnelStepConfig[]>([
-    { name: 'Up01', product: '', offers: [] },
-    { name: 'Up02', product: '', offers: [] },
-    { name: 'Up03', product: '', offers: [] },
-    { name: 'Up04', product: '', offers: [] },
-  ]);
-
-  const [results, setResults] = useState<CalcOutput | null>(null);
-
-  const [savedList, setSavedList] = useState<SavedPreset[]>([]);
-  const [presetName, setPresetName] = useState('');
-  const [selectedPresetId, setSelectedPresetId] = useState('');
-  useEffect(() => setSavedList(listPresets()), []);
-
-  const preset = CHECKOUT_PRESETS[platform];
-
-  // Auto-map columns when files load OR platform changes.
-  useEffect(() => {
-    if (!frontSheet) return;
-    const auto = autoMapAllColumns(frontSheet.columns, preset);
-    setFrontCols((prev) => ({
-      customerId: prev.customerId || auto.customerId || '',
-      product: prev.product || auto.product || '',
-      offer: prev.offer || auto.offer || '',
-      status: prev.status || auto.status || '',
-      dateTime: prev.dateTime || auto.dateTime || '',
-    }));
-  }, [frontSheet, preset]);
-
-  useEffect(() => {
-    if (!upsellSheet) return;
-    const auto = autoMapAllColumns(upsellSheet.columns, preset);
-    setUpsellCols((prev) => ({
-      customerId: prev.customerId || auto.customerId || '',
-      product: prev.product || auto.product || '',
-      offer: prev.offer || auto.offer || '',
-      status: prev.status || auto.status || '',
-      dateTime: prev.dateTime || auto.dateTime || '',
-    }));
-  }, [upsellSheet, preset]);
-
-  const handleFile = async (kind: 'front' | 'upsell', file: File) => {
-    try {
-      const parsed = await parseSpreadsheet(file);
-      if (kind === 'front') {
-        setFrontSheet(parsed);
-        setFrontFileName(file.name);
-        setFrontCols(EMPTY_COLS); // re-trigger auto-map
-      } else {
-        setUpsellSheet(parsed);
-        setUpsellFileName(file.name);
-        setUpsellCols(EMPTY_COLS);
-      }
-      toast.success(`${file.name}: ${parsed.rows.length} linhas, ${parsed.columns.length} colunas`);
-    } catch (err) {
-      toast.error(`Erro lendo ${file.name}: ${(err as Error).message}`);
-    }
-  };
-
-  const canCalculate =
-    !!frontSheet &&
-    !!upsellSheet &&
-    frontCols.customerId &&
-    frontCols.product &&
-    frontCols.offer &&
-    upsellCols.customerId &&
-    upsellCols.product &&
-    upsellCols.offer &&
-    upsellCols.status;
-
-  const handleCalculate = () => {
-    if (!frontSheet || !upsellSheet) return;
-    try {
-      const out = runCalculation({
-        preset,
-        front: { sheet: frontSheet, columns: frontCols, config: frontConfig },
-        upsell: { sheet: upsellSheet, columns: upsellCols },
-        steps,
-      });
-      setResults(out);
-      toast.success(`Calculado · ${out.eligibleCount} clientes elegíveis`);
-    } catch (err) {
-      toast.error(`Erro no cálculo: ${(err as Error).message}`);
-    }
-  };
-
-  const handleSavePreset = () => {
-    if (!presetName.trim()) {
-      toast.error('Dê um nome para o preset.');
-      return;
-    }
-    savePreset({
-      name: presetName.trim(),
-      platform,
-      frontColumns: frontCols,
-      upsellColumns: upsellCols,
-      front: frontConfig,
-      steps,
-    });
-    setSavedList(listPresets());
-    setPresetName('');
-    toast.success('Preset salvo.');
-  };
-
-  const handleLoadPreset = () => {
-    if (!selectedPresetId) return;
-    const p = getPreset(selectedPresetId);
-    if (!p) return;
-    setPlatform(p.platform);
-    setFrontCols(p.frontColumns);
-    setUpsellCols(p.upsellColumns);
-    setFrontConfig(p.front);
-    setSteps(p.steps);
-    toast.success(`Preset "${p.name}" carregado.`);
-  };
-
-  const handleDeletePreset = () => {
-    if (!selectedPresetId) return;
-    deletePreset(selectedPresetId);
-    setSavedList(listPresets());
-    setSelectedPresetId('');
-    toast.success('Preset removido.');
-  };
-
-  const addStep = () =>
-    setSteps((prev) => [
-      ...prev,
-      { name: `Up${String(prev.length + 1).padStart(2, '0')}`, product: '', offers: [] },
-    ]);
-  const removeStep = (i: number) => setSteps((prev) => prev.filter((_, idx) => idx !== i));
-  const updateStep = (i: number, patch: Partial<FunnelStepConfig>) =>
-    setSteps((prev) => prev.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
+  const {
+    platform,
+    setPlatform,
+    frontSheet,
+    upsellSheet,
+    frontFileName,
+    upsellFileName,
+    frontCols,
+    setFrontCols,
+    upsellCols,
+    setUpsellCols,
+    frontConfig,
+    setFrontConfig,
+    steps,
+    results,
+    savedList,
+    presetName,
+    setPresetName,
+    selectedPresetId,
+    setSelectedPresetId,
+    handleFile,
+    canCalculate,
+    handleCalculate,
+    handleSavePreset,
+    handleLoadPreset,
+    handleDeletePreset,
+    addStep,
+    removeStep,
+    updateStep,
+  } = useUpsellAnalyzerState();
 
   return (
     <div className="space-y-6">
@@ -222,13 +78,13 @@ export function UpsellAnalyzer() {
             label="Planilha Front (xlsx, xls, csv)"
             fileName={frontFileName}
             sheet={frontSheet}
-            onFile={(f) => handleFile('front', f)}
+            onFile={(f) => void handleFile('front', f)}
           />
           <FilePicker
             label="Planilha Upsell (única, com todos)"
             fileName={upsellFileName}
             sheet={upsellSheet}
-            onFile={(f) => handleFile('upsell', f)}
+            onFile={(f) => void handleFile('upsell', f)}
           />
         </div>
       </section>
@@ -425,159 +281,6 @@ export function UpsellAnalyzer() {
           arquivos das planilhas precisam ser carregados de novo a cada uso.
         </p>
       </section>
-    </div>
-  );
-}
-
-// ---- sub-components ----
-
-function FilePicker(props: {
-  label: string;
-  fileName: string;
-  sheet: ParsedSheet | null;
-  onFile: (f: File) => void;
-}) {
-  return (
-    <div className="space-y-2">
-      <Label className="hud-label">{props.label}</Label>
-      <label className="flex cursor-pointer items-center gap-3 rounded-md border border-dashed border-white/[0.12] bg-white/[0.02] p-4 transition hover:border-cyan-300/40 hover:bg-cyan-300/[0.03]">
-        <Upload className="h-4 w-4 text-cyan-300/70" />
-        <div className="flex-1 text-[13px]">
-          {props.fileName ? (
-            <>
-              <p className="font-semibold text-white/85">{props.fileName}</p>
-              <p className="text-[11px] text-white/45">
-                {props.sheet?.rows.length ?? 0} linhas · {props.sheet?.columns.length ?? 0} colunas
-              </p>
-            </>
-          ) : (
-            <p className="text-white/55">Clique para escolher arquivo</p>
-          )}
-        </div>
-        <input
-          type="file"
-          accept=".xlsx,.xls,.csv"
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) props.onFile(f);
-          }}
-        />
-      </label>
-    </div>
-  );
-}
-
-function ColumnMapper(props: {
-  title: string;
-  sheet: ParsedSheet | null;
-  cols: ColumnMap;
-  onChange: (next: ColumnMap) => void;
-  showStatus: boolean;
-  showDateTime: boolean;
-}) {
-  const options = useMemo(() => props.sheet?.columns ?? [], [props.sheet]);
-  if (!props.sheet) {
-    return (
-      <div className="rounded-md border border-white/[0.06] bg-black/20 p-4 text-[12px] text-white/40">
-        {props.title}: faça upload do arquivo.
-      </div>
-    );
-  }
-  const fields: Array<{ key: keyof ColumnMap; label: string; show: boolean }> = [
-    { key: 'customerId', label: 'ID Cliente', show: true },
-    { key: 'product', label: 'Produto', show: true },
-    { key: 'offer', label: 'Oferta', show: true },
-    { key: 'status', label: 'Status', show: props.showStatus },
-    { key: 'dateTime', label: 'Data/Hora', show: props.showDateTime },
-  ];
-  return (
-    <div className="space-y-2">
-      <p className="hud-label">{props.title}</p>
-      {fields
-        .filter((f) => f.show)
-        .map((f) => (
-          <div key={f.key} className="grid grid-cols-[120px_1fr] items-center gap-2">
-            <Label className="text-[11px] uppercase tracking-[0.12em] text-white/55">
-              {f.label}
-            </Label>
-            <select
-              value={props.cols[f.key] ?? ''}
-              onChange={(e) => props.onChange({ ...props.cols, [f.key]: e.target.value })}
-              className="flex h-11 w-full rounded-md border border-white/[0.10] bg-white/[0.04] px-4 text-[14px] text-white focus-visible:outline-none focus-visible:border-cyan-300/40"
-            >
-              <option value="">— escolha —</option>
-              {options.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
-          </div>
-        ))}
-    </div>
-  );
-}
-
-function FunnelRow(props: {
-  step: FunnelStepConfig;
-  onChange: (patch: Partial<FunnelStepConfig>) => void;
-  onRemove?: () => void;
-  tone?: 'front';
-}) {
-  const isFront = props.tone === 'front';
-  return (
-    <div
-      className={`grid items-end gap-3 rounded-md border p-3 md:grid-cols-[80px_1fr_1fr_auto] ${
-        isFront ? 'border-cyan-300/30 bg-cyan-300/[0.03]' : 'border-white/[0.06] bg-white/[0.02]'
-      }`}
-    >
-      <div>
-        <Label className="hud-label">Etapa</Label>
-        <p
-          className={`mt-1 text-[13px] font-semibold uppercase tracking-[0.14em] ${
-            isFront ? 'text-cyan-300' : 'text-white/85'
-          }`}
-        >
-          {props.step.name}
-        </p>
-      </div>
-      <div>
-        <Label className="hud-label">Produto</Label>
-        <Input
-          value={props.step.product}
-          onChange={(e) => props.onChange({ product: e.target.value })}
-          placeholder="(vazio = qualquer)"
-        />
-      </div>
-      <div>
-        <Label className="hud-label">Ofertas (vírgula)</Label>
-        <Input
-          value={props.step.offers.join(', ')}
-          onChange={(e) =>
-            props.onChange({
-              offers: e.target.value
-                .split(',')
-                .map((o) => o.trim())
-                .filter((o) => o.length > 0),
-            })
-          }
-          placeholder="ex: OFF01, OFF01B"
-        />
-      </div>
-      <div className="flex items-end">
-        {props.onRemove && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            aria-label={`Remover etapa ${props.step.name}`}
-            onClick={props.onRemove}
-          >
-            <X className="h-3.5 w-3.5" />
-          </Button>
-        )}
-      </div>
     </div>
   );
 }

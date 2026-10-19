@@ -17,7 +17,11 @@ function personalKey(key: string): string | null {
 export function readPersonalStorage(key: string): string | null {
   const scoped = personalKey(key);
   if (!scoped || typeof window === 'undefined') return null;
-  try { return window.localStorage.getItem(scoped); } catch { return null; }
+  try {
+    return window.localStorage.getItem(scoped);
+  } catch {
+    return null;
+  }
 }
 
 export function writePersonalStorage(key: string, value: string | null): void {
@@ -26,5 +30,7 @@ export function writePersonalStorage(key: string, value: string | null): void {
   try {
     if (value === null) window.localStorage.removeItem(scoped);
     else window.localStorage.setItem(scoped, value);
-  } catch { /* Private-mode or storage quota must not expose a different owner. */ }
+  } catch {
+    /* Private-mode or storage quota must not expose a different owner. */
+  }
 }

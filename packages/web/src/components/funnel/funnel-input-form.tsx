@@ -55,7 +55,7 @@ export function FunnelInputForm() {
   };
 
   return (
-    <form onSubmit={onSubmit} className="space-y-6">
+    <form onSubmit={(event) => void onSubmit(event)} className="space-y-6">
       <div className="space-y-2">
         <Label htmlFor="funnel-url" className="hud-label">
           URL inicial do funil (front)

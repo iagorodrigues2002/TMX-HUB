@@ -1,7 +1,7 @@
 'use client';
 
+import { type FunnelJobView, apiClient } from '@/lib/api-client';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient, type FunnelJobView } from '@/lib/api-client';
 
 const POLLING_STATES = new Set(['queued', 'crawling', 'packaging', 'uploading']);
 

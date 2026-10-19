@@ -1,22 +1,18 @@
+import type { CheerioAPI } from 'cheerio';
 import type { AnyNode, Element } from 'domhandler';
 import { isTag } from 'domhandler';
-import type { CheerioAPI } from 'cheerio';
 
 export interface SelectorOptions {
   preferIdRoot?: boolean;
   maxDepth?: number;
 }
 
-export function generateSelector(
-  $: CheerioAPI,
-  el: Element,
-  opts: SelectorOptions = {},
-): string {
-  const id = el.attribs?.['id'];
+export function generateSelector($: CheerioAPI, el: Element, opts: SelectorOptions = {}): string {
+  const id = el.attribs?.id;
   if (id && isSafeIdent(id)) {
     return `#${cssEscape(id)}`;
   }
-  const name = el.attribs?.['name'];
+  const name = el.attribs?.name;
   if (name && isSafeIdent(name)) {
     const tag = el.tagName.toLowerCase();
     return `${tag}[name="${cssEscapeAttr(name)}"]`;
@@ -42,15 +38,15 @@ export function generateSelector(
 }
 
 function describeNode($: CheerioAPI, el: Element): string {
-  const id = el.attribs?.['id'];
+  const id = el.attribs?.id;
   if (id && isSafeIdent(id)) return `#${cssEscape(id)}`;
   const tag = el.tagName.toLowerCase();
-  const action = el.attribs?.['action'];
+  const action = el.attribs?.action;
   if (tag === 'form' && action) {
     const idx = nthOfTypeIndex($, el);
     return `form[action="${cssEscapeAttr(action)}"]${idx > 1 ? `:nth-of-type(${idx})` : ''}`;
   }
-  const name = el.attribs?.['name'];
+  const name = el.attribs?.name;
   if (name && isSafeIdent(name)) {
     return `${tag}[name="${cssEscapeAttr(name)}"]`;
   }

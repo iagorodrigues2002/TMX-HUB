@@ -1,12 +1,12 @@
 'use client';
 
+import { PreviewFrame } from '@/components/editor/preview-frame';
+import { StatusPill } from '@/components/editor/status-pill';
+import { Button } from '@/components/ui/button';
+import { useCloneJob } from '@/hooks/use-clone-job';
+import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { use } from 'react';
-import { ArrowLeft } from 'lucide-react';
-import { PreviewFrame } from '@/components/editor/preview-frame';
-import { useCloneJob } from '@/hooks/use-clone-job';
-import { Button } from '@/components/ui/button';
-import { StatusPill } from '@/components/editor/status-pill';
 
 interface PreviewPageProps {
   params: Promise<{ id: string }>;
@@ -29,7 +29,8 @@ export default function PreviewPage({ params }: PreviewPageProps) {
         </Button>
         <div className="mx-2 h-6 w-px bg-white/10" aria-hidden />
         <p className="flex-1 truncate text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">
-          Preview final · <span className="text-white/80 normal-case tracking-normal">{job.data?.url ?? id}</span>
+          Preview final ·{' '}
+          <span className="text-white/80 normal-case tracking-normal">{job.data?.url ?? id}</span>
         </p>
         <StatusPill status={job.data?.status} progress={job.data?.progress} />
       </header>

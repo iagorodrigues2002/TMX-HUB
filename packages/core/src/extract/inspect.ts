@@ -1,5 +1,5 @@
-import * as cheerio from 'cheerio';
 import type { InspectResult } from '@page-cloner/shared';
+import * as cheerio from 'cheerio';
 import { resolveUrl } from '../assets/url-utils.js';
 
 // Path-level patterns: things like /checkout, /cart, /buy, etc.
@@ -133,7 +133,10 @@ export function inspectHtml(html: string, baseUrl: string): InspectResult {
     recordCandidate($(el).attr('href') ?? '', $(el).text() ?? '');
   });
   $('form[action]').each((_, el) => {
-    recordCandidate($(el).attr('action') ?? '', $(el).find('button, [type=submit]').first().text() ?? 'form');
+    recordCandidate(
+      $(el).attr('action') ?? '',
+      $(el).find('button, [type=submit]').first().text() ?? 'form',
+    );
   });
   $('[data-checkout-url], [data-href], [data-url]').each((_, el) => {
     const $el = $(el);

@@ -1,18 +1,11 @@
 'use client';
 
-import Link from 'next/link';
-import { use } from 'react';
-import {
-  ArrowLeft,
-  CheckCircle2,
-  Download,
-  Loader2,
-  Network,
-  XCircle,
-} from 'lucide-react';
 import { HubShell } from '@/components/hub/hub-shell';
 import { Button } from '@/components/ui/button';
 import { useFunnelJob } from '@/hooks/use-funnel-job';
+import { ArrowLeft, CheckCircle2, Download, Loader2, Network, XCircle } from 'lucide-react';
+import Link from 'next/link';
+import { use } from 'react';
 
 const STATUS_LABEL: Record<string, string> = {
   queued: 'Na fila',
@@ -53,9 +46,7 @@ export default function FunnelJobPage({ params }: { params: Promise<{ id: string
             <Network className="h-5 w-5 text-cyan-300" />
             <p className="hud-label">Funnel Clone · Job</p>
           </div>
-          <h1 className="break-all text-xl font-semibold text-white">
-            {data?.rootUrl ?? id}
-          </h1>
+          <h1 className="break-all text-xl font-semibold text-white">{data?.rootUrl ?? id}</h1>
         </header>
 
         <div className="glass-card space-y-5 p-6">
@@ -72,7 +63,7 @@ export default function FunnelJobPage({ params }: { params: Promise<{ id: string
               <div>
                 <p className="hud-label">Status</p>
                 <p className="text-[15px] font-semibold text-white">
-                  {data ? STATUS_LABEL[data.status] ?? data.status : 'Carregando…'}
+                  {data ? (STATUS_LABEL[data.status] ?? data.status) : 'Carregando…'}
                 </p>
               </div>
             </div>
@@ -115,9 +106,7 @@ export default function FunnelJobPage({ params }: { params: Promise<{ id: string
               </div>
               <div>
                 <dt className="hud-label">ZIP</dt>
-                <dd className="mt-1 font-mono text-white/80">
-                  {formatBytes(data.totalBytes)}
-                </dd>
+                <dd className="mt-1 font-mono text-white/80">{formatBytes(data.totalBytes)}</dd>
               </div>
             </dl>
           )}
@@ -145,7 +134,10 @@ export default function FunnelJobPage({ params }: { params: Promise<{ id: string
                         {p.error ? '⚠ erro' : formatBytes(p.bytes)}
                       </span>
                     </div>
-                    <p className="mt-0.5 truncate font-mono text-[10px] text-white/40" style={{ paddingLeft: p.depth * 12 + 30 }}>
+                    <p
+                      className="mt-0.5 truncate font-mono text-[10px] text-white/40"
+                      style={{ paddingLeft: p.depth * 12 + 30 }}
+                    >
                       {p.url}
                     </p>
                   </li>

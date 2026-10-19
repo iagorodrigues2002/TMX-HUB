@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
 import { usePrivacy } from '@/lib/privacy-context';
+import { useEffect, useRef } from 'react';
 
 /**
  * Keeps the application usable during screen sharing while replacing only
@@ -9,7 +9,8 @@ import { usePrivacy } from '@/lib/privacy-context';
  * nodes so future dashboards and popovers inherit privacy protection without
  * every financial component needing bespoke masking code.
  */
-const MONEY_RE = /(?:R\$|US\$|USD|EUR|€|GBP|£)\s*[-−]?\s*(?:\d{1,3}(?:[.\s,]\d{3})*|\d+)(?:[.,]\d{2})?/giu;
+const MONEY_RE =
+  /(?:R\$|US\$|USD|EUR|€|GBP|£)\s*[-−]?\s*(?:\d{1,3}(?:[.\s,]\d{3})*|\d+)(?:[.,]\d{2})?/giu;
 
 function isMaskableText(node: Text) {
   const parent = node.parentElement;

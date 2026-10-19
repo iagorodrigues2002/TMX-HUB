@@ -1,7 +1,21 @@
 'use client';
 
-import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  type DigiAuditItemView,
+  type DigiAuditStatusView,
+  type DigiAuditView,
+  type DigiItemStateView,
+  apiClient,
+} from '@/lib/api-client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
@@ -13,25 +27,11 @@ import {
   Loader2,
   ShieldAlert,
 } from 'lucide-react';
+import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import {
-  apiClient,
-  type DigiAuditItemView,
-  type DigiAuditStatusView,
-  type DigiAuditView,
-  type DigiItemStateView,
-} from '@/lib/api-client';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { cn } from '@/lib/utils';
+import { ItemRow } from './audit-detail-item-row';
+import { ProgressMini, STATUS_OPTIONS, progressOfSection } from './audit-detail-support';
 import {
   CHECKLIST,
   RED_FLAGS,
@@ -39,27 +39,7 @@ import {
   itemKey,
   totalCriticalItems,
   totalItems,
-  type ChecklistItem,
 } from './checklist-data';
-
-const STATUS_OPTIONS: Array<{ value: DigiAuditStatusView; label: string }> = [
-  { value: 'draft', label: 'Rascunho' },
-  { value: 'in_review', label: 'Em revisão' },
-  { value: 'approved', label: 'Aprovado' },
-  { value: 'rejected', label: 'Rejeitado' },
-  { value: 'abandoned', label: 'Abandonado' },
-];
-
-function progressOfSection(audit: DigiAuditView, sectionId: string) {
-  const section = CHECKLIST.find((s) => s.id === sectionId);
-  if (!section) return { done: 0, total: 0 };
-  let done = 0;
-  for (const item of section.items) {
-    const state = audit.items[itemKey(sectionId, item.id)]?.state;
-    if (state === 'done' || state === 'na') done++;
-  }
-  return { done, total: section.items.length };
-}
 
 export function AuditDetail({ id }: { id: string }) {
   const qc = useQueryClient();
@@ -81,7 +61,7 @@ export function AuditDetail({ id }: { id: string }) {
       apiClient.updateDigiAudit(id, patch),
     onSuccess: (updated) => {
       qc.setQueryData(['digi-audit', id], updated);
-      qc.invalidateQueries({ queryKey: ['digi-audits'] });
+      void qc.invalidateQueries({ queryKey: ['digi-audits'] });
     },
     onError: (err) => toast.error((err as Error).message),
   });
@@ -168,24 +148,23 @@ export function AuditDetail({ id }: { id: string }) {
         {/* Progress overview */}
         <div className="glass-card space-y-3 p-5">
           <div className="grid grid-cols-2 gap-4">
-            <ProgressMini
-              label="Geral"
-              done={overall.done}
-              total={overall.total}
-              tone="cyan"
-            />
+            <ProgressMini label="Geral" done={overall.done} total={overall.total} tone="cyan" />
             <ProgressMini
               label="Críticos"
               done={overall.critDone}
               total={overall.critTotal}
-              tone={overall.critDone === overall.critTotal && overall.critTotal > 0 ? 'emerald' : 'amber'}
+              tone={
+                overall.critDone === overall.critTotal && overall.critTotal > 0
+                  ? 'emerald'
+                  : 'amber'
+              }
             />
           </div>
           {overall.critDone < overall.critTotal && (
             <p className="flex items-start gap-1.5 text-[11px] text-amber-300/85">
               <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
-              {overall.critTotal - overall.critDone} item(ns) crítico(s) ainda pendente(s) — bloqueiam
-              aprovação segura.
+              {overall.critTotal - overall.critDone} item(ns) crítico(s) ainda pendente(s) —
+              bloqueiam aprovação segura.
             </p>
           )}
         </div>
@@ -212,10 +191,7 @@ export function AuditDetail({ id }: { id: string }) {
                       </span>
                     </div>
                     <div className="mt-1 h-0.5 overflow-hidden rounded-full bg-white/[0.06]">
-                      <div
-                        className="h-full bg-cyan-300/70"
-                        style={{ width: `${pct}%` }}
-                      />
+                      <div className="h-full bg-cyan-300/70" style={{ width: `${pct}%` }} />
                     </div>
                   </div>
                   {open ? (
@@ -266,9 +242,7 @@ export function AuditDetail({ id }: { id: string }) {
             <ShieldAlert className="h-4 w-4 text-rose-300" />
             <p className="hud-label text-rose-200">Bandeiras vermelhas</p>
           </div>
-          <p className="text-[11px] text-white/55">
-            Se qualquer um disso acionar, pause tudo:
-          </p>
+          <p className="text-[11px] text-white/55">Se qualquer um disso acionar, pause tudo:</p>
           <ul className="space-y-1.5">
             {RED_FLAGS.map((rf) => (
               <li key={rf.id} className="flex items-start gap-1.5 text-[11px] text-rose-100/80">
@@ -316,156 +290,6 @@ export function AuditDetail({ id }: { id: string }) {
           </a>
         </div>
       </aside>
-    </div>
-  );
-}
-
-function ItemRow({
-  item,
-  state,
-  onChange,
-}: {
-  item: ChecklistItem;
-  state: DigiAuditItemView | undefined;
-  onChange: (patch: Partial<DigiAuditItemView>) => void;
-}) {
-  const current = state?.state ?? 'pending';
-  const [showNotes, setShowNotes] = useState(!!state?.notes);
-  const [localNote, setLocalNote] = useState(state?.notes ?? '');
-  const [localUrl, setLocalUrl] = useState(state?.url ?? '');
-
-  useEffect(() => {
-    setLocalNote(state?.notes ?? '');
-    setLocalUrl(state?.url ?? '');
-  }, [state?.notes, state?.url]);
-
-  return (
-    <div
-      className={cn(
-        'rounded-md border p-2.5',
-        item.critical
-          ? 'border-amber-300/15 bg-amber-300/[0.02]'
-          : 'border-white/[0.06] bg-white/[0.02]',
-      )}
-    >
-      <div className="flex items-start gap-2">
-        <StateToggle current={current} onChange={(s) => onChange({ state: s })} />
-        <div className="min-w-0 flex-1">
-          <p
-            className={cn(
-              'text-[12.5px] leading-snug',
-              current === 'done' && 'text-white/60 line-through decoration-white/40',
-              current === 'na' && 'text-white/40',
-              current === 'pending' && 'text-white/85',
-            )}
-          >
-            {item.label}
-            {item.critical && (
-              <span className="ml-1.5 inline-block rounded-sm border border-amber-300/30 bg-amber-300/10 px-1 text-[8px] font-semibold uppercase tracking-[0.14em] text-amber-200/85">
-                crítico
-              </span>
-            )}
-          </p>
-          {item.hint && <p className="mt-0.5 text-[11px] text-white/45">{item.hint}</p>}
-          {item.hasUrl && (
-            <Input
-              value={localUrl}
-              onChange={(e) => setLocalUrl(e.target.value)}
-              onBlur={() => {
-                if (localUrl !== (state?.url ?? '')) onChange({ url: localUrl });
-              }}
-              placeholder="https://..."
-              className="mt-1.5 h-7 font-mono text-[11px]"
-            />
-          )}
-          {showNotes ? (
-            <textarea
-              value={localNote}
-              onChange={(e) => setLocalNote(e.target.value)}
-              onBlur={() => {
-                if (localNote !== (state?.notes ?? '')) onChange({ notes: localNote });
-              }}
-              placeholder="anotação"
-              rows={2}
-              className="mt-1.5 w-full rounded-md border border-white/[0.10] bg-white/[0.04] px-2 py-1 text-[11px] text-white/85 placeholder:text-white/30 focus:border-cyan-300/40 focus:outline-none"
-            />
-          ) : (
-            <button
-              type="button"
-              onClick={() => setShowNotes(true)}
-              className="mt-1 text-[10px] uppercase tracking-[0.14em] text-white/35 hover:text-cyan-300"
-            >
-              + nota
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function StateToggle({
-  current,
-  onChange,
-}: {
-  current: DigiItemStateView;
-  onChange: (s: DigiItemStateView) => void;
-}) {
-  const cycle = () => {
-    const next: DigiItemStateView =
-      current === 'pending' ? 'done' : current === 'done' ? 'na' : 'pending';
-    onChange(next);
-  };
-  const cls =
-    current === 'done'
-      ? 'border-emerald-300/40 bg-emerald-300/15 text-emerald-200'
-      : current === 'na'
-        ? 'border-white/[0.15] bg-white/[0.04] text-white/45'
-        : 'border-white/[0.18] bg-white/[0.04] text-white/65';
-  const label = current === 'done' ? '✓' : current === 'na' ? '—' : ' ';
-  return (
-    <button
-      type="button"
-      onClick={cycle}
-      title={`Estado: ${current}. Clique pra alternar.`}
-      className={cn(
-        'mt-0.5 grid h-5 w-5 shrink-0 cursor-pointer place-items-center rounded-sm border font-mono text-[11px] font-bold transition-colors',
-        cls,
-      )}
-    >
-      {label}
-    </button>
-  );
-}
-
-function ProgressMini({
-  label,
-  done,
-  total,
-  tone,
-}: {
-  label: string;
-  done: number;
-  total: number;
-  tone: 'cyan' | 'emerald' | 'amber';
-}) {
-  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-  const barClass = {
-    cyan: 'bg-cyan-300/70',
-    emerald: 'bg-emerald-300/70',
-    amber: 'bg-amber-300/70',
-  }[tone];
-  return (
-    <div>
-      <div className="flex items-baseline justify-between">
-        <p className="hud-label">{label}</p>
-        <span className="font-mono text-[12px] text-white/65">
-          {done}/{total} <span className="text-white/35">· {pct}%</span>
-        </span>
-      </div>
-      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
-        <div className={`h-full ${barClass}`} style={{ width: `${pct}%` }} />
-      </div>
     </div>
   );
 }

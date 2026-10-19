@@ -1,9 +1,11 @@
 import { readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { fileURLToPath } from 'node:url';
+import { inflateRawSync } from 'node:zlib';
 import * as cheerio from 'cheerio';
+import { describe, expect, it, vi } from 'vitest';
 import { bundle } from '../src/bundle/index.js';
+import { buildZip } from '../src/bundle/zip.js';
 import type { CloneState } from '../src/types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -94,6 +96,37 @@ describe('bundle (single HTML)', () => {
 });
 
 describe('bundle (zip)', () => {
+  it('rewrites every original URL when redirected assets share a final URL', async () => {
+    const state = makeState(
+      '<img src="/old.png"><img src="/alias.png"><img src="https://cdn.example.com/image.png">',
+    );
+    state.assets.entries = ['/old.png', '/alias.png'].map((path, index) => ({
+      id: `asset-${index}`,
+      url: 'https://cdn.example.com/image.png',
+      originalUrl: `https://example.com${path}`,
+      kind: 'image',
+      mime: 'image/png',
+      size: 5,
+      hash: 'fixture',
+      storageKey: 'fixture.png',
+    }));
+    const fetchUrl = vi.fn(async () => ({ data: Buffer.from('image'), mime: 'image/png' }));
+    const out = await buildZip(state, { applyEdits: false, fetchUrl });
+    expect(out.readUInt32LE(out.length - 22)).toBe(0x06054b50);
+    expect(out.readUInt16LE(out.length - 12)).toBe(2);
+    const nameLength = out.readUInt16LE(26);
+    expect(out.subarray(30, 30 + nameLength).toString()).toBe('index.html');
+    const htmlOffset = 30 + nameLength + out.readUInt16LE(28);
+    const $ = cheerio.load(inflateRawSync(out.subarray(htmlOffset)).toString());
+    expect(
+      $('img')
+        .map((_, el) => $(el).attr('src'))
+        .get(),
+    ).toEqual(['assets/fixture.png', 'assets/fixture.png', 'assets/fixture.png']);
+    expect(fetchUrl).toHaveBeenCalledOnce();
+    expect(fetchUrl).toHaveBeenCalledWith('https://cdn.example.com/image.png');
+  });
+
   it('produces a non-empty buffer with the ZIP magic bytes', async () => {
     const html = await loadFixture('simple.html');
     const state = makeState(html);

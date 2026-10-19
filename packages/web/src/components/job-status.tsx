@@ -1,8 +1,8 @@
 'use client';
 
-import { AlertCircle, Loader2 } from 'lucide-react';
-import type { CloneJob } from '@/lib/api-client';
 import { Card, CardContent } from '@/components/ui/card';
+import type { CloneJob } from '@/lib/api-client';
+import { AlertCircle, Loader2 } from 'lucide-react';
 
 interface JobStatusProps {
   job: CloneJob | undefined;

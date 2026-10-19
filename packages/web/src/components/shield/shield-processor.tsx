@@ -10,370 +10,46 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  type NicheView,
-  type ShieldCompressionMode,
-  type ShieldJobView,
-  apiClient,
-} from '@/lib/api-client';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Download,
-  FileArchive,
-  FileVideo,
-  Loader2,
-  Shuffle,
-  Trash2,
-  Upload,
-  XCircle,
-} from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
-import { toast } from 'sonner';
-
-const COMPRESSION_OPTIONS: Array<{ value: ShieldCompressionMode; label: string; hint: string }> = [
-  { value: 'none', label: 'Sem compressão', hint: 'mais rápido — não re-encoda o vídeo' },
-  { value: 'lossless', label: 'Sem perda visível', hint: 'CRF 18 — qualidade máxima' },
-  { value: 'balanced', label: 'Equilibrado', hint: 'CRF 23 — redução típica de 50%' },
-  { value: 'small', label: 'Tamanho mínimo', hint: 'CRF 28 — perda visível em close inspect' },
-];
-
-/** Maximum simultaneous uploads to keep network/UI sane. */
-const PARALLEL_UPLOADS = 5;
-
-/** Extensões de vídeo/áudio aceitas dentro de um ZIP (case-insensitive). */
-const ALLOWED_MEDIA_EXT = new Set(['mp4', 'mov', 'avi', 'webm', 'mkv', 'mp3', 'wav', 'm4a', 'aac']);
-
-function isZipFile(file: File): boolean {
-  const ext = file.name.split('.').pop()?.toLowerCase();
-  return (
-    file.type === 'application/zip' || file.type === 'application/x-zip-compressed' || ext === 'zip'
-  );
-}
-
-function extOf(name: string): string {
-  return (name.split('.').pop() || '').toLowerCase();
-}
-
-/**
- * Extrai vídeos/áudios de um ZIP no browser. Ignora pastas, arquivos ocultos
- * (.DS_Store, __MACOSX/) e qualquer extensão fora da whitelist. Retorna File[]
- * prontos pra entrar como slots normais.
- */
-async function extractMediaFromZip(zipFile: File): Promise<File[]> {
-  const { default: JSZip } = await import('jszip');
-  const buf = await zipFile.arrayBuffer();
-  const zip = await JSZip.loadAsync(buf);
-  const out: File[] = [];
-  const entries = Object.values(zip.files);
-  for (const entry of entries) {
-    if (entry.dir) continue;
-    if (entry.name.startsWith('__MACOSX/')) continue;
-    const baseName = entry.name.split('/').pop() || entry.name;
-    if (!baseName || baseName.startsWith('.')) continue;
-    const ext = extOf(baseName);
-    if (!ALLOWED_MEDIA_EXT.has(ext)) continue;
-    const blob = await entry.async('blob');
-    const mime =
-      ext === 'mp4' || ext === 'm4a'
-        ? 'video/mp4'
-        : ext === 'mov'
-          ? 'video/quicktime'
-          : ext === 'avi'
-            ? 'video/x-msvideo'
-            : ext === 'webm'
-              ? 'video/webm'
-              : ext === 'mkv'
-                ? 'video/x-matroska'
-                : ext === 'mp3'
-                  ? 'audio/mpeg'
-                  : ext === 'wav'
-                    ? 'audio/wav'
-                    : ext === 'aac'
-                      ? 'audio/aac'
-                      : 'application/octet-stream';
-    out.push(new File([blob], baseName, { type: mime }));
-  }
-  return out;
-}
-
-interface UploadSlot {
-  id: string; // local unique id
-  file: File;
-  status: 'pending' | 'uploading' | 'done' | 'failed';
-  progress: number; // 0..100
-  jobId?: string;
-  error?: string;
-}
-
-function newSlotId(): string {
-  return `up_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
-}
-
-function formatBytes(b: number): string {
-  if (b < 1024) return `${b} B`;
-  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
-  if (b < 1024 * 1024 * 1024) return `${(b / 1024 / 1024).toFixed(1)} MB`;
-  return `${(b / 1024 / 1024 / 1024).toFixed(2)} GB`;
-}
+import type { NicheView, ShieldCompressionMode } from '@/lib/api-client';
+import { AlertTriangle, FileArchive, Loader2, Shuffle, Upload } from 'lucide-react';
+import { ShieldJobStatus } from './shield-processor-shield-job-status';
+import { SlotRow } from './shield-processor-slot-row';
+import { COMPRESSION_OPTIONS } from './shield-processor-support';
+import { useShieldProcessorState } from './shield-processor-use-shield-processor-state';
 
 /**
  * @deprecated Legado sem imports vivos, confirmado em 2026-10-06.
  * Use `@/components/creative-studio/creative-studio`.
  */
 export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
-  const qc = useQueryClient();
-  const [slots, setSlots] = useState<UploadSlot[]>([]);
-  const [nicheId, setNicheId] = useState<string>('');
-  const [useWhiteAudio, setUseWhiteAudio] = useState(true);
-  const [whiteVolumeDb, setWhiteVolumeDb] = useState(-22);
-  const [compression, setCompression] = useState<ShieldCompressionMode>('none');
-  const [verifyTranscript, setVerifyTranscript] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [extractingZips, setExtractingZips] = useState(0);
-  const [draggingOver, setDraggingOver] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  // Bloqueia o browser de "abrir" arquivos que caem fora do drop zone
-  // (default action seria navegar pro arquivo). Mantém a janela inteira como
-  // capture pra não perder o evento.
-  useEffect(() => {
-    const onWindowDragOver = (e: DragEvent) => {
-      if (e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files')) {
-        e.preventDefault();
-      }
-    };
-    const onWindowDrop = (e: DragEvent) => {
-      // Só previne se não é dentro do drop zone (ele já preventDefault dele).
-      if (
-        e.dataTransfer &&
-        Array.from(e.dataTransfer.types).includes('Files') &&
-        !(e.target as HTMLElement)?.closest?.('[data-shield-dropzone]')
-      ) {
-        e.preventDefault();
-      }
-    };
-    window.addEventListener('dragover', onWindowDragOver);
-    window.addEventListener('drop', onWindowDrop);
-    return () => {
-      window.removeEventListener('dragover', onWindowDragOver);
-      window.removeEventListener('drop', onWindowDrop);
-    };
-  }, []);
-
-  // Default niche selection: first one with whites.
-  useEffect(() => {
-    if (!nicheId && niches.length > 0) {
-      const first = niches.find((n) => n.whites.length > 0) ?? niches[0];
-      if (first) setNicheId(first.id);
-    }
-  }, [niches, nicheId]);
-
-  const selectedNiche = niches.find((n) => n.id === nicheId);
-  const pendingCount = slots.filter((s) => s.status === 'pending').length;
-  const uploadingCount = slots.filter((s) => s.status === 'uploading').length;
-  const doneCount = slots.filter((s) => s.status === 'done').length;
-  const failedCount = slots.filter((s) => s.status === 'failed').length;
-  const activeJobIds = slots.filter((s) => s.jobId).map((s) => s.jobId!);
-
-  const onAddFiles = async (fileList: FileList | null) => {
-    if (!fileList || fileList.length === 0) return;
-    // CRÍTICO: copia os Files ANTES de mexer no input. fileList é a referência
-    // viva de input.files; reset do input.value zera essa coleção, então leitura
-    // depois do reset retornaria []. Array.from copia as referências dos File
-    // pra um array novo que sobrevive ao reset.
-    const incoming = Array.from(fileList);
-    if (fileRef.current) fileRef.current.value = '';
-
-    const zipFiles: File[] = [];
-    const mediaFiles: File[] = [];
-    const rejected: { name: string; reason: string }[] = [];
-
-    for (const f of incoming) {
-      if (isZipFile(f)) {
-        zipFiles.push(f);
-        continue;
-      }
-      const ext = extOf(f.name);
-      const mime = (f.type || '').toLowerCase();
-      const isMediaByMime = mime.startsWith('video/') || mime.startsWith('audio/');
-      const isMediaByExt = ALLOWED_MEDIA_EXT.has(ext);
-      if (isMediaByMime || isMediaByExt) {
-        mediaFiles.push(f);
-      } else {
-        rejected.push({
-          name: f.name,
-          reason: `tipo "${mime || ext || 'desconhecido'}" não suportado`,
-        });
-      }
-    }
-
-    for (const r of rejected) {
-      toast.warning(`Ignorado: ${r.name} — ${r.reason}`);
-    }
-
-    if (mediaFiles.length > 0) {
-      const adds: UploadSlot[] = mediaFiles.map((f) => ({
-        id: newSlotId(),
-        file: f,
-        status: 'pending',
-        progress: 0,
-      }));
-      setSlots((s) => [...s, ...adds]);
-      toast.info(
-        `${mediaFiles.length} arquivo(s) adicionado(s)${
-          zipFiles.length > 0 ? ' · extraindo ZIP(s)…' : ''
-        }`,
-      );
-    }
-
-    if (zipFiles.length === 0) return;
-
-    setExtractingZips((n) => n + zipFiles.length);
-    try {
-      const { default: JSZip } = await import('jszip');
-      const results = await Promise.allSettled(
-        zipFiles.map(async (zip) => {
-          try {
-            const buf = await zip.arrayBuffer();
-            const z = await JSZip.loadAsync(buf);
-            const out: File[] = [];
-            for (const entry of Object.values(z.files)) {
-              if (entry.dir) continue;
-              if (entry.name.startsWith('__MACOSX/')) continue;
-              const baseName = entry.name.split('/').pop() || entry.name;
-              if (!baseName || baseName.startsWith('.')) continue;
-              const ext = extOf(baseName);
-              if (!ALLOWED_MEDIA_EXT.has(ext)) continue;
-              const blob = await entry.async('blob');
-              const mime =
-                ext === 'mp4' || ext === 'm4a'
-                  ? 'video/mp4'
-                  : ext === 'mov'
-                    ? 'video/quicktime'
-                    : ext === 'avi'
-                      ? 'video/x-msvideo'
-                      : ext === 'webm'
-                        ? 'video/webm'
-                        : ext === 'mkv'
-                          ? 'video/x-matroska'
-                          : ext === 'mp3'
-                            ? 'audio/mpeg'
-                            : ext === 'wav'
-                              ? 'audio/wav'
-                              : ext === 'aac'
-                                ? 'audio/aac'
-                                : 'application/octet-stream';
-              out.push(new File([blob], baseName, { type: mime }));
-            }
-            if (out.length === 0) {
-              toast.warning(`${zip.name}: ZIP aberto mas sem vídeos/áudios reconhecidos.`);
-            } else {
-              toast.success(`${zip.name}: ${out.length} mídia(s) extraídas.`);
-            }
-            return out;
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            // eslint-disable-next-line no-console
-            console.error('[shield] erro ao extrair ZIP', zip.name, err);
-            toast.error(`${zip.name}: erro ao abrir ZIP — ${msg}`);
-            throw err;
-          }
-        }),
-      );
-      const flat: File[] = [];
-      for (const r of results) {
-        if (r.status === 'fulfilled') flat.push(...r.value);
-      }
-      if (flat.length > 0) {
-        const adds: UploadSlot[] = flat.map((f) => ({
-          id: newSlotId(),
-          file: f,
-          status: 'pending',
-          progress: 0,
-        }));
-        setSlots((s) => [...s, ...adds]);
-      }
-    } finally {
-      setExtractingZips((n) => Math.max(0, n - zipFiles.length));
-    }
-  };
-
-  const removeSlot = (id: string) => {
-    setSlots((s) => s.filter((x) => x.id !== id));
-  };
-  const clearAll = () => {
-    setSlots([]);
-  };
-
-  const uploadOne = async (slot: UploadSlot): Promise<void> => {
-    setSlots((s) =>
-      s.map((x) => (x.id === slot.id ? { ...x, status: 'uploading', progress: 0 } : x)),
-    );
-    try {
-      const job = await apiClient.createShieldJob(
-        {
-          file: slot.file,
-          ...(useWhiteAudio ? { nicheId } : {}),
-          useWhiteAudio,
-          whiteVolumeDb,
-          compression,
-          verifyTranscript,
-        },
-        (pct) => {
-          setSlots((s) => s.map((x) => (x.id === slot.id ? { ...x, progress: pct } : x)));
-        },
-      );
-      setSlots((s) =>
-        s.map((x) =>
-          x.id === slot.id ? { ...x, status: 'done', progress: 100, jobId: job.id } : x,
-        ),
-      );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setSlots((s) =>
-        s.map((x) => (x.id === slot.id ? { ...x, status: 'failed', error: msg } : x)),
-      );
-    }
-  };
-
-  const onSubmit = async () => {
-    const pending = slots.filter((s) => s.status === 'pending');
-    if (pending.length === 0) {
-      toast.error('Selecione pelo menos um vídeo.');
-      return;
-    }
-    if (useWhiteAudio && !nicheId) {
-      toast.error('Selecione um nicho.');
-      return;
-    }
-    if (useWhiteAudio && (!selectedNiche || selectedNiche.whites.length === 0)) {
-      toast.error('Esse nicho não tem áudios white.');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      // Concurrency-limited upload pool.
-      const queue = [...pending];
-      const workers: Promise<void>[] = [];
-      const runNext = async (): Promise<void> => {
-        const next = queue.shift();
-        if (!next) return;
-        await uploadOne(next);
-        return runNext();
-      };
-      for (let i = 0; i < Math.min(PARALLEL_UPLOADS, queue.length); i++) {
-        workers.push(runNext());
-      }
-      await Promise.all(workers);
-      qc.invalidateQueries({ queryKey: ['shield-jobs-list'] });
-      toast.success('Uploads concluídos.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  const {
+    slots,
+    nicheId,
+    setNicheId,
+    useWhiteAudio,
+    setUseWhiteAudio,
+    whiteVolumeDb,
+    setWhiteVolumeDb,
+    compression,
+    setCompression,
+    verifyTranscript,
+    setVerifyTranscript,
+    submitting,
+    extractingZips,
+    draggingOver,
+    setDraggingOver,
+    fileRef,
+    selectedNiche,
+    pendingCount,
+    uploadingCount,
+    doneCount,
+    failedCount,
+    activeJobIds,
+    onAddFiles,
+    removeSlot,
+    clearAll,
+    onSubmit,
+  } = useShieldProcessorState({ niches });
 
   return (
     <div className="space-y-4">
@@ -425,7 +101,7 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
             onDrop={(e) => {
               e.preventDefault();
               setDraggingOver(false);
-              onAddFiles(e.dataTransfer.files);
+              void onAddFiles(e.dataTransfer.files);
             }}
           >
             {extractingZips > 0 ? (
@@ -453,7 +129,7 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
               accept="video/*,audio/*,.zip,application/zip,application/x-zip-compressed"
               multiple
               className="sr-only"
-              onChange={(e) => onAddFiles(e.target.files)}
+              onChange={(e) => void onAddFiles(e.target.files)}
               disabled={submitting}
             />
           </label>
@@ -607,7 +283,7 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
 
         <div className="flex justify-end gap-2 pt-2">
           <Button
-            onClick={onSubmit}
+            onClick={() => void onSubmit()}
             disabled={
               submitting ||
               pendingCount === 0 ||
@@ -632,186 +308,6 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
           {activeJobIds.map((id) => (
             <ShieldJobStatus key={id} jobId={id} />
           ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SlotRow({ slot, onRemove }: { slot: UploadSlot; onRemove: () => void }) {
-  const icon =
-    slot.status === 'done' ? (
-      <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-300" />
-    ) : slot.status === 'failed' ? (
-      <XCircle className="h-3 w-3 shrink-0 text-rose-300" />
-    ) : slot.status === 'uploading' ? (
-      <Loader2 className="h-3 w-3 shrink-0 animate-spin text-cyan-300" />
-    ) : (
-      <FileVideo className="h-3 w-3 shrink-0 text-white/45" />
-    );
-  return (
-    <li className="rounded px-2 py-1.5 hover:bg-white/[0.03]">
-      <div className="flex items-center gap-2 text-[12px]">
-        {icon}
-        <span className="flex-1 truncate text-white/85" title={slot.file.name}>
-          {slot.file.name}
-        </span>
-        <span className="shrink-0 font-mono text-[10px] text-white/40">
-          {formatBytes(slot.file.size)}
-        </span>
-        {slot.status === 'pending' && (
-          <button
-            type="button"
-            onClick={onRemove}
-            className="text-white/40 hover:text-rose-300"
-            title="Remover da fila"
-          >
-            <Trash2 className="h-3 w-3" />
-          </button>
-        )}
-      </div>
-      {slot.status === 'uploading' && (
-        <div className="ml-5 mt-1 h-0.5 overflow-hidden rounded-full bg-white/[0.08]">
-          <div
-            className="h-full bg-cyan-300/70 transition-all"
-            style={{ width: `${slot.progress}%` }}
-          />
-        </div>
-      )}
-      {slot.status === 'failed' && slot.error && (
-        <p className="ml-5 mt-1 truncate text-[10px] text-rose-300/85" title={slot.error}>
-          {slot.error}
-        </p>
-      )}
-    </li>
-  );
-}
-
-function ShieldJobStatus({ jobId }: { jobId: string }) {
-  const { data, refetch } = useQuery<ShieldJobView>({
-    queryKey: ['shield-job', jobId],
-    queryFn: () => apiClient.getShieldJob(jobId),
-    refetchInterval: (q) => {
-      const s = q.state.data?.status;
-      if (s === 'ready' || s === 'failed') return false;
-      return 3000;
-    },
-    refetchOnWindowFocus: false,
-  });
-
-  if (!data) {
-    return (
-      <div className="glass-card flex items-center gap-3 p-4 text-[13px] text-white/55">
-        <Loader2 className="h-4 w-4 animate-spin text-cyan-300" />
-        Carregando job…
-      </div>
-    );
-  }
-
-  const status = data.status;
-  const isWorking = status === 'queued' || status === 'processing' || status === 'verifying';
-
-  const statusText = {
-    queued: 'Na fila',
-    processing: 'Processando (FFmpeg)',
-    verifying: 'Verificando com AssemblyAI',
-    ready: 'Concluído',
-    failed: 'Falhou',
-  }[status];
-
-  return (
-    <div
-      className={`glass-card space-y-4 p-5 ${
-        status === 'failed' ? 'border-rose-300/30' : status === 'ready' ? 'border-cyan-300/30' : ''
-      }`}
-    >
-      <div className="flex items-baseline justify-between">
-        <div className="space-y-1">
-          <p className="hud-label flex items-center gap-2">
-            {isWorking && <Loader2 className="h-3 w-3 animate-spin text-cyan-300" />}
-            {status === 'ready' && <CheckCircle2 className="h-3 w-3 text-emerald-300" />}
-            {status === 'failed' && <XCircle className="h-3 w-3 text-rose-300" />}
-            {statusText}
-          </p>
-          <h3 className="text-[15px] font-semibold text-white">{data.input.filename}</h3>
-          <p className="text-[11px] text-white/45">
-            Nicho: {data.niche.name} · White: {data.white.label} · Vol: {data.white.volumeDb}dB
-            {' · '}
-            Compressão: {data.compression}
-          </p>
-        </div>
-        <Button size="sm" variant="ghost" onClick={() => refetch()} disabled={isWorking}>
-          Atualizar
-        </Button>
-      </div>
-
-      {status === 'failed' && data.error && (
-        <div className="rounded-md border border-rose-300/30 bg-rose-300/[0.06] p-3 text-[12px] text-rose-100/85">
-          {data.error}
-        </div>
-      )}
-
-      {status === 'ready' && data.output && (
-        <div className="space-y-3 rounded-md border border-cyan-300/20 bg-cyan-300/[0.04] p-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="truncate text-[13px] font-semibold text-white">
-                {data.output.filename}
-              </p>
-              <p className="text-[11px] text-white/55">
-                {formatBytes(data.output.bytes)}
-                {data.input.bytes > 0 && (
-                  <> · {Math.round((data.output.bytes / data.input.bytes) * 100)}% do original</>
-                )}
-              </p>
-            </div>
-            <Button asChild disabled={!data.output.downloadUrl}>
-              <a
-                href={data.output.downloadUrl ?? '#'}
-                download={data.output.filename}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <Download className="h-4 w-4" />
-                Baixar
-              </a>
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {data.transcriptStatus && (
-        <div className="space-y-2">
-          <p className="hud-label">Verificação AssemblyAI</p>
-          <p className="text-[11px] text-white/55">
-            Status:{' '}
-            <span
-              className={
-                data.transcriptStatus === 'done'
-                  ? 'text-emerald-300'
-                  : data.transcriptStatus === 'failed'
-                    ? 'text-rose-300'
-                    : 'text-amber-300'
-              }
-            >
-              {data.transcriptStatus}
-            </span>
-          </p>
-          {data.transcriptStatus === 'failed' && data.transcriptError && (
-            <pre className="max-h-[160px] overflow-auto whitespace-pre-wrap rounded-md border border-rose-300/30 bg-rose-300/[0.06] p-3 text-[12px] text-rose-100/85">
-              {data.transcriptError}
-            </pre>
-          )}
-          {data.transcriptStatus === 'skipped' && (
-            <p className="text-[11px] text-white/45">
-              ASSEMBLYAI_API_KEY não está configurada no servidor — verificação ignorada.
-            </p>
-          )}
-          {data.transcript !== undefined && (
-            <pre className="max-h-[260px] overflow-auto whitespace-pre-wrap rounded-md border border-white/[0.08] bg-black/30 p-3 text-[12px] text-white/75">
-              {data.transcript || '(transcript vazio — ótimo sinal!)'}
-            </pre>
-          )}
         </div>
       )}
     </div>

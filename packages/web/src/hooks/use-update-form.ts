@@ -1,8 +1,9 @@
 'use client';
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import type { Form, UpdateFormRequest } from '@page-cloner/shared';
 import { apiClient } from '@/lib/api-client';
+import { getSessionGeneration } from '@/lib/session-data';
+import type { Form, UpdateFormRequest } from '@page-cloner/shared';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { formsQueryKey } from './use-clone-forms';
 
 interface UpdateFormVars {
@@ -13,11 +14,18 @@ interface UpdateFormVars {
 export function useUpdateForm(jobId: string) {
   const qc = useQueryClient();
   const key = formsQueryKey(jobId);
+  const generation = getSessionGeneration();
+  const isCurrentSession = () => generation === getSessionGeneration();
 
   return useMutation<Form, Error, UpdateFormVars, { previous?: Form[] }>({
-    mutationFn: ({ formId, body }) => apiClient.updateForm(jobId, formId, body),
+    mutationFn: ({ formId, body }) => {
+      if (!isCurrentSession()) throw new Error('Sessão alterada. Abra a página novamente.');
+      return apiClient.updateForm(jobId, formId, body);
+    },
     onMutate: async ({ formId, body }) => {
+      if (!isCurrentSession()) return {};
       await qc.cancelQueries({ queryKey: key });
+      if (!isCurrentSession()) return {};
       const previous = qc.getQueryData<Form[]>(key);
       if (previous) {
         qc.setQueryData<Form[]>(
@@ -37,11 +45,13 @@ export function useUpdateForm(jobId: string) {
       return { previous };
     },
     onError: (_err, _vars, ctx) => {
+      if (!isCurrentSession()) return;
       if (ctx?.previous) {
         qc.setQueryData(key, ctx.previous);
       }
     },
     onSuccess: (updated) => {
+      if (!isCurrentSession()) return;
       const current = qc.getQueryData<Form[]>(key);
       if (current) {
         qc.setQueryData<Form[]>(

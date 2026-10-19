@@ -2,147 +2,43 @@
 
 import { Button } from '@/components/ui/button';
 import { DataState } from '@/components/ui/data-state';
-import { FormField } from '@/components/ui/form-field';
-import { Input } from '@/components/ui/input';
-import { apiClient } from '@/lib/api-client';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Activity,
   Cable,
   CheckCircle2,
   Database,
-  History,
   Loader2,
   RefreshCw,
-  Send,
   ShieldCheck,
   TriangleAlert,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
-
-const DEFAULT_FORM = {
-  name: 'UTMify Geral',
-  api_token: '',
-  endpoint_url: 'https://api.utmify.com.br/api-credentials/orders',
-  pixel_id: '',
-  enabled: true,
-};
+import { renderDashboardSettings } from './utmify-global-center-render-dashboard-settings';
+import { MetricCard, UtmifyLoadingState } from './utmify-global-center-support';
+import { useUtmifyGlobalCenterState } from './utmify-global-center-use-utmify-global-center-state';
 
 export function UtmifyGlobalCenter() {
-  const qc = useQueryClient();
-  const config = useQuery({
-    queryKey: ['utmify-global'],
-    queryFn: () => apiClient.getUtmifyGlobal(),
-    refetchInterval: 15_000,
-  });
-  const [form, setForm] = useState(DEFAULT_FORM);
-  const [selectedOfferIds, setSelectedOfferIds] = useState<string[]>([]);
-  const [offerRoutesDirty, setOfferRoutesDirty] = useState(false);
-  const [attemptedSave, setAttemptedSave] = useState(false);
-
-  useEffect(() => {
-    if (!config.isSuccess) return;
-    const destination = config.data.destination;
-    setForm(
-      destination
-        ? {
-            name: destination.name,
-            api_token: '',
-            endpoint_url: destination.endpoint_url,
-            pixel_id: destination.pixel_id ?? '',
-            enabled: destination.enabled,
-          }
-        : DEFAULT_FORM,
-    );
-  }, [config.data, config.isSuccess]);
-
-  useEffect(() => {
-    if (!config.data || offerRoutesDirty) return;
-    setSelectedOfferIds(
-      config.data.offers.filter((offer) => offer.enabled).map((offer) => offer.id),
-    );
-  }, [config.data, offerRoutesDirty]);
-
-  const save = useMutation({
-    mutationFn: () =>
-      apiClient.saveUtmifyGlobal({
-        name: form.name.trim(),
-        ...(form.api_token.trim() ? { api_token: form.api_token.trim() } : {}),
-        endpoint_url: form.endpoint_url.trim(),
-        ...(form.pixel_id.trim() ? { pixel_id: form.pixel_id.trim() } : { pixel_id: null }),
-        enabled: form.enabled,
-      }),
-    onSuccess: () => {
-      toast.success(
-        'UTMify Geral configurada. As ofertas continuarão enviando também para seus destinos individuais.',
-      );
-      setAttemptedSave(false);
-      setForm((current) => ({ ...current, api_token: '' }));
-      void qc.invalidateQueries({ queryKey: ['utmify-global'] });
-    },
-    onError: (error) =>
-      toast.error(
-        error instanceof Error ? error.message : 'Não foi possível salvar a UTMify Geral.',
-      ),
-  });
-  const test = useMutation({
-    mutationFn: () => apiClient.testUtmifyGlobal(),
-    onSuccess: (result) => toast.success(`Teste enviado: ${result.transaction_id}`),
-    onError: (error) =>
-      toast.error(error instanceof Error ? error.message : 'A UTMify recusou o teste.'),
-  });
-  const replay = useMutation({
-    mutationFn: () => apiClient.replayUtmifyGlobal(),
-    onSuccess: (result) => {
-      toast.success(
-        `${result.queued} pedido(s) histórico(s) enfileirado(s); ${result.recovered} pendência(s) recuperada(s).`,
-      );
-      void qc.invalidateQueries({ queryKey: ['utmify-global'] });
-    },
-    onError: (error) =>
-      toast.error(
-        error instanceof Error ? error.message : 'Não foi possível reenviar o histórico.',
-      ),
-  });
-  const saveOfferRoutes = useMutation({
-    mutationFn: () => apiClient.saveUtmifyGlobalOffers(selectedOfferIds),
-    onSuccess: () => {
-      toast.success(
-        'Ofertas da UTMify Geral atualizadas. Novos eventos só serão enviados pelas selecionadas.',
-      );
-      setOfferRoutesDirty(false);
-      void qc.invalidateQueries({ queryKey: ['utmify-global'] });
-    },
-    onError: (error) =>
-      toast.error(
-        error instanceof Error ? error.message : 'Não foi possível atualizar as ofertas.',
-      ),
-  });
-
-  const stats = config.data?.stats;
-  const hasPeriodData = Boolean(stats && (stats.orders_7d > 0 || stats.web_events_7d > 0));
-  const deliveryRate =
-    stats && stats.orders_7d > 0
-      ? `${Math.round((stats.orders_delivered_7d / stats.orders_7d) * 100)}%`
-      : '0%';
-  const nameError = form.name.trim() ? null : 'Informe o nome da dashboard.';
-  const tokenError =
-    form.api_token.trim() || config.data?.destination?.token_configured
-      ? null
-      : 'Informe o API Token da UTMify Geral.';
-  const pixelError =
-    form.pixel_id.trim() && !/^[a-f0-9]{24}$/i.test(form.pixel_id.trim())
-      ? 'Use exatamente 24 caracteres hexadecimais.'
-      : null;
-  const endpointError = form.endpoint_url.trim() ? null : 'Informe o endpoint de pedidos.';
-  const hasFormError = Boolean(nameError || tokenError || pixelError || endpointError);
-
-  const handleSave = () => {
-    setAttemptedSave(true);
-    if (hasFormError) return;
-    save.mutate();
-  };
+  const {
+    config,
+    form,
+    setForm,
+    selectedOfferIds,
+    setSelectedOfferIds,
+    offerRoutesDirty,
+    setOfferRoutesDirty,
+    attemptedSave,
+    save,
+    test,
+    replay,
+    saveOfferRoutes,
+    stats,
+    hasPeriodData,
+    deliveryRate,
+    nameError,
+    tokenError,
+    pixelError,
+    endpointError,
+    handleSave,
+  } = useUtmifyGlobalCenterState();
 
   return (
     <div className="signal-reveal space-y-6">
@@ -220,143 +116,21 @@ export function UtmifyGlobalCenter() {
             />
           )}
 
-          <form
-            className="rounded-2xl border border-cyan-300/15 bg-bg-elevated/90 p-5 sm:p-6"
-            onSubmit={(event) => {
-              event.preventDefault();
-              handleSave();
-            }}
-          >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 className="font-semibold text-white">Destino agregador</h2>
-                <p className="mt-1 text-xs leading-5 text-white/40">
-                  Use o token e o Pixel ID pertencentes à dashboard geral da UTMify.
-                </p>
-              </div>
-              <label className="flex min-h-11 cursor-pointer items-center gap-2 text-xs text-white/60">
-                <input
-                  type="checkbox"
-                  checked={form.enabled}
-                  onChange={(event) => setForm({ ...form, enabled: event.target.checked })}
-                  className="h-4 w-4 accent-cyan-300"
-                />
-                Integração ativa
-              </label>
-            </div>
-
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
-              <FormField
-                id="utmify-global-name"
-                label="Nome da dashboard"
-                error={attemptedSave ? nameError : null}
-              >
-                <Input
-                  id="utmify-global-name"
-                  value={form.name}
-                  aria-invalid={attemptedSave && Boolean(nameError)}
-                  aria-describedby={
-                    attemptedSave && nameError ? 'utmify-global-name-error' : undefined
-                  }
-                  onChange={(event) => setForm({ ...form, name: event.target.value })}
-                />
-              </FormField>
-              <FormField
-                id="utmify-global-token"
-                label="API Token"
-                help={
-                  config.data.destination?.token_configured
-                    ? 'Token salvo. Deixe em branco para manter o atual.'
-                    : 'Token da dashboard geral da UTMify.'
-                }
-                error={attemptedSave ? tokenError : null}
-              >
-                <Input
-                  id="utmify-global-token"
-                  type="password"
-                  autoComplete="new-password"
-                  value={form.api_token}
-                  aria-invalid={attemptedSave && Boolean(tokenError)}
-                  aria-describedby={
-                    attemptedSave && tokenError
-                      ? 'utmify-global-token-error'
-                      : 'utmify-global-token-help'
-                  }
-                  onChange={(event) => setForm({ ...form, api_token: event.target.value })}
-                />
-              </FormField>
-              <FormField
-                id="utmify-global-pixel"
-                label="Pixel ID geral"
-                help="Opcional. Use 24 caracteres hexadecimais."
-                error={attemptedSave ? pixelError : null}
-              >
-                <Input
-                  id="utmify-global-pixel"
-                  value={form.pixel_id}
-                  className="font-mono"
-                  aria-invalid={attemptedSave && Boolean(pixelError)}
-                  aria-describedby={
-                    attemptedSave && pixelError
-                      ? 'utmify-global-pixel-error'
-                      : 'utmify-global-pixel-help'
-                  }
-                  onChange={(event) => setForm({ ...form, pixel_id: event.target.value })}
-                />
-              </FormField>
-              <FormField
-                id="utmify-global-endpoint"
-                label="Endpoint de pedidos"
-                error={attemptedSave ? endpointError : null}
-              >
-                <Input
-                  id="utmify-global-endpoint"
-                  type="url"
-                  value={form.endpoint_url}
-                  aria-invalid={attemptedSave && Boolean(endpointError)}
-                  aria-describedby={
-                    attemptedSave && endpointError ? 'utmify-global-endpoint-error' : undefined
-                  }
-                  onChange={(event) => setForm({ ...form, endpoint_url: event.target.value })}
-                />
-              </FormField>
-            </div>
-
-            <div className="mt-4 flex flex-wrap justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => replay.mutate()}
-                disabled={!config.data.configured || replay.isPending}
-                className="gap-2 border-white/10"
-              >
-                {replay.isPending ? (
-                  <Loader2 className="animate-spin" />
-                ) : (
-                  <History className="h-4 w-4" />
-                )}
-                {replay.isPending ? 'Reenviando…' : 'Reenviar histórico'}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => test.mutate()}
-                disabled={!config.data.configured || test.isPending}
-                className="gap-2 border-white/10"
-              >
-                {test.isPending ? (
-                  <Loader2 className="animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
-                {test.isPending ? 'Enviando…' : 'Enviar pedido teste'}
-              </Button>
-              <Button type="submit" disabled={save.isPending}>
-                {save.isPending && <Loader2 className="animate-spin" />}
-                {save.isPending ? 'Salvando…' : 'Salvar UTMify Geral'}
-              </Button>
-            </div>
-          </form>
+          {renderDashboardSettings({
+            dashboardConfig: config.data,
+            config,
+            form,
+            setForm,
+            attemptedSave,
+            save,
+            test,
+            replay,
+            nameError,
+            tokenError,
+            pixelError,
+            endpointError,
+            handleSave,
+          })}
 
           <section className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-5 sm:p-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
@@ -439,45 +213,5 @@ export function UtmifyGlobalCenter() {
         </>
       ) : null}
     </div>
-  );
-}
-
-function MetricCard({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: typeof Database;
-  label: string;
-  value: string | number;
-}) {
-  return (
-    <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-4">
-      <Icon className="h-4 w-4 text-cyan-300" />
-      <p className="mt-4 font-mono text-2xl tabular-nums text-white">{value}</p>
-      <p className="mt-1 text-[10px] uppercase tracking-[0.15em] text-white/35">{label}</p>
-    </div>
-  );
-}
-
-function UtmifyLoadingState() {
-  const skeletons = ['pedidos', 'entregues', 'eventos', 'saude'];
-
-  return (
-    <output
-      aria-live="polite"
-      aria-label="Carregando configuração da UTMify Geral"
-      className="block"
-    >
-      <section className="grid animate-pulse gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {skeletons.map((skeleton) => (
-          <div
-            key={skeleton}
-            className="h-28 rounded-xl border border-white/[0.08] bg-white/[0.025]"
-          />
-        ))}
-      </section>
-      <div className="mt-6 h-72 animate-pulse rounded-2xl border border-white/[0.08] bg-white/[0.025]" />
-    </output>
   );
 }

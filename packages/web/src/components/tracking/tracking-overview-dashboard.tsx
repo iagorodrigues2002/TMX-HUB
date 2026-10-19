@@ -13,20 +13,38 @@ import { useState } from 'react';
 
 const SAO_PAULO_TIME_ZONE = 'America/Sao_Paulo';
 
-function reversedMetrics(row: {
-  refunded_revenue_brl_minor: string; chargeback_revenue_brl_minor: string;
-  refunded_revenue_usd_minor: string; chargeback_revenue_usd_minor: string;
-  refund_chargeback_fee_brl_minor: string; refund_chargeback_fee_usd_minor: string;
-  gross_revenue_brl_minor: string; gross_revenue_usd_minor: string;
-}, currency: string) {
+function reversedMetrics(
+  row: {
+    refunded_revenue_brl_minor: string;
+    chargeback_revenue_brl_minor: string;
+    refunded_revenue_usd_minor: string;
+    chargeback_revenue_usd_minor: string;
+    refund_chargeback_fee_brl_minor: string;
+    refund_chargeback_fee_usd_minor: string;
+    gross_revenue_brl_minor: string;
+    gross_revenue_usd_minor: string;
+  },
+  currency: string,
+) {
   const brl = Number(row.refunded_revenue_brl_minor) + Number(row.chargeback_revenue_brl_minor);
   const usd = Number(row.refunded_revenue_usd_minor) + Number(row.chargeback_revenue_usd_minor);
   const impactBrl = brl + Number(row.refund_chargeback_fee_brl_minor);
   const impactUsd = usd + Number(row.refund_chargeback_fee_usd_minor);
-  const gross = Number(currency === 'USD' ? row.gross_revenue_usd_minor : row.gross_revenue_brl_minor);
-  return { brl: String(brl), usd: String(usd), impactBrl: String(impactBrl), impactUsd: String(impactUsd),
-    percentage: formatRefundRevenuePercentage(refundRevenuePercentage(currency === 'USD' ? usd : brl, gross)),
-    impactPercentage: formatRefundRevenuePercentage(refundRevenuePercentage(currency === 'USD' ? impactUsd : impactBrl, gross)) };
+  const gross = Number(
+    currency === 'USD' ? row.gross_revenue_usd_minor : row.gross_revenue_brl_minor,
+  );
+  return {
+    brl: String(brl),
+    usd: String(usd),
+    impactBrl: String(impactBrl),
+    impactUsd: String(impactUsd),
+    percentage: formatRefundRevenuePercentage(
+      refundRevenuePercentage(currency === 'USD' ? usd : brl, gross),
+    ),
+    impactPercentage: formatRefundRevenuePercentage(
+      refundRevenuePercentage(currency === 'USD' ? impactUsd : impactBrl, gross),
+    ),
+  };
 }
 
 function saoPauloDate(date = new Date()) {
@@ -46,7 +64,7 @@ function integer(value: number | undefined) {
 
 export function TrackingOverviewDashboard() {
   const { isPrivate } = usePrivacy();
-  const percentage = (value: string) => isPrivate ? '****' : value;
+  const percentage = (value: string) => (isPrivate ? '****' : value);
   const [from, setFrom] = useState(() => saoPauloDate());
   const [to, setTo] = useState(() => saoPauloDate());
   const [displayCurrency] = useDisplayCurrency();
@@ -194,13 +212,14 @@ export function TrackingOverviewDashboard() {
                       <span className="tmx-kpi-strip-label">Impacto total das devoluções</span>
                     </div>
                     <p className="mono-num tmx-kpi-strip-value text-danger">
-                      {(totals?.fees_missing_operations ?? 0) > 0 ? '—' : pick(
-                        reversed.impactBrl,
-                        reversed.impactUsd,
-                      )}
+                      {(totals?.fees_missing_operations ?? 0) > 0
+                        ? '—'
+                        : pick(reversed.impactBrl, reversed.impactUsd)}
                     </p>
                     <p className="tmx-kpi-strip-detail">
-                      {(totals?.fees_missing_operations ?? 0) > 0 ? 'Impacto indisponível: taxas não configuradas' : `${percentage(reversed.impactPercentage)} do bruto · inclui multas configuradas por gateway`}
+                      {(totals?.fees_missing_operations ?? 0) > 0
+                        ? 'Impacto indisponível: taxas não configuradas'
+                        : `${percentage(reversed.impactPercentage)} do bruto · inclui multas configuradas por gateway`}
                     </p>
                   </div>
                 </div>
@@ -234,7 +253,10 @@ export function TrackingOverviewDashboard() {
                 </div>
               </div>
 
-              <p className="text-xs text-white/45">Devoluções pela data da ocorrência; podem ser de compras anteriores. Percentuais sobre o faturamento bruto do período, não sobre uma coorte de compras.</p>
+              <p className="text-xs text-white/45">
+                Devoluções pela data da ocorrência; podem ser de compras anteriores. Percentuais
+                sobre o faturamento bruto do período, não sobre uma coorte de compras.
+              </p>
 
               <div className="overflow-x-auto rounded-lg border border-white/[0.08]">
                 <table className="w-full min-w-[820px] border-collapse text-sm">
@@ -244,64 +266,74 @@ export function TrackingOverviewDashboard() {
                       <th className="p-3 text-right font-medium tabular-nums">Pedidos</th>
                       <th className="p-3 text-right font-medium tabular-nums">Bruto</th>
                       <th className="p-3 text-right font-medium tabular-nums">Com erro</th>
-                      <th className="p-3 text-right font-medium tabular-nums">Reembolsos e chargebacks</th>
+                      <th className="p-3 text-right font-medium tabular-nums">
+                        Reembolsos e chargebacks
+                      </th>
                       <th className="p-3 text-right font-medium tabular-nums">Taxas</th>
-                      <th className="p-3 text-right font-medium tabular-nums">Impacto total c/ multas</th>
+                      <th className="p-3 text-right font-medium tabular-nums">
+                        Impacto total c/ multas
+                      </th>
                       <th className="p-3 text-right font-medium tabular-nums">Em reserva</th>
                       <th className="p-3 text-right font-medium tabular-nums">Líquido agora</th>
                       <th className="p-3 text-right font-medium tabular-nums">Líquido total</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {account.offers.map((offer) => { const offerReversed = reversedMetrics(offer, displayCurrency); return (
-                      <tr
-                        key={offer.offer_id}
-                        className="border-b border-white/[0.05] text-white/75 last:border-0"
-                      >
-                        <td className="p-3 font-medium text-white/90">{offer.offer_name}</td>
-                        <td className="mono-num p-3 text-right tabular-nums">
-                          {integer(offer.paid_orders)}
-                        </td>
-                        <td className="mono-num p-3 text-right tabular-nums">
-                          {pick(offer.gross_revenue_brl_minor, offer.gross_revenue_usd_minor)}
-                        </td>
-                        <td className="mono-num p-3 text-right tabular-nums text-amber-200/80">
-                          <span className="block">
-                            {pick(offer.failed_revenue_brl_minor, offer.failed_revenue_usd_minor)}
-                          </span>
-                          <span className="mt-1 block text-[10px] text-white/35">
-                            {integer(offer.failed_orders)} pedidos
-                          </span>
-                        </td>
-                        <td className="mono-num p-3 text-right tabular-nums text-amber-200/80">
-                          {pick(offerReversed.brl, offerReversed.usd)}
-                          <span className="mt-1 block text-[10px] text-white/50">{percentage(offerReversed.percentage)} do bruto</span>
-                        </td>
-                        <td className="mono-num p-3 text-right tabular-nums text-white/50">
-                          {pick(offer.fees_brl_minor, offer.fees_usd_minor)}
-                        </td>
-                        <td className="mono-num p-3 text-right tabular-nums text-danger/80">
-                          <span className="block">
-                            {(offer.fees_missing_operations ?? 0) > 0 ? '—' : pick(
-                              offerReversed.impactBrl,
-                              offerReversed.impactUsd,
-                            )}
-                          </span>
-                          <span className="mt-1 block text-[10px] text-white/35">
-                            {(offer.fees_missing_operations ?? 0) > 0 ? 'Taxas não configuradas' : `${percentage(offerReversed.impactPercentage)} do bruto`}
-                          </span>
-                        </td>
-                        <td className="mono-num p-3 text-right tabular-nums text-white/50">
-                          {pick(offer.reserve_brl_minor, offer.reserve_usd_minor)}
-                        </td>
-                        <td className="mono-num p-3 text-right font-medium tabular-nums text-cyan-200">
-                          {pick(offer.net_available_brl_minor, offer.net_available_usd_minor)}
-                        </td>
-                        <td className="mono-num p-3 text-right font-medium tabular-nums text-emerald-200">
-                          {pick(offer.net_revenue_brl_minor, offer.net_revenue_usd_minor)}
-                        </td>
-                      </tr>
-                    ); })}
+                    {account.offers.map((offer) => {
+                      const offerReversed = reversedMetrics(offer, displayCurrency);
+                      return (
+                        <tr
+                          key={offer.offer_id}
+                          className="border-b border-white/[0.05] text-white/75 last:border-0"
+                        >
+                          <td className="p-3 font-medium text-white/90">{offer.offer_name}</td>
+                          <td className="mono-num p-3 text-right tabular-nums">
+                            {integer(offer.paid_orders)}
+                          </td>
+                          <td className="mono-num p-3 text-right tabular-nums">
+                            {pick(offer.gross_revenue_brl_minor, offer.gross_revenue_usd_minor)}
+                          </td>
+                          <td className="mono-num p-3 text-right tabular-nums text-amber-200/80">
+                            <span className="block">
+                              {pick(offer.failed_revenue_brl_minor, offer.failed_revenue_usd_minor)}
+                            </span>
+                            <span className="mt-1 block text-[10px] text-white/35">
+                              {integer(offer.failed_orders)} pedidos
+                            </span>
+                          </td>
+                          <td className="mono-num p-3 text-right tabular-nums text-amber-200/80">
+                            {pick(offerReversed.brl, offerReversed.usd)}
+                            <span className="mt-1 block text-[10px] text-white/50">
+                              {percentage(offerReversed.percentage)} do bruto
+                            </span>
+                          </td>
+                          <td className="mono-num p-3 text-right tabular-nums text-white/50">
+                            {pick(offer.fees_brl_minor, offer.fees_usd_minor)}
+                          </td>
+                          <td className="mono-num p-3 text-right tabular-nums text-danger/80">
+                            <span className="block">
+                              {(offer.fees_missing_operations ?? 0) > 0
+                                ? '—'
+                                : pick(offerReversed.impactBrl, offerReversed.impactUsd)}
+                            </span>
+                            <span className="mt-1 block text-[10px] text-white/35">
+                              {(offer.fees_missing_operations ?? 0) > 0
+                                ? 'Taxas não configuradas'
+                                : `${percentage(offerReversed.impactPercentage)} do bruto`}
+                            </span>
+                          </td>
+                          <td className="mono-num p-3 text-right tabular-nums text-white/50">
+                            {pick(offer.reserve_brl_minor, offer.reserve_usd_minor)}
+                          </td>
+                          <td className="mono-num p-3 text-right font-medium tabular-nums text-cyan-200">
+                            {pick(offer.net_available_brl_minor, offer.net_available_usd_minor)}
+                          </td>
+                          <td className="mono-num p-3 text-right font-medium tabular-nums text-emerald-200">
+                            {pick(offer.net_revenue_brl_minor, offer.net_revenue_usd_minor)}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

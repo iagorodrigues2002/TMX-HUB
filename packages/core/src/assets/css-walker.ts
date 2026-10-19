@@ -28,7 +28,7 @@ export function walkCss(css: string, opts: WalkOptions): WalkResult {
     collectedUrls.push(abs);
     const replaced = opts.visit(url, abs);
     const finalUrl = replaced ?? url;
-    rule.params = `url("${escapeUrlForCss(finalUrl)}")${rest ? ' ' + rest : ''}`;
+    rule.params = `url("${escapeUrlForCss(finalUrl)}")${rest ? ` ${rest}` : ''}`;
   });
 
   root.walkDecls((decl: Declaration) => {

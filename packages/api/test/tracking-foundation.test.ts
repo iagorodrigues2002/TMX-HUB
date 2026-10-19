@@ -153,8 +153,13 @@ describe('reliable tracking foundation', () => {
 
   it('normalizes VendePay card labels to the strict UTMify enum', () => {
     const payload = buildUtmifyOrderPayload({
-      orderId: 'order-card', provider: 'vendepay', status: 'paid', amountMinor: 100,
-      currency: 'BRL', createdAt: new Date('2026-09-07T12:34:56.000Z'), buyer: {},
+      orderId: 'order-card',
+      provider: 'vendepay',
+      status: 'paid',
+      amountMinor: 100,
+      currency: 'BRL',
+      createdAt: new Date('2026-09-07T12:34:56.000Z'),
+      buyer: {},
       source: { payment_method: 'card' },
     });
     expect(payload.paymentMethod).toBe('credit_card');
@@ -188,27 +193,48 @@ describe('reliable tracking foundation', () => {
 
   it('composes the UTMify Meta signature from landing names and recovered ids', () => {
     const payload = buildUtmifyOrderPayload({
-      orderId: 'pjr-eng-1', provider: 'vendepay', status: 'paid', amountMinor: 2490,
-      currency: 'BRL', createdAt: new Date('2026-09-06T10:00:00.000Z'), buyer: {},
+      orderId: 'pjr-eng-1',
+      provider: 'vendepay',
+      status: 'paid',
+      amountMinor: 2490,
+      currency: 'BRL',
+      createdAt: new Date('2026-09-06T10:00:00.000Z'),
+      buyer: {},
       source: {
-        utm_source: 'fb', utm_medium: 'paid_social', utm_campaign: 'PJR ENG CBO',
-        utm_content: 'CRIATIVO 12', utm_term: 'CONJUNTO US',
-        campaign_id: '1201', adset_id: '1202', ad_id: '1203', placement: 'Facebook_Mobile_Feed',
+        utm_source: 'fb',
+        utm_medium: 'paid_social',
+        utm_campaign: 'PJR ENG CBO',
+        utm_content: 'CRIATIVO 12',
+        utm_term: 'CONJUNTO US',
+        campaign_id: '1201',
+        adset_id: '1202',
+        ad_id: '1203',
+        placement: 'Facebook_Mobile_Feed',
       },
     });
     expect(payload.trackingParameters).toEqual({
-      src: null, sck: null, utm_source: 'FB', utm_medium: 'CONJUNTO US|1202',
-      utm_campaign: 'PJR ENG CBO|1201', utm_content: 'CRIATIVO 12|1203',
+      src: null,
+      sck: null,
+      utm_source: 'FB',
+      utm_medium: 'CONJUNTO US|1202',
+      utm_campaign: 'PJR ENG CBO|1201',
+      utm_content: 'CRIATIVO 12|1203',
       utm_term: 'Facebook_Mobile_Feed',
     });
   });
 
   it('appends the Meta id when the campaign name itself contains a pipe', () => {
     const payload = buildUtmifyOrderPayload({
-      orderId: 'pjr-eng-pipe', provider: 'vendepay', status: 'paid', amountMinor: 2490,
-      currency: 'BRL', createdAt: new Date('2026-09-07T10:00:00.000Z'), buyer: {},
+      orderId: 'pjr-eng-pipe',
+      provider: 'vendepay',
+      status: 'paid',
+      amountMinor: 2490,
+      currency: 'BRL',
+      createdAt: new Date('2026-09-07T10:00:00.000Z'),
+      buyer: {},
       source: {
-        utm_campaign: '[HT][CAT|CBO][1-1-5] [PJR_ENG]', campaign_id: '120249466116200101',
+        utm_campaign: '[HT][CAT|CBO][1-1-5] [PJR_ENG]',
+        campaign_id: '120249466116200101',
       },
     });
     expect(payload.trackingParameters.utm_campaign).toBe(

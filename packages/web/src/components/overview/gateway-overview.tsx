@@ -1,6 +1,6 @@
 'use client';
-import type { TrackingOverviewAccount } from '@/lib/api-client';
 import { formatCurrency, formatInt } from '@/components/dashboard/kpi-cards';
+import type { TrackingOverviewAccount } from '@/lib/api-client';
 import { usePrivacy } from '@/lib/privacy-context';
 
 const labels: Record<string, string> = {
@@ -55,14 +55,14 @@ export function GatewayOverview({ accounts }: { accounts: TrackingOverviewAccoun
                         </span>
                       )}
                     </td>
-                    {[row.fees_brl_minor, row.reserve_brl_minor, row.penalty_brl_minor].map(
-                      (value, index) => (
-                        <td key={index} className="text-right">
+                    {(['fees_brl_minor', 'reserve_brl_minor', 'penalty_brl_minor'] as const).map(
+                      (field) => (
+                        <td key={field} className="text-right">
                           {row.fees_missing_operations
                             ? 'Configuração incompleta'
                             : isPrivate
                               ? '****'
-                              : formatCurrency((value ?? 0) / 100, 'BRL')}
+                              : formatCurrency((row[field] ?? 0) / 100, 'BRL')}
                         </td>
                       ),
                     )}

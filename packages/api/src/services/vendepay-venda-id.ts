@@ -1,9 +1,4 @@
-const explicitVendaIdKeys = new Set([
-  'vendid',
-  'vendaid',
-  'venda_id',
-  'vend_id',
-]);
+const explicitVendaIdKeys = new Set(['vendid', 'vendaid', 'venda_id', 'vend_id']);
 const checkoutIdKeys = new Set([
   'checkoutid',
   'checkout_id',

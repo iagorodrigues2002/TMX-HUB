@@ -4,162 +4,54 @@ import { formatCurrency, formatRoas } from '@/components/dashboard/kpi-cards';
 import { Button } from '@/components/ui/button';
 import { DataState } from '@/components/ui/data-state';
 import { DateRangeFilter } from '@/components/ui/date-range-filter';
-import { FormField } from '@/components/ui/form-field';
-import { Input } from '@/components/ui/input';
 import { Kpi } from '@/components/ui/kpi';
-import { type OfferView, apiClient } from '@/lib/api-client';
-import { useAuth } from '@/lib/auth-context';
-import { type DateRange, PERIOD_DATE_PRESETS, rollingDateRange } from '@/lib/date-range';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  ArrowRight,
-  Building2,
-  Loader2,
-  Plus,
-  Receipt,
-  RefreshCw,
-  TrendingUp,
-  Wallet,
-} from 'lucide-react';
+import { PERIOD_DATE_PRESETS } from '@/lib/date-range';
+import { ArrowRight, Building2, Plus, Receipt, RefreshCw, TrendingUp, Wallet } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
-import { toast } from 'sonner';
 import { OfferCard } from './offer-card';
 import { OfferEditDialog } from './offer-edit-dialog';
-import { OfferMemberPicker } from './offer-member-picker';
+import { renderCreateOfferForm } from './offer-list-render-create-offer-form';
+import { syncLabel } from './offer-list-sync-label';
+import { useOfferListState } from './offer-list-use-offer-list-state';
 
 export function OfferList() {
-  const qc = useQueryClient();
-  const { user } = useAuth();
-  const [period, setPeriod] = useState(() => rollingDateRange(7));
-  const { from, to } = period;
-  const [showCreate, setShowCreate] = useState(false);
-  const [companyName, setCompanyName] = useState('');
-  const [name, setName] = useState('');
-  const [dashboardId, setDashboardId] = useState('');
-  const [utmifyLogin, setUtmifyLogin] = useState('');
-  const [utmifyAccess, setUtmifyAccess] = useState(false);
-  const [utmifyPassword, setUtmifyPassword] = useState('');
-  const [editing, setEditing] = useState<OfferView | null>(null);
-  const [memberIds, setMemberIds] = useState<string[]>([]);
-  const [createAttempted, setCreateAttempted] = useState(false);
-  const [filterPhase, setFilterPhase] = useState<'idle' | 'exiting' | 'waiting' | 'entering'>(
-    'idle',
-  );
-  const filterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const usersQuery = useQuery({
-    queryKey: ['users-list'],
-    queryFn: () => apiClient.listUsers(),
-    enabled: user?.role === 'admin',
-  });
-
-  const offersQuery = useQuery<OfferView[]>({
-    queryKey: ['offers'],
-    queryFn: () => apiClient.listOffers(),
-    refetchInterval: 30_000,
-  });
-  const summaryQuery = useQuery({
-    queryKey: ['dashboard-summary', from, to],
-    queryFn: () => apiClient.getDashboardSummary({ from, to }),
-    refetchInterval: 60_000,
-  });
-  const offers = offersQuery.data ?? [];
-
-  useEffect(() => {
-    if (filterPhase !== 'waiting' || summaryQuery.isFetching) return;
-
-    setFilterPhase('entering');
-    filterTimerRef.current = setTimeout(() => setFilterPhase('idle'), 180);
-  }, [filterPhase, summaryQuery.isFetching]);
-
-  useEffect(
-    () => () => {
-      if (filterTimerRef.current) clearTimeout(filterTimerRef.current);
-    },
-    [],
-  );
-
-  const changePeriod = (nextPeriod: DateRange) => {
-    if (nextPeriod.from === from && nextPeriod.to === to) return;
-    if (filterTimerRef.current) clearTimeout(filterTimerRef.current);
-
-    setFilterPhase('exiting');
-    filterTimerRef.current = setTimeout(() => {
-      setPeriod(nextPeriod);
-      setFilterPhase('waiting');
-    }, 120);
-  };
-
-  const createMut = useMutation({
-    mutationFn: () =>
-      apiClient.createOffer({
-        company_name: companyName.trim(),
-        name: name.trim(),
-        utmify_access_enabled: utmifyAccess,
-        ...(utmifyAccess ? {dashboard_id: dashboardId.trim(),utmify_login: utmifyLogin.trim(),utmify_password: utmifyPassword} : {}),
-        ...(user?.role === 'admin' ? { member_ids: memberIds } : {}),
-      }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['offers'] });
-      void qc.invalidateQueries({ queryKey: ['dashboard-summary'] });
-      setShowCreate(false);
-      setCompanyName('');
-      setName('');
-      setDashboardId('');
-      setUtmifyLogin('');
-      setUtmifyPassword('');
-      setMemberIds([]);
-      setCreateAttempted(false);
-      toast.success(utmifyAccess ? 'Oferta criada. A primeira sincronização já começou.' : 'Oferta criada sem acesso à dashboard UTMify.');
-      setUtmifyAccess(false);
-    },
-    onError: (error) => toast.error((error as Error).message),
-  });
-
-  const deleteMut = useMutation({
-    mutationFn: (id: string) => apiClient.deleteOffer(id),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['offers'] });
-      void qc.invalidateQueries({ queryKey: ['dashboard-summary'] });
-      toast.success('Oferta removida.');
-    },
-    onError: (error) => toast.error((error as Error).message),
-  });
-
-  const syncMut = useMutation({
-    mutationFn: (id: string) => apiClient.syncOffer(id),
-    onSuccess: (result) => {
-      void qc.invalidateQueries({ queryKey: ['offers'] });
-      void qc.invalidateQueries({ queryKey: ['dashboard-summary'] });
-      toast.success(
-        result.skipped
-          ? 'A sincronização já estava em andamento.'
-          : `${result.ads} ads atualizados${result.failedDays ? ` · ${result.failedDays} dia(s) com erro` : ''}.`,
-      );
-    },
-    onError: (error) => toast.error((error as Error).message),
-  });
-
-  const canCreate =
-    companyName.trim() && name.trim() && (!utmifyAccess || (dashboardId.trim() && utmifyLogin.trim() && utmifyPassword));
-  const createErrors = {
-    companyName: companyName.trim() ? null : 'Informe o nome da empresa.',
-    name: name.trim() ? null : 'Informe o nome da oferta.',
-    dashboardId: !utmifyAccess || dashboardId.trim() ? null : 'Informe o ID da dashboard.',
-    utmifyLogin: !utmifyAccess || utmifyLogin.trim() ? null : 'Informe o login da UTMify.',
-    utmifyPassword: !utmifyAccess || utmifyPassword ? null : 'Informe a senha da UTMify.',
-  };
-  const summary = summaryQuery.data;
-  const visibleSummaryOffers =
-    summary?.accounts.reduce((total, account) => total + account.offers.length, 0) ?? 0;
-  const animateSummaryContainer = visibleSummaryOffers > 20;
-  const filterMotionClass =
-    filterPhase === 'exiting' || filterPhase === 'waiting'
-      ? 'opacity-0 transition-opacity duration-[120ms] ease-out motion-reduce:transition-none'
-      : filterPhase === 'entering'
-        ? 'animate-[tmx-tabs-content-in_180ms_ease-out_both] motion-reduce:animate-none'
-        : '';
+  const {
+    user,
+    period,
+    showCreate,
+    setShowCreate,
+    companyName,
+    setCompanyName,
+    name,
+    setName,
+    dashboardId,
+    setDashboardId,
+    utmifyLogin,
+    setUtmifyLogin,
+    utmifyAccess,
+    setUtmifyAccess,
+    utmifyPassword,
+    setUtmifyPassword,
+    editing,
+    setEditing,
+    memberIds,
+    setMemberIds,
+    createAttempted,
+    setCreateAttempted,
+    usersQuery,
+    offersQuery,
+    summaryQuery,
+    offers,
+    changePeriod,
+    createMut,
+    deleteMut,
+    syncMut,
+    canCreate,
+    createErrors,
+    summary,
+    animateSummaryContainer,
+    filterMotionClass,
+  } = useOfferListState();
 
   return (
     <div className="space-y-7">
@@ -317,107 +209,30 @@ export function OfferList() {
           </Button>
         </div>
 
-        {showCreate && (
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              setCreateAttempted(true);
-              if (canCreate) createMut.mutate();
-            }}
-            className="glass-card space-y-4 p-5"
-          >
-            <div>
-              <p className="hud-label">Nova conexão UTMify</p>
-              <p className="mt-1 text-[12px] text-white/45">
-                Login e senha ficam criptografados no backend e nunca retornam para o navegador.
-              </p>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <FormField
-                id="offer-company"
-                label="Empresa"
-                error={createAttempted ? createErrors.companyName : null}
-              >
-                <Input
-                  value={companyName}
-                  onChange={(e) => setCompanyName(e.target.value)}
-                  placeholder="Ex: Empresa 1"
-                />
-              </FormField>
-              <FormField
-                id="offer-name"
-                label="Nome da oferta"
-                error={createAttempted ? createErrors.name : null}
-              >
-                <Input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Ex: PFL Brasil"
-                />
-              </FormField>
-              <label className="col-span-full flex items-start gap-3 rounded-lg border border-white/10 p-3 text-sm">
-                <input type="checkbox" aria-label="Permitir acesso à dashboard UTMify" checked={utmifyAccess}
-                  onChange={e=>setUtmifyAccess(e.target.checked)} className="mt-1" />
-                <span>Permitir acesso à dashboard UTMify
-                  <span className="mt-1 block text-xs text-white/50">Opcional. Desmarcado: sem login ou importação da dashboard. O envio de vendas por API é configurado separadamente no Tracking.</span>
-                </span>
-              </label>
-              {utmifyAccess && <>
-              <FormField
-                id="offer-utmify-login"
-                label="Login UTMify"
-                error={createAttempted ? createErrors.utmifyLogin : null}
-              >
-                <Input
-                  value={utmifyLogin}
-                  onChange={(e) => setUtmifyLogin(e.target.value)}
-                  autoComplete="username"
-                  placeholder="seu@email.com"
-                />
-              </FormField>
-              <FormField
-                id="offer-utmify-password"
-                label="Senha UTMify"
-                error={createAttempted ? createErrors.utmifyPassword : null}
-              >
-                <Input
-                  type="password"
-                  value={utmifyPassword}
-                  onChange={(e) => setUtmifyPassword(e.target.value)}
-                  autoComplete="new-password"
-                  placeholder="••••••••"
-                />
-              </FormField>
-              <FormField
-                id="offer-dashboard-id"
-                label="ID da dashboard"
-                error={createAttempted ? createErrors.dashboardId : null}
-              >
-                <Input
-                  value={dashboardId}
-                  onChange={(e) => setDashboardId(e.target.value)}
-                  className="font-mono text-[12px]"
-                  placeholder="6a2182d753f10e2ba0fb2ed2"
-                />
-              </FormField>
-              </>}
-            </div>
-            {user?.role === 'admin' && (
-              <OfferMemberPicker
-                members={usersQuery.data ?? []}
-                selected={memberIds}
-                onChange={setMemberIds}
-                loading={usersQuery.isLoading}
-              />
-            )}
-            <div className="flex justify-end">
-              <Button type="submit" disabled={createMut.isPending}>
-                {createMut.isPending && <Loader2 className="h-4 w-4 animate-spin" />}Criar e
-                sincronizar
-              </Button>
-            </div>
-          </form>
-        )}
+        {showCreate &&
+          renderCreateOfferForm({
+            user,
+            companyName,
+            setCompanyName,
+            name,
+            setName,
+            dashboardId,
+            setDashboardId,
+            utmifyLogin,
+            setUtmifyLogin,
+            utmifyAccess,
+            setUtmifyAccess,
+            utmifyPassword,
+            setUtmifyPassword,
+            memberIds,
+            setMemberIds,
+            createAttempted,
+            setCreateAttempted,
+            usersQuery,
+            createMut,
+            canCreate,
+            createErrors,
+          })}
 
         {offersQuery.isLoading ? (
           <DataState variant="loading" title="Carregando ofertas…" />
@@ -468,7 +283,12 @@ export function OfferList() {
                         variant="ghost"
                         size="sm"
                         onClick={() => syncMut.mutate(offer.id)}
-                        disabled={syncMut.isPending || offer.syncStatus === 'syncing' || offer.utmifyAccessEnabled === false || !offer.utmifyConfigured}
+                        disabled={
+                          syncMut.isPending ||
+                          offer.syncStatus === 'syncing' ||
+                          offer.utmifyAccessEnabled === false ||
+                          !offer.utmifyConfigured
+                        }
                       >
                         <RefreshCw
                           className={`h-3.5 w-3.5 ${offer.syncStatus === 'syncing' ? 'animate-spin' : ''}`}
@@ -489,14 +309,4 @@ export function OfferList() {
       )}
     </div>
   );
-}
-
-function syncLabel(offer: OfferView): string {
-  if (offer.syncStatus === 'syncing') return 'Sincronizando agora…';
-  if (offer.syncStatus === 'partial') {
-    return `Parcial: ${offer.lastSyncError ?? 'alguns dias falharam'}`;
-  }
-  if (offer.syncStatus === 'error') return `Erro: ${offer.lastSyncError ?? 'verifique a conexão'}`;
-  if (offer.lastSyncAt) return `Atualizado ${new Date(offer.lastSyncAt).toLocaleString('pt-BR')}`;
-  return offer.utmifyConfigured ? 'Aguardando primeira sincronização' : 'UTMify não conectada';
 }

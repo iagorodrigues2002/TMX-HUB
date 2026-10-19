@@ -1,8 +1,8 @@
 'use client';
-import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
+import { apiClient } from '@/lib/api-client';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { toast } from 'sonner';
 type Order = Awaited<ReturnType<typeof apiClient.syzeOrders>>['orders'][number];
 function OrderClassification({
@@ -143,7 +143,9 @@ export function SyzepayOrders({ connectionId }: { connectionId: string }) {
       {query.isError ? (
         <p role="alert" className="mt-3 text-red-300">
           Não foi possível carregar os pedidos.{' '}
-          <button onClick={() => void query.refetch()}>Tentar novamente</button>
+          <button type="button" onClick={() => void query.refetch()}>
+            Tentar novamente
+          </button>
         </p>
       ) : query.isLoading ? (
         <p className="mt-3 text-white/45">Carregando pedidos…</p>

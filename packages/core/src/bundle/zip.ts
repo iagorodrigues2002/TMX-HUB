@@ -1,9 +1,9 @@
 import archiver from 'archiver';
 import * as cheerio from 'cheerio';
-import { request } from 'undici';
-import type { CloneState, Form, Link } from '../types.js';
 import { walkCss } from '../assets/css-walker.js';
 import { storageKeyFor } from '../assets/manifest.js';
+import { publicRequest as request } from '../fetch/public-network.js';
+import type { CloneState, Form, Link } from '../types.js';
 
 interface AssetData {
   data: Buffer;
@@ -29,12 +29,17 @@ export async function buildZip(state: CloneState, opts: ZipBundleOptions): Promi
 
   for (const entry of state.assets.entries) {
     if (!entry.url) continue;
-    if (urlToKey.has(entry.url)) continue;
-    const data = await fetcher(entry.url);
-    if (!data) continue;
-    const key = entry.storageKey ?? storageKeyFor(entry.hash || hashish(entry.url), data.mime, entry.url);
-    urlToKey.set(entry.url, `assets/${key}`);
-    fetched.set(entry.url, data);
+    let assetPath = urlToKey.get(entry.url);
+    if (!assetPath) {
+      const data = await fetcher(entry.url);
+      if (!data) continue;
+      const key =
+        entry.storageKey ?? storageKeyFor(entry.hash || hashish(entry.url), data.mime, entry.url);
+      assetPath = `assets/${key}`;
+      urlToKey.set(entry.url, assetPath);
+      fetched.set(entry.url, data);
+    }
+    urlToKey.set(entry.originalUrl, assetPath);
   }
 
   rewriteAttrs($, urlToKey, state.finalUrl);
@@ -94,11 +99,7 @@ function applyLinkEdits($: cheerio.CheerioAPI, links: Link[]): void {
   }
 }
 
-function rewriteAttrs(
-  $: cheerio.CheerioAPI,
-  urlToKey: Map<string, string>,
-  baseUrl: string,
-): void {
+function rewriteAttrs($: cheerio.CheerioAPI, urlToKey: Map<string, string>, baseUrl: string): void {
   const attrTargets: Array<[string, string]> = [
     ['img', 'src'],
     ['source', 'src'],
@@ -145,9 +146,7 @@ function rewriteStyleBlocks(
       cssBaseUrl: baseUrl,
       visit: (_raw, abs) => urlToKey.get(abs),
     });
-    const unwrapped = result.css
-      .replace(/^\s*__pc_inline__\s*\{\s*/, '')
-      .replace(/\s*\}\s*$/, '');
+    const unwrapped = result.css.replace(/^\s*__pc_inline__\s*\{\s*/, '').replace(/\s*\}\s*$/, '');
     node.attr('style', unwrapped);
   });
 }

@@ -146,7 +146,7 @@ export default function DebugPage() {
           <h2 className="mb-3 font-semibold text-emerald-400">Testes de conectividade</h2>
           <button
             type="button"
-            onClick={runChecks}
+            onClick={() => void runChecks()}
             className="mb-4 rounded bg-emerald-600 px-3 py-1.5 text-black hover:bg-emerald-500"
           >
             Executar testes
