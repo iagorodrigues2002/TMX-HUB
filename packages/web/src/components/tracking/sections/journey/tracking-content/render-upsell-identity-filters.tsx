@@ -2,7 +2,7 @@
 import { Button } from '@/components/ui/button';
 import { renderUpsellIdentities } from './render-upsell-identities';
 import type { TrackingContentContext } from './tracking-content-context';
-import { UPSELL_IDENTITIES_PAGE_SIZE } from './tracking-helpers';
+import { UpsellPagination } from './upsell-pagination';
 export function renderUpsellIdentityFilters(context: TrackingContentContext) {
   const {
     canManage,
@@ -16,6 +16,8 @@ export function renderUpsellIdentityFilters(context: TrackingContentContext) {
     upsellIdentities,
     upsellIdentityOffset,
     setUpsellIdentityOffset,
+    upsellIdentityPageSize,
+    setUpsellIdentityPageSize,
   } = context;
   return (
     <div className="mt-5 overflow-hidden rounded-xl border border-white/[0.08]">
@@ -102,45 +104,13 @@ export function renderUpsellIdentityFilters(context: TrackingContentContext) {
       {!upsellIdentities.isLoading && !filteredUpsellIdentities.length && (
         <p className="px-4 py-5 text-sm text-white/40">Nenhum comprador encontrado neste filtro.</p>
       )}
-      {!upsellIdentities.isLoading && (upsellIdentities.data?.total ?? 0) > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.08] px-4 py-3 text-xs text-white/45">
-          <span>
-            Exibindo {upsellIdentityOffset + 1}–
-            {Math.min(
-              upsellIdentityOffset + (upsellIdentities.data?.items.length ?? 0),
-              upsellIdentities.data?.total ?? 0,
-            )}{' '}
-            de {upsellIdentities.data?.total} compras aprovadas.
-          </span>
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={upsellIdentityOffset === 0}
-              onClick={() =>
-                setUpsellIdentityOffset((offset) =>
-                  Math.max(0, offset - UPSELL_IDENTITIES_PAGE_SIZE),
-                )
-              }
-            >
-              Anterior
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={
-                upsellIdentityOffset + (upsellIdentities.data?.items.length ?? 0) >=
-                (upsellIdentities.data?.total ?? 0)
-              }
-              onClick={() =>
-                setUpsellIdentityOffset((offset) => offset + UPSELL_IDENTITIES_PAGE_SIZE)
-              }
-            >
-              Próxima
-            </Button>
-          </div>
-        </div>
-      )}
+      <UpsellPagination
+        total={upsellIdentities.data?.total ?? 0}
+        offset={upsellIdentityOffset}
+        pageSize={upsellIdentityPageSize}
+        onOffsetChange={setUpsellIdentityOffset}
+        onPageSizeChange={setUpsellIdentityPageSize}
+      />
     </div>
   );
 }

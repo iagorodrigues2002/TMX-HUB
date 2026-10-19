@@ -4,7 +4,6 @@ import { apiClient } from '@/lib/api-client';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { upsellStageLabel } from './tracking-helpers';
-import { UPSELL_IDENTITIES_PAGE_SIZE } from './tracking-helpers';
 import { UPSELL_STAGE_OPTIONS } from './tracking-helpers';
 import { ADVANCED_QUERY_SECTIONS } from './tracking-navigation';
 import type { TrackingSectionId } from './tracking-navigation';
@@ -15,6 +14,7 @@ export function useUpsellQueries({
   trackingFrom,
   trackingTo,
   upsellIdentityOffset,
+  upsellIdentityPageSize,
   setUpsellIdentityOffset,
   upsellBuyerFilter,
   upsellTestFilter,
@@ -28,6 +28,7 @@ export function useUpsellQueries({
   trackingFrom: ReturnType<typeof useFormState>['trackingFrom'];
   trackingTo: ReturnType<typeof useFormState>['trackingTo'];
   upsellIdentityOffset: ReturnType<typeof useFormState>['upsellIdentityOffset'];
+  upsellIdentityPageSize: number;
   setUpsellIdentityOffset: ReturnType<typeof useFormState>['setUpsellIdentityOffset'];
   upsellBuyerFilter: ReturnType<typeof useFormState>['upsellBuyerFilter'];
   upsellTestFilter: ReturnType<typeof useFormState>['upsellTestFilter'];
@@ -55,14 +56,21 @@ export function useUpsellQueries({
   });
 
   const upsellIdentities = useQuery({
-    queryKey: ['tracking-upsell-identities', offerId, 'all', upsellIdentityOffset],
+    queryKey: [
+      'tracking-upsell-identities',
+      offerId,
+      'all',
+      upsellIdentityOffset,
+      upsellIdentityPageSize,
+    ],
     queryFn: () =>
       apiClient.getTrackingUpsellIdentities(offerId, {
         all: true,
-        limit: UPSELL_IDENTITIES_PAGE_SIZE,
+        limit: upsellIdentityPageSize,
         offset: upsellIdentityOffset,
       }),
     enabled: section === 'upsells',
+    placeholderData: (previous, query) => (query?.queryKey[1] === offerId ? previous : undefined),
     retry: false,
     staleTime: TRACKING_DASHBOARD_STALE_TIME,
     refetchOnWindowFocus: false,

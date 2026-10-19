@@ -51,5 +51,3 @@ export const UPSELL_STAGE_OPTIONS = Array.from(
   { length: 20 },
   (_, index) => `upsell_${index + 1}` as UpsellStageKey,
 );
-
-export const UPSELL_IDENTITIES_PAGE_SIZE = 50;

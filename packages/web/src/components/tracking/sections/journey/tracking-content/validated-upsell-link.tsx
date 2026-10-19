@@ -87,6 +87,7 @@ export function ValidatedUpsellLink({
         : apiClient.checkTrackingUpsellCompatibility(link.url),
     staleTime: 30_000,
     refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
     refetchInterval: 60_000,
     retry: 1,
     enabled: !link.force_url && !link.already_purchased,
@@ -107,7 +108,10 @@ export function ValidatedUpsellLink({
   const withLastOpening = (content: React.ReactNode) => (
     <div className="flex min-w-0 flex-col items-start gap-1">
       {content}
-      <span className="max-w-full break-words text-[10px] text-muted-foreground">
+      <span
+        className="line-clamp-2 h-8 max-w-full break-words text-[10px] leading-4 text-muted-foreground"
+        title={upsellLastOpeningLabel(link.last_opening)}
+      >
         {upsellLastOpeningLabel(link.last_opening)}
       </span>
     </div>
@@ -116,9 +120,7 @@ export function ValidatedUpsellLink({
     withLastOpening(
       <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-cyan-300/15 bg-cyan-300/[0.04] p-1.5">
         {openLink}
-        {isOpening && (
-          <output className="text-xs text-muted-foreground">Registrando abertura…</output>
-        )}
+        <output className="sr-only">{isOpening ? 'Registrando abertura…' : ''}</output>
         <button
           type="button"
           disabled={saveResult.isPending}

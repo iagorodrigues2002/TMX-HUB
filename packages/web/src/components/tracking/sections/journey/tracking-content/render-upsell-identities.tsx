@@ -6,7 +6,13 @@ export function renderUpsellIdentities(context: TrackingContentContext) {
   const { filteredUpsellIdentities, offerId } = context;
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[760px] text-left text-xs">
+      <table className="w-full min-w-[960px] table-fixed text-left text-xs">
+        <colgroup>
+          <col className="w-[22%]" />
+          <col className="w-[20%]" />
+          <col className="w-[20%]" />
+          <col className="w-[38%]" />
+        </colgroup>
         <thead className="text-white/40">
           <tr className="border-b border-white/[0.06]">
             <th className="px-4 py-3 font-medium">Identificador</th>
@@ -19,7 +25,7 @@ export function renderUpsellIdentities(context: TrackingContentContext) {
           {filteredUpsellIdentities.map((identity) => (
             <tr key={identity.id} className="border-b border-white/[0.05] last:border-0">
               <td className="px-4 py-3">
-                <code className="select-all text-cyan-100">{identity.vendid}</code>
+                <code className="select-all break-all text-cyan-100">{identity.vendid}</code>
                 <span
                   className={cn(
                     'mt-1 block w-fit rounded-full border px-2 py-0.5 text-[9px]',
@@ -55,7 +61,7 @@ export function renderUpsellIdentities(context: TrackingContentContext) {
               </td>
               <td className="px-4 py-3">
                 {identity.links.length ? (
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex min-w-0 flex-col gap-3">
                     {identity.links.map((link) => (
                       <ValidatedUpsellLink
                         key={link.stage_id}

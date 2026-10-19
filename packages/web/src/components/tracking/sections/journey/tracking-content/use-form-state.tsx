@@ -130,6 +130,7 @@ export function useFormState() {
   >('all');
 
   const [upsellIdentityOffset, setUpsellIdentityOffset] = useState(0);
+  const [upsellIdentityPageSize, setUpsellIdentityPageSize] = useState(20);
 
   const [vendepayPayload, setVendepayPayload] = useState(vendepaySample);
 
@@ -274,6 +275,8 @@ export function useFormState() {
     upsellTestFilter,
     setUpsellTestFilter,
     upsellIdentityOffset,
+    upsellIdentityPageSize,
+    setUpsellIdentityPageSize,
     setUpsellIdentityOffset,
     vendepayPayload,
     setVendepayPayload,
