@@ -22,6 +22,12 @@ describe.skipIf(!url)('paid attribution snapshot (PostgreSQL)', () => {
         'utf8',
       ),
     );
+    await db.unsafe(
+      await readFile(
+        new URL('../migrations/102_paid_attribution_webhook_fallback.sql', import.meta.url),
+        'utf8',
+      ),
+    );
     await db.unsafe(`INSERT INTO tracking_events VALUES
       ('old','p','v','2026-10-01 10:00Z','2026-10-01 10:00Z','PageView','{"ad_id":"old","campaign_id":"do-not-inherit"}','{}'),
       ('last','p','v','2026-10-01 11:00Z','2026-10-01 11:00Z','Click','{"ad_id":"last"}','{"fbclid":"last-click"}'),
@@ -32,7 +38,7 @@ describe.skipIf(!url)('paid attribution snapshot (PostgreSQL)', () => {
     await db.unsafe(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
     await db.end();
   });
-  const sale = async (id: string, visitor = 'v', status = 'paid') => {
+  const sale = async (id: string, visitor: string | null = 'v', status = 'paid') => {
     await db`INSERT INTO tracking_orders(id,project_id,visitor_id,status,occurred_at,paid_at,attribution_source)
       VALUES(${id},'p',${visitor},${status},'2026-10-01 12:00Z',${status === 'paid' ? '2026-10-01 12:00Z' : null},
       '{"ad_id":"webhook-guess","campaign_id":"webhook-campaign","gateway_fee_in_cents":"10"}')`;
@@ -48,15 +54,67 @@ describe.skipIf(!url)('paid attribution snapshot (PostgreSQL)', () => {
       gateway_fee_in_cents: '10',
     });
   });
-  it('freezes empty attribution too, including visitor, across replay/refund/admin repairs', async () => {
+  it('preserves webhook attribution without an eligible touch and freezes it across later repairs', async () => {
     await sale('empty', 'unknown-visitor');
     await db`UPDATE tracking_orders SET attribution_source='{"ad_id":"late"}',visitor_id='v',status='refunded',attribution_locked_at=NULL WHERE id='empty'`;
     const [o] = await db`SELECT * FROM tracking_orders WHERE id='empty'`;
-    expect(o!.attribution_source).toEqual({ gateway_fee_in_cents: '10' });
+    expect(o!.attribution_source).toEqual({
+      ad_id: 'webhook-guess',
+      campaign_id: 'webhook-campaign',
+      gateway_fee_in_cents: '10',
+    });
     expect(o!.visitor_id).toBe('unknown-visitor');
     expect(o!.attribution_event_id).toBeNull();
     expect(o!.attribution_locked_at).not.toBeNull();
     expect(o!.status).toBe('refunded');
+  });
+  it('preserves webhook IDs and UTMs when the first approval has no visitor', async () => {
+    await db`INSERT INTO tracking_orders(id,project_id,visitor_id,status,occurred_at,paid_at,attribution_source)
+      VALUES('webhook-only','p',NULL,'paid','2026-10-01 12:00Z','2026-10-01 12:00Z',
+      '{"ad_id":"120000000001","adset_id":"120000000002","campaign_id":"120000000003","utm_source":"facebook","utm_content":"AD05-L17","fbclid":"webhook-click","fbc":"fb.1.1790856000000.webhook-click","gateway_fee_in_cents":"10"}')`;
+    const [o] = await db`SELECT * FROM tracking_orders WHERE id='webhook-only'`;
+    expect(o!.attribution_source).toEqual({
+      ad_id: '120000000001',
+      adset_id: '120000000002',
+      campaign_id: '120000000003',
+      utm_source: 'facebook',
+      utm_content: 'AD05-L17',
+      fbclid: 'webhook-click',
+      fbc: 'fb.1.1790856000000.webhook-click',
+      gateway_fee_in_cents: '10',
+    });
+    expect(o!.visitor_id).toBeNull();
+    expect(o!.attribution_event_id).toBeNull();
+    expect(o!.attribution_locked_at).not.toBeNull();
+  });
+  it('freezes the webhook attribution present at approval, not an earlier pending payload', async () => {
+    await sale('pending-webhook', null, 'pending');
+    await db`UPDATE tracking_orders SET status='paid',paid_at='2026-10-01 12:00Z',
+      attribution_source='{"ad_id":"approval-ad","fbclid":"approval-click"}'
+      WHERE id='pending-webhook'`;
+    await db`INSERT INTO tracking_orders(id,project_id,visitor_id,status,occurred_at,paid_at,attribution_source)
+      VALUES('pending-webhook','p','v','paid','2026-10-02','2026-10-02','{"ad_id":"replay-ad"}')
+      ON CONFLICT(id) DO UPDATE SET attribution_source=EXCLUDED.attribution_source,visitor_id=EXCLUDED.visitor_id`;
+    const [o] = await db`SELECT * FROM tracking_orders WHERE id='pending-webhook'`;
+    expect(o!.attribution_source).toEqual({
+      ad_id: 'approval-ad',
+      fbclid: 'approval-click',
+    });
+    expect(o!.visitor_id).toBeNull();
+    expect(o!.attribution_event_id).toBeNull();
+    expect(o!.attribution_locked_at).not.toBeNull();
+  });
+  it('does not invent attribution when neither webhook nor an eligible touch supplies it', async () => {
+    await db`INSERT INTO tracking_orders(id,project_id,visitor_id,status,occurred_at,paid_at,attribution_source)
+      VALUES('no-attribution','p',NULL,'paid','2026-10-01 12:00Z','2026-10-01 12:00Z',
+      '{"gateway_fee_in_cents":"10"}')`;
+    await db`UPDATE tracking_orders SET attribution_source='{"ad_id":"late"}',visitor_id='v'
+      WHERE id='no-attribution'`;
+    const [o] = await db`SELECT * FROM tracking_orders WHERE id='no-attribution'`;
+    expect(o!.attribution_source).toEqual({ gateway_fee_in_cents: '10' });
+    expect(o!.visitor_id).toBeNull();
+    expect(o!.attribution_event_id).toBeNull();
+    expect(o!.attribution_locked_at).not.toBeNull();
   });
   it('locks a pending order only on its first approval', async () => {
     await sale('pending', 'v', 'pending');
@@ -98,7 +156,11 @@ describe.skipIf(!url)('paid attribution snapshot (PostgreSQL)', () => {
     await sale('late-sale', 'late-v');
     const [o] = await db`SELECT * FROM tracking_orders WHERE id='late-sale'`;
     expect(o!.attribution_event_id).toBeNull();
-    expect(o!.attribution_source).toEqual({ gateway_fee_in_cents: '10' });
+    expect(o!.attribution_source).toEqual({
+      ad_id: 'webhook-guess',
+      campaign_id: 'webhook-campaign',
+      gateway_fee_in_cents: '10',
+    });
   });
 });
 

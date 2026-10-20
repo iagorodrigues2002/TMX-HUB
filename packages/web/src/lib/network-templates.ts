@@ -42,7 +42,7 @@ export const NETWORK_TRACKING_TEMPLATES = {
     networkName: 'Meta Ads',
     urlPattern: '?fbclid=...',
     urlTemplate:
-      '?utm_source=facebook&utm_medium=paid-social&utm_campaign={{campaign.id}}&utm_content={{adset.id}}&utm_term={{ad.id}}&fbclid={{fbclid}}',
+      '?utm_source={{site_source_name}}&utm_medium=paid_social&utm_campaign={{campaign.name}}&utm_content={{ad.name}}&utm_term={{adset.name}}&campaign_id={{campaign.id}}&adset_id={{adset.id}}&ad_id={{ad.id}}&placement={{placement}}&site_source_name={{site_source_name}}',
     fields: [
       { name: 'fbclid', description: 'Meta Click ID recebido na URL' },
       { name: 'fbc', description: 'Identificador derivado do fbclid' },

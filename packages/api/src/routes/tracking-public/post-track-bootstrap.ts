@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { ulid } from 'ulid';
 import { env } from '../../env.js';
+import { normalizeAdAttribution } from '../../lib/ad-attribution.js';
 import { collectNetworkIdentifiers } from '../../lib/network-detection.js';
 import { createTrackingToken } from '../../lib/tracking-token.js';
 import { readRotatingTrackingToken } from './attribution.js';
@@ -26,7 +27,7 @@ export function registerPostTrackBootstrapRoutes(app: FastifyInstance) {
     const journeyId =
       linkedIdentity?.projectId === project.id ? linkedIdentity.journeyId : input.journey_id;
     const country = requestCountry(req.headers);
-    const source = country ? { ...input.source, country } : input.source;
+    const source = normalizeAdAttribution(country ? { ...input.source, country } : input.source);
     const clickIds = collectNetworkIdentifiers(source);
     await app.db.begin(async (sql) => {
       await sql`

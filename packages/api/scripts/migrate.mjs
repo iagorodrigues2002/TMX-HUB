@@ -107,6 +107,8 @@ const migrations = [
   '098_upsell_operator_audit.sql',
   '099_paid_attribution_snapshot.sql',
   '100_upsell_operator_last_click.sql',
+  '102_paid_attribution_webhook_fallback.sql',
+  '103_attribution_recovery_audit.sql',
 ];
 
 await sql`

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { ulid } from 'ulid';
 import { env } from '../../env.js';
+import { normalizeAdAttribution } from '../../lib/ad-attribution.js';
 import { collectNetworkIdentifiers } from '../../lib/network-detection.js';
 import { encryptSecret } from '../../lib/secret-box.js';
 import { checkUpsellCompatibility } from '../../services/upsell-compatibility.js';
@@ -119,11 +120,11 @@ export function registerPostTrackUpsellEventsRoutes(app: FastifyInstance) {
     const checkoutHref = typeof event.properties.href === 'string' ? event.properties.href : null;
     const vturbKey =
       findVturbConversionKeyInUrl(checkoutHref) ?? findVturbConversionKeyInUrl(event.event_url);
-    const source = {
+    const source = normalizeAdAttribution({
       ...event.source,
       ...(vturbKey && !Object.values(event.source).includes(vturbKey) ? { vtid: vturbKey } : {}),
       ...(country ? { country } : {}),
-    };
+    });
     const clickIds = collectNetworkIdentifiers(source);
     const inserted = await app.db<{ id: string; received_at: Date }[]>`
       INSERT INTO tracking_events

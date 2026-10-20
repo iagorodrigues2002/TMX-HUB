@@ -1,8 +1,20 @@
+import { normalizeAdAttribution } from '../lib/ad-attribution.js';
+
 function buildTrackerScriptBase(publicKey: string, pixelIds: string[] = []): string {
   // Cross-origin sendBeacon uses credential mode "include" even when no
   // cookie is present. Use anonymous keepalive fetch for external landings,
   // so public capture never requires credentialed CORS or TMX session cookies.
   return buildTrackerScriptBaseRaw(publicKey, pixelIds)
+    .replace(
+      '(()=>{const C=',
+      `(()=>{const normalize=${normalizeAdAttribution.toString()};const C=`,
+    )
+    .replace('campaign_id|campaign_name', 'campaignId|adsetId|adId|campaign_id|campaign_name')
+    .replace('return out};let visitor=', 'return normalize(out)};let visitor=')
+    .replace(
+      "if(out.fbclid&&!out._fbc&&!out.fbc){const ts=Number(stored(FK)._fbclid_ts)||Date.now();out._fbclid_ts=String(ts);out._fbc='fb.1.'+ts+'.'+out.fbclid}",
+      "if(out.fbclid){const previous=stored(LK),existing=out.fbc||out._fbc;if(existing&&existing.split('.').slice(3).join('.')===out.fbclid){out.fbc=out._fbc=existing}else{const ts=previous.fbclid===out.fbclid&&Number(previous._fbclid_ts)||Date.now();out._fbclid_ts=String(ts);out.fbc=out._fbc='fb.1.'+ts+'.'+out.fbclid}}",
+    )
     .replace('if(navigator.sendBeacon)', 'if(navigator.sendBeacon&&location.origin===O)')
     .replace('body,keepalive:true', "body,keepalive:true,credentials:'omit'");
 }

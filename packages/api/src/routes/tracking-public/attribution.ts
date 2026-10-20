@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { ulid } from 'ulid';
 import { env } from '../../env.js';
+import { normalizeAdAttribution } from '../../lib/ad-attribution.js';
 import { readTrackingTokenWithRotation } from '../../lib/tracking-token.js';
 
 export const attributionQueryKeys = new Set([
@@ -29,6 +30,9 @@ export const attributionQueryKeys = new Set([
   'adset_name',
   'ad_id',
   'ad_name',
+  'campaignId',
+  'adsetId',
+  'adId',
   'placement',
   'site_source_name',
   '_fbp',
@@ -41,9 +45,13 @@ export const attributionQueryKeys = new Set([
 ]);
 
 export function extractAttributionQuery(query: Record<string, string | undefined>) {
-  return Object.fromEntries(
-    Object.entries(query).filter(([key, value]) => Boolean(value) && attributionQueryKeys.has(key)),
-  ) as Record<string, string>;
+  return normalizeAdAttribution(
+    Object.fromEntries(
+      Object.entries(query).filter(
+        ([key, value]) => Boolean(value) && attributionQueryKeys.has(key),
+      ),
+    ) as Record<string, string>,
+  );
 }
 
 export const campaignAttributionKeys = [
