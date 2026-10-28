@@ -1,6 +1,7 @@
 import { buildApp } from './app.js';
 import { env } from './env.js';
 import { runAdsImport } from './services/ads-intelligence.js';
+import { startBrowserPush } from './services/browser-push.js';
 import { runRecoveryEmailAutomation } from './services/recovery-automation.js';
 import { runSyzepayAutoClassification } from './services/syzepay-auto.js';
 import { recoverTrackingDeliveries } from './services/tracking-delivery-recovery.js';
@@ -22,6 +23,7 @@ import { createVslWorker } from './workers/vsl.worker.js';
 
 async function main() {
   const app = await buildApp();
+  const stopBrowserPush = startBrowserPush(app);
   // Start the financial consumer before seeding/recovering any backlog.
   // Recovery also performs network-bound FX repair and must never delay the
   // worker responsible for paid/refunded/chargeback delivery.
@@ -249,6 +251,7 @@ async function main() {
       clearInterval(vendepayWebhookRecoveryTimer);
       app.utmifySync.stop();
       // Stop accepting new requests first.
+      await stopBrowserPush();
       await app.close();
       // Drain workers (they finish in-flight jobs).
       await renderWorker.close();

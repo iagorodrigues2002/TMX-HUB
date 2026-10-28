@@ -1,0 +1,11 @@
+{
+  "name": "TMX HUB",
+  "short_name": "TMX",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#06131b",
+  "theme_color": "#06131b",
+  "icons": [{ "src": "/brand/the-minex-mark.png", "sizes": "2000x2000", "type": "image/png", "purpose": "any" }]
+}

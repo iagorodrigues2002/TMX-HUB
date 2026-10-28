@@ -13,6 +13,7 @@ import {
   useState,
 } from 'react';
 import { type AuthUser, apiClient, authToken } from './api-client';
+import { disableBrowserPush } from './browser-push';
 import { setPersonalStorageOwner } from './personal-storage';
 import { ApiError } from './query-client';
 import { resetSessionData } from './session-data';
@@ -128,6 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(() => {
+    void disableBrowserPush(authToken.get()).catch(() => {});
     authToken.clear();
     resetSession();
     setLoading(false);

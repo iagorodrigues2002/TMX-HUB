@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
+import { BrowserPushMenu } from './browser-push-menu';
 
 export function UserMenu() {
   const { user, logout } = useAuth();
@@ -84,7 +85,7 @@ export function UserMenu() {
         <DropdownMenuContent
           align="end"
           sideOffset={8}
-          className="tmx-user-menu w-64 rounded-xl border-border/60 bg-popover/95 p-1 text-popover-foreground shadow-card backdrop-blur-xl"
+          className="tmx-user-menu max-h-[calc(100dvh-5rem)] w-64 overflow-y-auto rounded-xl border-border/60 bg-popover/95 p-1 text-popover-foreground shadow-card backdrop-blur-xl"
         >
           <DropdownMenuLabel className="px-3 py-2 font-normal">
             <span className="block truncate text-[14px] font-semibold text-foreground">
@@ -114,6 +115,7 @@ export function UserMenu() {
           <DropdownMenuSeparator className="bg-border/60" />
           {process.env.NEXT_PUBLIC_TMX_SIGNAL_PREVIEW === '1' && (
             <>
+              <BrowserPushMenu userId={user.id} />
               <DropdownMenuItem
                 onSelect={(event) => {
                   event.preventDefault();

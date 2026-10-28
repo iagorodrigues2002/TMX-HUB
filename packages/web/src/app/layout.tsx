@@ -7,6 +7,8 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'TMX HUB · TERMINAL DE CONTROLE',
   description: 'Hub de ferramentas TMX',
+  manifest: '/manifest.webmanifest',
+  appleWebApp: { capable: true, title: 'TMX HUB', statusBarStyle: 'black-translucent' },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

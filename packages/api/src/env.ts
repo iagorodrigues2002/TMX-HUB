@@ -21,6 +21,9 @@ const EnvSchema = z
     REDIS_URL: z.string().default('redis://localhost:6379'),
     DATABASE_URL: z.string().optional(),
     TRACKING_ENCRYPTION_KEY: z.string().min(32).optional(),
+    WEB_PUSH_PUBLIC_KEY: z.string().optional(),
+    WEB_PUSH_PRIVATE_KEY: z.string().optional(),
+    WEB_PUSH_SUBJECT: z.string().url().default('https://theminex.com'),
     META_GRAPH_API_VERSION: z
       .string()
       .regex(/^v\d+\.\d+$/)
