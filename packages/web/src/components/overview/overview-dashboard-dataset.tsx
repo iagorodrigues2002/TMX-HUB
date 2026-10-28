@@ -108,7 +108,7 @@ export function Dataset({ dataset }: { dataset: OverviewDataset }) {
           [
             'Reserva retida estimada',
             dataset.finance?.reserve,
-            'Retenção temporária; não é despesa definitiva',
+            'VendePay: exclui compras devolvidas; retenção estimada, não é despesa definitiva',
           ],
           [
             'Após retenção da reserva',

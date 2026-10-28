@@ -13,6 +13,7 @@ export interface FeeBucket {
   settings: unknown;
   reported_fee_brl_minor?: string;
   reported_fee_sales?: number;
+  retained_reserve_brl_minor?: string;
 }
 export interface CalculatedGatewayFee {
   provider: string;
@@ -52,7 +53,10 @@ export function calculateGatewayFee(
       : Math.round((gross * model.fee_pct) / 100) + tariffs.fixed * Number(bucket.sales),
     percentage_brl_minor: reported ? 0 : Math.round((gross * model.fee_pct) / 100),
     fixed_brl_minor: reported ? 0 : tariffs.fixed * Number(bucket.sales),
-    reserve_brl_minor: Math.round((gross * model.reserve_pct) / 100),
+    reserve_brl_minor:
+      bucket.provider === 'vendepay' && bucket.retained_reserve_brl_minor !== undefined
+        ? Number(bucket.retained_reserve_brl_minor)
+        : Math.round((gross * model.reserve_pct) / 100),
     penalty_brl_minor:
       tariffs.refund * Number(bucket.refunds) + tariffs.chargeback * Number(bucket.chargebacks),
     penalty_count: Number(bucket.refunds) + Number(bucket.chargebacks),
@@ -79,6 +83,7 @@ export async function loadGatewayFees(db: Sql, offerIds: string[], from: Date, t
       SELECT p.offer_id,lower(trim(o.provider)) provider,
         CASE WHEN lower(trim(o.provider))='vendepay' THEN 'vendepay' ELSE COALESCE(o.gateway_connection_id,o.syzepay_connection_id,'unassigned') END connection_key,
         o.paid_at,
+        o.status IN ('refunded','chargeback') OR o.refunded_at IS NOT NULL OR o.chargeback_at IS NOT NULL reversed,
         CASE WHEN o.chargeback_at IS NULL OR o.refunded_at<=o.chargeback_at THEN o.refunded_at END refunded_at,
         CASE WHEN o.refunded_at IS NULL OR o.chargeback_at<o.refunded_at THEN o.chargeback_at END chargeback_at,
         CASE WHEN lower(trim(o.provider))='syzepay' AND o.attribution_source->>'gateway_fee_in_cents' ~ '^[0-9]{1,15}$'
@@ -97,6 +102,9 @@ export async function loadGatewayFees(db: Sql, offerIds: string[], from: Date, t
       WHERE p.offer_id=ANY(${offerIds}) AND (
         (o.paid_at>=${from} AND o.paid_at<${to}) OR (o.refunded_at>=${from} AND o.refunded_at<${to}) OR (o.chargeback_at>=${from} AND o.chargeback_at<${to}))
     ) SELECT offer_id,provider,settings,
+      COALESCE(sum(CASE WHEN provider='vendepay' AND NOT reversed
+        THEN ROUND(amount*(settings->>'reserve_pct')::numeric/100) ELSE 0 END)
+        FILTER(WHERE paid_at>=${from} AND paid_at<${to}),0)::text retained_reserve_brl_minor,
       COALESCE(sum(amount) FILTER(WHERE paid_at>=${from} AND paid_at<${to}),0)::text gross_brl_minor,
       count(*) FILTER(WHERE paid_at>=${from} AND paid_at<${to})::int sales,
       COALESCE(sum(reported_fee) FILTER(WHERE paid_at>=${from} AND paid_at<${to} AND reported_fee<=amount),0)::text reported_fee_brl_minor,
