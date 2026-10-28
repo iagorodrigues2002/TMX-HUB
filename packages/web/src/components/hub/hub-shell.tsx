@@ -2,7 +2,7 @@
 
 import { AuthGate } from '@/components/auth/auth-gate';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { type ReactNode, type RefObject, Suspense, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { AmbientBackground } from './ambient-background';
 import { CommandPalette } from './command-palette';
 import { FinancialPrivacyMask } from './financial-privacy-mask';
@@ -22,13 +22,18 @@ interface HubShellProps {
   fullBleed?: boolean;
 }
 
-function RouteMotion({
-  content,
+export function HubShell({
+  children,
+  breadcrumb,
+  topbarRight,
+  notificationCount,
+  onOpenNotifications,
   fullBleed,
-}: { content: RefObject<HTMLDivElement | null>; fullBleed?: boolean }) {
+}: HubShellProps) {
   const pathname = usePathname();
   const search = useSearchParams();
   const screenKey = `${pathname}:${search.get('view') ?? ''}:${search.get('section') ?? ''}`;
+  const content = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const element = content.current;
     if (!element || !screenKey || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -40,19 +45,7 @@ function RouteMotion({
       { duration: 320, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
     );
     return () => animation.cancel();
-  }, [screenKey, fullBleed, content]);
-  return null;
-}
-
-export function HubShell({
-  children,
-  breadcrumb,
-  topbarRight,
-  notificationCount,
-  onOpenNotifications,
-  fullBleed,
-}: HubShellProps) {
-  const content = useRef<HTMLDivElement>(null);
+  }, [screenKey, fullBleed]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -80,9 +73,6 @@ export function HubShell({
   return (
     <AuthGate>
       <OfferContextProvider>
-        <Suspense fallback={null}>
-          <RouteMotion content={content} fullBleed={fullBleed} />
-        </Suspense>
         <a
           href="#conteudo-principal"
           className="fixed left-4 top-3 z-[100] -translate-y-20 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition focus:translate-y-0"
