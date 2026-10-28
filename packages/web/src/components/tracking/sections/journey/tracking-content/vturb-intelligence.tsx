@@ -63,7 +63,7 @@ export function VturbIntelligence({
 
   return (
     <div className="space-y-5">
-      <div className="relative overflow-hidden rounded-2xl border border-cyan-300/20 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.12),transparent_38%),linear-gradient(135deg,var(--tmx-hero-start),var(--tmx-hero-end))] p-5">
+      <div className="relative overflow-hidden rounded-2xl border border-cyan-300/20 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.12),transparent_38%),linear-gradient(135deg,rgba(6,25,31,0.96),rgba(3,12,17,0.98))] p-5">
         <div className="absolute inset-0 opacity-25 [background-image:linear-gradient(rgba(34,211,238,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,.08)_1px,transparent_1px)] [background-size:24px_24px]" />
         <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>

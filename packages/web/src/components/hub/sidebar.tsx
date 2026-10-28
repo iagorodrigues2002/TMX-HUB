@@ -81,7 +81,6 @@ function DesktopItem({
     <div>
       <div className={cn('group/row relative flex items-center', !collapsed && 'gap-1')}>
         <Link
-          prefetch={true}
           href={item.href}
           aria-current={active ? 'page' : undefined}
           aria-label={collapsed ? item.label : undefined}
@@ -130,7 +129,6 @@ function DesktopItem({
                 const childIsActive = itemIsActive(child, pathname, search);
                 return (
                   <Link
-                    prefetch={submenuOpen}
                     key={child.id}
                     href={child.href}
                     tabIndex={submenuOpen ? undefined : -1}
@@ -176,7 +174,6 @@ function MobileNavigation({
               {item.group}
             </p>
             <Link
-              prefetch={true}
               href={item.href}
               onClick={onNavigate}
               aria-current={active ? 'page' : undefined}
@@ -191,7 +188,6 @@ function MobileNavigation({
                   const ChildIcon = child.icon;
                   return (
                     <Link
-                      prefetch={true}
                       key={child.id}
                       href={child.href}
                       onClick={onNavigate}

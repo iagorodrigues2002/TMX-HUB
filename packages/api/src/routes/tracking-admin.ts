@@ -4,7 +4,6 @@ import { registerGetCountriesRoutes } from './tracking-admin/get-countries.js';
 import { registerGetDiagnosticsRoutes } from './tracking-admin/get-diagnostics.js';
 import { registerGetHealthRoutes } from './tracking-admin/get-health.js';
 import { registerGetPageFunnelRoutes } from './tracking-admin/get-page-funnel.js';
-import { registerGetReceiptRevenueRoutes } from './tracking-admin/get-receipt-revenue.js';
 import { registerGetSummaryRoutes } from './tracking-admin/get-summary.js';
 import { registerGetTrackingRoutes } from './tracking-admin/get-tracking.js';
 import { registerPatchVendepayConnectionsConnectionIdRoutes } from './tracking-admin/patch-vendepay-connections-connection-id.js';
@@ -22,7 +21,6 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   registerPatchVendepayConnectionsConnectionIdRoutes(app);
   registerGetPageFunnelRoutes(app);
   registerGetCountriesRoutes(app);
-  registerGetReceiptRevenueRoutes(app);
   registerGetAttributionRoutes(app);
   registerGetSummaryRoutes(app);
   registerPutGatewayConnectionsConnectionIdFeesRoutes(app);
