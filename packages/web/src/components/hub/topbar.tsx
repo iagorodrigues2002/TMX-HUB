@@ -190,7 +190,7 @@ export function Topbar({
       >
         <span
           aria-hidden
-          className="grid h-8 w-8 place-items-center rounded-md border border-border/60 bg-muted"
+          className="tmx-brand-mark relative grid h-8 w-8 place-items-center rounded-md border border-border/60 bg-muted"
         >
           <svg
             aria-hidden="true"

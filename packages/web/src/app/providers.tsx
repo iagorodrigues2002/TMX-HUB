@@ -1,7 +1,9 @@
 'use client';
 
+import { SaleNotifications } from '@/components/hub/sale-notifications';
 import { InterfaceThemeProvider, useInterfaceTheme } from '@/components/theme-provider';
 import { AuthProvider } from '@/lib/auth-context';
+import { InterfaceEffectsProvider } from '@/lib/interface-effects';
 import { PrivacyProvider } from '@/lib/privacy-context';
 import { makeQueryClient } from '@/lib/query-client';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -53,7 +55,12 @@ export function Providers({ children }: { children: ReactNode }) {
     <InterfaceThemeProvider>
       <QueryClientProvider client={client}>
         <AuthProvider>
-          <PrivacyProvider>{children}</PrivacyProvider>
+          <PrivacyProvider>
+            <InterfaceEffectsProvider>
+              {children}
+              {process.env.NEXT_PUBLIC_TMX_SIGNAL_PREVIEW === '1' && <SaleNotifications />}
+            </InterfaceEffectsProvider>
+          </PrivacyProvider>
         </AuthProvider>
         <ThemeAwareToaster />
       </QueryClientProvider>

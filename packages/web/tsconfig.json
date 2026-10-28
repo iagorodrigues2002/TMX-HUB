@@ -21,6 +21,7 @@
   },
   "include": [
     ".next-dev/types/**/*.ts",
+    ".next-signal-preview/types/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
     "src/**/*.ts",

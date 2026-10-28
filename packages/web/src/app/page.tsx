@@ -3,6 +3,7 @@
 import { HubShell } from '@/components/hub/hub-shell';
 import { ToolCard } from '@/components/hub/tool-card';
 import { OverviewDashboard } from '@/components/overview/overview-dashboard';
+import { SIGNAL_PREVIEW } from '@/components/overview/signal-preview';
 import { Button } from '@/components/ui/button';
 import { canAccessTool } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
@@ -21,31 +22,33 @@ export default function HubLandingPage() {
 
   return (
     <HubShell>
-      <header className="tmx-command-hero animate-[tmx-reveal_240ms_cubic-bezier(0,0,0.2,1)_both] rounded-2xl border border-cyan-300/15 p-5 motion-reduce:animate-none sm:p-7 md:p-8">
-        <div className="mb-4 flex flex-wrap items-center gap-3">
-          <p className="hud-label">Operator Console</p>
-          <span className="flex items-center gap-2 rounded-full border border-emerald-300/15 bg-emerald-300/[0.05] px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-emerald-200/70">
-            <span className="status-dot" aria-hidden /> Sistema online
-          </span>
-        </div>
-        <h1 className="text-3xl font-bold leading-tight tracking-tight text-white md:text-4xl">
-          Olá,{' '}
-          <span
-            className="bg-clip-text text-transparent"
-            style={{
-              backgroundImage:
-                'linear-gradient(90deg, var(--accent-from) 0%, var(--accent-to) 100%)',
-            }}
-          >
-            {firstName}
-          </span>
-        </h1>
-        <p className="mt-3 max-w-xl text-sm leading-6 text-white/55">
-          {hasOffers
-            ? 'Acompanhe pedidos, receita e liquidação de todas as suas ofertas em um só lugar.'
-            : 'Seu espaço de trabalho mostra somente as ferramentas liberadas pelo administrador.'}
-        </p>
-      </header>
+      {!SIGNAL_PREVIEW && (
+        <header className="tmx-command-hero animate-[tmx-reveal_240ms_cubic-bezier(0,0,0.2,1)_both] rounded-2xl border border-cyan-300/15 p-5 motion-reduce:animate-none sm:p-7 md:p-8">
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <p className="hud-label">Operator Console</p>
+            <span className="flex items-center gap-2 rounded-full border border-emerald-300/15 bg-emerald-300/[0.05] px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-emerald-200/70">
+              <span className="status-dot" aria-hidden /> Sistema online
+            </span>
+          </div>
+          <h1 className="text-3xl font-bold leading-tight tracking-tight text-white md:text-4xl">
+            Olá,{' '}
+            <span
+              className="bg-clip-text text-transparent"
+              style={{
+                backgroundImage:
+                  'linear-gradient(90deg, var(--accent-from) 0%, var(--accent-to) 100%)',
+              }}
+            >
+              {firstName}
+            </span>
+          </h1>
+          <p className="mt-3 max-w-xl text-sm leading-6 text-white/55">
+            {hasOffers
+              ? 'Acompanhe pedidos, receita e liquidação de todas as suas ofertas em um só lugar.'
+              : 'Seu espaço de trabalho mostra somente as ferramentas liberadas pelo administrador.'}
+          </p>
+        </header>
+      )}
 
       {hasOffers && (
         <section className="mt-8" aria-label="Visão geral da conta">

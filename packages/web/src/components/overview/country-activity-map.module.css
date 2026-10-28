@@ -1,0 +1,141 @@
+.panel {
+  min-width: 0;
+  border: 1px solid #24434b;
+  border-radius: 14px;
+  background: #071820f5;
+  padding: 18px;
+}
+html[data-theme="light"] .panel {
+  background: var(--color-card);
+  border-color: var(--color-border);
+  color: var(--color-foreground);
+}
+html[data-theme="light"] .header span,
+html[data-theme="light"] .legend {
+  color: var(--color-muted-foreground);
+}
+html[data-theme="light"] .purchase {
+  color: #087849;
+}
+html[data-theme="light"] .checkout {
+  color: #905600;
+}
+html[data-theme="light"] .map path {
+  fill: #d4e8eb;
+  stroke: #87afb7;
+}
+html[data-theme="light"] .map circle[fill="#48d6a1"] {
+  fill: #087849;
+}
+html[data-theme="light"] .map circle[fill="#f2bb68"] {
+  fill: #905600;
+}
+html[data-theme="light"] .map g[role="button"]:focus circle {
+  stroke: #10242a;
+}
+html[data-theme="light"] .overlay {
+  background: #f8fbfbe8;
+}
+html[data-theme="light"] .detail {
+  border-color: var(--color-border);
+}
+.header {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.header h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+.header span,
+.legend,
+.footer {
+  font-size: 12px;
+  color: #9ab2ba;
+}
+.legend {
+  display: flex;
+  gap: 16px;
+  margin-top: 10px;
+}
+.purchase {
+  color: #48d6a1;
+}
+.checkout {
+  color: #f2bb68;
+}
+.map {
+  position: relative;
+}
+.map svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.map g[role="button"] {
+  cursor: pointer;
+}
+.map g[role="button"]:focus {
+  outline: none;
+}
+.map g[role="button"]:focus circle {
+  stroke: white;
+  stroke-width: 2px;
+}
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  padding: 20px;
+  text-align: center;
+  background: #071820bd;
+  font-size: 13px;
+}
+.detail {
+  min-height: 40px;
+  font-size: 13px;
+  padding: 10px 0;
+  border-top: 1px solid #24434b;
+}
+.footer {
+  display: grid;
+  gap: 4px;
+}
+.ripple {
+  transform-box: fill-box;
+  transform-origin: center;
+  stroke-width: 1.2;
+  pointer-events: none;
+  opacity: 0;
+  animation: ripple 2800ms ease-out infinite;
+}
+.ripple[stroke="#f2bb68"] {
+  animation-delay: -1400ms;
+}
+@keyframes ripple {
+  from {
+    transform: scale(1);
+    opacity: 0.75;
+  }
+  to {
+    transform: scale(3.4);
+    opacity: 0;
+  }
+}
+.pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation-duration: 900ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pulse,
+  .ripple {
+    animation: none;
+  }
+}
