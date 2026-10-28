@@ -43,11 +43,12 @@ export function takeNewApproved<T extends SaleNoticeOrder>(
   orders: T[],
   seen: Set<string>,
   startedAt: number,
+  now = Date.now(),
 ): T[] {
   return orders.filter((order) => {
     if (order.status !== 'paid' || seen.has(order.id)) return false;
     seen.add(order.id);
     const time = Date.parse(order.occurred_at);
-    return Number.isFinite(time) && time > startedAt && time <= Date.now();
+    return Number.isFinite(time) && time > startedAt && time <= now;
   });
 }

@@ -1,17 +1,16 @@
 'use client';
 
 import { formatCurrency } from '@/components/dashboard/kpi-cards';
-import type { apiClient } from '@/lib/api-client';
-import { request } from '@/lib/api-client/request';
+import { authToken } from '@/lib/api-client/request';
 import { useAuth } from '@/lib/auth-context';
 import { todayIso } from '@/lib/date-range';
 import { useInterfaceEffects } from '@/lib/interface-effects';
 import { usePrivacy } from '@/lib/privacy-context';
+import { type SaleNotice, consumeSaleNoticeStream } from '@/lib/sale-notice-stream';
 import { enqueueSaleNotices, saleNoticeTotals, takeNewApproved } from '@/lib/sale-notification';
 import { useEffect, useRef, useState } from 'react';
 
-type Order = Awaited<ReturnType<typeof apiClient.listTrackingOrders>>['items'][number];
-type Notice = Order & { offerName: string; offerId: string; test?: boolean };
+type Notice = SaleNotice;
 
 export function SaleNotifications() {
   const { user } = useAuth();
@@ -44,11 +43,8 @@ export function SaleNotifications() {
         : enqueueSaleNotices(current, [
             {
               id: `preview-${testRequest}`,
-              external_id: 'preview',
               status: 'paid',
               occurred_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-              buyer: {},
               provider: 'Prévia local · nenhum envio',
               offerName: 'TESTE · Venda demonstrativa',
               offerId: '',
@@ -62,67 +58,87 @@ export function SaleNotifications() {
 
   useEffect(() => {
     if (!principal || !enabled) return;
-    const startedAt = Date.now();
+    let startedAt: number | undefined;
     const seen = new Set<string>();
-    let cursor = { since: new Date(startedAt).toISOString(), after_id: '' };
-    let delay = 30_000;
+    let cursor: string | undefined;
+    let delay = 1000;
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
-    const poll = async () => {
+    let controller: AbortController;
+    const connect = async () => {
+      controller = new AbortController();
+      const watchdog = setInterval(() => {
+        if (Date.now() - lastMessage > 35_000) controller.abort();
+      }, 5000);
+      let lastMessage = Date.now();
       try {
-        if (document.hidden) return;
-        await navigator.locks.request(
-          `tmx-sales:${principal}`,
-          { ifAvailable: true },
-          async (lock) => {
-            if (!lock || stopped) return;
-            const storageKey = `tmx-sales-seen:${principal}:${todayIso()}`;
-            const stored: unknown = JSON.parse(localStorage.getItem(storageKey) ?? '[]');
-            if (Array.isArray(stored))
-              for (const id of stored) if (typeof id === 'string') seen.add(id);
-            while (!stopped) {
-              if (Date.parse(cursor.since) < Date.now() - 86_000_000)
-                cursor = { since: new Date(Date.now() - 86_000_000).toISOString(), after_id: '' };
-              const result = await request<{
-                items: Notice[];
-                offer_ids: string[];
-                next: typeof cursor | null;
-              }>(`/v1/tracking/sale-notices?${new URLSearchParams(cursor)}`);
-              if (stopped) return;
-              setQueue((current) =>
-                current
-                  .map((batch) => {
-                    const allowed = batch.filter(
-                      (notice) => notice.test || result.offer_ids.includes(notice.offerId),
-                    );
-                    return allowed.length === batch.length ? batch : allowed;
-                  })
-                  .filter((batch) => batch.length),
-              );
-              const fresh = takeNewApproved(result.items, seen, startedAt);
-              localStorage.setItem(storageKey, JSON.stringify([...seen]));
-              if (fresh.length) setQueue((current) => enqueueSaleNotices(current, fresh));
-              const last = result.items.at(-1);
-              if (last)
-                cursor = { since: new Date(last.occurred_at).toISOString(), after_id: last.id };
-              if (!result.next) break;
-              cursor = result.next;
-            }
+        const token = authToken.get();
+        const query = cursor ? `?${new URLSearchParams({ since: cursor })}` : '';
+        const response = await fetch(`/v1/tracking/sale-notices/stream${query}`, {
+          headers: {
+            Accept: 'text/event-stream',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
-        );
-        if (!stopped) setFailed(false);
-        delay = 30_000;
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+        if (response.status === 400) cursor = undefined;
+        if (!response.ok || !response.body) throw new Error('sale_notice_stream_unavailable');
+        await consumeSaleNoticeStream(response.body, async (message) => {
+          if (stopped) return;
+          lastMessage = Date.now();
+          delay = 1000;
+          setFailed(false);
+          startedAt ??= Date.parse(message.at);
+          cursor ??= message.at;
+          setQueue((current) =>
+            current
+              .map((batch) => {
+                const allowed = batch.filter(
+                  (notice) => notice.test || message.offer_ids.includes(notice.offerId),
+                );
+                return allowed.length === batch.length ? batch : allowed;
+              })
+              .filter((batch) => batch.length),
+          );
+          if (message.type !== 'sales') return;
+          const deliver = async () => {
+            if (stopped) return;
+            const storageKey = `tmx-sales-seen:${principal}:${todayIso()}`;
+            // Storage restrictions must not turn a working stream into a retry loop.
+            try {
+              const stored: unknown = JSON.parse(localStorage.getItem(storageKey) ?? '[]');
+              if (Array.isArray(stored))
+                for (const id of stored) if (typeof id === 'string') seen.add(id);
+            } catch {
+              /* In-memory deduplication remains active. */
+            }
+            const fresh = takeNewApproved(message.items, seen, startedAt!, Date.parse(message.at));
+            try {
+              localStorage.setItem(storageKey, JSON.stringify([...seen]));
+            } catch {
+              /* See above. */
+            }
+            if (fresh.length) setQueue((current) => enqueueSaleNotices(current, fresh));
+          };
+          // Lock only the delivery, so another tab never waits on a long-lived stream.
+          if (navigator.locks) await navigator.locks.request(`tmx-sales:${principal}`, deliver);
+          else await deliver();
+          if (message.cursor) cursor = message.cursor;
+        });
       } catch {
         if (!stopped) setFailed(true);
-        delay = Math.min(delay * 2, 120_000);
+        delay = Math.min(delay * 2, 10_000);
       } finally {
-        if (!stopped) timer = setTimeout(poll, delay);
+        clearInterval(watchdog);
+        if (!stopped) timer = setTimeout(connect, delay);
       }
     };
-    void poll();
+    void connect();
     return () => {
       stopped = true;
       clearTimeout(timer);
+      controller?.abort();
       setQueue([]);
     };
   }, [principal, enabled]);
