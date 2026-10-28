@@ -5,6 +5,7 @@ export type AnalyticsCacheEndpoint =
   | 'tracking-summary'
   | 'tracking-attribution'
   | 'tracking-countries'
+  | 'reserve-projection'
   | 'dashboard';
 
 export type AnalyticsCacheOptions = {

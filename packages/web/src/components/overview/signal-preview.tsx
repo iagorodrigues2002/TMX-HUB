@@ -25,6 +25,7 @@ import { GatewayOverview } from './gateway-overview';
 import { Dataset } from './overview-dashboard-dataset';
 import { type OverviewDataset, formatConversionRate } from './overview-dashboard-support';
 import { ReceiptRevenueChart } from './receipt-revenue-chart';
+import { ReserveReleaseProjection } from './reserve-release-projection';
 import styles from './signal-preview.module.css';
 
 export const SIGNAL_PREVIEW = process.env.NEXT_PUBLIC_TMX_SIGNAL_PREVIEW === '1';
@@ -236,6 +237,7 @@ export function SignalPreview({
         </div>
       </section>
       <Dataset dataset={dataset} />
+      <ReserveReleaseProjection offerIds={dataset.offerIds ?? []} />
       {accounts && (
         <GatewayOverview
           accounts={accounts.filter((account) => dataset.key.startsWith(`${account.owner_id}:`))}
