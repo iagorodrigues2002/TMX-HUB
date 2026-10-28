@@ -139,6 +139,11 @@ export function UserMenu() {
                   {effects.soundError}
                 </p>
               )}
+              {effects.sound && effects.soundPending && !effects.soundError && (
+                <p className="px-3 py-2 text-xs text-muted-foreground">
+                  Som ativado. Clique ou toque no painel para liberar o áudio.
+                </p>
+              )}
               <label className="block px-3 py-2 text-[13px]">
                 <span className="flex justify-between gap-3">
                   Volume da notificação <span>{effects.volume}%</span>
