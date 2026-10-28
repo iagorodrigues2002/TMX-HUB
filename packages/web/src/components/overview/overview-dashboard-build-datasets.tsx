@@ -102,6 +102,7 @@ export function buildDatasets(
 
     return {
       key: group.key,
+      offerIds,
       finance,
       label: group.ownerName,
       currency: 'BRL',

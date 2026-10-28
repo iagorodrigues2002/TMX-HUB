@@ -34,7 +34,7 @@ export function useCountUp(value: number | undefined, duration = 800): number | 
     const tick = (time: number) => {
       startTime ??= time;
       const progress = Math.min((time - startTime) / Math.max(duration, 100), 1);
-      const easedProgress = 1 - (1 - progress) ** 3;
+      const easedProgress = 1 - (1 - progress) ** 4;
 
       setDisplayValue(value * easedProgress);
 

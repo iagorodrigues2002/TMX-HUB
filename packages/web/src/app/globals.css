@@ -1,5 +1,188 @@
 @import "tailwindcss";
 
+html[data-theme="light"] main footer[aria-label="Status"] {
+  position: relative;
+  inset: auto;
+  z-index: auto;
+  margin-top: 1.5rem;
+}
+
+.tmx-sale-notice {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  will-change: transform, opacity;
+  animation: tmx-sale-in 350ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.tmx-sale-notice::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(110deg, transparent 30%, #6ee7b71a 50%, transparent 70%);
+  animation: tmx-sale-sheen 650ms ease-out both;
+}
+.tmx-sale-notice::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 2px;
+  background: linear-gradient(90deg, #34d399, #22d3ee);
+  transform-origin: left;
+  animation: tmx-sale-time 3000ms linear both;
+}
+.tmx-sale-confirm {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #34d39924;
+  border: 1px solid #6ee7b74d;
+  animation: tmx-sale-confirm 250ms 100ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.tmx-sale-notice[data-leaving="true"] {
+  animation: tmx-sale-out 160ms ease-in both;
+}
+@keyframes tmx-sale-in {
+  from {
+    opacity: 0;
+    transform: translate3d(24px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+@keyframes tmx-sale-confirm {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes tmx-sale-sheen {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+@keyframes tmx-sale-time {
+  to {
+    transform: scaleX(0);
+  }
+}
+@keyframes tmx-sale-out {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(20px, 0, 0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tmx-sale-notice {
+    will-change: auto;
+    animation: tmx-sale-fade-in 150ms both;
+  }
+  .tmx-sale-confirm {
+    animation: none;
+  }
+  .tmx-sale-notice::before,
+  .tmx-sale-notice::after {
+    display: none;
+    animation: none;
+  }
+  .tmx-sale-notice[data-leaving="true"] {
+    animation: tmx-sale-fade-out 150ms both;
+  }
+}
+@keyframes tmx-sale-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes tmx-sale-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-signal-shell] .tmx-brand-mark::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border: 1px solid #22d3ee;
+    border-radius: inherit;
+    box-shadow: 0 0 12px #22d3ee55;
+    pointer-events: none;
+    opacity: 0;
+    animation: tmx-brand-pulse 2.2s ease-out 2;
+  }
+  [data-signal-shell] a:hover .tmx-brand-mark svg,
+  [data-signal-shell] a:focus-visible .tmx-brand-mark svg {
+    animation: tmx-brand-signal 900ms ease-out;
+  }
+}
+@keyframes tmx-brand-pulse {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+  25% {
+    opacity: 0.65;
+    transform: scale(1.04);
+  }
+  80% {
+    opacity: 0;
+    transform: scale(1.2);
+  }
+}
+@keyframes tmx-brand-signal {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  40% {
+    opacity: 0.4;
+  }
+  65% {
+    opacity: 1;
+  }
+}
+
+/* Keep the local ambient layer outside reading surfaces. */
+html:not([data-theme="light"]) [data-signal-shell] {
+  --tmx-card-start: rgba(8, 23, 32, 0.98);
+  --tmx-card-end: rgba(4, 14, 22, 0.97);
+  --tmx-panel-start: rgba(8, 23, 32, 0.97);
+  --tmx-panel-end: rgba(4, 14, 22, 0.96);
+}
+html:not([data-theme="light"]) [data-signal-shell] main section[class~="border"],
+html:not([data-theme="light"]) [data-signal-shell] main aside[class~="border"] {
+  background-color: rgba(5, 18, 27, 0.96);
+}
+
 /* ----------------------------------------------------------------------
  * TMX HUB — Dark Turquoise Terminal Design System
  * Tokens (Tailwind v4 @theme exposes these as utilities):
@@ -286,6 +469,40 @@ html[data-theme="light"] body {
   background: #e7eff1;
 }
 
+html[data-theme="light"] [data-signal-shell] main section[class~="border"],
+html[data-theme="light"] [data-signal-shell] main aside[class~="border"] {
+  background-color: var(--color-card);
+}
+
+html[data-theme="light"] [class*="text-cyan-"] {
+  color: #096574;
+}
+
+html[data-theme="light"] [class*="text-emerald-"] {
+  color: #087449;
+}
+
+html[data-theme="light"] [class*="text-amber-"] {
+  color: #805000;
+}
+
+html[data-theme="light"] [class*="text-rose-"] {
+  color: #b12648;
+}
+
+html[data-theme="light"] [class*="text-violet-"] {
+  color: #6940a3;
+}
+
+html[data-theme="light"] [class*="text-fuchsia-"] {
+  color: #853286;
+}
+
+html[data-theme="light"] [class*="text-slate-"],
+html[data-theme="light"] [class*="text-zinc-"] {
+  color: #52646a;
+}
+
 html[data-theme="light"] body::before,
 html[data-theme="light"] body::after {
   opacity: 0.18;
@@ -305,11 +522,23 @@ html[data-theme="light"] [class*="border-white/"] {
 }
 
 html[data-theme="light"] [class*="bg-white/"] {
-  background-color: rgba(16, 36, 42, 0.045);
+  background-color: var(--color-card);
 }
 
 html[data-theme="light"] [class*="bg-[#0" i] {
   background-color: var(--color-bg-elevated);
+}
+
+html[data-theme="light"]
+  main
+  :is(
+    [class~="bg-black/10"],
+    [class~="bg-black/15"],
+    [class~="bg-black/20"],
+    [class~="bg-black/25"],
+    [class~="bg-black/30"]
+  ) {
+  background-color: #eaf1f3;
 }
 
 @media (max-width: 767px) {
@@ -624,7 +853,7 @@ html[data-theme="light"] [class*="bg-[#0" i] {
 @keyframes page-fade-in {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -633,8 +862,7 @@ html[data-theme="light"] [class*="bg-[#0" i] {
 }
 
 .page-transition {
-  animation: page-fade-in 180ms ease-out both;
-  will-change: opacity, transform;
+  animation: page-fade-in 320ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* ----------------------------------------------------------------------

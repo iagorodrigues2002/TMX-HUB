@@ -48,6 +48,7 @@ export interface OverviewDataset {
   clicks: number;
   pageViews: number;
   conversionRate: number | null;
+  offerIds?: string[];
   daily: ChartPoint[];
   intraday: ChartPoint[];
   finance: {

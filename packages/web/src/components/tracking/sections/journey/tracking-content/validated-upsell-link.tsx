@@ -85,11 +85,12 @@ export function ValidatedUpsellLink({
       link.gateway === 'syzepay'
         ? apiClient.checkSyzepayUpsell(offerId, orderId, link.stage_id)
         : apiClient.checkTrackingUpsellCompatibility(link.url),
-    staleTime: 30_000,
-    refetchOnMount: 'always',
+    // Opening revalidates on the server; don't poll every visible buyer/stage in the background.
+    staleTime: 300_000,
+    refetchOnMount: true,
     refetchOnWindowFocus: false,
-    refetchInterval: 60_000,
-    retry: 1,
+    refetchInterval: false,
+    retry: false,
     enabled: !link.force_url && !link.already_purchased,
   });
   const saveResult = useMutation({

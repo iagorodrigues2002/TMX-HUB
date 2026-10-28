@@ -11,8 +11,20 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/lib/auth-context';
+import { useInterfaceEffects } from '@/lib/interface-effects';
 import { usePrivacy } from '@/lib/privacy-context';
-import { Eye, EyeOff, KeyRound, LogOut, Moon, Sun } from 'lucide-react';
+import {
+  Bell,
+  Eye,
+  EyeOff,
+  KeyRound,
+  LogOut,
+  Moon,
+  Sparkles,
+  Sun,
+  Volume2,
+  Waves,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 
@@ -21,6 +33,7 @@ export function UserMenu() {
   const { isPrivate, togglePrivacy } = usePrivacy();
   const { theme, toggleTheme } = useInterfaceTheme();
   const [menuOpen, setMenuOpen] = useState(false);
+  const effects = useInterfaceEffects();
 
   if (!user) return null;
 
@@ -99,6 +112,85 @@ export function UserMenu() {
             {isPrivate ? 'Mostrar valores financeiros' : 'Ocultar valores financeiros'}
           </DropdownMenuItem>
           <DropdownMenuSeparator className="bg-border/60" />
+          {process.env.NEXT_PUBLIC_TMX_SIGNAL_PREVIEW === '1' && (
+            <>
+              <DropdownMenuItem
+                onSelect={(event) => {
+                  event.preventDefault();
+                  effects.setAlerts(!effects.alerts);
+                }}
+                className="h-11 cursor-pointer px-3 text-[13px]"
+              >
+                <Bell aria-hidden /> Avisos de venda: {effects.alerts ? 'ligados' : 'desligados'}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={(event) => {
+                  event.preventDefault();
+                  void effects.toggleSound();
+                }}
+                className="h-11 cursor-pointer px-3 text-[13px]"
+              >
+                <Volume2 aria-hidden /> Som: {effects.sound ? 'ligado' : 'desligado'}
+              </DropdownMenuItem>
+              {effects.soundError && (
+                <p role="alert" className="px-3 py-2 text-xs text-destructive">
+                  {effects.soundError}
+                </p>
+              )}
+              <label className="block px-3 py-2 text-[13px]">
+                <span className="flex justify-between gap-3">
+                  Volume da notificação <span>{effects.volume}%</span>
+                </span>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value={effects.volume}
+                  aria-label="Volume da notificação"
+                  aria-valuetext={`${effects.volume}%`}
+                  className="mt-2 h-6 w-full cursor-pointer accent-cyan-400"
+                  onKeyDown={(event) => {
+                    if (
+                      ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(
+                        event.key,
+                      )
+                    )
+                      event.stopPropagation();
+                  }}
+                  onChange={(event) => effects.setVolume(Number(event.target.value))}
+                />
+              </label>
+              <DropdownMenuItem
+                onSelect={(event) => {
+                  event.preventDefault();
+                  effects.setAmbient(!effects.ambient);
+                }}
+                className="h-11 cursor-pointer px-3 text-[13px]"
+              >
+                <Waves aria-hidden /> Fundo animado: {effects.ambient ? 'ligado' : 'pausado'}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={(event) => {
+                  event.preventDefault();
+                  effects.setVisual(!effects.visual);
+                }}
+                className="h-11 cursor-pointer px-3 text-[13px]"
+              >
+                <Sparkles aria-hidden /> Efeitos visuais:{' '}
+                {effects.visual ? 'ligados' : 'desligados'}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-border/60" />
+              <DropdownMenuItem
+                onSelect={() => {
+                  void effects.testNotification();
+                }}
+                className="h-11 cursor-pointer px-3 text-[13px]"
+              >
+                <Bell aria-hidden /> {effects.sound ? 'Testar aviso e som' : 'Testar aviso sem som'}
+              </DropdownMenuItem>
+            </>
+          )}
           <DropdownMenuItem
             onSelect={logout}
             className="h-11 cursor-pointer px-3 text-[13px] text-danger focus:text-danger"

@@ -22,6 +22,7 @@ import {
   OverviewLoadingSkeleton,
   accountOffers,
 } from './overview-dashboard-support';
+import { SIGNAL_PREVIEW, SignalPreview } from './signal-preview';
 
 export function OverviewDashboard(props: OverviewDashboardProps) {
   const { scope, initialPeriod } = props;
@@ -167,10 +168,16 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
               Parte das fontes não respondeu. Os módulos disponíveis continuam visíveis abaixo.
             </output>
           )}
-          {datasets.map((dataset) => (
-            <Dataset key={dataset.key} dataset={dataset} />
-          ))}
-          {scope === 'account' && financialQuery.data?.accounts && (
+          {SIGNAL_PREVIEW ? (
+            <SignalPreview
+              period={period}
+              datasets={datasets}
+              accounts={scope === 'account' ? financialQuery.data?.accounts : undefined}
+            />
+          ) : (
+            datasets.map((dataset) => <Dataset key={dataset.key} dataset={dataset} />)
+          )}
+          {!SIGNAL_PREVIEW && scope === 'account' && financialQuery.data?.accounts && (
             <GatewayOverview accounts={financialQuery.data.accounts} />
           )}
         </>
