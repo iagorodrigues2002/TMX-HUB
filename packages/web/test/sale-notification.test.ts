@@ -1,10 +1,20 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  canPlaySaleNoticeSound,
   enqueueSaleNotices,
   saleNoticeTotals,
   takeNewApproved,
 } from '../src/lib/sale-notification';
+
+test('sale sound requires a new popup in the visible focused tab', () => {
+  const notice = { id: 'sale-1', previousId: null, visible: true, focused: true, enabled: true };
+  assert.equal(canPlaySaleNoticeSound(notice), true);
+  assert.equal(canPlaySaleNoticeSound({ ...notice, visible: false }), false);
+  assert.equal(canPlaySaleNoticeSound({ ...notice, focused: false }), false);
+  assert.equal(canPlaySaleNoticeSound({ ...notice, enabled: false }), false);
+  assert.equal(canPlaySaleNoticeSound({ ...notice, previousId: 'sale-1' }), false);
+});
 
 const started = Date.now() - 60_000;
 const order = (id: string, status = 'paid', time = started + 1000) => ({

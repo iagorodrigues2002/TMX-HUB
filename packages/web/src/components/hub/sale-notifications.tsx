@@ -7,7 +7,12 @@ import { todayIso } from '@/lib/date-range';
 import { useInterfaceEffects } from '@/lib/interface-effects';
 import { usePrivacy } from '@/lib/privacy-context';
 import { type SaleNotice, consumeSaleNoticeStream } from '@/lib/sale-notice-stream';
-import { enqueueSaleNotices, saleNoticeTotals, takeNewApproved } from '@/lib/sale-notification';
+import {
+  canPlaySaleNoticeSound,
+  enqueueSaleNotices,
+  saleNoticeTotals,
+  takeNewApproved,
+} from '@/lib/sale-notification';
 import { useEffect, useRef, useState } from 'react';
 
 type Notice = SaleNotice;
@@ -34,6 +39,7 @@ export function SaleNotifications() {
   const first = active?.[0];
   const totals = saleNoticeTotals(active ?? []);
   const lastTest = useRef(0);
+  const lastSoundNotice = useRef<string | null>(null);
   useEffect(() => {
     if (!testRequest || testRequest === lastTest.current) return;
     lastTest.current = testRequest;
@@ -146,8 +152,17 @@ export function SaleNotifications() {
   useEffect(() => {
     if (!active) return;
     setLeaving(false);
+    const id = active[0]!.id;
+    const previousId = lastSoundNotice.current;
+    lastSoundNotice.current = id;
     if (
-      soundEnabled.current &&
+      canPlaySaleNoticeSound({
+        id,
+        previousId,
+        visible: document.visibilityState === 'visible',
+        focused: document.hasFocus(),
+        enabled: soundEnabled.current,
+      }) &&
       audio.current?.state === 'running' &&
       audioBuffer.current &&
       gain.current
@@ -164,8 +179,19 @@ export function SaleNotifications() {
       };
       source.start();
     }
+    const silenceHiddenTab = () => {
+      if (document.visibilityState === 'visible' && document.hasFocus()) return;
+      playing.current?.stop();
+      playing.current = null;
+    };
+    document.addEventListener('visibilitychange', silenceHiddenTab);
+    window.addEventListener('blur', silenceHiddenTab);
     const timer = setTimeout(() => setLeaving(true), 3000);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', silenceHiddenTab);
+      window.removeEventListener('blur', silenceHiddenTab);
+    };
   }, [active, audio, audioBuffer, gain, playing]);
 
   useEffect(() => {

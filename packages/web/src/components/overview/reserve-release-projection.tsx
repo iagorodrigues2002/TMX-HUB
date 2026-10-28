@@ -4,6 +4,7 @@ import { formatCurrency } from '@/components/dashboard/kpi-cards';
 import { request } from '@/lib/api-client/request';
 import { useAuth } from '@/lib/auth-context';
 import { usePrivacy } from '@/lib/privacy-context';
+import { reserveWithoutReturns } from '@/lib/reserve-without-returns';
 import { useQuery } from '@tanstack/react-query';
 import { CalendarClock } from 'lucide-react';
 
@@ -60,9 +61,19 @@ export function ReserveProjectionView({
       <p className="mt-3 text-xs text-muted-foreground">
         Hoje: {count(data.today.sales)} compra(s) na data de vencimento.{' '}
         {money(data.today.reversed_reserve_brl_minor)} da reserva prevista está ligada a compras com
-        reembolso ou chargeback e pode sofrer compensações. Não foi descontado novamente do
-        faturamento.
+        reembolso ou chargeback. Essa parcela não reduz a previsão original de liberação.
       </p>
+      <div className="mt-3 rounded-xl border border-border bg-background/60 p-4">
+        <p className="text-xs text-muted-foreground">Reserva sem compras devolvidas · hoje</p>
+        <p className="mt-2 text-xl font-semibold tabular-nums text-foreground">
+          {data.today.missing_values || data.missing_dates ? '≥ ' : ''}
+          {money(reserveWithoutReturns(data.today))}
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Reserva original menos reserva de compras devolvidas. Visão alternativa; não é saldo
+          confirmado. A VendePay desconta as devoluções do disponível, não da reserva.
+        </p>
+      </div>
       {(warnings > 0 || data.missing_dates > 0) && (
         <output className="mt-2 block text-xs text-amber-500">
           Projeção parcial: {count(warnings)} compra(s) sem valor ou percentual válido e{' '}
@@ -75,8 +86,8 @@ export function ReserveProjectionView({
           Ver calendário diário de liberação · hoje e próximos 90 dias
         </summary>
         <div className="max-h-80 overflow-auto">
-          <table className="w-full min-w-[580px] text-left text-sm">
-            <thead className="sticky top-0 bg-card text-xs text-muted-foreground">
+          <table className="w-full min-w-[760px] border-separate border-spacing-0 text-left text-sm">
+            <thead className="sticky top-0 z-10 bg-[#071c24] text-xs leading-5 text-muted-foreground">
               <tr>
                 <th scope="col" className="p-3">
                   Liberação prevista
@@ -88,7 +99,10 @@ export function ReserveProjectionView({
                   Reserva original
                 </th>
                 <th scope="col" className="p-3">
-                  Ligada a devoluções
+                  Reserva de compras devolvidas
+                </th>
+                <th scope="col" className="p-3">
+                  Reserva sem compras devolvidas
                 </th>
               </tr>
             </thead>
@@ -105,6 +119,10 @@ export function ReserveProjectionView({
                     {money(day.reserve_brl_minor)}
                   </td>
                   <td className="p-3 tabular-nums">{money(day.reversed_reserve_brl_minor)}</td>
+                  <td className="p-3 tabular-nums">
+                    {day.missing_values ? '≥ ' : ''}
+                    {money(reserveWithoutReturns(day))}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -115,8 +133,9 @@ export function ReserveProjectionView({
         Data de aprovação + prazo de reserva configurado (atualmente 90 dias). Fronts e upsells
         entram uma vez por pedido. Percentuais atuais e conversões disponíveis no TMX; não há
         histórico das mudanças de taxas. Próximos 7/30 dias começam amanhã. Esta é a reserva
-        original prevista para maturar, não uma confirmação de crédito ou saldo para saque; pode
-        haver compensações do gateway. Não prevê novas vendas nem devoluções futuras.
+        original prevista para maturar, não uma confirmação de crédito ou saldo para saque. O campo
+        sem compras devolvidas é apenas uma subtração informativa, sem novo desconto financeiro. Não
+        prevê novas vendas nem devoluções futuras.
       </p>
       {!data.today.sales && (
         <p className="mt-2 text-xs text-muted-foreground">

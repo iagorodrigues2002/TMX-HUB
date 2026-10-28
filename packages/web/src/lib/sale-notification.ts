@@ -4,6 +4,22 @@ export interface SaleNoticeOrder {
   occurred_at: string;
 }
 
+export function canPlaySaleNoticeSound({
+  id,
+  previousId,
+  visible,
+  focused,
+  enabled,
+}: {
+  id: string;
+  previousId: string | null;
+  visible: boolean;
+  focused: boolean;
+  enabled: boolean;
+}) {
+  return enabled && visible && focused && id !== previousId;
+}
+
 // Keep the visible batch stable; coalesce arrivals into a single waiting popup.
 export function enqueueSaleNotices<T extends { id: string }>(queue: T[][], incoming: T[]): T[][] {
   const ids = new Set(queue.flat().map((notice) => notice.id));
