@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { env } from '../env.js';
 import { decryptSecret } from '../lib/secret-box.js';
 import { assertSafeOutboundUrl } from '../lib/url-safety.js';
+import { saleNoticeOffers } from './sale-notice-preferences.js';
 
 export const pushId = (endpoint: string) => createHash('sha256').update(endpoint).digest('hex');
 export const pushConfigured = () => !!(env.WEB_PUSH_PUBLIC_KEY && env.WEB_PUSH_PRIVATE_KEY);
@@ -40,7 +41,7 @@ export const pushSubscriptionSchema = z.object({
   }),
 });
 
-type PushApp = Pick<FastifyInstance, 'db' | 'userStore' | 'offerStore' | 'log'>;
+type PushApp = Pick<FastifyInstance, 'db' | 'redis' | 'userStore' | 'offerStore' | 'log'>;
 export async function runBrowserPush(app: PushApp, send = webpush.sendNotification) {
   if (!app.db || !pushConfigured()) return;
   const db = app.db;
@@ -91,7 +92,7 @@ export async function runBrowserPush(app: PushApp, send = webpush.sendNotificati
             !user.allowedTools.includes('ofertas'))
         )
           return;
-        const offers = await app.offerStore.listAccessible(user.id, user.role === 'admin');
+        const offers = await saleNoticeOffers(app, { sub: user.id, role: user.role });
         if (!offers.some((offer) => offer.id === row.offer_id)) return;
         const subscription = pushSubscriptionSchema.parse(
           JSON.parse(decryptSecret(row.secret_encrypted, pushSecret())),

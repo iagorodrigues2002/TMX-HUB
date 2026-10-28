@@ -2,6 +2,7 @@ import { PassThrough } from 'node:stream';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { SaleNoticeFeed } from '../../services/sale-notice-feed.js';
+import { saleNoticeOffers } from '../../services/sale-notice-preferences.js';
 
 const querySchema = z.object({ since: z.string().datetime().optional() });
 
@@ -25,7 +26,7 @@ export function registerGetSaleNoticeStream(app: FastifyInstance) {
         !req.user!.tools.includes('ofertas')
       )
         throw new Error('tool_forbidden');
-      return app.offerStore.listAccessible(req.user!.sub, req.user!.role === 'admin');
+      return saleNoticeOffers(app, req.user!);
     };
     const offers = await authorize();
     const stream = new PassThrough();

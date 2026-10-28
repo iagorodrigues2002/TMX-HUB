@@ -124,6 +124,15 @@ it('does not leak sales to a revoked/deleted user or send stale sales', async ()
     expect(send).not.toHaveBeenCalled();
   }
 });
+it('honors an admin personal scope for push without silencing another admin', async () => {
+  for (const scope of ['own', 'all']) {
+    const { app, send } = fixture();
+    app.userStore.maybeGetById.mockResolvedValue({ id: 'member', role: 'admin' });
+    app.offerStore.listAccessible.mockResolvedValue([{ id: 'offer', userId: 'another' }] as never);
+    await runBrowserPush({ ...app, redis: { get: async () => scope } } as never, send);
+    expect(send).toHaveBeenCalledTimes(scope === 'all' ? 1 : 0);
+  }
+});
 it('removes expired endpoints and bounds retries for transient provider failures', async () => {
   for (const statusCode of [410, 503]) {
     const { app, db, send } = fixture();

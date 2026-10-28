@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { saleNoticeOffers } from '../../services/sale-notice-preferences.js';
 
 const querySchema = z.object({
   since: z.string().datetime(),
@@ -15,7 +16,7 @@ export function registerGetSaleNotices(app: FastifyInstance) {
     if (+since > Date.now() || +since < Date.now() - 86_400_000)
       return reply.code(400).send({ error: 'invalid_cursor' });
     if (!app.db) return reply.code(503).send({ error: 'database_unavailable' });
-    const offers = await app.offerStore.listAccessible(req.user.sub, req.user.role === 'admin');
+    const offers = await saleNoticeOffers(app, req.user);
     if (!offers.length) return { items: [], next: null, offer_ids: [] };
     const ids = offers.map((offer) => offer.id);
     const names = new Map(offers.map((offer) => [offer.id, offer.name]));

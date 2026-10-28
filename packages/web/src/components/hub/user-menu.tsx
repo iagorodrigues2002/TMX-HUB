@@ -28,6 +28,7 @@ import {
 import Link from 'next/link';
 import { useState } from 'react';
 import { BrowserPushMenu } from './browser-push-menu';
+import { SaleNoticeScopeMenu } from './sale-notice-scope-menu';
 
 export function UserMenu() {
   const { user, logout } = useAuth();
@@ -116,6 +117,7 @@ export function UserMenu() {
           {process.env.NEXT_PUBLIC_TMX_SIGNAL_PREVIEW === '1' && (
             <>
               <BrowserPushMenu userId={user.id} />
+              {user.role === 'admin' && <SaleNoticeScopeMenu userId={user.id} />}
               <DropdownMenuItem
                 onSelect={(event) => {
                   event.preventDefault();
