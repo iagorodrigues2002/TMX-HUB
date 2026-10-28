@@ -5,6 +5,11 @@ import { request } from '@/lib/api-client/request';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 type Preference = { scope: 'all' | 'own' };
+export const saveSaleNoticeScope = (scope: Preference['scope']) =>
+  request<Preference>('/v1/tracking/sale-notice-preferences', {
+    method: 'PUT',
+    body: { scope },
+  });
 export function SaleNoticeScopeMenu({ userId }: { userId: string }) {
   const client = useQueryClient();
   const key = ['sale-notice-preferences', userId];
@@ -15,11 +20,7 @@ export function SaleNoticeScopeMenu({ userId }: { userId: string }) {
     retry: false,
   });
   const change = useMutation({
-    mutationFn: (scope: Preference['scope']) =>
-      request<Preference>('/v1/tracking/sale-notice-preferences', {
-        method: 'PUT',
-        body: JSON.stringify({ scope }),
-      }),
+    mutationFn: saveSaleNoticeScope,
     onSuccess: (data) => client.setQueryData(key, data),
   });
   return (
