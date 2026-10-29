@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyPluginAsync, FastifyRequest, RouteOptions 
 import { HttpProblem } from '../lib/problem.js';
 
 type RateLimitResult = { current: number; ttl: number };
+const GENERAL_RATE_LIMIT_MAX = 3000;
 type RateLimitCallback = (error: Error | null, result?: RateLimitResult) => void;
 type RateLimitStoreOptions = {
   continueExceeding?: boolean;
@@ -66,7 +67,7 @@ function createFailClosedRedisStore(redis: RedisRateLimitClient) {
       key: string,
       callback: RateLimitCallback,
       timeWindow = this.options.timeWindow ?? 60_000,
-      max = this.options.max ?? 600,
+      max = this.options.max ?? GENERAL_RATE_LIMIT_MAX,
     ) {
       const command = redis.rateLimit;
       if (!command) return callback(unavailableProblem());
@@ -147,7 +148,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     app.redis as unknown as RedisRateLimitClient,
   );
   await app.register(rateLimit, {
-    max: 600,
+    max: GENERAL_RATE_LIMIT_MAX,
     timeWindow: '1 minute',
     store: FailClosedRedisStore,
     skipOnError: false,
