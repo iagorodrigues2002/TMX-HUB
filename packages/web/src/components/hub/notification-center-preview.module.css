@@ -1,0 +1,42 @@
+.drawer {
+  display: flex;
+  flex-direction: column;
+}
+.drawer > * {
+  flex-shrink: 0;
+}
+.drawer[data-state='open'] {
+  animation: drawer-in 360ms cubic-bezier(.16, 1, .3, 1) both;
+}
+.drawer[data-state='closed'] {
+  animation: drawer-out 190ms cubic-bezier(.4, 0, 1, 1) both;
+}
+.card {
+  animation: card-in 300ms cubic-bezier(.16, 1, .3, 1) both;
+}
+.card article {
+  transition: transform 180ms ease, border-color 180ms ease;
+}
+@media (hover: hover) {
+  .card article:hover { transform: translateY(-2px); }
+}
+@keyframes drawer-in {
+  from { opacity: 0; transform: translateX(36px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes drawer-out {
+  to { opacity: 0; transform: translateX(24px); }
+}
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .drawer[data-state], .card {
+    animation: fade-in 100ms ease both;
+    animation-delay: 0ms !important;
+  }
+  .drawer[data-state='closed'] { animation-direction: reverse; }
+  .card article, .card article:hover { transform: none; transition: none; }
+}
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }

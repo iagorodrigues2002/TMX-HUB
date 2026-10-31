@@ -110,6 +110,9 @@ const migrations = [
   '102_paid_attribution_webhook_fallback.sql',
   '103_attribution_recovery_audit.sql',
   '104_browser_sale_push.sql',
+  '105_task_management.sql',
+  '106_call_management.sql',
+  '107_notification_center.sql',
 ];
 
 await sql`

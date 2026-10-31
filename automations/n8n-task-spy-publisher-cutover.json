@@ -1,0 +1,11 @@
+{
+  "workflowId": "FdB40Pz6MTSr8Ib4",
+  "operations": [
+    {
+      "type": "setNodeSettings",
+      "nodeName": "Notificar canal Spy",
+      "settings": { "disabled": true }
+    }
+  ],
+  "requires": "Aplicar em rascunho e publicar coordenadamente com o publicador único, preservando Confirmar no Discord no canal de solicitação. Não ativar um segundo publicador."
+}

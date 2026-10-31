@@ -1,0 +1,492 @@
+{
+  "name": "TMX — Calls | Agendamentos e lembretes",
+  "active": false,
+  "nodes": [
+    {
+      "name": "A cada 30 segundos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "seconds",
+              "secondsInterval": 30
+            }
+          ]
+        }
+      },
+      "id": "call-0"
+    },
+    {
+      "name": "Reservar calls",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        230,
+        0
+      ],
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 15000
+        },
+        "method": "POST",
+        "url": "={{ $vars.TMX_TASK_API_BASE + '/v1/call-automation/claim' }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CONFIGURE_TMX_TASK_HEADER_AUTH",
+          "name": "TMX Tasks API"
+        }
+      },
+      "id": "call-1"
+    },
+    {
+      "name": "Preparar calls",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        0
+      ],
+      "parameters": {
+        "jsCode": "\nconst config=JSON.parse($vars.TMX_CALL_CONFIG_JSON||'{}');\nif(!/^\\d+$/.test(String(config.listId||'')) || !/^\\d+$/.test(String(config.channelId||''))) throw new Error('Configure lista e canal reais');\nreturn $input.first().json.commands.map(command=>{\n const call=command.call;\n if(!call.participants.length || call.participants.some(p=>!/^\\d+$/.test(p.clickupId)||!/^\\d+$/.test(p.discordId))) throw new Error('Todos os participantes precisam de vínculo confirmado');\n const status=config.statuses?.[call.status];\n if(!status) throw new Error('Status real da lista não configurado');\n const mentions=call.participants.map(p=>'<@'+p.discordId+'>').join(' ');\n const when=new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Sao_Paulo',dateStyle:'short',timeStyle:'short'}).format(new Date(call.startsAt));\n const heading=command.action==='remind'?(command.minutes===0?'A call começa agora':'Call em '+command.minutes+' minutos'):(call.status==='cancelled'?'Call cancelada':call.status==='completed'?'Call realizada':'Call agendada');\n const base=['📅 **'+heading+' — '+call.title+'**',when+' · São Paulo · '+call.durationMinutes+' min',mentions].join('\\n');\n const content=[base,call.message.slice(0,Math.max(0,1999-base.length))].filter(Boolean).join('\\n');\n const discordBody={content,allowed_mentions:{parse:[],users:call.participants.map(p=>p.discordId)},components:call.status==='scheduled'?[{type:1,components:[{type:2,style:5,label:'Entrar na call',url:call.meetingUrl}]}]:[]};\n if(command.action==='remind'||!call.discordMessageId){discordBody.nonce=String(command.id).slice(-25);discordBody.enforce_nonce=true;}\n const clickupBody={name:call.title,description:call.description+'\\n\\nTMX call '+call.id+' revision '+call.revision+'\\n'+call.meetingUrl,status,assignees:call.participants.map(p=>Number(p.clickupId)),due_date:Date.parse(call.startsAt),due_date_time:true,start_date:Date.parse(call.startsAt),start_date_time:true};\n if(call.clickupId) clickupBody.assignees={add:call.participants.map(p=>Number(p.clickupId)),rem:[]};\n return {json:{command,config,discordBody,clickupBody,status,discordMethod:command.action==='sync'&&call.discordMessageId?'PATCH':'POST',discordUrl:'https://discord.com/api/v10/channels/'+config.channelId+'/messages'+(command.action==='sync'&&call.discordMessageId?'/'+call.discordMessageId:''),clickupMethod:call.clickupId?'PUT':'POST',clickupUrl:'https://api.clickup.com/api/v2/'+(call.clickupId?'task/'+call.clickupId:'list/'+config.listId+'/task')}};\n});",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "call-2"
+    },
+    {
+      "name": "É lembrete?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        690,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.command.action }}",
+              "rightValue": "remind",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "call-3"
+    },
+    {
+      "name": "Já existe no ClickUp?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        920,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ !!$json.command.call.clickupId }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "call-4"
+    },
+    {
+      "name": "Ler participantes atuais",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1150,
+        0
+      ],
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "clickUpApi",
+        "options": {
+          "timeout": 15000
+        },
+        "method": "GET",
+        "url": "={{ 'https://api.clickup.com/api/v2/task/' + $json.command.call.clickupId }}"
+      },
+      "credentials": {
+        "clickUpApi": {
+          "id": "CONFIGURE_CLICKUP",
+          "name": "Mainex Clickup"
+        }
+      },
+      "id": "call-5"
+    },
+    {
+      "name": "Preparar participantes atuais",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1380,
+        0
+      ],
+      "parameters": {
+        "jsCode": "\nconst input=$('Preparar calls').item.json;const remote=$input.item.json;\nif(String(remote.id)!==input.command.call.clickupId) throw new Error('Outra tarefa retornada');\nconst wanted=input.command.call.participants.map(p=>p.clickupId);\ninput.clickupBody.assignees={add:wanted.map(Number),rem:(remote.assignees||[]).map(p=>String(p.id)).filter(id=>!wanted.includes(id)).map(Number)};\nreturn {json:input};",
+        "mode": "runOnceForEachItem"
+      },
+      "id": "call-6"
+    },
+    {
+      "name": "Gravar ClickUp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1610,
+        0
+      ],
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "clickUpApi",
+        "options": {
+          "timeout": 15000
+        },
+        "method": "={{ $json.clickupMethod }}",
+        "url": "={{ $json.clickupUrl }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.clickupBody }}"
+      },
+      "credentials": {
+        "clickUpApi": {
+          "id": "CONFIGURE_CLICKUP",
+          "name": "Mainex Clickup"
+        }
+      },
+      "id": "call-7"
+    },
+    {
+      "name": "Reler ClickUp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1840,
+        0
+      ],
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "clickUpApi",
+        "options": {
+          "timeout": 15000
+        },
+        "method": "GET",
+        "url": "={{ 'https://api.clickup.com/api/v2/task/' + $json.id }}"
+      },
+      "credentials": {
+        "clickUpApi": {
+          "id": "CONFIGURE_CLICKUP",
+          "name": "Mainex Clickup"
+        }
+      },
+      "id": "call-8"
+    },
+    {
+      "name": "Conferir ClickUp",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2070,
+        0
+      ],
+      "parameters": {
+        "jsCode": "\nconst input=$('Preparar calls').item.json;const remote=$input.item.json;\nif(!remote.id || (input.command.call.clickupId && String(remote.id)!==input.command.call.clickupId)) throw new Error('ClickUp não confirmou identidade');\nconst expected=input.command.call.participants.map(p=>p.clickupId).sort();const actual=(remote.assignees||[]).map(p=>String(p.id)).sort();\nif(JSON.stringify(expected)!==JSON.stringify(actual)||remote.status?.status!==input.status||Number(remote.due_date)!==Date.parse(input.command.call.startsAt)) throw new Error('ClickUp não confirmou participantes, horário ou status');\nreturn {json:{...input,clickupId:String(remote.id)}};",
+        "mode": "runOnceForEachItem"
+      },
+      "id": "call-9"
+    },
+    {
+      "name": "Guardar identidade ClickUp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2300,
+        0
+      ],
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 15000
+        },
+        "method": "POST",
+        "url": "={{ $vars.TMX_TASK_API_BASE + '/v1/call-automation/checkpoint' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { id: $json.command.id, revision: $json.command.call.revision, clickupId: $json.clickupId } }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CONFIGURE_TMX_TASK_HEADER_AUTH",
+          "name": "TMX Tasks API"
+        }
+      },
+      "id": "call-10"
+    },
+    {
+      "name": "Publicar ou atualizar card",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2530,
+        0
+      ],
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "discordBotApi",
+        "options": {
+          "timeout": 15000
+        },
+        "method": "={{ $('Preparar calls').item.json.discordMethod }}",
+        "url": "={{ $('Preparar calls').item.json.discordUrl }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Preparar calls').item.json.discordBody }}"
+      },
+      "credentials": {
+        "discordBotApi": {
+          "id": "CONFIGURE_DISCORD",
+          "name": "Mainex Bot - TMX"
+        }
+      },
+      "id": "call-11"
+    },
+    {
+      "name": "Conferir Discord",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2760,
+        0
+      ],
+      "parameters": {
+        "jsCode": "\nconst input=$('Preparar calls').item.json;const receipt=$input.item.json;\nif(!/^\\d+$/.test(String(receipt.id||'')) || String(receipt.channel_id)!==String(input.config.channelId)) throw new Error('Discord não confirmou mensagem');\nif(input.discordMethod==='PATCH'&&String(receipt.id)!==input.command.call.discordMessageId) throw new Error('Discord retornou outro card');\nlet clickupId=input.command.call.clickupId;\nif(input.command.action==='sync') clickupId=$('Conferir ClickUp').item.json.clickupId;\nreturn {json:{id:input.command.id,revision:input.command.call.revision,ok:true,clickupId,discordMessageId:String(receipt.id),discordChannelId:String(receipt.channel_id)}};",
+        "mode": "runOnceForEachItem"
+      },
+      "id": "call-12"
+    },
+    {
+      "name": "Confirmar entrega",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2990,
+        0
+      ],
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 15000
+        },
+        "method": "POST",
+        "url": "={{ $vars.TMX_TASK_API_BASE + '/v1/call-automation/result' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CONFIGURE_TMX_TASK_HEADER_AUTH",
+          "name": "TMX Tasks API"
+        }
+      },
+      "id": "call-13"
+    }
+  ],
+  "connections": {
+    "A cada 30 segundos": {
+      "main": [
+        [
+          {
+            "node": "Reservar calls",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reservar calls": {
+      "main": [
+        [
+          {
+            "node": "Preparar calls",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar calls": {
+      "main": [
+        [
+          {
+            "node": "É lembrete?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É lembrete?": {
+      "main": [
+        [
+          {
+            "node": "Publicar ou atualizar card",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Já existe no ClickUp?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Já existe no ClickUp?": {
+      "main": [
+        [
+          {
+            "node": "Ler participantes atuais",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gravar ClickUp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler participantes atuais": {
+      "main": [
+        [
+          {
+            "node": "Preparar participantes atuais",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar participantes atuais": {
+      "main": [
+        [
+          {
+            "node": "Gravar ClickUp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gravar ClickUp": {
+      "main": [
+        [
+          {
+            "node": "Reler ClickUp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reler ClickUp": {
+      "main": [
+        [
+          {
+            "node": "Conferir ClickUp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conferir ClickUp": {
+      "main": [
+        [
+          {
+            "node": "Guardar identidade ClickUp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar identidade ClickUp": {
+      "main": [
+        [
+          {
+            "node": "Publicar ou atualizar card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publicar ou atualizar card": {
+      "main": [
+        [
+          {
+            "node": "Conferir Discord",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conferir Discord": {
+      "main": [
+        [
+          {
+            "node": "Confirmar entrega",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "timezone": "America/Sao_Paulo"
+  }
+}

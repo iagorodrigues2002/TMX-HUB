@@ -1,0 +1,451 @@
+{
+  "name": "TMX — Discord | Estado único por tarefa | Publicador único · revisão local",
+  "nodes": [
+    {
+      "parameters": {
+        "team": "90171583342",
+        "events": [
+          "taskCreated",
+          "taskStatusUpdated",
+          "taskAssigneeUpdated",
+          "taskDueDateUpdated"
+        ],
+        "filters": {
+          "folderId": "901711760348"
+        }
+      },
+      "id": "358d380d-0406-4e95-9094-8629e0a219b2",
+      "name": "Status, responsável ou prazo",
+      "type": "n8n-nodes-base.clickUpTrigger",
+      "typeVersion": 1,
+      "position": [
+        128,
+        304
+      ],
+      "webhookId": "3590ffe7-2d8f-487e-86bc-5061d1594ed9",
+      "credentials": {
+        "clickUpApi": {
+          "id": "oFle9RNlHV9vB9cQ",
+          "name": "Mainex Clickup"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "id": "={{ $json.task_id }}"
+      },
+      "id": "0e1a21f8-c54a-4587-8e69-3096bcb9f8cf",
+      "name": "Buscar tarefa",
+      "type": "n8n-nodes-base.clickUp",
+      "typeVersion": 1,
+      "position": [
+        368,
+        304
+      ],
+      "credentials": {
+        "clickUpApi": {
+          "id": "oFle9RNlHV9vB9cQ",
+          "name": "Mainex Clickup"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const task=$json;if(/(?:^|\\n)TMX call [0-9a-f-]{36} revision \\d+(?:\\n|$)/i.test(String(task.description||task.text_content||''))) return null;const name=String(task.name??'').trim();const description=String(task.text_content??task.description??'');const listName=String(task.list?.name??'').trim();const status=String(task.status?.status??task.status??'').trim();const normalizedStatus=status.toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g,'');const isCompleted=['concluido','complete','completed','closed'].includes(normalizedStatus);const url=String(task.url??'');const nameMatch=name.toUpperCase().match(/^([A-Z0-9]+)-(EN|ENG|ESP|DE)(?:-(TTK|YT))?\\s*[|—–-]\\s*(.+)$/);const descriptionMatch=description.toUpperCase().match(/(?:^|\\n)OFERTA:\\s*([A-Z0-9]+)[_-](EN|ENG|ESP|DE)(?:[_-](TTK|YT))?/);const match=nameMatch??descriptionMatch;const offerRoutes={'PJR-EN':'1531108250647400688','PJR-EN-TTK':'1554152629100220557','PJR-EN-YT':'1554153611003564184','PJR-ESP':'1544778422981623849','SLM-EN':'1537182979628212254','SLM-ESP':'1531108172834803885','SLM-DE':'1533662257857302669','SLM-DE-YT':'1557061702602985522','PYS-EN':'1556504216946741248','TJR-EN':'1557229422657142936','TBN-EN':'1561866982939173024'};const areaRoutes={'Financeiro':'1554156471116374267','Infraestrutura':'1557062462199562280','Spy':'1557087913542549526','Tráfego':'1566131429467754656','Funil & Desenvolvimento':'1566131429551644722'};const discordByClickUp={'101399101':'1357487279454556281','101375637':'343585375618334732','246130969':'854014263092969484'};const assignees=Array.isArray(task.assignees)?task.assignees:[];const mentions=[...new Set(assignees.map(a=>discordByClickUp[String(a.id)]).filter(Boolean))].map(id=>'<@'+id+'>').join(' ');let source='',channelId='' ,classification='GERAL',action=name;if(match){const offer=match[1],language=match[2]==='ENG'?'EN':match[2],sourceCode=match[3],parsedAction=nameMatch?match[4]:name;source=sourceCode==='TTK'?'TikTok Ads':sourceCode==='YT'?'YouTube Ads':task.tags?.some(t=>String(t.name).toLowerCase()==='meta ads')?'Meta Ads':'';classification=[offer,language,sourceCode].filter(Boolean).join('-');action=parsedAction;channelId=offerRoutes[classification]??'';}else if(areaRoutes[listName]){classification=listName.toUpperCase();channelId=areaRoutes[listName];}if(!channelId) throw new Error('Canal da área ou oferta não configurado');const completedAt=new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(Number(task.date_done||task.date_closed||task.date_updated))).replace(',', ' às');const content=isCompleted?'✅ A tarefa **'+name+'** foi concluída em **'+completedAt+'**.':['📌 **'+classification+'**','**'+action+'**',status?'Status: '+status:'',mentions?'Responsável: '+mentions:'',source?'Fonte: '+source:'',listName?'Área: '+listName:'',url].filter(Boolean).join('\\n');const cache=$getWorkflowStaticData('global');const taskKey=String(task.id);const eventKey=[taskKey,String(task.date_updated??''),normalizedStatus].join('|');const previous=cache[taskKey]??{};return{json:{...task,channelId,content,isCompleted,previousMessageId:previous.messageId??'',previousChannelId:previous.channelId??channelId}};"
+      },
+      "id": "36e10340-e304-434d-8365-c8704e9af0a5",
+      "name": "Preparar estado atual",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        608,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.previousMessageId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d011bb85-5c21-4ad3-bc1d-2a3b3e37f2ab",
+      "name": "Existe mensagem?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        848,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const task=$('Preparar estado atual').item.json;\nconst receipt=$input.item.json;\nif(!/^\\d+$/.test(String(receipt.id||'')) || String(receipt.channel_id)!==String(task.previousChannelId||task.channelId)) throw new Error('Discord não confirmou a mensagem');\nconst cache=$getWorkflowStaticData('global');\ncache[String(task.id)]={messageId:String(receipt.id),channelId:String(receipt.channel_id)};\nconst eventId=String(task.id)+'|'+String(task.date_updated)+'|'+String(task.status?.status);\ncache.__lastEventKey=cache.__lastEventKey||{};\ncache.__lastEventKey[String(task.id)]=eventId;\nreturn {json:{body:{eventId,source:'clickup',task,discordMessageId:String(receipt.id),discordChannelId:String(receipt.channel_id)}}};"
+      },
+      "id": "aaa5b3e9-e2c0-4441-a37f-619ef58ef014",
+      "name": "Guardar ID atualizado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const task=$('Preparar estado atual').item.json;\nconst receipt=$input.item.json;\nif(!/^\\d+$/.test(String(receipt.id||'')) || String(receipt.channel_id)!==String(task.previousChannelId||task.channelId)) throw new Error('Discord não confirmou a mensagem');\nconst cache=$getWorkflowStaticData('global');\ncache[String(task.id)]={messageId:String(receipt.id),channelId:String(receipt.channel_id)};\nconst eventId=String(task.id)+'|'+String(task.date_updated)+'|'+String(task.status?.status);\ncache.__lastEventKey=cache.__lastEventKey||{};\ncache.__lastEventKey[String(task.id)]=eventId;\nreturn {json:{body:{eventId,source:'clickup',task,discordMessageId:String(receipt.id),discordChannelId:String(receipt.channel_id)}}};"
+      },
+      "id": "f1f1b5e4-9707-4109-8f15-230e82787472",
+      "name": "Guardar primeiro ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1328,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ 'https://discord.com/api/v10/channels/' + $('Preparar estado atual').item.json.previousChannelId + '/messages/' + $('Preparar estado atual').item.json.previousMessageId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "discordBotApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { content: $('Preparar estado atual').item.json.content, flags: 4096, ...($('Preparar estado atual').item.json.isCompleted ? {} : { components: [{ type: 1, components: [{ type: 2, style: 2, label: 'Pendente', custom_id: 'tmx_status|' + $('Preparar estado atual').item.json.id + '|pending', disabled: String($('Preparar estado atual').item.json.status?.status).toLowerCase() === 'pendente' }, { type: 2, style: 1, label: 'Em progresso', custom_id: 'tmx_status|' + $('Preparar estado atual').item.json.id + '|progress', disabled: String($('Preparar estado atual').item.json.status?.status).toLowerCase() === 'em progresso' }, { type: 2, style: 3, label: 'Concluído', custom_id: 'tmx_status|' + $('Preparar estado atual').item.json.id + '|done', disabled: String($('Preparar estado atual').item.json.status?.status).toLowerCase() === 'concluído' }] }] }) } }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "d101c024-97b8-4657-bc0d-1b470e15b179",
+      "name": "Publicar estado atualizado com botões",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1328,
+        192
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CONFIGURE_TMX_TASK_HEADER_AUTH",
+          "name": "TMX Tasks API"
+        },
+        "discordBotApi": {
+          "id": "h7MeXv4NXmpu1xVG",
+          "name": "Mainex Bot - TMX"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://discord.com/api/v10/channels/' + $json.channelId + '/messages' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "discordBotApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { content: $json.content, allowed_mentions: { parse: [], users: ($json.assignees||[]).map(p=>({'101399101':'1357487279454556281','101375637':'343585375618334732','246130969':'854014263092969484'})[String(p.id)]).filter(Boolean) }, flags: 4096, nonce: String($json.id), enforce_nonce: true, ...($json.isCompleted ? {} : { components: [{ type: 1, components: [{ type: 2, style: 2, label: 'Pendente', custom_id: 'tmx_status|' + $json.id + '|pending', disabled: String($json.status?.status||$json.status).toLowerCase() === 'pendente' }, { type: 2, style: 1, label: 'Em progresso', custom_id: 'tmx_status|' + $json.id + '|progress', disabled: String($json.status?.status||$json.status).toLowerCase() === 'em progresso' }, { type: 2, style: 3, label: 'Concluído', custom_id: 'tmx_status|' + $json.id + '|done', disabled: String($json.status?.status||$json.status).toLowerCase() === 'concluído' }] }] }) } }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "5f48da63-90a0-47c4-b832-be81de1aab19",
+      "name": "Publicar primeiro estado com botões",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1088,
+        432
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CONFIGURE_TMX_TASK_HEADER_AUTH",
+          "name": "TMX Tasks API"
+        },
+        "discordBotApi": {
+          "id": "h7MeXv4NXmpu1xVG",
+          "name": "Mainex Bot - TMX"
+        }
+      }
+    },
+    {
+      "name": "Preparar recibo para TMX",
+      "id": "tmx-receipt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        400
+      ],
+      "parameters": {
+        "jsCode": "return $input.all();"
+      }
+    },
+    {
+      "id": "Ler vínculos TMX",
+      "name": "Ler vínculos TMX",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.TMX_TASK_API_BASE + '/v1/task-automation/people' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CONFIGURE_TMX_TASK_HEADER_AUTH",
+          "name": "TMX Tasks API"
+        }
+      }
+    },
+    {
+      "id": "lookup",
+      "name": "Buscar vínculo da tarefa",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        400,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CONFIGURE_TMX_TASK_HEADER_AUTH",
+          "name": "TMX Tasks API"
+        }
+      },
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $vars.TMX_TASK_API_BASE + '/v1/task-automation/tasks/lookup?clickupId=' + encodeURIComponent($('Preparar recibo para TMX').item.json.body.task.id) + (($('Preparar recibo para TMX').item.json.body.task.description || '').match(/Origem: TMX request ([0-9a-f-]{36})/i) ? '&requestId=' + encodeURIComponent(($('Preparar recibo para TMX').item.json.body.task.description || '').match(/Origem: TMX request ([0-9a-f-]{36})/i)[1]) : '') }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 15000
+        }
+      }
+    },
+    {
+      "id": "normalize",
+      "name": "Normalizar tarefa",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const input=$('Preparar recibo para TMX').item.json.body;\nconst people=$('Ler vínculos TMX').first().json.people;\nconst previous=$input.first().json.task;\nif(!input || !input.eventId || !['discord','clickup'].includes(input.source)) throw new Error('Envelope inválido');\nconst remote=input.task;\nif(!remote?.id || !/^[a-zA-Z0-9_-]+$/.test(String(remote.id))) throw new Error('taskId ausente');\nconst config=JSON.parse($vars.TMX_TASK_CONFIG_JSON || '{}');\nconst match=Object.entries(config).find(([sector,value])=>String(value.listId)===String(remote.list?.id));\nif(!match) throw new Error('Lista ClickUp sem mapeamento de setor');\nconst [sector,settings]=match;\nconst state=Object.entries(settings.statuses).find(([key,value])=>value===remote.status?.status)?.[0];\nif(!['pending','progress','done'].includes(state)) throw new Error('Status da lista não mapeado');\nconst iso=value=>value && Number.isFinite(Number(value))?new Date(Number(value)).toISOString():null;\nconst updatedAt=iso(remote.date_updated);\nif(!updatedAt) throw new Error('Data de atualização ausente');\nconst assignees=(remote.assignees||[]).map(p=>{ const person=people.find(saved=>saved.clickupId===String(p.id)); if(!person) throw new Error('Responsável sem vínculo TMX: '+p.id); return person; });\nconst task={clickupId:String(remote.id),discordMessageId:input.discordMessageId||previous?.discordMessageId||null,discordChannelId:input.discordChannelId||previous?.discordChannelId||null,\ntitle:String(remote.name||''),description:String(remote.description||''),sector,offer:input.offer||previous?.offer||String(remote.description||'').match(/Oferta:\\s*([^\\n]+)/i)?.[1]?.trim()||null,assignees,status:state,\npriority:({1:'urgent',2:'high',3:'normal',4:'low'})[remote.priority?.id]||'normal',source:input.source,\nreceivedAt:iso(remote.date_created)||updatedAt,assignedAt:null,startedAt:input.startedAt||previous?.startedAt||null,\ncompletedAt:state==='done'?iso(remote.date_done||remote.date_closed):null,dueAt:iso(remote.due_date),updatedAt,\nsyncState:'synced',discordState:'pending'};\nif(previous) task.id=previous.id;\nif(!/^\\d+$/.test(String(input.discordMessageId||'')) || !/^\\d+$/.test(String(input.discordChannelId||''))) throw new Error('Recibo Discord confirmado obrigatório');\ntask.discordState='synced';\nreturn [{json:{eventId:String(input.eventId)+':confirmed',task}}];"
+      }
+    },
+    {
+      "id": "Persistir evento idempotente",
+      "name": "Persistir evento idempotente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.TMX_TASK_API_BASE + '/v1/task-automation/events' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { eventId: $json.eventId, task: $json.task } }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CONFIGURE_TMX_TASK_HEADER_AUTH",
+          "name": "TMX Tasks API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Status, responsável ou prazo": {
+      "main": [
+        [
+          {
+            "node": "Buscar tarefa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar tarefa": {
+      "main": [
+        [
+          {
+            "node": "Preparar estado atual",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar estado atual": {
+      "main": [
+        [
+          {
+            "node": "Existe mensagem?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Existe mensagem?": {
+      "main": [
+        [
+          {
+            "node": "Publicar estado atualizado com botões",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Publicar primeiro estado com botões",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publicar estado atualizado com botões": {
+      "main": [
+        [
+          {
+            "node": "Guardar ID atualizado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publicar primeiro estado com botões": {
+      "main": [
+        [
+          {
+            "node": "Guardar primeiro ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar ID atualizado": {
+      "main": [
+        [
+          {
+            "node": "Preparar recibo para TMX",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar primeiro ID": {
+      "main": [
+        [
+          {
+            "node": "Preparar recibo para TMX",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar recibo para TMX": {
+      "main": [
+        [
+          {
+            "node": "Ler vínculos TMX",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler vínculos TMX": {
+      "main": [
+        [
+          {
+            "node": "Buscar vínculo da tarefa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar vínculo da tarefa": {
+      "main": [
+        [
+          {
+            "node": "Normalizar tarefa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar tarefa": {
+      "main": [
+        [
+          {
+            "node": "Persistir evento idempotente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate"
+  },
+  "active": false
+}

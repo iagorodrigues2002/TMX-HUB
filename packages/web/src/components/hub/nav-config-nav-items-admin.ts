@@ -1,4 +1,4 @@
-import { Activity, CircleGauge, KeyRound, ListChecks, ShieldCheck, Users } from 'lucide-react';
+import { Activity, CircleGauge, KeyRound, ListChecks, ListTodo, ShieldCheck, Users } from 'lucide-react';
 import type { NavItem } from './nav-config-nav-item';
 
 export const nav_items_admin: NavItem = {
@@ -10,6 +10,15 @@ export const nav_items_admin: NavItem = {
   roles: ['admin'],
   keywords: ['administração'],
   children: [
+    {
+      id: 'task-management',
+      label: 'Gestão de tarefas',
+      href: '/tarefas',
+      icon: ListTodo,
+      group: 'Admin',
+      roles: ['admin'],
+      keywords: ['tarefas', 'demandas', 'clickup', 'discord'],
+    },
     {
       id: 'admin-overview',
       label: 'Visão geral',

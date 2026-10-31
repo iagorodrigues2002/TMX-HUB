@@ -31,6 +31,7 @@ describe('logger PII redaction', () => {
       user_agent: 'sensitive-browser',
       address: { street: 'Rua privada, 10' },
       authorization: 'Bearer top-secret',
+      headers: { 'x-tmx-task-secret': 'private-task-bridge-key' },
       cookies: 'session=top-secret',
       buyer: { email: 'nested@example.com', phone: '11999999999' },
       req: {
@@ -43,6 +44,7 @@ describe('logger PII redaction', () => {
     const output = chunks.join('');
     for (const secret of [
       'buyer@example.com',
+      'private-task-bridge-key',
       '+5511999999999',
       '12345678901',
       '12345678000199',

@@ -5,6 +5,8 @@ import activityRoutes from './activity.js';
 import adsIntelligenceRoutes from './ads-intelligence.js';
 import authRoutes from './auth.js';
 import buildsRoutes from './builds.js';
+import { callAutomationRoutes, callManagementRoutes } from './call-management.js';
+import { notificationCenterRoutes } from './notification-center.js';
 import clonesRoutes from './clones.js';
 import formsRoutes from './forms.js';
 import funnelJobsRoutes from './funnel-jobs.js';
@@ -25,6 +27,7 @@ import recoveryAdminRoutes from './recovery-admin.js';
 import refundsDashboardRoutes from './refunds-dashboard.js';
 import shieldJobsRoutes from './shield-jobs.js';
 import { syzepayAdminRoutes, syzepayPublicRoutes } from './syzepay.js';
+import { taskAutomationRoutes, taskManagementRoutes } from './task-management.js';
 import tiktokAdsAdminRoutes from './tiktok-ads-admin.js';
 import trackingAdminRoutes from './tracking-admin.js';
 import trackingAdvancedRoutes from './tracking-advanced.js';
@@ -87,6 +90,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       await v1.register(offerCartRoutes);
       await v1.register(explodelyWebhookRoutes);
       await v1.register(syzepayPublicRoutes);
+      await v1.register(taskAutomationRoutes);
+      await v1.register(callAutomationRoutes);
 
       // Everything below requires a valid JWT.
       await v1.register(async (protectedRoutes) => {
@@ -133,6 +138,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         await protectedRoutes.register(pushcutAdminRoutes);
         await protectedRoutes.register(recoveryAdminRoutes);
         await protectedRoutes.register(usersRoutes);
+        await protectedRoutes.register(taskManagementRoutes);
+        await protectedRoutes.register(callManagementRoutes);
+        await protectedRoutes.register(notificationCenterRoutes);
       });
     },
     { prefix: '/v1' },

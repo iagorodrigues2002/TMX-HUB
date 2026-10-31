@@ -1,0 +1,26 @@
+.dashboard {
+  animation: enter 300ms ease both;
+}
+.task {
+  animation: enter 220ms ease both;
+}
+.details {
+  animation: enter 180ms ease both;
+}
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dashboard,
+  .task,
+  .details {
+    animation: none;
+  }
+}

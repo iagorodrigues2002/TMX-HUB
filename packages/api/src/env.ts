@@ -24,6 +24,7 @@ const EnvSchema = z
     WEB_PUSH_PUBLIC_KEY: z.string().optional(),
     WEB_PUSH_PRIVATE_KEY: z.string().optional(),
     WEB_PUSH_SUBJECT: z.string().url().default('https://theminex.com'),
+    TASK_AUTOMATION_SECRET: z.string().min(32).optional(),
     META_GRAPH_API_VERSION: z
       .string()
       .regex(/^v\d+\.\d+$/)

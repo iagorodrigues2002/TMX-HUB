@@ -1,0 +1,290 @@
+{
+  "name": "TMX — Gestão de tarefas | Comandos do painel",
+  "active": false,
+  "nodes": [
+    {
+      "id": "timer",
+      "name": "A cada 15 segundos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "seconds",
+              "secondsInterval": 15
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "Reservar comandos",
+      "name": "Reservar comandos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.TMX_TASK_API_BASE + '/v1/task-automation/commands/claim' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CONFIGURE_TMX_TASK_HEADER_AUTH",
+          "name": "TMX Tasks API"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "Preparar comandos",
+      "name": "Preparar comandos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const cfg=JSON.parse($vars.TMX_TASK_CONFIG_JSON || '{}');\nconst base=String($vars.TMX_TASK_API_BASE || '');\nif(!base.startsWith('https://') || !base.slice(8) || /[^a-z0-9.:-]/i.test(base.slice(8))) throw new Error('Use HTTPS na API TMX');\nreturn ($input.first().json.commands || []).map(command=>{\n const task=command.task, settings=cfg[task.sector];\n if(!settings || !/^\\d+$/.test(settings.listId) || !/^\\d+$/.test(settings.channelId)) throw new Error('Setor sem lista/canal configurados: '+task.sector);\n const desired=command.action==='create'?'pending':command.status;\n if(!settings.statuses?.[desired]) throw new Error('Status da lista não mapeado');\n if(command.action==='status' && (!task.clickupId || !task.discordMessageId || !task.discordChannelId)) throw new Error('Vincule a mensagem Discord antes de alterar');\n const ids=task.assignees.map(p=>Number(p.clickupId));\n if(ids.some(id=>!Number.isSafeInteger(id)||id<=0)) throw new Error('Responsável ClickUp inválido');\n return {json:{command,settings,desired,method:command.action==='create'?'POST':'PUT',\n url:command.action==='create'?'https://api.clickup.com/api/v2/list/'+settings.listId+'/task':'https://api.clickup.com/api/v2/task/'+encodeURIComponent(task.clickupId),\n body:command.action==='create'?{name:task.title,markdown_description:'Oferta: '+(task.offer||'Sem oferta')+'\\nSetor: '+task.sector+'\\n\\n'+task.description+'\\n\\nOrigem: TMX request '+command.id,\n assignees:ids,status:settings.statuses[desired],priority:({urgent:1,high:2,normal:3,low:4})[task.priority],...(task.dueAt?{due_date:Date.parse(task.dueAt),due_date_time:true}:{})}:{status:settings.statuses[desired]}}};\n});"
+      }
+    },
+    {
+      "id": "Executar ClickUp",
+      "name": "Executar ClickUp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        0
+      ],
+      "parameters": {
+        "method": "={{ $json.method }}",
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "clickUpApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "credentials": {
+        "clickUpApi": {
+          "id": "CONFIGURE_EXISTING_CLICKUP_CREDENTIAL",
+          "name": "ClickUp existente"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "Conferir ClickUp",
+      "name": "Conferir ClickUp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://api.clickup.com/api/v2/task/' + encodeURIComponent($json.id || $('Preparar comandos').item.json.command.task.clickupId) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "clickUpApi",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "credentials": {
+        "clickUpApi": {
+          "id": "CONFIGURE_EXISTING_CLICKUP_CREDENTIAL",
+          "name": "ClickUp existente"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "Preparar espelho ClickUp",
+      "name": "Preparar espelho ClickUp",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const input=$('Preparar comandos').item.json;\nconst remote=$input.item.json;\nif(!remote.id || !/^[a-zA-Z0-9_-]+$/.test(String(remote.id))) throw new Error('ClickUp não confirmou taskId');\nif(input.command.action==='status' && String(remote.id)!==input.command.task.clickupId) throw new Error('ClickUp não confirmou a identidade da tarefa');\nif(remote.status?.status!==input.settings.statuses[input.desired]) throw new Error('ClickUp não confirmou o status solicitado');\nconst actual=(remote.assignees||[]).map(p=>String(p.id));\nconst expected=input.command.task.assignees.map(p=>p.clickupId);\nif(actual.length!==expected.length || expected.some(id=>!actual.includes(id))) throw new Error('ClickUp não confirmou todos os responsáveis');\nconst iso=v=>v && Number.isFinite(Number(v)) ? new Date(Number(v)).toISOString():null;\nconst at=iso(remote.date_updated);\nif(!at) throw new Error('ClickUp não retornou data de atualização');\nconst task={...input.command.task,clickupId:String(remote.id),status:input.desired,\n updatedAt:at,completedAt:input.desired==='done'?iso(remote.date_done || remote.date_closed):null,\n startedAt:input.desired==='progress'&&input.command.task.status!=='progress'?(input.command.task.startedAt||at):input.command.task.startedAt,assignedAt:input.command.task.assignedAt,\n syncState:'synced',discordState:'pending'};\nreturn {json:{...input,task,event:{eventId:input.command.id+':clickup',task}}};",
+        "mode": "runOnceForEachItem"
+      }
+    },
+    {
+      "id": "Persistir confirmação ClickUp",
+      "name": "Persistir confirmação ClickUp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.TMX_TASK_API_BASE + '/v1/task-automation/events' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.event }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CONFIGURE_TMX_TASK_HEADER_AUTH",
+          "name": "TMX Tasks API"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "Registrar falha sem repetir criação",
+      "name": "Registrar falha sem repetir criação",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.TMX_TASK_API_BASE + '/v1/task-automation/commands/' + $('Preparar comandos').item.json.command.id + '/result' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { success: false } }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CONFIGURE_TMX_TASK_HEADER_AUTH",
+          "name": "TMX Tasks API"
+        }
+      },
+      "onError": "continueErrorOutput"
+    }
+  ],
+  "connections": {
+    "A cada 15 segundos": {
+      "main": [
+        [
+          {
+            "node": "Reservar comandos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reservar comandos": {
+      "main": [
+        [
+          {
+            "node": "Preparar comandos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar comandos": {
+      "main": [
+        [
+          {
+            "node": "Executar ClickUp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Executar ClickUp": {
+      "main": [
+        [
+          {
+            "node": "Conferir ClickUp",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Registrar falha sem repetir criação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conferir ClickUp": {
+      "main": [
+        [
+          {
+            "node": "Preparar espelho ClickUp",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Registrar falha sem repetir criação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar espelho ClickUp": {
+      "main": [
+        [
+          {
+            "node": "Persistir confirmação ClickUp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persistir confirmação ClickUp": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Registrar falha sem repetir criação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}

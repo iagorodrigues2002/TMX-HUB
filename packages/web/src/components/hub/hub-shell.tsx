@@ -7,6 +7,7 @@ import { AmbientBackground } from './ambient-background';
 import { CommandPalette } from './command-palette';
 import { FinancialPrivacyMask } from './financial-privacy-mask';
 import { MicroFooter } from './micro-footer';
+import { NotificationCenter } from './notification-center';
 import { OfferContextProvider } from './offer-context-switcher';
 import { Sidebar } from './sidebar';
 import { Topbar } from './topbar';
@@ -56,6 +57,8 @@ export function HubShell({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [notificationCenterOpen, setNotificationCenterOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     setSidebarCollapsed(window.localStorage.getItem('tmx-ui.sidebar.collapsed') === 'true');
@@ -101,8 +104,8 @@ export function HubShell({
             onToggleSidebar={toggleSidebar}
             onOpenMobileNavigation={() => setMobileNavOpen(true)}
             onOpenCommandPalette={() => setCommandPaletteOpen(true)}
-            notificationCount={notificationCount}
-            onOpenNotifications={onOpenNotifications}
+            notificationCount={notificationCount ?? unreadCount}
+            onOpenNotifications={onOpenNotifications ?? (() => setNotificationCenterOpen(true))}
           />
           <div className="flex min-h-0 flex-1 overflow-hidden">
             <Sidebar
@@ -144,6 +147,11 @@ export function HubShell({
           </div>
           <FinancialPrivacyMask />
           <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />
+          <NotificationCenter
+            open={notificationCenterOpen}
+            onOpenChange={setNotificationCenterOpen}
+            onUnreadCountChange={setUnreadCount}
+          />
           {fullBleed && <MicroFooter />}
         </div>
       </OfferContextProvider>
