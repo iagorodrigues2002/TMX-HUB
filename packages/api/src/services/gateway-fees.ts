@@ -2,6 +2,7 @@ import { VENDEPAY_PENALTY_MINOR, gatewayFeesSchema } from '../lib/gateway-fee-mo
 export { gatewayFeesSchema } from '../lib/gateway-fee-model.js';
 import type { Sql } from 'postgres';
 import { convertToBrlMinor } from './exchange-rate.js';
+import { type SalesView, saleOriginFilter } from './sale-origin.js';
 
 export interface FeeBucket {
   offer_id: string;
@@ -77,7 +78,13 @@ export function totalGatewayFees(rows: CalculatedGatewayFee[]) {
     { fees: 0, reserve: 0, penalties: 0, penaltyCount: 0, missing: 0 },
   );
 }
-export async function loadGatewayFees(db: Sql, offerIds: string[], from: Date, to: Date) {
+export async function loadGatewayFees(
+  db: Sql,
+  offerIds: string[],
+  from: Date,
+  to: Date,
+  salesView: SalesView = 'general',
+) {
   const buckets = await db<FeeBucket[]>`
     WITH scoped AS (
       SELECT p.offer_id,lower(trim(o.provider)) provider,
@@ -99,7 +106,7 @@ export async function loadGatewayFees(db: Sql, offerIds: string[], from: Date, t
       LEFT JOIN tracking_gateway_connections gc ON gc.id=o.gateway_connection_id AND gc.project_id=p.id AND gc.provider=lower(trim(o.provider))
       LEFT JOIN syzepay_company_connections sc ON sc.id=o.syzepay_connection_id AND lower(trim(o.provider))='syzepay'
       LEFT JOIN exchange_rate_cache rc ON rc.base_currency=o.currency AND rc.target_currency='BRL'
-      WHERE p.offer_id=ANY(${offerIds}) AND (
+      WHERE p.offer_id=ANY(${offerIds}) AND ${saleOriginFilter(db, salesView)} AND (
         (o.paid_at>=${from} AND o.paid_at<${to}) OR (o.refunded_at>=${from} AND o.refunded_at<${to}) OR (o.chargeback_at>=${from} AND o.chargeback_at<${to}))
     ) SELECT offer_id,provider,settings,
       COALESCE(sum(CASE WHEN provider='vendepay' AND NOT reversed

@@ -1,9 +1,16 @@
 import type { Sql } from 'postgres';
+import { type SalesView, saleOriginFilter } from './sale-origin.js';
 
 export const COUNTRY_ACTIVITY_VERSION = 'pre-purchase-v1';
 
 /** Read-only aggregate. No browser IP is inferred from a gateway's webhook IP. */
-export async function countryActivity(sql: Sql, offerId: string, from: Date, to: Date) {
+export async function countryActivity(
+  sql: Sql,
+  offerId: string,
+  from: Date,
+  to: Date,
+  salesView: SalesView = 'general',
+) {
   const rows = await sql`
     WITH events AS (
       SELECT e.* FROM tracking_events e
@@ -21,6 +28,7 @@ export async function countryActivity(sql: Sql, offerId: string, from: Date, to:
       SELECT o.*, coalesce(o.paid_at,o.occurred_at) purchased_at
       FROM tracking_orders o JOIN tracking_projects p ON p.id=o.project_id
       WHERE p.offer_id=${offerId} AND o.status='paid'
+        AND ${saleOriginFilter(sql, salesView)}
         AND coalesce(o.paid_at,o.occurred_at)>=${from} AND coalesce(o.paid_at,o.occurred_at)<${to}
     ), located AS (
       SELECT o.id, CASE

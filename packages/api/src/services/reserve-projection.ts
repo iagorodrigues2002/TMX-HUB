@@ -1,4 +1,5 @@
 import type { Sql } from 'postgres';
+import { type SalesView, saleOriginFilter } from './sale-origin.js';
 
 export interface ReserveBucket {
   purchase_date: string | null;
@@ -66,7 +67,12 @@ export function reserveProjection(rows: ReserveBucket[], today: string) {
   };
 }
 
-export async function loadReserveProjection(db: Sql, offerIds: string[], today: string) {
+export async function loadReserveProjection(
+  db: Sql,
+  offerIds: string[],
+  today: string,
+  salesView: SalesView = 'general',
+) {
   if (!offerIds.length) return reserveProjection([], today);
   const rows = await db<ReserveBucket[]>`
     WITH scoped AS (
@@ -79,6 +85,7 @@ export async function loadReserveProjection(db: Sql, offerIds: string[], today: 
       LEFT JOIN tracking_fee_settings f ON f.project_id=p.id
       LEFT JOIN exchange_rate_cache rc ON rc.base_currency=o.currency AND rc.target_currency='BRL'
       WHERE p.offer_id=ANY(${offerIds}) AND lower(trim(o.provider))='vendepay'
+        AND ${saleOriginFilter(db, salesView)}
         AND (o.paid_at IS NOT NULL OR o.status='paid')
     ) SELECT purchase_date::text,(purchase_date+reserve_days)::text release_date,
       count(*)::int sales,

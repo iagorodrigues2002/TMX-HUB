@@ -78,9 +78,12 @@ describe.skipIf(!url)('calls on disposable Postgres', () => {
     };
     await db`INSERT INTO managed_task_people(id,clickup_id,discord_id,body) VALUES(${person.id},'123','456',${db.json(person)})`;
     const app = await appFor(db, 'admin');
+    // The claim uses the database clock, which can differ slightly from the Docker host clock.
+    const [schedule] =
+      await db`SELECT (clock_timestamp()+interval '4 minutes 59 seconds')::text starts_at`;
     const input = {
       title: 'Call QA',
-      startsAt: new Date(Date.now() + 300000).toISOString(),
+      startsAt: new Date(schedule!.starts_at).toISOString(),
       meetingUrl: 'https://meet.google.com/qa',
       participantIds: [person.id],
       reminderMinutes: [5, 0],

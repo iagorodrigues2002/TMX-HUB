@@ -17,6 +17,7 @@ export function registerGetTrackingOverviewRoutes(app: FastifyInstance) {
 
       const parsed = OverviewRangeSchema.safeParse(req.query);
       if (!parsed.success) return reply.code(400).send({ error: 'invalid_date' });
+      const salesView = parsed.data.sales_view;
       const now = new Date();
       const today = saoPauloParts(now).date;
       const fromDate = parsed.data.from ?? parsed.data.date ?? today;
@@ -43,7 +44,7 @@ export function registerGetTrackingOverviewRoutes(app: FastifyInstance) {
       );
       const scope = createHash('sha256')
         .update(
-          `gateway-fees-v3-reversal-once:${req.user.sub}:${offerIds.slice().sort().join(',')}`,
+          `gateway-fees-v3-reversal-once:${salesView}:${req.user.sub}:${offerIds.slice().sort().join(',')}`,
         )
         .digest('base64url');
 
@@ -63,10 +64,11 @@ export function registerGetTrackingOverviewRoutes(app: FastifyInstance) {
             from,
             to,
             req.user!.sub,
+            salesView,
           );
           const usdRate = await getBrlRate('USD', app.db!);
           const toUsdMinor = (brlMinor: number) => (usdRate ? Math.round(brlMinor / usdRate) : 0);
-          const feeMap = await loadGatewayFees(app.db!, offerIds, from, to);
+          const feeMap = await loadGatewayFees(app.db!, offerIds, from, to, salesView);
 
           const perOffer = await Promise.all(
             rows.map(async (row) => {

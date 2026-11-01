@@ -15,17 +15,25 @@ export function registerGetSummaryRoutes(app: FastifyInstance) {
     async (req, reply) => {
       await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
       if (!app.db) return reply.code(503).send(databaseUnavailable);
-      const { date, from_date: fromDate, to_date: toDate, from, to } = parseTrackingDate(req.query);
+      const {
+        date,
+        from_date: fromDate,
+        to_date: toDate,
+        from,
+        to,
+        sales_view: salesView,
+      } = parseTrackingDate(req.query);
       return app.analyticsCache.getOrSet(
         {
           endpoint: 'tracking-summary',
-          offerId: req.params.id,
+          offerId: salesView === 'natural' ? `${req.params.id}:natural` : req.params.id,
+          tags: [req.params.id],
           from: fromDate,
           to: toDate,
           ttlSeconds: 30,
         },
         async () => {
-          const summary = await loadTrackingSummary(app, req, from, to);
+          const summary = await loadTrackingSummary(app, req, from, to, salesView);
           const [feeRow] = await app.db!<
             Array<{
               vendepay_fee_pct: string;
@@ -43,9 +51,15 @@ export function registerGetSummaryRoutes(app: FastifyInstance) {
       `;
           const fee = feeRow ?? DEFAULT_FEE_SETTINGS;
           const gatewayFees =
-            (await loadGatewayFees(app.db!, [req.params.id], new Date(from), new Date(to))).get(
-              req.params.id,
-            ) ?? [];
+            (
+              await loadGatewayFees(
+                app.db!,
+                [req.params.id],
+                new Date(from),
+                new Date(to),
+                salesView,
+              )
+            ).get(req.params.id) ?? [];
           const feeTotal = totalGatewayFees(gatewayFees);
           const grossBrlMinor = Number(summary?.paid_revenue_brl_minor ?? 0);
           const feeVendepayBrlMinor = gatewayFees

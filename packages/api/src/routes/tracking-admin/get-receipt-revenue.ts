@@ -12,8 +12,8 @@ export function registerGetReceiptRevenueRoutes(app: FastifyInstance) {
     async (req, reply) => {
       await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
       if (!app.db) return reply.code(503).send(databaseUnavailable);
-      const { from, to } = parseTrackingDate(req.query);
-      const rows = await receiptRevenueRows(app.db, req.params.id, to);
+      const { from, to, sales_view } = parseTrackingDate(req.query);
+      const rows = await receiptRevenueRows(app.db, req.params.id, to, sales_view);
       if (rows.length > 20000)
         return reply.code(422).send({
           message:

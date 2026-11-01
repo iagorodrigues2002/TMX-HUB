@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const OverviewRangeSchema = z.object({
+  sales_view: z.enum(['general', 'natural']).default('general'),
   date: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)

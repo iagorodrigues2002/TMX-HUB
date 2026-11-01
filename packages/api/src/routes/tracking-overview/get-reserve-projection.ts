@@ -4,7 +4,10 @@ import { z } from 'zod';
 import { saoPauloParts } from '../../services/intraday-store.js';
 import { loadReserveProjection } from '../../services/reserve-projection.js';
 
-const querySchema = z.object({ offer_ids: z.string().max(4000).optional() });
+const querySchema = z.object({
+  offer_ids: z.string().max(4000).optional(),
+  sales_view: z.enum(['general', 'natural']).default('general'),
+});
 export function registerGetReserveProjection(app: FastifyInstance) {
   app.get('/tracking/reserve-projection', async (req, reply) => {
     if (!req.user) return reply.code(401).send({ error: 'unauthorized' });
@@ -23,7 +26,7 @@ export function registerGetReserveProjection(app: FastifyInstance) {
     if (!app.db) return reply.code(503).send({ error: 'tracking_database_unavailable' });
     const today = saoPauloParts(new Date()).date;
     const scope = createHash('sha256')
-      .update(`${req.user.sub}:${ids.join(',')}`)
+      .update(`${parsed.data.sales_view}:${req.user.sub}:${ids.join(',')}`)
       .digest('hex');
     const projection = await app.analyticsCache.getOrSet(
       {
@@ -34,7 +37,7 @@ export function registerGetReserveProjection(app: FastifyInstance) {
         ttlSeconds: 60,
         tags: ids,
       },
-      () => loadReserveProjection(app.db!, ids, today),
+      () => loadReserveProjection(app.db!, ids, today, parsed.data.sales_view),
     );
     return { ...projection, offer_count: ids.length };
   });

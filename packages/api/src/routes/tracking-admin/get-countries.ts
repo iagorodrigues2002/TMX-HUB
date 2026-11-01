@@ -13,8 +13,8 @@ export function registerGetCountriesRoutes(app: FastifyInstance) {
     async (req, reply) => {
       await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
       if (!app.db) return reply.code(503).send(databaseUnavailable);
-      const { from, to } = parseTrackingDate(req.query);
-      return funnelActivity(app.db, req.params.id, new Date(from), new Date(to));
+      const { from, to, sales_view } = parseTrackingDate(req.query);
+      return funnelActivity(app.db, req.params.id, new Date(from), new Date(to), sales_view);
     },
   );
   app.get<{ Params: { id: string }; Querystring: TrackingPeriodQuery }>(
@@ -22,8 +22,8 @@ export function registerGetCountriesRoutes(app: FastifyInstance) {
     async (req, reply) => {
       await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
       if (!app.db) return reply.code(503).send(databaseUnavailable);
-      const { from, to } = parseTrackingDate(req.query);
-      return countryActivity(app.db, req.params.id, new Date(from), new Date(to));
+      const { from, to, sales_view } = parseTrackingDate(req.query);
+      return countryActivity(app.db, req.params.id, new Date(from), new Date(to), sales_view);
     },
   );
   app.get<{ Params: { id: string }; Querystring: TrackingPeriodQuery }>(

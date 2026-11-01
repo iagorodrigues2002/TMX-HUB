@@ -1,9 +1,11 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { type SalesView, saleOriginFilter } from '../../services/sale-origin.js';
 export async function loadTrackingSummary(
   app: FastifyInstance,
   req: FastifyRequest<{ Params: { id: string } }>,
   from: Date,
   to: Date,
+  salesView: SalesView = 'general',
 ) {
   const [summary] = await app.db!<
     Array<{
@@ -204,6 +206,7 @@ export async function loadTrackingSummary(
         LEFT JOIN exchange_rate_cache usd
           ON usd.base_currency = 'USD' AND usd.target_currency = 'BRL'
         WHERE project.offer_id = ${req.params.id}
+          AND ${saleOriginFilter(app.db!, salesView)}
           AND (
             (o.occurred_at >= ${from} AND o.occurred_at < ${to})
             OR (o.paid_at >= ${from} AND o.paid_at < ${to})

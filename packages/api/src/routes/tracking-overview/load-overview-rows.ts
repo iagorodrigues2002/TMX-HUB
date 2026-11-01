@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { GatewayOverviewRow } from '../../services/gateway-overview.js';
+import { type SalesView, saleOriginFilter } from '../../services/sale-origin.js';
 
 export async function loadOverviewRows(
   app: FastifyInstance,
@@ -7,7 +8,9 @@ export async function loadOverviewRows(
   from: Date,
   to: Date,
   ownerId: string,
+  salesView: SalesView = 'general',
 ) {
+  const origin = saleOriginFilter(app.db!, salesView);
   const rows = await app.db!<
     Array<{
       offer_id: string;
@@ -28,7 +31,7 @@ export async function loadOverviewRows(
       SELECT
         p.offer_id,
         (SELECT count(*)::int FROM tracking_orders o
-          WHERE o.project_id = p.id AND o.paid_at IS NOT NULL
+          WHERE o.project_id = p.id AND ${origin} AND o.paid_at IS NOT NULL
             AND o.paid_at >= ${from} AND o.paid_at < ${to}) AS paid_orders,
         (SELECT COALESCE(sum(
             CASE
@@ -41,10 +44,10 @@ export async function loadOverviewRows(
           FROM tracking_orders o
           LEFT JOIN exchange_rate_cache rc
             ON rc.base_currency = o.currency AND rc.target_currency = 'BRL'
-          WHERE o.project_id = p.id AND o.paid_at IS NOT NULL
+          WHERE o.project_id = p.id AND ${origin} AND o.paid_at IS NOT NULL
             AND o.paid_at >= ${from} AND o.paid_at < ${to}) AS paid_revenue_brl_minor,
         (SELECT count(*)::int FROM tracking_orders o
-          WHERE o.project_id = p.id
+          WHERE o.project_id = p.id AND ${origin}
             AND o.status IN ('refused', 'failed', 'cancelled')
             AND o.paid_at IS NULL
             AND CASE
@@ -66,7 +69,7 @@ export async function loadOverviewRows(
           FROM tracking_orders o
           LEFT JOIN exchange_rate_cache rc
             ON rc.base_currency = o.currency AND rc.target_currency = 'BRL'
-          WHERE o.project_id = p.id
+          WHERE o.project_id = p.id AND ${origin}
             AND o.status IN ('refused', 'failed', 'cancelled')
             AND o.paid_at IS NULL
             AND CASE
@@ -78,7 +81,7 @@ export async function loadOverviewRows(
               ELSE o.occurred_at
             END < ${to}) AS failed_revenue_brl_minor,
         (SELECT count(*)::int FROM tracking_orders o
-          WHERE o.project_id = p.id AND o.refunded_at IS NOT NULL
+          WHERE o.project_id = p.id AND ${origin} AND o.refunded_at IS NOT NULL
             AND (o.chargeback_at IS NULL OR o.refunded_at <= o.chargeback_at)
             AND o.refunded_at >= ${from} AND o.refunded_at < ${to}) AS refunded_orders,
         (SELECT COALESCE(sum(
@@ -92,11 +95,11 @@ export async function loadOverviewRows(
           FROM tracking_orders o
           LEFT JOIN exchange_rate_cache rc
             ON rc.base_currency = o.currency AND rc.target_currency = 'BRL'
-          WHERE o.project_id = p.id AND o.refunded_at IS NOT NULL
+          WHERE o.project_id = p.id AND ${origin} AND o.refunded_at IS NOT NULL
             AND (o.chargeback_at IS NULL OR o.refunded_at <= o.chargeback_at)
             AND o.refunded_at >= ${from} AND o.refunded_at < ${to}) AS refunded_revenue_brl_minor,
         (SELECT count(*)::int FROM tracking_orders o
-          WHERE o.project_id = p.id AND o.chargeback_at IS NOT NULL
+          WHERE o.project_id = p.id AND ${origin} AND o.chargeback_at IS NOT NULL
             AND (o.refunded_at IS NULL OR o.chargeback_at < o.refunded_at)
             AND o.chargeback_at >= ${from} AND o.chargeback_at < ${to}) AS chargeback_orders,
         (SELECT COALESCE(sum(
@@ -110,7 +113,7 @@ export async function loadOverviewRows(
           FROM tracking_orders o
           LEFT JOIN exchange_rate_cache rc
             ON rc.base_currency = o.currency AND rc.target_currency = 'BRL'
-          WHERE o.project_id = p.id AND o.chargeback_at IS NOT NULL
+          WHERE o.project_id = p.id AND ${origin} AND o.chargeback_at IS NOT NULL
             AND (o.refunded_at IS NULL OR o.chargeback_at < o.refunded_at)
             AND o.chargeback_at >= ${from} AND o.chargeback_at < ${to}) AS chargeback_revenue_brl_minor,
         f.vendepay_fee_pct::text AS vendepay_fee_pct,
@@ -130,7 +133,7 @@ export async function loadOverviewRows(
                   WHEN rc.rate IS NOT NULL THEN (o.amount_minor*rc.rate)::bigint ELSE NULL END AS amount
               FROM tracking_orders o JOIN tracking_projects p ON p.id=o.project_id
               LEFT JOIN exchange_rate_cache rc ON rc.base_currency=o.currency AND rc.target_currency='BRL'
-              WHERE p.offer_id=ANY(${offerIds}) AND p.enabled AND o.paid_at>=${from} AND o.paid_at<${to}
+              WHERE p.offer_id=ANY(${offerIds}) AND p.enabled AND ${origin} AND o.paid_at>=${from} AND o.paid_at<${to}
             )
             SELECT offer_id,provider,count(*)::int transactions,
               count(*) FILTER(WHERE order_kind='front')::int fronts,

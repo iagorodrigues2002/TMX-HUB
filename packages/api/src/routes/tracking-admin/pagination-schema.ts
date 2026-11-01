@@ -11,6 +11,7 @@ export const PaginationSchema = z.object({
 });
 
 export const TrackingDateSchema = z.object({
+  sales_view: z.enum(['general', 'natural']).default('general'),
   date: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -82,7 +83,12 @@ export type PaginationQuery = {
   to?: string;
 };
 
-export type TrackingPeriodQuery = { date?: string; from?: string; to?: string };
+export type TrackingPeriodQuery = {
+  date?: string;
+  from?: string;
+  to?: string;
+  sales_view?: 'general' | 'natural';
+};
 
 export const databaseUnavailable = {
   error: 'tracking_database_unavailable',
@@ -167,6 +173,7 @@ export function parseTrackingDate(query: TrackingPeriodQuery) {
   const startRange = saoPauloDayRange(startDate, now);
   const endRange = saoPauloDayRange(endDate, now);
   return {
+    sales_view: parsed.data.sales_view,
     date: startDate === endDate ? startDate : `${startDate}:${endDate}`,
     from_date: startDate,
     to_date: endDate,

@@ -2,6 +2,7 @@ import type { Sql } from 'postgres';
 import { normalizeExplodely } from '../integrations/explodely/normalize.js';
 import { normalizePaysight } from '../integrations/paysight/normalize.js';
 import { normalizeVendepay } from '../integrations/vendepay/normalize.js';
+import { type SalesView, saleOriginFilter } from './sale-origin.js';
 
 export interface RevenueReceipt {
   order_id: string;
@@ -13,7 +14,12 @@ export interface RevenueReceipt {
   order_kind?: string | null;
 }
 
-export async function receiptRevenueRows(sql: Sql, offerId: string, to: Date) {
+export async function receiptRevenueRows(
+  sql: Sql,
+  offerId: string,
+  to: Date,
+  salesView: SalesView = 'general',
+) {
   // Include receipts before the period so replays never become new sales.
   return sql<RevenueReceipt[]>`
     SELECT o.id AS order_id,o.external_id,o.provider,r.payload,r.received_at,o.order_kind,
@@ -21,19 +27,19 @@ export async function receiptRevenueRows(sql: Sql, offerId: string, to: Date) {
     FROM tracking_orders o JOIN tracking_projects p ON p.id=o.project_id
     JOIN webhook_receipts r ON r.order_id=o.id AND r.connection_id=o.vendepay_connection_id
     JOIN vendepay_connections c ON c.id=r.connection_id AND c.project_id=o.project_id
-    WHERE p.offer_id=${offerId} AND r.state='processed' AND r.received_at < ${to}
+    WHERE p.offer_id=${offerId} AND ${saleOriginFilter(sql, salesView)} AND r.state='processed' AND r.received_at < ${to}
     UNION ALL
     SELECT o.id,o.external_id,o.provider,r.payload,r.received_at,o.order_kind,
       COALESCE(o.amount_brl_minor,CASE WHEN o.currency='BRL' THEN o.amount_minor END)::text
     FROM tracking_orders o JOIN tracking_projects p ON p.id=o.project_id
     JOIN tracking_gateway_webhook_receipts r ON r.order_id=o.id AND r.gateway_connection_id=o.gateway_connection_id
-    WHERE p.offer_id=${offerId} AND r.state='processed' AND r.received_at < ${to}
+    WHERE p.offer_id=${offerId} AND ${saleOriginFilter(sql, salesView)} AND r.state='processed' AND r.received_at < ${to}
     UNION ALL
     SELECT o.id,o.external_id,'syzepay',NULL::jsonb,r.received_at,o.order_kind,
       COALESCE(o.amount_brl_minor,CASE WHEN o.currency='BRL' THEN o.amount_minor END)::text
     FROM tracking_orders o JOIN tracking_projects p ON p.id=o.project_id
     JOIN syzepay_inbox_receipts r ON r.tracking_order_id=o.id AND r.connection_id=o.syzepay_connection_id
-    WHERE p.offer_id=${offerId} AND r.state='processed' AND r.received_at < ${to}
+    WHERE p.offer_id=${offerId} AND ${saleOriginFilter(sql, salesView)} AND r.state='processed' AND r.received_at < ${to}
     LIMIT 20001
   `;
 }

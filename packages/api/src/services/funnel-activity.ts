@@ -1,6 +1,13 @@
 import type { Sql } from 'postgres';
+import { type SalesView, saleOriginFilter } from './sale-origin.js';
 
-export async function funnelActivity(sql: Sql, offerId: string, from: Date, to: Date) {
+export async function funnelActivity(
+  sql: Sql,
+  offerId: string,
+  from: Date,
+  to: Date,
+  salesView: SalesView = 'general',
+) {
   const [counts] = await sql`
     WITH entrants AS (
       SELECT e.project_id,e.visitor_id,min(e.received_at) entered_at
@@ -12,6 +19,7 @@ export async function funnelActivity(sql: Sql, offerId: string, from: Date, to: 
       SELECT e.*, checkout.started_at,
         EXISTS(SELECT 1 FROM tracking_orders o
           WHERE o.project_id=e.project_id AND o.visitor_id=e.visitor_id
+            AND ${saleOriginFilter(sql, salesView)}
             AND o.status='paid' AND o.order_kind='front'
             AND coalesce(o.paid_at,o.occurred_at)>=checkout.started_at
             AND coalesce(o.paid_at,o.occurred_at)<${to}) purchased
