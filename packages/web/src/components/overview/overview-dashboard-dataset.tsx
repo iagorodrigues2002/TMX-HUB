@@ -4,7 +4,15 @@ import { formatCurrency, formatInt } from '@/components/dashboard/kpi-cards';
 import { Kpi } from '@/components/ui/kpi';
 import { formatRefundRevenuePercentage } from '@/lib/overview-financial';
 import { usePrivacy } from '@/lib/privacy-context';
-import { CreditCard, Eye, MousePointerClick, Percent, Receipt, ShoppingCart } from 'lucide-react';
+import {
+  CreditCard,
+  Eye,
+  MousePointerClick,
+  Percent,
+  Receipt,
+  ShoppingCart,
+  Users,
+} from 'lucide-react';
 import { RevenueChart } from './overview-dashboard-revenue-chart';
 import {
   type OverviewDataset,
@@ -81,6 +89,19 @@ export function Dataset({ dataset }: { dataset: OverviewDataset }) {
           }
           hint="Vendas / PageView"
           icon={<Percent className="h-4 w-4" />}
+        />
+        <Kpi
+          label="ARPU"
+          value={
+            isPrivate ? '••••' : dataset.arpu == null ? '—' : formatCurrency(dataset.arpu, 'BRL')
+          }
+          countUp={
+            !isPrivate && dataset.arpu != null
+              ? { value: dataset.arpu, format: (value) => formatCurrency(value, 'BRL') }
+              : undefined
+          }
+          hint="Receita bruta ÷ clientes únicos por funil no período"
+          icon={<Users className="h-4 w-4" />}
         />
       </div>
 

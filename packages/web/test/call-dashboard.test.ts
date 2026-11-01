@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
   callDate,
@@ -25,4 +26,18 @@ test('invalid and normalized calendar dates are rejected before saving', () => {
     assert.throws(() => callStartIso(value));
   assert.equal(reminderLabel(0), 'No horário');
   assert.equal(reminderLabel(30), '30 min antes');
+});
+
+test('scheduled cards show simple call information before collapsed management details', () => {
+  const source = readFileSync(
+    new URL('../src/components/tasks/calls-dashboard.tsx', import.meta.url),
+    'utf8',
+  );
+  const card = source.slice(source.indexOf('<article key={call.id}'));
+  const summary = card.slice(0, card.indexOf('<details'));
+  assert.match(card, /Detalhes e gerenciamento/);
+  for (const field of ['call.title', 'call.startsAt', 'call.participants', 'call.meetingUrl'])
+    assert.ok(summary.includes(field));
+  assert.doesNotMatch(summary, /call.description|call.message|Editar \/ reagendar/);
+  assert.doesNotMatch(card, /<details[^>]*\bopen\b/);
 });

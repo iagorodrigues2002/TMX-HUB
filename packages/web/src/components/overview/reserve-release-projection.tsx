@@ -147,15 +147,18 @@ export function ReserveProjectionView({
   );
 }
 
-export function ReserveReleaseProjection({ offerIds }: { offerIds: string[] }) {
+export function ReserveReleaseProjection({
+  offerIds,
+  salesView = 'general',
+}: { offerIds: string[]; salesView?: 'general' | 'natural' }) {
   const { user } = useAuth();
   const { isPrivate } = usePrivacy();
   const ids = [...new Set(offerIds)].sort();
   const query = useQuery({
-    queryKey: ['reserve-projection', user?.id, user?.role, ids],
+    queryKey: ['reserve-projection', user?.id, user?.role, ids, salesView],
     queryFn: () =>
       request<ReserveProjectionData>(
-        `/v1/tracking/reserve-projection?${new URLSearchParams({ offer_ids: ids.join(',') })}`,
+        `/v1/tracking/reserve-projection?${new URLSearchParams({ offer_ids: ids.join(','), sales_view: salesView })}`,
       ),
     enabled: !!user && ids.length > 0,
     staleTime: 60000,

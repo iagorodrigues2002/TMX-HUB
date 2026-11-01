@@ -40,6 +40,7 @@ export interface ChartPoint {
 }
 
 export interface OverviewDataset {
+  arpu?: number | null;
   key: string;
   label: string;
   currency: string;

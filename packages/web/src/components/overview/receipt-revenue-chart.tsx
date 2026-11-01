@@ -17,17 +17,23 @@ export function ReceiptRevenueChart({
   offerIds,
   period,
   animated,
-}: { offerIds: string[]; period: DateRange; animated: boolean }) {
+  salesView = 'general',
+}: {
+  offerIds: string[];
+  period: DateRange;
+  animated: boolean;
+  salesView?: 'general' | 'natural';
+}) {
   const { user } = useAuth();
   const [kind, setKind] = useState<'all' | 'front' | 'upsell'>('all');
   const scopedOffers = [...new Set(offerIds)];
   const queries = useQueries({
     queries: scopedOffers.map((id) => ({
-      queryKey: ['receipt-revenue', user?.id, user?.role, id, period.from, period.to],
+      queryKey: ['receipt-revenue', user?.id, user?.role, id, period.from, period.to, salesView],
       enabled: Boolean(user),
       queryFn: () =>
         request<ReceiptRevenue>(
-          `/v1/offers/${id}/tracking/receipt-revenue?${new URLSearchParams({ from: period.from, to: period.to })}`,
+          `/v1/offers/${id}/tracking/receipt-revenue?${new URLSearchParams({ from: period.from, to: period.to, sales_view: salesView })}`,
         ),
       retry: false,
       staleTime: 60_000,

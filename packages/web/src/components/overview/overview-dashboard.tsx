@@ -22,14 +22,16 @@ import {
   OverviewLoadingSkeleton,
   accountOffers,
 } from './overview-dashboard-support';
+import { periodArpu, useSalesComposition } from './sales-composition';
 import { SIGNAL_PREVIEW, SignalPreview } from './signal-preview';
 
 export function OverviewDashboard(props: OverviewDashboardProps) {
   const { scope, initialPeriod } = props;
   const [period, setPeriod] = useState<DateRange>(() => initialPeriod ?? rollingDateRange(7));
+  const [salesView, setSalesView] = useState<'general' | 'natural'>('general');
   const financialQuery = useQuery({
-    queryKey: ['overview-financial', period.from, period.to],
-    queryFn: () => apiClient.getTrackingOverview(period.from, period.to),
+    queryKey: ['overview-financial', period.from, period.to, salesView],
+    queryFn: () => apiClient.getTrackingOverview(period.from, period.to, salesView),
     staleTime: TRACKING_DASHBOARD_STALE_TIME,
     retry: false,
   });
@@ -63,8 +65,8 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
   });
   const trackingQueries = useQueries({
     queries: offers.map((offer) => ({
-      queryKey: ['overview-tracking-summary', offer.id, period.from, period.to],
-      queryFn: () => apiClient.getTrackingSummary(offer.id, period),
+      queryKey: ['overview-tracking-summary', offer.id, period.from, period.to, salesView],
+      queryFn: () => apiClient.getTrackingSummary(offer.id, period, salesView),
       retry: false,
       staleTime: TRACKING_DASHBOARD_STALE_TIME,
     })),
@@ -73,25 +75,32 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
     queries: offers.map((offer) => ({
       queryKey: ['overview-intraday', offer.id, period.from, period.to],
       queryFn: () => apiClient.getOfferIntradayRange(offer.id, period.from, period.to),
+      enabled: salesView === 'general',
       retry: false,
       refetchOnWindowFocus: false,
       staleTime: TRACKING_DASHBOARD_STALE_TIME,
     })),
   });
 
+  const composition = useSalesComposition(period.from, period.to);
   const datasets = buildDatasets(
     scope,
     offers,
     snapshotQueries.map((query) => query.data),
     trackingQueries.map((query) => query.data),
-    intradayQueries.map((query) => query.data),
+    intradayQueries.map((query) => (salesView === 'general' ? query.data : undefined)),
     financialQuery.data?.offers,
-  );
+  ).map((dataset) => ({
+    ...dataset,
+    arpu: periodArpu(composition.data, dataset.offerIds ?? [], salesView),
+    daily: salesView === 'general' ? dataset.daily : [],
+  }));
   const detailQueries = [
     ...snapshotQueries,
     ...trackingQueries,
-    ...intradayQueries,
+    ...(salesView === 'general' ? intradayQueries : []),
     financialQuery,
+    composition,
   ];
   const isLoading =
     (scope === 'account' && dashboard.isLoading) || detailQueries.some((query) => query.isLoading);
@@ -123,6 +132,22 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
             <h2 className="text-sm font-semibold text-white">Visão geral</h2>
             <p className="mt-1 text-sm leading-6 text-white/50">{scopeDescription}</p>
           </div>
+          <fieldset
+            aria-label="Visão das vendas"
+            className="ml-auto flex rounded-lg border bg-card p-1"
+          >
+            {(['general', 'natural'] as const).map((view) => (
+              <button
+                key={view}
+                type="button"
+                aria-pressed={salesView === view}
+                onClick={() => setSalesView(view)}
+                className={`rounded-md px-3 py-2 text-sm transition-colors ${salesView === view ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                {view === 'general' ? 'Visão geral' : 'Visão natural'}
+              </button>
+            ))}
+          </fieldset>
         </div>
         <DateRangeFilter
           value={period}
@@ -170,6 +195,7 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
           )}
           {SIGNAL_PREVIEW ? (
             <SignalPreview
+              salesView={salesView}
               period={period}
               datasets={datasets}
               accounts={scope === 'account' ? financialQuery.data?.accounts : undefined}

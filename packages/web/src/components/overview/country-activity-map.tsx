@@ -31,9 +31,15 @@ export function CountryActivityMap({
   offerIds,
   period,
   animated,
-}: { offerIds: string[]; period: DateRange; animated: boolean }) {
+  salesView = 'general',
+}: {
+  offerIds: string[];
+  period: DateRange;
+  animated: boolean;
+  salesView?: 'general' | 'natural';
+}) {
   const { user } = useAuth();
-  const scope = `${user?.id}:${user?.role}:${[...new Set(offerIds)].sort().join(',')}:${period.from}:${period.to}`;
+  const scope = `${user?.id}:${user?.role}:${[...new Set(offerIds)].sort().join(',')}:${period.from}:${period.to}:${salesView}`;
   return (
     <Activity
       key={scope}
@@ -41,6 +47,7 @@ export function CountryActivityMap({
       period={period}
       animated={animated}
       scope={scope}
+      salesView={salesView}
     />
   );
 }
@@ -50,7 +57,14 @@ function Activity({
   period,
   animated,
   scope,
-}: { offerIds: string[]; period: DateRange; animated: boolean; scope: string }) {
+  salesView,
+}: {
+  offerIds: string[];
+  period: DateRange;
+  animated: boolean;
+  scope: string;
+  salesView: 'general' | 'natural';
+}) {
   const [selected, setSelected] = useState<string | null>(null);
   const [pulses, setPulses] = useState<string[]>([]);
   const previous = useRef<Map<string, Row> | null>(null);
@@ -59,7 +73,7 @@ function Activity({
       queryKey: ['country-activity', scope, id],
       queryFn: () =>
         request<Response>(
-          `/v1/offers/${id}/tracking/country-activity?${new URLSearchParams({ from: period.from, to: period.to })}`,
+          `/v1/offers/${id}/tracking/country-activity?${new URLSearchParams({ from: period.from, to: period.to, sales_view: salesView })}`,
         ),
       retry: false,
       staleTime: 30_000,

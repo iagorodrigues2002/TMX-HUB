@@ -252,85 +252,97 @@ export function CallsDashboard() {
                   {callDate(call.startsAt)} · {call.durationMinutes} minutos
                 </p>
               </div>
+            </div>
+            {call.syncState !== 'synced' && (
               <p
-                className={`text-xs ${call.syncState === 'failed' ? 'text-red-500' : 'text-muted-foreground'}`}
+                className={`mt-2 text-xs ${call.syncState === 'failed' ? 'text-red-500' : 'text-amber-500'}`}
               >
                 {syncLabels[call.syncState]}
               </p>
-            </div>
+            )}
             <p className="mt-3 flex items-start gap-2 text-sm">
               <Users className="h-4 w-4 shrink-0 text-primary" aria-hidden />
               {call.participants.map((p) => p.name).join(' · ')}
             </p>
-            {call.description && (
-              <p className="mt-3 whitespace-pre-wrap break-words text-sm text-muted-foreground">
-                {call.description}
+            <Button asChild variant="outline" className="mt-4">
+              <a href={call.meetingUrl} target="_blank" rel="noopener noreferrer">
+                <ExternalLink aria-hidden />
+                Entrar na call
+              </a>
+            </Button>
+            <details className="mt-4 border-t border-border pt-3">
+              <summary className="cursor-pointer rounded-md text-sm text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                Detalhes e gerenciamento
+              </summary>
+              <p
+                className={`mt-3 text-xs ${call.syncState === 'failed' ? 'text-red-500' : 'text-muted-foreground'}`}
+              >
+                {syncLabels[call.syncState]}
               </p>
-            )}
-            <p className="mt-3 text-xs text-muted-foreground">
-              Lembretes: {call.reminderMinutes.map(reminderLabel).join(' · ') || 'Nenhum'}
-            </p>
-            {call.message && (
-              <p className="mt-2 whitespace-pre-wrap break-words border-l-2 border-primary/40 pl-3 text-sm">
-                {call.message}
+              {call.description && (
+                <p className="mt-3 whitespace-pre-wrap break-words text-sm text-muted-foreground">
+                  {call.description}
+                </p>
+              )}
+              <p className="mt-3 text-xs text-muted-foreground">
+                Lembretes: {call.reminderMinutes.map(reminderLabel).join(' · ') || 'Nenhum'}
               </p>
-            )}
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Button asChild variant="outline">
-                <a href={call.meetingUrl} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink aria-hidden />
-                  Entrar na call
-                </a>
-              </Button>
-              {call.clickupId && (
-                <Button asChild variant="ghost">
-                  <a
-                    href={`https://app.clickup.com/t/${encodeURIComponent(call.clickupId)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Abrir no ClickUp
-                  </a>
-                </Button>
+              {call.message && (
+                <p className="mt-2 whitespace-pre-wrap break-words border-l-2 border-primary/40 pl-3 text-sm">
+                  {call.message}
+                </p>
               )}
-              {call.status === 'scheduled' && (
-                <>
-                  <Button
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() => {
-                      setEditing(call);
-                      key.current = null;
-                      setError('');
-                      setOpen(true);
-                    }}
-                  >
-                    Editar / reagendar
+              <div className="mt-4 flex flex-wrap gap-2">
+                {call.clickupId && (
+                  <Button asChild variant="ghost">
+                    <a
+                      href={`https://app.clickup.com/t/${encodeURIComponent(call.clickupId)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Abrir no ClickUp
+                    </a>
                   </Button>
-                  <Button
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() => {
-                      key.current = null;
-                      setConfirmation({ call, action: 'complete' });
-                    }}
-                  >
-                    <CheckCheck aria-hidden />
-                    Marcar realizada
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    disabled={busy}
-                    onClick={() => {
-                      key.current = null;
-                      setConfirmation({ call, action: 'cancel' });
-                    }}
-                  >
-                    Cancelar call
-                  </Button>
-                </>
-              )}
-            </div>
+                )}
+                {call.status === 'scheduled' && (
+                  <>
+                    <Button
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => {
+                        setEditing(call);
+                        key.current = null;
+                        setError('');
+                        setOpen(true);
+                      }}
+                    >
+                      Editar / reagendar
+                    </Button>
+                    <Button
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => {
+                        key.current = null;
+                        setConfirmation({ call, action: 'complete' });
+                      }}
+                    >
+                      <CheckCheck aria-hidden />
+                      Marcar realizada
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      disabled={busy}
+                      onClick={() => {
+                        key.current = null;
+                        setConfirmation({ call, action: 'cancel' });
+                      }}
+                    >
+                      Cancelar call
+                    </Button>
+                  </>
+                )}
+              </div>
+            </details>
           </article>
         ))}
       </div>

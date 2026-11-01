@@ -9,6 +9,7 @@ export const endpoints = {
   async getTrackingSummary(
     id: string,
     period?: string | TrackingPeriod,
+    salesView: 'general' | 'natural' = 'general',
   ): Promise<{
     date: string;
     time_zone: string;
@@ -58,6 +59,7 @@ export const endpoints = {
     net_available_usd_minor: string;
   }> {
     const params = trackingPeriodParams(period);
+    if (salesView === 'natural') params.set('sales_view', salesView);
     const query = params.size ? `?${params.toString()}` : '';
     return request(`/v1/offers/${id}/tracking/summary${query}`);
   },
@@ -117,6 +119,7 @@ export const endpoints = {
   async getTrackingOverview(
     from?: string,
     to?: string,
+    salesView: 'general' | 'natural' = 'general',
   ): Promise<{
     from: string;
     to: string;
@@ -129,6 +132,7 @@ export const endpoints = {
     const params = new URLSearchParams();
     if (from) params.set('from', from);
     if (to) params.set('to', to);
+    if (salesView === 'natural') params.set('sales_view', salesView);
     const query = params.toString();
     return request(`/v1/tracking/overview${query ? `?${query}` : ''}`);
   },

@@ -34,7 +34,13 @@ export function SignalPreview({
   datasets,
   accounts,
   period,
-}: { datasets: OverviewDataset[]; accounts?: TrackingOverviewAccount[]; period: DateRange }) {
+  salesView = 'general',
+}: {
+  datasets: OverviewDataset[];
+  accounts?: TrackingOverviewAccount[];
+  period: DateRange;
+  salesView?: 'general' | 'natural';
+}) {
   const [selected, setSelected] = useState('');
   const { visual: effects } = useInterfaceEffects();
   const [motion, setMotion] = useState(false);
@@ -47,10 +53,10 @@ export function SignalPreview({
     datasets[0];
   const funnelQueries = useQueries({
     queries: [...new Set(dataset?.offerIds ?? [])].map((id) => ({
-      queryKey: ['funnel-activity', user?.id, user?.role, id, period.from, period.to],
+      queryKey: ['funnel-activity', user?.id, user?.role, id, period.from, period.to, salesView],
       queryFn: () =>
         request<{ version: string; entrants: number; checkouts: number; buyers: number }>(
-          `/v1/offers/${id}/tracking/funnel-activity?${new URLSearchParams({ from: period.from, to: period.to })}`,
+          `/v1/offers/${id}/tracking/funnel-activity?${new URLSearchParams({ from: period.from, to: period.to, sales_view: salesView })}`,
         ),
       staleTime: 60_000,
       refetchInterval: 60_000,
@@ -184,8 +190,18 @@ export function SignalPreview({
         ))}
       </div>
       <div className={styles.visuals}>
-        <CountryActivityMap offerIds={dataset.offerIds ?? []} period={period} animated={motion} />
-        <ReceiptRevenueChart animated={motion} offerIds={dataset.offerIds ?? []} period={period} />
+        <CountryActivityMap
+          salesView={salesView}
+          offerIds={dataset.offerIds ?? []}
+          period={period}
+          animated={motion}
+        />
+        <ReceiptRevenueChart
+          salesView={salesView}
+          animated={motion}
+          offerIds={dataset.offerIds ?? []}
+          period={period}
+        />
       </div>
       <section className={styles.journey}>
         <h3>
@@ -237,7 +253,7 @@ export function SignalPreview({
         </div>
       </section>
       <Dataset dataset={dataset} />
-      <ReserveReleaseProjection offerIds={dataset.offerIds ?? []} />
+      <ReserveReleaseProjection salesView={salesView} offerIds={dataset.offerIds ?? []} />
       {accounts && (
         <GatewayOverview
           accounts={accounts.filter((account) => dataset.key.startsWith(`${account.owner_id}:`))}
