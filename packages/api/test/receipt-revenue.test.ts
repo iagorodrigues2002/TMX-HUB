@@ -13,6 +13,15 @@ const receipt = (id: string, at: string, status = 'approved'): RevenueReceipt =>
 });
 
 describe('receipt revenue', () => {
+  it('includes every numbered upsell in the upsell filter without changing the total', () => {
+    const rows = ['upsell', 'upsell_1', 'upsell_2', 'upsell_3', 'upsell_10', 'upsell_unknown'].map(
+      (order_kind) => ({ ...receipt(order_kind, '2026-10-27T04:00:00Z'), order_kind }),
+    );
+    const result = hourlyReceiptRevenue(rows, from, to);
+    expect(result.by_kind.upsell.hours[1]?.sales).toBe(5);
+    expect(result.by_kind.unknown.hours[1]?.sales).toBe(1);
+    expect(result.hours[1]?.revenue_brl_minor).toBe(17400);
+  });
   it('partitions deduplicated revenue by real kind and keeps unknown sales separate', () => {
     const front = { ...receipt('f', '2026-10-27T04:00:00Z'), order_kind: 'front' };
     const result = hourlyReceiptRevenue(

@@ -101,7 +101,11 @@ export function hourlyReceiptRevenue(rows: RevenueReceipt[], from: Date, to: Dat
     const received = new Date(row.received_at);
     if (received < from || received >= to) continue;
     const kind =
-      row.order_kind === 'front' || row.order_kind === 'upsell' ? row.order_kind : 'unknown';
+      row.order_kind === 'front'
+        ? 'front'
+        : row.order_kind === 'upsell' || /^upsell_[0-9]+$/.test(row.order_kind ?? '')
+          ? 'upsell'
+          : 'unknown';
     const classified = by_kind[kind];
     const amount = row.amount_brl_minor === null ? Number.NaN : Number(row.amount_brl_minor);
     if (!Number.isSafeInteger(amount) || amount < 0) {
