@@ -201,7 +201,9 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
               accounts={scope === 'account' ? financialQuery.data?.accounts : undefined}
             />
           ) : (
-            datasets.map((dataset) => <Dataset key={dataset.key} dataset={dataset} />)
+            datasets.map((dataset) => (
+              <Dataset key={dataset.key} dataset={dataset} salesView={salesView} />
+            ))
           )}
           {!SIGNAL_PREVIEW && scope === 'account' && financialQuery.data?.accounts && (
             <GatewayOverview accounts={financialQuery.data.accounts} />

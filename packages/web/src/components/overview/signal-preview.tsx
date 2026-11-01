@@ -252,7 +252,7 @@ export function SignalPreview({
           </small>
         </div>
       </section>
-      <Dataset dataset={dataset} />
+      <Dataset dataset={dataset} salesView={salesView} />
       <ReserveReleaseProjection salesView={salesView} offerIds={dataset.offerIds ?? []} />
       {accounts && (
         <GatewayOverview

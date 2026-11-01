@@ -16,12 +16,16 @@ export interface SalesCompositionRow {
   revenue_brl_minor: string;
 }
 
-export function compositionTotals(rows: SalesCompositionRow[]) {
+export function compositionTotals(
+  rows: SalesCompositionRow[],
+  basis: 'customers' | 'fronts' = 'customers',
+) {
   const sum = (
     key: 'orders' | 'fronts' | 'upsells' | 'customers' | 'unidentified_orders' | 'missing_amounts',
   ) => rows.reduce((n, r) => n + Number(r[key]), 0);
   const revenue = rows.reduce((n, r) => n + Number(r.revenue_brl_minor), 0);
   const customers = sum('customers');
+  const denominator = sum(basis);
   return {
     orders: sum('orders'),
     fronts: sum('fronts'),
@@ -31,8 +35,10 @@ export function compositionTotals(rows: SalesCompositionRow[]) {
     missing_amounts: sum('missing_amounts'),
     revenue_brl_minor: String(revenue),
     arr_brl_minor:
-      customers > 0 && !sum('unidentified_orders') && !sum('missing_amounts')
-        ? String(Math.round(revenue / customers))
+      denominator > 0 &&
+      (basis === 'fronts' || !sum('unidentified_orders')) &&
+      !sum('missing_amounts')
+        ? String(Math.round(revenue / denominator))
         : null,
   };
 }
@@ -97,7 +103,10 @@ export function registerGetSalesComposition(app: FastifyInstance) {
           offer_id: offer.id,
           offer_name: offer.name,
           owner_id: offer.userId,
-          general: compositionTotals(own.filter((r) => r.classification === null)),
+          general: compositionTotals(
+            own.filter((r) => r.classification === null),
+            'fronts',
+          ),
           natural: compositionTotals(own.filter((r) => r.classification === 'natural')),
           assisted: compositionTotals(own.filter((r) => r.classification === 'assisted')),
           unclassified: compositionTotals(own.filter((r) => r.classification === 'unknown')),

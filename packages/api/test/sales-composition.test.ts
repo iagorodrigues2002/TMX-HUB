@@ -35,6 +35,23 @@ it('does not invent customer counts or exchange amounts', () => {
   expect(compositionTotals([row({ unidentified_orders: 1 })]).arr_brl_minor).toBeNull();
   expect(compositionTotals([row({ missing_amounts: 1 })]).arr_brl_minor).toBeNull();
 });
+it('general ARPU uses front purchases, including all upsell revenue', () => {
+  expect(
+    compositionTotals(
+      [
+        row({ fronts: 78, customers: 96, revenue_brl_minor: '2501506' }),
+        row({ fronts: 0, customers: 2, revenue_brl_minor: '187048' }),
+      ],
+      'fronts',
+    ).arr_brl_minor,
+  ).toBe('34469');
+  expect(compositionTotals([row({ fronts: 0 })], 'fronts').arr_brl_minor).toBeNull();
+  expect(
+    compositionTotals([row({ fronts: 2, customers: 0, unidentified_orders: 3 })], 'fronts')
+      .arr_brl_minor,
+  ).toBe('30000');
+  expect(compositionTotals([row({ missing_amounts: 1 })], 'fronts').arr_brl_minor).toBeNull();
+});
 async function appFor(db: unknown, authenticated = true) {
   const app = Fastify();
   app.decorate('db', db);
@@ -48,6 +65,22 @@ async function appFor(db: unknown, authenticated = true) {
   registerGetSalesComposition(app);
   return app;
 }
+it('returns general ARPU by front purchases from the endpoint', async () => {
+  const db = Object.assign(
+    vi.fn(async () => [row({ fronts: 2, customers: 1 })]),
+    {
+      unsafe: vi.fn(() => true),
+    },
+  );
+  const app = await appFor(db);
+  try {
+    const result = await app.inject('/tracking/sales-composition?from=2026-10-01&to=2026-10-01');
+    expect(result.statusCode).toBe(200);
+    expect(result.json().offers[0].general.arr_brl_minor).toBe('30000');
+  } finally {
+    await app.close();
+  }
+});
 it('rejects missing authentication and impossible calendar dates before querying storage', async () => {
   const db = vi.fn();
   const anonymous = await appFor(db, false);

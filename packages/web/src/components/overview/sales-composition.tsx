@@ -37,7 +37,7 @@ export function useSalesComposition(from: string, to: string) {
   });
 }
 
-// Revenue and unique clients belong to the selected period, counted once per funnel.
+// General uses front purchases; natural keeps unique clients within the selected period.
 export function periodArpu(
   data: z.infer<typeof response> | undefined,
   ids: string[],
@@ -45,8 +45,9 @@ export function periodArpu(
 ) {
   if (!data) return null;
   const rows = ids.map((id) => data.offers.find((o) => o.offer_id === id)?.[mode]);
-  if (rows.some((r) => !r || r.unidentified_orders || r.missing_amounts)) return null;
-  const customers = rows.reduce((n, r) => n + r!.customers, 0);
+  if (rows.some((r) => !r || r.missing_amounts || (mode === 'natural' && r.unidentified_orders)))
+    return null;
+  const denominator = rows.reduce((n, r) => n + (mode === 'general' ? r!.fronts : r!.customers), 0);
   const revenue = rows.reduce((n, r) => n + Number(r!.revenue_brl_minor), 0);
-  return customers ? Math.round(revenue / customers) / 100 : null;
+  return denominator ? Math.round(revenue / denominator) / 100 : null;
 }

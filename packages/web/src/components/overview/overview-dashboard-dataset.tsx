@@ -20,7 +20,10 @@ import {
   formatConversionRate,
 } from './overview-dashboard-support';
 
-export function Dataset({ dataset }: { dataset: OverviewDataset }) {
+export function Dataset({
+  dataset,
+  salesView,
+}: { dataset: OverviewDataset; salesView: 'general' | 'natural' }) {
   const { isPrivate } = usePrivacy();
   return (
     <section
@@ -100,7 +103,11 @@ export function Dataset({ dataset }: { dataset: OverviewDataset }) {
               ? { value: dataset.arpu, format: (value) => formatCurrency(value, 'BRL') }
               : undefined
           }
-          hint="Receita bruta ÷ clientes únicos por funil no período"
+          hint={
+            salesView === 'general'
+              ? 'Receita bruta ÷ compras front no período'
+              : 'Receita bruta ÷ clientes únicos por funil no período'
+          }
           icon={<Users className="h-4 w-4" />}
         />
       </div>
