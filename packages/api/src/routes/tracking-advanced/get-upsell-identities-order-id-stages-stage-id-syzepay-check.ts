@@ -39,7 +39,8 @@ export function registerGetUpsellIdentitiesOrderIdStagesStageIdSyzepayCheckRoute
   }>(
     '/offers/:id/tracking/upsell-identities/:orderId/stages/:stageId/result',
     async (req, reply) => {
-      const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin', true);
+      // An operator records a page test, not a tracking configuration or an approved sale.
+      const p = await project(req.params.id, req.user!.sub, req.user!.role === 'admin');
       if (!app.db) return reply.code(503).send(databaseUnavailable);
       if (!p) return reply.code(404).send({ error: 'tracking_not_configured' });
       const parsed = UpsellManualResultSchema.safeParse(req.body);
