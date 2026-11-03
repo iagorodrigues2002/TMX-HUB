@@ -217,6 +217,40 @@ describe.skipIf(!process.env.TASK_TEST_DATABASE_URL)('company-scoped tasks and c
     ).rejects.toMatchObject({ status: 403 });
   });
 
+  it('delegates tasks and calls only inside the company with an explicit task permission', async () => {
+    const member = await makeApp('member');
+    const global = await makeApp();
+    expect((await member.inject('/tasks/access')).statusCode).toBe(403);
+    await db`UPDATE company_memberships SET tools=ARRAY['nav:scoped','nav:task-management'] WHERE company_id=${tmx} AND user_id='member'`;
+    const access = await member.inject('/tasks/access');
+    expect(access.statusCode, access.body).toBe(200);
+    expect(access.json().companies.map((c: { id: string }) => c.id)).toEqual([tmx]);
+    const created = await post(member, '/tasks', taskInput());
+    expect(created.statusCode, created.body).toBe(201);
+    const task = created.json();
+    expect((await member.inject('/tasks')).json().tasks.map((t: { id: string }) => t.id)).toEqual([
+      task.id,
+    ]);
+    const updated = await member.inject({
+      method: 'PATCH',
+      url: `/tasks/${task.id}/status`,
+      payload: { revision: 1, status: 'done' },
+      headers: { 'idempotency-key': randomUUID() },
+    });
+    expect(updated.statusCode, updated.body).toBe(200);
+    expect((await post(member, '/calls', callInput())).statusCode).toBe(201);
+    expect((await member.inject('/calls')).json().calls).toHaveLength(1);
+    const foreign = (await post(global, '/tasks', taskInput(other, [yolaPerson]))).json();
+    expect((await member.inject(`/tasks/${foreign.id}/history`)).statusCode).toBe(403);
+    expect((await member.inject(`/tasks?companyId=${other}`)).statusCode).toBe(403);
+    expect((await member.inject(`/calls?companyId=${other}`)).statusCode).toBe(403);
+    expect((await post(member, '/tasks', taskInput(other, [yolaPerson]))).statusCode).toBe(403);
+    expect((await post(member, '/calls', callInput(other, [yolaPerson]))).statusCode).toBe(403);
+    await db`UPDATE company_memberships SET tools='{}' WHERE company_id=${tmx} AND user_id='member'`;
+    expect((await member.inject('/tasks/access')).statusCode).toBe(403);
+    expect((await member.inject('/calls')).statusCode).toBe(403);
+  });
+
   it('calls retain company, reject foreign participants and preserve legacy only for globals', async () => {
     const global = await makeApp();
     const douglas = await makeApp('douglas');

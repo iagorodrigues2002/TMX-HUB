@@ -9,6 +9,48 @@ const member = (ids: string[]) => ({
   tools: ['ofertas', 'nav:scoped', ...ids.map((id) => `nav:${id}`)],
 });
 describe('navigation section permissions', () => {
+  it('requires the delegated activity grant for both report paths, separate from operating upsells', () => {
+    for (const path of [
+      '/v1/activity',
+      '/v1/tracking/upsell-operator-logs',
+      '/v1/offers/:id/tracking/upsell-operator-logs',
+    ]) {
+      expect(() =>
+        assertNavigationAccess(member(['operator-activity']), path, 'GET'),
+      ).not.toThrow();
+      expect(() =>
+        assertNavigationAccess(member(['tracking-upsell-intelligence']), path, 'GET'),
+      ).toThrow();
+      expect(() =>
+        assertNavigationAccess({ role: 'user', tools: ['ofertas', 'logs'] }, path, 'GET'),
+      ).toThrow();
+    }
+  });
+  it('gates task and call management but keeps participant notifications separately authorized', () => {
+    for (const path of [
+      '/v1/tasks',
+      '/v1/tasks/access',
+      '/v1/tasks/:id',
+      '/v1/calls',
+      '/v1/calls/:id',
+    ]) {
+      for (const method of ['GET', 'POST', 'PATCH', 'DELETE']) {
+        expect(() => assertNavigationAccess(member([]), path, method)).toThrow();
+        expect(() =>
+          assertNavigationAccess(member(['task-management']), path, method),
+        ).not.toThrow();
+      }
+    }
+    expect(() =>
+      assertNavigationAccess(member([]), '/v1/calls/notifications', 'GET'),
+    ).not.toThrow();
+    expect(() =>
+      assertNavigationAccess(member([]), '/v1/calls/notifications/:id/read', 'POST'),
+    ).not.toThrow();
+    expect(() =>
+      assertNavigationAccess(member([]), '/v1/calls/notifications/unknown', 'PATCH'),
+    ).toThrow();
+  });
   it('separates catalog, intelligence, integrations and finance even with the base offer tool', () => {
     const user = member(['offers-all']);
     expect(() => assertNavigationAccess(user, '/v1/offers', 'GET')).not.toThrow();

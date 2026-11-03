@@ -5,6 +5,9 @@ import { HttpProblem } from './problem.js';
 export function navigationRequirements(rawPath: string, method: string): NavigationId[] | null {
   const path = rawPath.split('?')[0]!.replace(/^\/v1/, '');
   const read = method === 'GET' || method === 'HEAD';
+  if (path === '/calls/notifications' || /^\/calls\/notifications\/[^/]+\/read$/.test(path))
+    return null; // Personal participant notices are authorized by their handlers.
+  if (/^\/(tasks|calls)(\/|$)/.test(path)) return ['task-management'];
   if (/^\/tracking\/(sale-notice|browser-push)/.test(path)) return null; // Personal opt-in, authorized separately.
   if (/^\/tracking\/upsell-operator-logs/.test(path) || path === '/activity')
     return ['operator-activity'];
@@ -23,6 +26,7 @@ export function navigationRequirements(rawPath: string, method: string): Navigat
   if (tracking) {
     const tail = tracking[1] ?? '';
     if (read && (tail === '' || tail === 'advanced')) return null; // Redacted by handler.
+    if (tail === 'upsell-operator-logs') return ['operator-activity'];
     if (/^upsell/.test(tail)) return ['tracking-upsell-intelligence'];
     if (/^refunds\b/.test(tail)) return ['refunds'];
     if (/^(summary|receipt-revenue|country-activity|countries|funnel-activity)$/.test(tail))
@@ -54,9 +58,14 @@ export function assertNavigationAccess(
   path: string,
   method: string,
 ) {
-  if (user.role === 'admin' || !user.tools?.includes('nav:scoped')) return;
+  if (user.role === 'admin') return;
   const required = navigationRequirements(path, method);
-  if (required !== null && !required.some((id) => hasNavigationAccess(user.tools, id))) {
+  const explicitActivity = required?.includes('operator-activity');
+  if (!explicitActivity && !user.tools?.includes('nav:scoped')) return;
+  if (
+    (explicitActivity && !user.tools?.includes('nav:operator-activity')) ||
+    (required !== null && !required.some((id) => hasNavigationAccess(user.tools, id)))
+  ) {
     throw new HttpProblem({
       status: 403,
       title: 'Forbidden',

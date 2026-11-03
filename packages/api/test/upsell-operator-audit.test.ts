@@ -1,3 +1,4 @@
+import type { ToolKey } from '@page-cloner/shared';
 import Fastify from 'fastify';
 import { describe, expect, it, vi } from 'vitest';
 import { HttpProblem } from '../src/lib/problem.js';
@@ -53,6 +54,9 @@ async function fixture(
     unsafe?: boolean;
     offers?: string[];
     foreign?: boolean;
+    tools?: ToolKey[];
+    companyTools?: ToolKey[];
+    companyStatus?: string;
   } = {},
 ) {
   const app = Fastify();
@@ -75,6 +79,16 @@ async function fixture(
     const sql = strings.join('?');
     statements.push(sql);
     parameters.push(values);
+    if (sql.includes('FROM company_offers c') && options.companyTools)
+      return [
+        {
+          offer_id: 'offer-1',
+          company_id: 'company-1',
+          role: 'member',
+          status: options.companyStatus ?? 'active',
+          tools: options.companyTools,
+        },
+      ];
     if (sql.includes('SELECT id,offer_id FROM tracking_projects'))
       return [
         { id: 'project-1', offer_id: options.offers?.[0] ?? 'offer-1' },
@@ -164,6 +178,7 @@ async function fixture(
       email: 'fixture@example.test',
       iat: 0,
       exp: 0,
+      tools: options.tools ?? ['ofertas', 'logs', 'nav:scoped', 'nav:operator-activity'],
     };
   });
   await app.register(errorHandlerPlugin);
@@ -175,6 +190,53 @@ const openUrl = '/offers/offer-1/tracking/upsell-identities/front-1/stages/stage
 const logUrl = '/offers/offer-1/tracking/upsell-operator-logs';
 const globalUrl = '/tracking/upsell-operator-logs';
 describe('upsell operator audit', () => {
+  it.each([logUrl, globalUrl])(
+    'requires explicit result delegation before reading %s',
+    async (url) => {
+      const { app, statements } = await fixture({ tools: ['ofertas', 'logs'] });
+      try {
+        const response = await app.inject(url);
+        expect(response.statusCode).toBe(403);
+        expect(response.json().code).toBe('section_forbidden');
+        expect(statements.some((sql) => sql.includes('tracking_upsell_operator_attempts'))).toBe(
+          false,
+        );
+      } finally {
+        await app.close();
+      }
+    },
+  );
+  it('does not borrow a delegated result grant from another company for a single offer', async () => {
+    const { app, statements } = await fixture({
+      companyTools: ['ofertas', 'nav:tracking-upsell-intelligence'],
+    });
+    try {
+      expect((await app.inject(logUrl)).statusCode).toBe(403);
+      expect(statements.some((sql) => sql.includes('tracking_upsell_operator_attempts'))).toBe(
+        false,
+      );
+    } finally {
+      await app.close();
+    }
+  });
+  it('keeps a delegated company member self-scoped without promoting the role', async () => {
+    const { app, statements, parameters } = await fixture({
+      user: 'member-1',
+      companyTools: ['ofertas', 'nav:scoped', 'nav:operator-activity'],
+    });
+    try {
+      const response = await app.inject(logUrl);
+      expect(response.statusCode).toBe(200);
+      expect(response.json().scope).toBe('self');
+      expect(
+        response.json().summary.map((row: { operator_id: string }) => row.operator_id),
+      ).toEqual(['member-1']);
+      const index = statements.findIndex((sql) => sql.includes('ORDER BY opened_at'));
+      expect(parameters[index].slice(0, 3)).toEqual([['project-1'], false, 'member-1']);
+    } finally {
+      await app.close();
+    }
+  });
   it('requires authentication for the global report', async () => {
     const app = Fastify();
     registerUpsellOperatorAudit(app);
@@ -412,7 +474,7 @@ describe('upsell operator audit', () => {
           ...(method === 'POST' ? { payload: { click_id: 'click_1234567890123456' } } : {}),
         });
         expect(response.statusCode).toBe(404);
-        expect(statements).toHaveLength(0);
+        expect(statements.filter((sql) => !sql.includes('FROM company_offers c'))).toHaveLength(0);
       } finally {
         await app.close();
       }

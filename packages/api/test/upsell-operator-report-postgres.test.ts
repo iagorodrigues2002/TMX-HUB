@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import Fastify from 'fastify';
 import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import errorHandlerPlugin from '../src/plugins/error-handler.js';
 import { registerUpsellOperatorAudit } from '../src/routes/upsell-operator-audit.js';
 
 // Requires migrations on a disposable local database; no DATABASE_URL fallback.
@@ -52,7 +53,7 @@ describe.skipIf(!url)('operator report end-to-end (local PostgreSQL)', () => {
   const report = async (
     user: string,
     admin: boolean,
-    options: { global?: boolean; from?: string; to?: string; offer?: string } = {},
+    options: { global?: boolean; from?: string; to?: string; offer?: string; status?: number } = {},
   ) => {
     const app = Fastify();
     app.decorate('db', db);
@@ -83,8 +84,10 @@ describe.skipIf(!url)('operator report end-to-end (local PostgreSQL)', () => {
         email: 'fixture@example.test',
         iat: 0,
         exp: 0,
+        tools: ['ofertas', 'logs', 'nav:scoped', 'nav:operator-activity'],
       };
     });
+    await app.register(errorHandlerPlugin);
     registerUpsellOperatorAudit(app);
     const path = options.global
       ? '/tracking/upsell-operator-logs'
@@ -92,7 +95,7 @@ describe.skipIf(!url)('operator report end-to-end (local PostgreSQL)', () => {
     const query = options.from ? `?from=${options.from}&to=${options.to}` : '';
     try {
       const r = await app.inject(path + query);
-      expect(r.statusCode).toBe(200);
+      expect(r.statusCode).toBe(options.status ?? 200);
       return r.json();
     } finally {
       await app.close();
@@ -118,6 +121,37 @@ describe.skipIf(!url)('operator report end-to-end (local PostgreSQL)', () => {
     expect(JSON.stringify(result)).not.toContain('Pessoa vencedora');
     const winner = await report('winner', false);
     expect(winner.summary[0].confirmed_purchases).toBe(1);
+  });
+  it('rechecks company-local delegation and suspension for offer and combined reports', async () => {
+    const companyId = randomUUID();
+    try {
+      await db`INSERT INTO companies(id,name,created_by) VALUES(${companyId},'Synthetic operator report','fixture-owner')`;
+      await db`INSERT INTO company_memberships(company_id,user_id,role,status,tools,all_offers)
+        VALUES(${companyId},'winner','member','active',ARRAY['ofertas','nav:scoped','nav:operator-activity'],true)`;
+      await db`INSERT INTO company_offers(company_id,offer_id,owner_user_id) VALUES(${companyId},${id},'fixture-owner')`;
+      const allowed = await report('winner', false);
+      expect(allowed.scope).toBe('self');
+      expect(allowed.summary.map((row: { operator_id: string }) => row.operator_id)).toEqual([
+        'winner',
+      ]);
+      expect(allowed.approvals).toHaveLength(1);
+
+      await db`UPDATE company_memberships SET tools=ARRAY['ofertas','nav:tracking-upsell-intelligence'] WHERE company_id=${companyId} AND user_id='winner'`;
+      expect((await report('winner', false, { status: 403 })).code).toBe('section_forbidden');
+      const excluded = await report('winner', false, { global: true });
+      expect(excluded.summary).toEqual([]);
+      expect(excluded.approvals).toEqual([]);
+      expect(excluded.attempts).toEqual([]);
+
+      await db`UPDATE company_memberships SET status='suspended' WHERE company_id=${companyId} AND user_id='winner'`;
+      expect((await report('winner', false, { status: 403 })).code).toBe(
+        'company_section_forbidden',
+      );
+    } finally {
+      await db`DELETE FROM company_offers WHERE company_id=${companyId}`;
+      await db`DELETE FROM company_memberships WHERE company_id=${companyId}`;
+      await db`DELETE FROM companies WHERE id=${companyId}`;
+    }
   });
   it('combines all authorized offers into one row per person', async () => {
     const result = await report('admin', true, { global: true });

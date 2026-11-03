@@ -20,8 +20,9 @@ export async function operationScope(
   if (actor.admin) return { global: !companyId, companyIds: companyId ? [companyId] : [] };
   const schema = await db`SELECT to_regclass('company_memberships') AS name`;
   if (!schema?.[0]?.name) throw denied();
-  const rows =
-    await db`SELECT company_id::text AS id FROM company_memberships WHERE user_id=${actor.id} AND status='active' AND role IN ('owner','admin')`;
+  const rows = await db`SELECT company_id::text AS id FROM company_memberships
+      WHERE user_id=${actor.id} AND status='active'
+        AND (role IN ('owner','admin') OR (role='member' AND 'nav:task-management'=ANY(tools)))`;
   const ids = rows.map((r) => r.id as string);
   if (!ids.length || (companyId && !ids.includes(companyId))) throw denied();
   return { global: false, companyIds: companyId ? [companyId] : ids };

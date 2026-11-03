@@ -6,6 +6,7 @@ import { normalizeVendepay } from '../integrations/vendepay/normalize.js';
 import { filterCompanyNavigationOffers } from '../lib/company-navigation-access.js';
 import { zodToProblem } from '../lib/problem.js';
 import { decryptSecret } from '../lib/secret-box.js';
+import { assertOperatorReportAccess } from '../lib/upsell-operator-report-access.js';
 import { buildSyzepayRecoveryUrl, validateSyzepayRecovery } from '../services/syzepay-upsell.js';
 
 const OpenSchema = z
@@ -222,6 +223,7 @@ export function registerUpsellOperatorAudit(app: FastifyInstance) {
   const logsHandler = async (req: FastifyRequest<LogRequest>, reply: FastifyReply) => {
     if (!req.user) return reply.code(401).send({ error: 'authentication_required' });
     reply.header('cache-control', 'private, no-store');
+    await assertOperatorReportAccess(app.db, req.user, req.params.id);
     const query = OperatorLogQuery.safeParse(req.query);
     if (!query.success)
       return reply.code(400).send({
