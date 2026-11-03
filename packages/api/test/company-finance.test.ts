@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import Fastify from 'fastify';
 import postgres from 'postgres';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { createResilientPostgresClient } from '../src/lib/postgres-retry.js';
 import { HttpProblem } from '../src/lib/problem.js';
 import { companyRoutes } from '../src/routes/companies.js';
 import { runFinanceSync } from '../src/services/company-finance.js';
@@ -52,12 +53,12 @@ describe.skipIf(!process.env.TASK_TEST_DATABASE_URL)(
     }
     async function call(
       actor: string,
-      method: 'GET' | 'POST' | 'DELETE',
+      method: 'GET' | 'POST' | 'DELETE' | 'PUT',
       url: string,
       body?: unknown,
     ) {
       const app = Fastify();
-      app.decorate('db', db);
+      app.decorate('db', createResilientPostgresClient(db));
       app.addHook('preHandler', async (req) => {
         req.user = { sub: actor, role: 'user', email: 'synthetic@example.test', iat: 0, exp: 0 };
       });
@@ -88,7 +89,11 @@ describe.skipIf(!process.env.TASK_TEST_DATABASE_URL)(
         connection: { search_path: schema },
         onnotice: () => {},
       });
-      for (const file of ['109_company_memberships.sql', '113_company_finance.sql'])
+      for (const file of [
+        '109_company_memberships.sql',
+        '113_company_finance.sql',
+        '115_finance_classification.sql',
+      ])
         await db.unsafe(readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8'));
       await db`INSERT INTO companies(id,name,created_by) VALUES(${company},'Company A','owner'),(${other},'Company B','outsider')`;
       await db`INSERT INTO company_memberships(company_id,user_id,role) VALUES(${company},'owner','owner'),(${company},'member','member'),(${other},'outsider','owner')`;
@@ -221,6 +226,66 @@ describe.skipIf(!process.env.TASK_TEST_DATABASE_URL)(
       await runFinanceSync(db);
       expect(fetch).not.toHaveBeenCalled();
       expect((await db`SELECT * FROM company_finance_entries`).length).toBe(1);
+    });
+    it('classifies scoped history, aggregates beyond pagination and preserves currencies and local dates', async () => {
+      const rules = {
+        vendepayIncome: true,
+        withdrawalRecipient: '52.210.584 IAGO RODRIGUES DA COSTA',
+      };
+      const base = `/companies/${company}/finance`;
+      expect((await call('outsider', 'PUT', `${base}/rules`, rules)).statusCode).toBe(403);
+      expect((await call('member', 'GET', `${base}/analytics?month=2020-10`)).statusCode).toBe(403);
+      expect((await call('owner', 'PUT', `${base}/rules`, rules)).statusCode).toBe(200);
+      for (let i = 0; i < 55; i++)
+        await db`INSERT INTO company_finance_entries(company_id,connection_id,external_id,operation_id,occurred_at,kind,status,description,received,received_currency)
+        VALUES(${company},${connection},${`qa-${i}`},${`qa-${i}`},'2020-10-02T02:00:00Z','CREDIT','completed','VendePay Technologies',10,'USD')`;
+      await db`INSERT INTO company_finance_entries(company_id,connection_id,external_id,operation_id,occurred_at,kind,status,description,sent,sent_currency)
+        VALUES(${company},${connection},'withdraw','withdraw','2020-10-02T03:00:00Z','DEBIT','completed','52.210.584 IAGO RODRIGUES DA COSTA',20,'USD'),
+        (${company},${connection},'fixed','fixed','2020-10-02T03:00:00Z','DEBIT','completed','Hosting',30,'USD'),
+        (${company},${connection},'pending','pending','2020-10-02T03:00:00Z','DEBIT','pending','Pending',100,'USD')`;
+      const classification = { connectionId: connection, externalId: 'fixed', category: 'fixed' };
+      expect(
+        (await call('outsider', 'PUT', `${base}/classification`, classification)).statusCode,
+      ).toBe(403);
+      expect(
+        (
+          await call('owner', 'PUT', `${base}/classification`, {
+            ...classification,
+            category: 'income',
+          })
+        ).statusCode,
+      ).toBe(422);
+      expect(
+        (await call('owner', 'PUT', `${base}/classification`, classification)).statusCode,
+      ).toBe(200);
+      const result = await call('owner', 'GET', `${base}/analytics?month=2020-10`);
+      expect(result.statusCode).toBe(200);
+      const days = result.json().days as { day: string; currency: string | null }[];
+      expect(days.find((d) => d.day === '2020-10-01' && d.currency === 'USD')).toMatchObject({
+        incoming: '550',
+        transactions: 55,
+      });
+      expect(days.find((d) => d.day === '2020-10-02' && d.currency === 'USD')).toMatchObject({
+        outgoing: '50',
+        fixed: '30',
+        withdrawals: '20',
+      });
+      expect(days.find((d) => d.currency === null)).toMatchObject({ excluded: 1 });
+      expect(
+        (await call('owner', 'GET', `${base}/analytics?month=2020-10&provider=lootrush`)).json()
+          .days,
+      ).toEqual([]);
+      expect((await call('owner', 'GET', `${base}/analytics?month=2020-99`)).statusCode).toBe(400);
+      const withdrawals = (await call('owner', 'GET', `${base}?view=withdrawals`)).json().entries;
+      expect(withdrawals.map((r: { external_id: string }) => r.external_id)).toEqual(['withdraw']);
+      const expenses = (await call('owner', 'GET', `${base}?view=outgoing`)).json().entries;
+      expect(expenses.map((r: { external_id: string }) => r.external_id)).toEqual(['fixed']);
+      expect(expenses[0].category_override).toBe('fixed');
+      expect(
+        (
+          await call('outsider', 'GET', `/companies/${other}/finance/analytics?month=2020-10`)
+        ).json().days,
+      ).toEqual([]);
     });
   },
 );

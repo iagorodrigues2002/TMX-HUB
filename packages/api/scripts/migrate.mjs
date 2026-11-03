@@ -120,6 +120,7 @@ const migrations = [
   '112_company_compensation.sql',
   '113_company_finance.sql',
   '114_ads_previous_pageview_index.sql',
+  '115_finance_classification.sql',
 ];
 
 await sql`

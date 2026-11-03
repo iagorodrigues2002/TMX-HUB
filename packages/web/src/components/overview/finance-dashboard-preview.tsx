@@ -7,14 +7,18 @@ import { request } from '@/lib/api-client/request';
 import { useAuth } from '@/lib/auth-context';
 import { financeValidationError } from '@/lib/finance-validation-error';
 import { usePrivacy } from '@/lib/privacy-context';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, KeyRound, Landmark, RefreshCw, Unplug } from 'lucide-react';
 import { useState } from 'react';
+import { FinanceAnalytics } from './finance-analytics';
+import { FinanceAvailableBalance } from './finance-available-balance';
+import { FinanceEntryCategory, FinanceRules } from './finance-classification';
 import { FinancePayees } from './finance-payees';
 import { FinanceReserve } from './finance-reserve';
 
 const tabs = [
   'Resumo',
+  'Crescimento',
   'Movimentações',
   'Saques',
   'Despesas',
@@ -44,6 +48,9 @@ type Connection = {
   balances: Balance[];
 };
 type Entry = {
+  connection_id: string;
+  category: string;
+  category_override: string | null;
   external_id: string;
   provider: Provider;
   occurred_at: string;
@@ -56,6 +63,7 @@ type Entry = {
   received_currency: string | null;
 };
 type FinanceData = {
+  rules: { vendepay_income: boolean; withdrawal_recipient: string };
   connections: Connection[];
   entries: Entry[];
   hasMore: boolean;
@@ -204,6 +212,7 @@ function ConnectionForm({ company, refresh }: { company: string; refresh: () => 
 }
 
 function FinanceAccountView({ company }: { company: string }) {
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const { isPrivate } = usePrivacy();
   const [tab, setTab] = useState<(typeof tabs)[number]>('Resumo');
@@ -229,6 +238,10 @@ function FinanceAccountView({ company }: { company: string }) {
   const connections = (data.data?.connections ?? []).filter(
     (c) => !provider || c.provider === provider,
   );
+  function refreshClassification() {
+    void queryClient.invalidateQueries({ queryKey: ['company-finance', user?.id, company] });
+    void queryClient.invalidateQueries({ queryKey: ['finance-analytics', user?.id, company] });
+  }
   async function action(id: string, remove: boolean) {
     if (
       remove &&
@@ -315,6 +328,24 @@ function FinanceAccountView({ company }: { company: string }) {
               <p className={panel}>Carregando dados salvos…</p>
             ) : (
               <>
+                {tab === 'Resumo' && (
+                  <FinanceAvailableBalance
+                    company={company}
+                    accounts={data.data?.connections ?? []}
+                  />
+                )}
+                {(tab === 'Resumo' || tab === 'Crescimento') && (
+                  <FinanceAnalytics
+                    company={company}
+                    provider={provider}
+                    growth={tab === 'Crescimento'}
+                    coverage={connections.map((c) =>
+                      c.history_supported === false
+                        ? `${names[c.provider]}: apenas saldo disponível; histórico ausente, não zero.`
+                        : `${names[c.provider]}: histórico desde ${time(c.history_start)}, importado até ${time(c.history_cursor)}. ${states[c.status] ?? c.status}.`,
+                    )}
+                  />
+                )}
                 {!connections.length && (
                   <p className={panel}>Nenhuma conta conectada. Cadastre a chave em Integrações.</p>
                 )}
@@ -380,13 +411,20 @@ function FinanceAccountView({ company }: { company: string }) {
                 )}
                 {(['Movimentações', 'Saques', 'Despesas'] as string[]).includes(tab) && (
                   <section className={`${panel} space-y-4`}>
+                    <FinanceRules
+                      company={company}
+                      rules={
+                        data.data?.rules ?? { vendepay_income: false, withdrawal_recipient: '' }
+                      }
+                      refresh={refreshClassification}
+                    />
                     <p className="text-sm text-muted-foreground">
                       Movimentações bancárias não são vendas nem lucro. Transferências e conversões
                       não entram no faturamento. Valores na moeda original.
                       {tab === 'Despesas' &&
-                        ' Aqui aparecem saídas a conciliar; nem toda saída é despesa.'}
+                        ' Aqui aparecem somente custos fixos ou variáveis classificados.'}
                       {tab === 'Saques' &&
-                        ' Somente operações identificadas como saque pelo provedor.'}
+                        ' Operações classificadas como saque, por regra, manualmente ou pelo provedor.'}
                     </p>
                     <div className="overflow-x-auto">
                       <table className="w-full text-left text-sm">
@@ -398,6 +436,7 @@ function FinanceAccountView({ company }: { company: string }) {
                               'Tipo / estado',
                               'Enviado',
                               'Recebido',
+                              'Classificação',
                             ].map((h) => (
                               <th key={h} className="p-3">
                                 {h}
@@ -408,7 +447,7 @@ function FinanceAccountView({ company }: { company: string }) {
                         <tbody>
                           {data.data?.entries.map((r) => (
                             <tr
-                              key={`${r.provider}:${r.external_id}`}
+                              key={`${r.connection_id}:${r.external_id}`}
                               className="border-t border-border"
                             >
                               <td className="whitespace-nowrap p-3">{time(r.occurred_at)}</td>
@@ -424,6 +463,13 @@ function FinanceAccountView({ company }: { company: string }) {
                               <td className="p-3 tabular-nums">{money(r.sent, r.sent_currency)}</td>
                               <td className="p-3 tabular-nums">
                                 {money(r.received, r.received_currency)}
+                              </td>
+                              <td className="p-3">
+                                <FinanceEntryCategory
+                                  company={company}
+                                  entry={r}
+                                  refresh={refreshClassification}
+                                />
                               </td>
                             </tr>
                           ))}
