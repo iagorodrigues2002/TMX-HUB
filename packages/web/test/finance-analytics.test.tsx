@@ -6,6 +6,7 @@ import { FinanceAnalyticsView } from '../src/components/overview/finance-analyti
 import {
   type FinanceDay,
   availableFinanceBalance,
+  convertFinanceDays,
   financeGrowth,
   financeMonth,
   previousFinanceMonth,
@@ -47,6 +48,23 @@ const days: FinanceDay[] = [
     excluded: 0,
   },
 ];
+test('display currency converts every movement and preserves counts and growth', () => {
+  const source = [...days, { ...days[0]!, currency: 'USDC', incoming: '200', outgoing: '0' }];
+  const rates = [{ currency: 'USD', rate: '5', fetched_at: '2026-11-03' }];
+  const usd = convertFinanceDays(source, 'USD', rates);
+  const brl = convertFinanceDays(source, 'BRL', rates);
+  assert.equal(usd.estimatedUsdc, true);
+  assert.deepEqual(usd.missing, []);
+  const usdTotal = financeMonth(usd.days, '2026-11', 'USD');
+  const brlTotal = financeMonth(brl.days, '2026-11', 'BRL');
+  assert.equal(usdTotal.incoming, 450);
+  assert.equal(brlTotal.incoming, usdTotal.incoming * 5);
+  assert.equal(brlTotal.outgoing, usdTotal.outgoing * 5);
+  assert.equal(brlTotal.transactions, usdTotal.transactions);
+  assert.equal(financeGrowth(brlTotal.incoming, 4500), financeGrowth(usdTotal.incoming, 900));
+  assert.deepEqual(convertFinanceDays(source, 'USD', []).missing, ['BRL']);
+  assert.deepEqual(convertFinanceDays(source, 'USD', []).days, []);
+});
 test('monthly cash flow keeps currencies, exact period and categories separate', () => {
   assert.deepEqual(financeMonth(days, '2026-11', 'USD'), {
     incoming: 150,
@@ -144,4 +162,46 @@ test('defaults to the imported currency instead of showing an empty USD series',
   );
   assert.match(html, /620,00 USDC/);
   assert.doesNotMatch(html, /620,00 USD</);
+});
+test('growth defaults to income currency, not the first card expense currency', () => {
+  const html = renderToStaticMarkup(
+    <FinanceAnalyticsView
+      days={[
+        {
+          day: '2026-11-01',
+          currency: 'BRL',
+          incoming: '0',
+          outgoing: '50',
+          transactions: 1,
+          excluded: 0,
+        },
+        {
+          day: '2026-10-01',
+          currency: 'USDC',
+          incoming: '100',
+          outgoing: '0',
+          transactions: 1,
+          excluded: 0,
+        },
+        {
+          day: '2026-11-02',
+          currency: 'USDC',
+          incoming: '200',
+          outgoing: '0',
+          transactions: 1,
+          excluded: 0,
+        },
+      ]}
+      month="2026-11"
+      today="2026-11-03"
+      chosenCurrency=""
+      setCurrency={() => {}}
+      setMonth={() => {}}
+      growth
+      isPrivate={false}
+    />,
+  );
+  assert.match(html, /200,00 USDC/);
+  assert.match(html, /\+100%/);
+  assert.doesNotMatch(html, /jan\. de 2026/);
 });

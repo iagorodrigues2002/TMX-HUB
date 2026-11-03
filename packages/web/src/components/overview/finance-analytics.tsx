@@ -4,6 +4,8 @@ import { request } from '@/lib/api-client/request';
 import { useAuth } from '@/lib/auth-context';
 import {
   type FinanceDay,
+  type FinanceRate,
+  convertFinanceDays,
   financeGrowth,
   financeMonth,
   previousFinanceMonth,
@@ -43,7 +45,7 @@ export function FinanceAnalytics({
     day: '2-digit',
   }).format(new Date());
   const [month, setMonth] = useState(today.slice(0, 7));
-  const [chosenCurrency, setCurrency] = useState('');
+  const [chosenCurrency, setCurrency] = useState('USD');
   const data = useQuery({
     queryKey: ['finance-analytics', user?.id, company, provider, month],
     queryFn: () =>
@@ -53,9 +55,30 @@ export function FinanceAnalytics({
     refetchInterval: 60000,
     gcTime: 0,
   });
+  const exchange = useQuery({
+    queryKey: ['finance-exchange', user?.id, company],
+    queryFn: () =>
+      request<{ rates: FinanceRate[]; source: string }>(
+        `/v1/companies/${company}/finance/exchange`,
+      ),
+    staleTime: 300000,
+    gcTime: 0,
+  });
+  const converted = convertFinanceDays(
+    data.data?.days ?? [],
+    chosenCurrency,
+    exchange.data?.rates ?? [],
+  );
+  const dates = [
+    ...new Set(
+      (exchange.data?.rates ?? []).map((rate) =>
+        new Date(rate.fetched_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
+      ),
+    ),
+  ];
   return (
     <FinanceAnalyticsView
-      days={data.data?.days ?? []}
+      days={converted.days}
       month={month}
       today={today}
       chosenCurrency={chosenCurrency}
@@ -63,9 +86,17 @@ export function FinanceAnalytics({
       setMonth={setMonth}
       growth={growth}
       isPrivate={isPrivate}
-      loading={data.isPending}
-      failed={data.isError}
-      coverage={coverage}
+      loading={data.isPending || exchange.isPending}
+      failed={data.isError || exchange.isError || converted.missing.length > 0}
+      coverage={[
+        ...coverage,
+        `Todas as movimentações convertidas para ${chosenCurrency}. Cotação referencial consultada em ${dates.join(' / ') || 'data indisponível'}; não é cotação histórica nem inclui tarifas.`,
+        ...(converted.estimatedUsdc
+          ? [
+              'USDC estimado pela referência de 1 USDC = 1 USD; não representa uma cotação de liquidação.',
+            ]
+          : []),
+      ]}
     />
   );
 }
@@ -100,6 +131,8 @@ export function FinanceAnalyticsView({
   ];
   const currency =
     chosenCurrency ||
+    days.find((d) => d.day.startsWith(month) && Number(d.incoming) > 0)?.currency ||
+    [...days].reverse().find((d) => Number(d.incoming) > 0)?.currency ||
     days.find((d) => d.day.startsWith(month) && d.currency)?.currency ||
     days.find((d) => d.currency)?.currency ||
     'USD';
@@ -120,11 +153,15 @@ export function FinanceAnalyticsView({
   const excluded = days
     .filter((d) => d.day.startsWith(month))
     .reduce((sum, d) => sum + d.excluded, 0);
+  const firstRecordedMonth = days
+    .filter((d) => d.currency === currency && d.transactions > 0)
+    .map((d) => d.day.slice(0, 7))
+    .sort()[0];
   const months = Array.from({ length: 12 }, (_, i) =>
     new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5)) - 12 + i, 1))
       .toISOString()
       .slice(0, 7),
-  );
+  ).filter((m) => m >= (firstRecordedMonth ?? month));
   const daily = Array.from({ length: cutoff }, (_, i) => {
     const day = `${month}-${String(i + 1).padStart(2, '0')}`;
     const rows = days.filter((d) => d.day === day && d.currency === currency);
@@ -261,6 +298,10 @@ export function FinanceAnalyticsView({
                 {line}
               </p>
             ))}
+            <p className="mt-2">
+              A moeda selecionada converte os valores, sem filtrar movimentações. Saldo atual da
+              Wise não é uma entrada do período e não mede crescimento histórico.
+            </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {metrics.map((metric) => (

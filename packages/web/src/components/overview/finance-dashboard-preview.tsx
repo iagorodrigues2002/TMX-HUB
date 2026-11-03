@@ -328,7 +328,7 @@ function FinanceAccountView({ company }: { company: string }) {
               <p className={panel}>Carregando dados salvos…</p>
             ) : (
               <>
-                {tab === 'Resumo' && (
+                {(tab === 'Resumo' || tab === 'Crescimento') && (
                   <FinanceAvailableBalance
                     company={company}
                     accounts={data.data?.connections ?? []}

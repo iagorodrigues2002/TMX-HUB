@@ -41,6 +41,41 @@ export type AvailableAccount = {
 };
 export type FinanceRate = { currency: string; rate: string; fetched_at: string };
 
+export function convertFinanceDays(days: FinanceDay[], target: string, rates: FinanceRate[]) {
+  const rateMap = new Map(rates.map((r) => [r.currency, Number(r.rate)]));
+  rateMap.set('BRL', 1);
+  // Display estimate only: USDC uses its USD reference, not an executable exchange quote.
+  const reference = (currency: string) => (currency === 'USDC' ? 'USD' : currency);
+  const missing = new Set<string>();
+  const converted = days.map((day) => {
+    if (!day.currency) return day;
+    const source = reference(day.currency);
+    const destination = reference(target);
+    const from = rateMap.get(source);
+    const to = rateMap.get(destination);
+    const factor = source === destination ? 1 : from && to ? from / to : Number.NaN;
+    if (!Number.isFinite(factor) || factor <= 0) {
+      missing.add(day.currency);
+      return day;
+    }
+    const amount = (value: string | undefined) => String(Number(value ?? 0) * factor);
+    return {
+      ...day,
+      currency: target,
+      incoming: amount(day.incoming),
+      outgoing: amount(day.outgoing),
+      fixed: amount(day.fixed),
+      variable: amount(day.variable),
+      withdrawals: amount(day.withdrawals),
+    };
+  });
+  return {
+    days: missing.size ? [] : converted,
+    missing: [...missing],
+    estimatedUsdc: days.some((day) => day.currency === 'USDC'),
+  };
+}
+
 export function availableFinanceBalance(accounts: AvailableAccount[], rates: FinanceRate[]) {
   const rateMap = new Map(rates.map((r) => [r.currency, Number(r.rate)]));
   rateMap.set('BRL', 1);

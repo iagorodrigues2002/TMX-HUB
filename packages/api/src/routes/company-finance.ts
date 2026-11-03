@@ -84,6 +84,11 @@ export function registerCompanyFinance(
     for (const c of connections)
       for (const b of c.balances ?? [])
         if (/^[A-Z]{3}$/.test(b.currency)) currencies.add(b.currency);
+    const entryCurrencies = await app.db!`SELECT DISTINCT currency FROM (
+      SELECT sent_currency AS currency FROM company_finance_entries WHERE company_id=${id}
+      UNION SELECT received_currency AS currency FROM company_finance_entries WHERE company_id=${id}
+    ) entry_currencies WHERE currency ~ '^[A-Z]{3}$'`;
+    for (const row of entryCurrencies) currencies.add(row.currency);
     await Promise.all(
       [...currencies].slice(0, 30).map((currency) => getBrlRate(currency, app.db!)),
     );
