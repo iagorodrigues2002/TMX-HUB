@@ -64,6 +64,14 @@ export function registerCompanyFinance(
       try {
         return { profiles: await financeProfiles(input.provider, input.apiKey) };
       } catch (error) {
+        req.log.warn(
+          {
+            provider: input.provider,
+            phase: 'profiles',
+            code: error instanceof FinanceProviderError ? error.code : 'invalid_provider_response',
+          },
+          'finance_validation_failed',
+        );
         throw new HttpProblem({
           status: 422,
           title: 'Conexão indisponível',
@@ -92,6 +100,14 @@ export function registerCompanyFinance(
           throw new FinanceProviderError('profile_not_authorized');
         balances = await financeBalances(input.provider, input.apiKey, input.profileId);
       } catch (error) {
+        req.log.warn(
+          {
+            provider: input.provider,
+            phase: 'connection',
+            code: error instanceof FinanceProviderError ? error.code : 'invalid_provider_response',
+          },
+          'finance_validation_failed',
+        );
         throw new HttpProblem({
           status: 422,
           title: 'Conexão indisponível',
