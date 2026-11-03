@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { companyApi } from '@/lib/api-client/endpoints-companies';
 import { request } from '@/lib/api-client/request';
 import { useAuth } from '@/lib/auth-context';
+import { financeValidationError } from '@/lib/finance-validation-error';
 import { usePrivacy } from '@/lib/privacy-context';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, KeyRound, Landmark, RefreshCw, Unplug } from 'lucide-react';
@@ -112,10 +113,8 @@ function ConnectionForm({ company, refresh }: { company: string; refresh: () => 
         refresh();
         setMessage('Conexão salva. Importação de até 90 dias agendada.');
       }
-    } catch {
-      setMessage(
-        'Não foi possível validar ou salvar. Confira chave, permissões e perfil. Na LootRush, habilite leitura de histórico e MCP. A mesma conta não pode pertencer a duas empresas.',
-      );
+    } catch (error) {
+      setMessage(financeValidationError(error));
     } finally {
       setBusy(false);
     }
