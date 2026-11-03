@@ -54,20 +54,88 @@ export function financeWindow(cursor: string | null, now = new Date()) {
 }
 export function lootEntry(value: unknown): FinanceEntry {
   const row = record.parse(value);
+  const description = z
+    .string()
+    .max(2000)
+    .parse(row.description ?? '');
+  // The settled ledger exposes atomic in/out amounts without token decimals. Its
+  // statement description is denominated; never guess a divisor for atomic amounts.
+  const statement = /^(Sent|Received|Withdrew|Purchased) (\d+(?:\.\d+)?) ([A-Z0-9]{2,15})\b/.exec(
+    description,
+  );
+  const outgoing = statement && ['Sent', 'Withdrew'].includes(statement[1]!);
+  const incoming = statement && ['Received', 'Purchased'].includes(statement[1]!);
+  const topup = statement?.[1] === 'Sent' && /\(Credit Card\)\s*$/i.test(description);
   return {
     externalId: identifier.parse(row.uniqueHashId),
     operationId: identifier.parse(row.id ?? row.uniqueHashId),
     at: date.parse(row.executedAt ?? row.transactionDate),
-    kind: z.string().parse(row.transactionType ?? 'unknown'),
-    status: z.string().parse(row.status ?? 'unknown'),
-    description: z
-      .string()
-      .max(2000)
-      .parse(row.description ?? ''),
-    sent: row.amountSent == null ? null : decimal.parse(row.amountSent),
-    sentCurrency: row.amountSent == null ? null : currency.parse(row.assetSent),
-    received: row.amountReceived == null ? null : decimal.parse(row.amountReceived),
-    receivedCurrency: row.amountReceived == null ? null : currency.parse(row.assetReceived),
+    kind: topup
+      ? 'card_topup'
+      : statement?.[1] === 'Withdrew'
+        ? 'withdraw'
+        : z.string().parse(row.transactionType ?? row.relatedType ?? 'unknown'),
+    // This function receives only feature=account (settled ledger), never account-unsettled.
+    status: z.string().parse(row.status ?? (statement ? 'settled' : 'unknown')),
+    description,
+    sent:
+      row.amountSent == null
+        ? outgoing
+          ? decimal.parse(statement[2])
+          : null
+        : decimal.parse(row.amountSent),
+    sentCurrency:
+      row.amountSent == null
+        ? outgoing
+          ? currency.parse(statement[3])
+          : null
+        : currency.parse(row.assetSent),
+    received:
+      row.amountReceived == null
+        ? incoming
+          ? decimal.parse(statement[2])
+          : null
+        : decimal.parse(row.amountReceived),
+    receivedCurrency:
+      row.amountReceived == null
+        ? incoming
+          ? currency.parse(statement[3])
+          : null
+        : currency.parse(row.assetReceived),
+  };
+}
+
+export function lootCardEntry(value: unknown): FinanceEntry {
+  const { transaction: t } = z
+    .object({
+      transaction: z.object({
+        id: identifier,
+        amount: decimal,
+        polarity: z.enum(['debit', 'credit']),
+        status: z.string(),
+        createdAt: date,
+        postedAt: date.nullish(),
+        merchantName: z.string().max(1000).nullish(),
+        memo: z.string().max(1000).nullish(),
+        localAmount: decimal,
+        localCurrency: z
+          .string()
+          .transform((s) => s.toUpperCase())
+          .pipe(currency),
+      }),
+    })
+    .parse(value);
+  return {
+    externalId: `card:${t.id}`,
+    operationId: t.id,
+    at: t.postedAt ?? t.createdAt,
+    kind: t.polarity === 'debit' ? 'card_charge' : 'card_refund',
+    status: t.status,
+    description: [t.merchantName, t.memo].filter(Boolean).join(' · '),
+    sent: t.polarity === 'debit' ? t.localAmount : null,
+    sentCurrency: t.polarity === 'debit' ? t.localCurrency : null,
+    received: t.polarity === 'credit' ? t.localAmount : null,
+    receivedCurrency: t.polarity === 'credit' ? t.localCurrency : null,
   };
 }
 export function wiseEntry(value: unknown, balance: string): FinanceEntry {
@@ -337,7 +405,40 @@ export async function financeHistory(
       throw new FinanceProviderError('pagination_repeated');
     seenPages.add(signature);
     rows.push(...entries);
-    if (!result.pageInfo.hasNextPage) return rows;
+    if (!result.pageInfo.hasNextPage) return [...rows, ...(await lootCardHistory(key, start, end))];
+  }
+  throw new FinanceProviderError('history_incomplete');
+}
+
+async function lootCardHistory(key: string, start: string, end: string): Promise<FinanceEntry[]> {
+  const rows: FinanceEntry[] = [];
+  const seen = new Set<string>();
+  // The card endpoint is one-based, unlike the account ledger.
+  for (let page = 1; page <= 100; page++) {
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    const params = new URLSearchParams({
+      resource: 'cards',
+      feature: 'cards-transactions',
+      currentPage: String(page),
+      pageSize: '200',
+      startDate: start,
+      endDate: end,
+    });
+    const result = z
+      .object({
+        userCardTransactions: z.array(z.unknown()),
+        pagination: z.object({ currentPage: z.number().int(), hasNextPage: z.boolean() }),
+      })
+      .parse(await providerJson(`https://history-api.lootrush.com/api/history?${params}`, key));
+    if (result.pagination.currentPage !== page)
+      throw new FinanceProviderError('history_incomplete');
+    const entries = result.userCardTransactions.map(lootCardEntry);
+    const signature = JSON.stringify(entries.map((e) => e.externalId));
+    if (seen.has(signature) || (result.pagination.hasNextPage && !entries.length))
+      throw new FinanceProviderError('pagination_repeated');
+    seen.add(signature);
+    rows.push(...entries);
+    if (!result.pagination.hasNextPage) return rows;
   }
   throw new FinanceProviderError('history_incomplete');
 }

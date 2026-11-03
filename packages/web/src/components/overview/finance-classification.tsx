@@ -10,6 +10,7 @@ export const financeCategories = {
   variable: 'Custo variável',
   withdrawal: 'Saque',
   transfer: 'Transferência interna',
+  card_topup: 'Recarga de cartão · fora das despesas',
   unclassified: 'Não classificada',
 };
 type Rules = { vendepay_income: boolean; withdrawal_recipient: string };
@@ -101,6 +102,10 @@ export function FinanceEntryCategory({
   }
   const outgoing = Number(entry.sent) > 0 && !Number(entry.received);
   const incoming = Number(entry.received) > 0 && !Number(entry.sent);
+  if (entry.category === 'card_topup')
+    return (
+      <span className="text-sm text-muted-foreground">Recarga de cartão · fora das despesas</span>
+    );
   return (
     <div className="min-w-44">
       <select
@@ -118,7 +123,6 @@ export function FinanceEntryCategory({
         {Object.entries(financeCategories)
           .filter(
             ([key]) =>
-              key === 'transfer' ||
               (incoming && key === 'income') ||
               (outgoing && ['fixed', 'variable', 'withdrawal'].includes(key)),
           )

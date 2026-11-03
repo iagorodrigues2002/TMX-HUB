@@ -2,6 +2,23 @@ import type { ManagedTask } from './task-management.js';
 export type CenterNotification =
   | {
       id: string;
+      kind: 'finance';
+      unread: true;
+      createdAt: string;
+      title: string;
+      finance: {
+        companyId: string;
+        companyName: string;
+        provider: string;
+        direction: 'incoming' | 'outgoing';
+        amount: string;
+        currency: string;
+        category: string;
+        occurredAt: string;
+      };
+    }
+  | {
+      id: string;
       kind: 'task';
       unread: boolean;
       createdAt: string;

@@ -57,9 +57,20 @@ export async function runFinanceSync(sql: Sql) {
       for (const entry of entries) {
         await tx`INSERT INTO company_finance_entries(company_id,connection_id,external_id,operation_id,occurred_at,kind,status,description,sent,sent_currency,received,received_currency)
           VALUES(${connection.company_id},${connection.id},${entry.externalId},${entry.operationId},${entry.at},${entry.kind},${entry.status},${entry.description},${entry.sent},${entry.sentCurrency},${entry.received},${entry.receivedCurrency})
-          ON CONFLICT(connection_id,external_id) DO UPDATE SET status=EXCLUDED.status,description=EXCLUDED.description,occurred_at=EXCLUDED.occurred_at,sent=EXCLUDED.sent,sent_currency=EXCLUDED.sent_currency,received=EXCLUDED.received,received_currency=EXCLUDED.received_currency,updated_at=now()`;
+          ON CONFLICT(connection_id,external_id) DO UPDATE SET kind=EXCLUDED.kind,status=EXCLUDED.status,description=EXCLUDED.description,occurred_at=EXCLUDED.occurred_at,sent=EXCLUDED.sent,sent_currency=EXCLUDED.sent_currency,received=EXCLUDED.received,received_currency=EXCLUDED.received_currency,updated_at=now()`;
+        if (connection.notification_ready_at) {
+          await tx`INSERT INTO company_finance_notifications(id,company_id,connection_id,external_id)
+            SELECT ${randomUUID()},company_id,connection_id,external_id FROM company_finance_classified
+            WHERE connection_id=${connection.id} AND external_id=${entry.externalId}
+              AND occurred_at>=${connection.notification_ready_at} AND occurred_at<=${now}
+              AND lower(status) IN ('completed','complete','success','succeeded','settled','paid','confirmed')
+              AND category NOT IN ('transfer','card_topup')
+              AND ((sent>0 AND coalesce(received,0)=0 AND sent_currency IS NOT NULL)
+                OR (received>0 AND coalesce(sent,0)=0 AND received_currency IS NOT NULL))
+            ON CONFLICT(connection_id,external_id) DO NOTHING`;
+        }
       }
-      await tx`UPDATE company_finance_connections SET balances=${tx.json(balances)},history_supported=${historySupported},history_cursor=${historySupported ? end : connection.history_cursor},last_sync_at=now(),status=${historySupported ? 'ready' : 'balance_only'},error_code=NULL,lease_id=NULL,lease_until=NULL,
+      await tx`UPDATE company_finance_connections SET notification_ready_at=CASE WHEN ${historySupported && end.getTime() >= now.getTime()} THEN coalesce(notification_ready_at,${now}) ELSE notification_ready_at END,balances=${tx.json(balances)},history_supported=${historySupported},history_cursor=${historySupported ? end : connection.history_cursor},last_sync_at=now(),status=${historySupported ? 'ready' : 'balance_only'},error_code=NULL,lease_id=NULL,lease_until=NULL,
         next_sync_at=now()+${historySupported && end.getTime() < now.getTime() ? '15 seconds' : '15 minutes'}::interval WHERE id=${connection.id}`;
     });
   } catch (error) {

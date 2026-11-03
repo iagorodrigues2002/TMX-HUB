@@ -422,7 +422,7 @@ function FinanceAccountView({ company }: { company: string }) {
                       Movimentações bancárias não são vendas nem lucro. Transferências e conversões
                       não entram no faturamento. Valores na moeda original.
                       {tab === 'Despesas' &&
-                        ' Aqui aparecem somente custos fixos ou variáveis classificados.'}
+                        ' Saídas liquidadas, incluindo as ainda não classificadas. Recargas de cartão e saques ficam fora das despesas.'}
                       {tab === 'Saques' &&
                         ' Operações classificadas como saque, por regra, manualmente ou pelo provedor.'}
                     </p>

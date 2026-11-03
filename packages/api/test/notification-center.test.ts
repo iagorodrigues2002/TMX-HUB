@@ -4,14 +4,23 @@ import type { ManagedTask } from '@page-cloner/shared';
 import Fastify from 'fastify';
 import postgres from 'postgres';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { HttpProblem } from '../src/lib/problem.js';
 import { notificationCenterRoutes } from '../src/routes/notification-center.js';
 vi.hoisted(() => {
   process.env.TASK_MANAGEMENT_MODE = 'clickup';
   process.env.JWT_SECRET ??= 'synthetic-center-tests-only-at-least-32-characters';
   process.env.TASK_AUTOMATION_SECRET = 'synthetic-center-tests-only-automation-secret';
 });
-async function appFor(db: unknown, sub?: string, role: 'admin' | 'user' = 'user') {
+async function appFor(
+  db: unknown,
+  sub?: string,
+  role: 'admin' | 'user' = 'user',
+  tools?: string[],
+) {
   const app = Fastify();
+  app.setErrorHandler((error, _req, reply) =>
+    reply.code(error instanceof HttpProblem ? error.status : 500).send({ error: error.message }),
+  );
   app.decorate('db', db);
   app.decorate('redis', { get: async () => null });
   app.decorate('offerStore', {
@@ -22,7 +31,14 @@ async function appFor(db: unknown, sub?: string, role: 'admin' | 'user' = 'user'
   app.decorate('userStore', { maybeGetById: async () => ({ name: 'QA Operator' }) });
   if (sub)
     app.addHook('preHandler', async (req) => {
-      req.user = { sub, role, email: 'qa@example.test', iat: 0, exp: 0 };
+      req.user = {
+        sub,
+        role,
+        email: 'qa@example.test',
+        iat: 0,
+        exp: 0,
+        ...(tools ? { tools } : {}),
+      };
     });
   await app.register(notificationCenterRoutes);
   return app;
@@ -61,6 +77,10 @@ describe.skipIf(!testUrl)('real central isolated Postgres', () => {
       '107_notification_center.sql',
       '109_company_memberships.sql',
       '111_sale_notice_preferences.sql',
+      '113_company_finance.sql',
+      '115_finance_classification.sql',
+      '116_finance_card_ledger.sql',
+      '117_finance_notifications.sql',
     ])
       await db.unsafe(readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8'));
     await db`CREATE TABLE IF NOT EXISTS tracking_projects(id text PRIMARY KEY,offer_id text NOT NULL)`;
@@ -70,11 +90,73 @@ describe.skipIf(!testUrl)('real central isolated Postgres', () => {
     await db`CREATE TABLE IF NOT EXISTS browser_sale_events(order_id text PRIMARY KEY,created_at timestamptz NOT NULL DEFAULT now())`;
   });
   beforeEach(async () => {
+    await db`TRUNCATE company_finance_notifications`;
     await db`TRUNCATE browser_sale_events`;
     await db`TRUNCATE notification_center_reads,managed_call_notifications,managed_call_reminders,managed_call_commands,managed_calls,managed_task_commands,managed_task_events,managed_tasks,managed_task_people,tracking_upsell_operator_credits,tracking_orders,tracking_projects CASCADE`;
   });
   afterAll(async () => {
     await db?.end();
+  });
+  it('isolates financial notices, removes individual reads and immediately respects suspension', async () => {
+    const company = randomUUID();
+    const connection = randomUUID();
+    const event = randomUUID();
+    await db`INSERT INTO companies(id,name,created_by) VALUES(${company},'QA Private Finance','finance-owner')`;
+    await db`INSERT INTO company_memberships(company_id,user_id,role) VALUES(${company},'finance-owner','owner'),(${company},'finance-admin','admin'),(${company},'finance-member','member')`;
+    await db`INSERT INTO company_finance_connections(id,company_id,provider,profile_id,label,history_start) VALUES(${connection},${company},'wise',${connection},'QA',now())`;
+    await db`INSERT INTO company_finance_entries(company_id,connection_id,external_id,operation_id,occurred_at,kind,status,description,received,received_currency) VALUES(${company},${connection},'entry','entry',now(),'CREDIT','settled','PRIVATE',25,'USD')`;
+    await db`INSERT INTO company_finance_notifications(id,company_id,connection_id,external_id) VALUES(${event},${company},${connection},'entry')`;
+    const owner = await appFor(db, 'finance-owner');
+    const admin = await appFor(db, 'finance-admin');
+    const restricted = await appFor(db, 'finance-owner', 'user', ['nav:scoped', 'ofertas']);
+    const restrictedResponse = await restricted.inject('/notifications');
+    expect(restrictedResponse.statusCode).toBe(200);
+    expect(restrictedResponse.body).not.toContain('QA Private Finance');
+    await restricted.close();
+    for (const [id, role] of [
+      ['finance-member', 'user'],
+      ['outsider', 'user'],
+      ['outsider', 'admin'],
+    ] as const) {
+      const app = await appFor(db, id, role);
+      const response = await app.inject('/notifications');
+      expect(response.statusCode).toBe(200);
+      expect(
+        response.json().notifications.filter((n: { kind: string }) => n.kind === 'finance'),
+      ).toHaveLength(0);
+      expect(response.body).not.toContain('QA Private Finance');
+      await app.close();
+    }
+    expect(
+      (await owner.inject('/notifications'))
+        .json()
+        .notifications.find((n: { kind: string }) => n.kind === 'finance').finance.amount,
+    ).toBe('25');
+    expect(
+      (
+        await owner.inject({
+          method: 'POST',
+          url: '/notifications/read',
+          payload: { ids: [`finance:${event}`] },
+        })
+      ).statusCode,
+    ).toBe(200);
+    expect(
+      (await owner.inject('/notifications'))
+        .json()
+        .notifications.filter((n: { kind: string }) => n.kind === 'finance'),
+    ).toHaveLength(0);
+    expect(
+      (await admin.inject('/notifications'))
+        .json()
+        .notifications.filter((n: { kind: string }) => n.kind === 'finance'),
+    ).toHaveLength(1);
+    await db`UPDATE company_memberships SET status='suspended' WHERE company_id=${company} AND user_id='finance-admin'`;
+    const revoked = await admin.inject('/notifications');
+    expect(revoked.statusCode).toBe(401);
+    expect(revoked.body).not.toContain('QA Private Finance');
+    await owner.close();
+    await admin.close();
   });
   it('isolates tasks and sales per user, hides read sales and keeps read tasks until completion', async () => {
     const person = {

@@ -43,7 +43,7 @@ export function FinanceAnalytics({
     day: '2-digit',
   }).format(new Date());
   const [month, setMonth] = useState(today.slice(0, 7));
-  const [chosenCurrency, setCurrency] = useState('USD');
+  const [chosenCurrency, setCurrency] = useState('');
   const data = useQuery({
     queryKey: ['finance-analytics', user?.id, company, provider, month],
     queryFn: () =>
@@ -98,7 +98,11 @@ export function FinanceAnalyticsView({
   const currencies = [
     ...new Set(['USD', 'BRL', ...days.flatMap((d) => (d.currency ? [d.currency] : []))]),
   ];
-  const currency = chosenCurrency;
+  const currency =
+    chosenCurrency ||
+    days.find((d) => d.day.startsWith(month) && d.currency)?.currency ||
+    days.find((d) => d.currency)?.currency ||
+    'USD';
   const money = (n: number) =>
     isPrivate
       ? '••••'
@@ -375,9 +379,7 @@ export function FinanceAnalyticsView({
                         tabIndex={0}
                         aria-label={`Dia ${d.label}: ${money(d.net)}`}
                       >
-                        <title>
-                          Dia {d.label}: {money(d.net)}
-                        </title>
+                        <title>{`Dia ${d.label}: ${money(d.net)}`}</title>
                       </circle>
                     );
                   })}

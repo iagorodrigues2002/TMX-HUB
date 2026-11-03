@@ -129,3 +129,19 @@ test('error state does not substitute missing history with zero metrics', () => 
   assert.match(html, /Consulta financeira indisponível/);
   assert.doesNotMatch(html, /0,00|Entradas projetadas/);
 });
+test('defaults to the imported currency instead of showing an empty USD series', () => {
+  const html = renderToStaticMarkup(
+    <FinanceAnalyticsView
+      days={days.map((day) => ({ ...day, currency: 'USDC' }))}
+      month="2026-11"
+      today="2026-11-03"
+      chosenCurrency=""
+      setCurrency={() => {}}
+      setMonth={() => {}}
+      growth={false}
+      isPrivate={false}
+    />,
+  );
+  assert.match(html, /620,00 USDC/);
+  assert.doesNotMatch(html, /620,00 USD</);
+});

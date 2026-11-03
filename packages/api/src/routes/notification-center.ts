@@ -9,6 +9,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { env } from '../env.js';
 import { participantHasCompanyAccess } from '../lib/company-operation-access.js';
+import { canReadNavigation } from '../lib/navigation-access.js';
 import { HttpProblem, zodToProblem } from '../lib/problem.js';
 import { changeNativeTaskStatus } from '../services/native-tasks.js';
 import { saleNoticeOffers } from '../services/sale-notice-preferences.js';
@@ -42,11 +43,22 @@ export async function notificationCenterRoutes(app: FastifyInstance) {
     const offers = await offersFor(user);
     const offerIds = offers.map((o) => o.id);
     const names = new Map(offers.map((o) => [o.id, o.name]));
-    const [tasks, calls, sales] = await Promise.all([
+    const [tasks, calls, sales, finance] = await Promise.all([
       db`SELECT t.body,r.event_id AS read_id FROM managed_tasks t LEFT JOIN notification_center_reads r ON r.user_id=${user.sub} AND r.event_id='task:'||t.id||':'||(t.body->>'updatedAt') WHERE coalesce(t.body->>'managementMode','clickup')=${env.TASK_MANAGEMENT_MODE} AND t.body->>'status'<>'done' AND (${global} OR (t.body->>'companyId'=ANY(${activeCompanies}::text[])) OR (t.body->>'companyId' IS NULL AND ${legacyAllowed})) AND EXISTS(SELECT 1 FROM managed_task_people p WHERE p.body->>'userId'=${user.sub} AND t.body->'assignees' @> jsonb_build_array(jsonb_build_object('id',p.id))) ORDER BY t.updated_at DESC LIMIT 100`,
       db`SELECT c.id,c.body,r.event_id AS read_id FROM managed_calls c LEFT JOIN notification_center_reads r ON r.user_id=${user.sub} AND r.event_id='call:scheduled:'||c.id||':'||(c.body->>'revision') WHERE coalesce(c.body->>'managementMode','clickup')=ANY(${callModes}::text[]) AND c.body->>'status'='scheduled' AND (${global} OR (c.body->>'companyId'=ANY(${activeCompanies}::text[])) OR (c.body->>'companyId' IS NULL AND ${legacyAllowed})) AND EXISTS(SELECT 1 FROM managed_task_people p WHERE p.body->>'userId'=${user.sub} AND c.body->'participants' @> jsonb_build_array(jsonb_build_object('id',p.id))) ORDER BY (c.body->>'startsAt')::timestamptz ASC`,
       offerIds.length
         ? db`SELECT o.id,o.provider,o.amount_minor,o.currency,o.order_kind,e.created_at AS occurred_at,p.offer_id,c.operator_id FROM tracking_orders o JOIN tracking_projects p ON p.id=o.project_id JOIN browser_sale_events e ON e.order_id=o.id LEFT JOIN tracking_upsell_operator_credits c ON c.order_id=o.id AND c.project_id=o.project_id WHERE p.offer_id=ANY(${offerIds}) AND o.status='paid' AND e.created_at<=now() AND NOT EXISTS(SELECT 1 FROM notification_center_reads r WHERE r.user_id=${user.sub} AND r.event_id='sale:'||o.id) ORDER BY e.created_at DESC,o.id DESC LIMIT 200`
+        : [],
+      canReadNavigation(user, 'company-finance')
+        ? db`SELECT n.id,n.created_at,e.occurred_at,e.company_id,c.name AS company_name,p.provider,e.category,e.sent::text,e.sent_currency,e.received::text,e.received_currency
+          FROM company_finance_notifications n
+          JOIN company_memberships m ON m.company_id=n.company_id AND m.user_id=${user.sub} AND m.status='active' AND m.role IN ('owner','admin')
+          JOIN companies c ON c.id=n.company_id
+          JOIN company_finance_connections p ON p.id=n.connection_id AND p.company_id=n.company_id
+          JOIN company_finance_classified e ON e.connection_id=n.connection_id AND e.external_id=n.external_id AND e.company_id=n.company_id
+          WHERE e.category NOT IN ('transfer','card_topup') AND lower(e.status) IN ('completed','complete','success','succeeded','settled','paid','confirmed')
+          AND NOT EXISTS(SELECT 1 FROM notification_center_reads r WHERE r.user_id=${user.sub} AND r.event_id='finance:'||n.id::text)
+          ORDER BY n.created_at DESC,n.id DESC LIMIT 200`
         : [],
     ]);
     const operatorIds = [...new Set(sales.map((s) => s.operator_id).filter(Boolean))];
@@ -58,6 +70,24 @@ export async function notificationCenterRoutes(app: FastifyInstance) {
       ),
     );
     const notifications: CenterNotification[] = [
+      ...finance.map((f) => ({
+        id: `finance:${f.id}`,
+        kind: 'finance' as const,
+        unread: true as const,
+        title:
+          Number(f.received) > 0 ? 'Entrada financeira registrada' : 'Saída financeira registrada',
+        createdAt: new Date(f.created_at).toISOString(),
+        finance: {
+          companyId: f.company_id,
+          companyName: f.company_name,
+          provider: f.provider,
+          direction: Number(f.received) > 0 ? ('incoming' as const) : ('outgoing' as const),
+          amount: Number(f.received) > 0 ? f.received : f.sent,
+          currency: Number(f.received) > 0 ? f.received_currency : f.sent_currency,
+          category: f.category,
+          occurredAt: new Date(f.occurred_at).toISOString(),
+        },
+      })),
       ...tasks.map((r) => {
         const task = r.body as ManagedTask;
         const id = taskEventId(task);
@@ -123,7 +153,7 @@ export async function notificationCenterRoutes(app: FastifyInstance) {
               .string()
               .min(1)
               .max(300)
-              .regex(/^(task|sale|call):/),
+              .regex(/^(task|sale|call|finance):/),
           )
           .max(500),
       })

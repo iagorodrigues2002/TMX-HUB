@@ -9,6 +9,20 @@ const common = {
   title: z.string(),
 };
 export const CenterNotificationSchema = z.discriminatedUnion('kind', [
+  z.object({
+    ...common,
+    kind: z.literal('finance'),
+    finance: z.object({
+      companyId: z.string().uuid(),
+      companyName: z.string(),
+      provider: z.string(),
+      direction: z.enum(['incoming', 'outgoing']),
+      amount: z.string().regex(/^\d+(\.\d+)?$/),
+      currency: z.string(),
+      category: z.string(),
+      occurredAt: z.string().datetime({ offset: true }),
+    }),
+  }),
   z.object({ ...common, kind: z.literal('task'), task: ManagedTaskSchema }),
   z.object({
     ...common,
@@ -50,7 +64,11 @@ export const notificationApi = {
       .parse(await request('/v1/notifications'));
   },
   async read(ids: string[]) {
-    return request('/v1/notifications/read', { method: 'POST', body: { ids } });
+    for (let offset = 0; offset < ids.length; offset += 500)
+      await request('/v1/notifications/read', {
+        method: 'POST',
+        body: { ids: ids.slice(offset, offset + 500) },
+      });
   },
   async clearSales() {
     return request('/v1/notifications/clear-sales', { method: 'POST', body: { all: true } });

@@ -4,12 +4,112 @@ import {
   financeHistory,
   financeProfiles,
   financeWindow,
+  lootCardEntry,
   lootEntry,
   wiseEntry,
 } from '../src/services/finance-providers.js';
 
 describe('banking imports', () => {
   afterEach(() => vi.unstubAllGlobals());
+  it('reads the real settled ledger without treating atomic token amounts as dollars', () => {
+    const base = {
+      uniqueHashId: 'ledger:1',
+      executedAt: '2026-11-01T22:31:55Z',
+      relatedType: 'transfer-token',
+      inamount: '100000000',
+      outamount: '100000000',
+    };
+    expect(
+      lootEntry({
+        ...base,
+        description: 'Sent 100 USDC to wallet (Credit Card)',
+        direction: 'send',
+      }),
+    ).toMatchObject({
+      sent: '100',
+      sentCurrency: 'USDC',
+      received: null,
+      kind: 'card_topup',
+      status: 'settled',
+    });
+    expect(
+      lootEntry({
+        ...base,
+        description: 'Received 285.94 USDC from VENDEPAY TECHNOLOGIES INC',
+        direction: 'receive',
+      }),
+    ).toMatchObject({
+      received: '285.94',
+      receivedCurrency: 'USDC',
+      sent: null,
+      status: 'settled',
+    });
+    expect(
+      lootEntry({ ...base, description: 'Withdrew 400 USDC via PIX to recipient' }),
+    ).toMatchObject({ sent: '400', kind: 'withdraw' });
+    expect(lootEntry({ ...base, description: 'Unknown new format' })).toMatchObject({
+      sent: null,
+      received: null,
+      status: 'unknown',
+    });
+  });
+  it('keeps card identity, charged currency, settlement date and unconfirmed status', () => {
+    const transaction = {
+      id: 'card-tx',
+      amount: '38.6000',
+      localAmount: '205.4800',
+      localCurrency: 'brl',
+      polarity: 'debit',
+      status: 'settled',
+      createdAt: '2026-11-01T22:32:56Z',
+      postedAt: '2026-11-03T01:46:09Z',
+      merchantName: 'Synthetic merchant',
+    };
+    expect(lootCardEntry({ transaction })).toMatchObject({
+      externalId: 'card:card-tx',
+      kind: 'card_charge',
+      status: 'settled',
+      sent: '205.4800',
+      sentCurrency: 'BRL',
+      at: '2026-11-03T01:46:09.000Z',
+    });
+    expect(
+      lootCardEntry({ transaction: { ...transaction, status: 'declined', postedAt: null } }).status,
+    ).toBe('declined');
+    expect(lootCardEntry({ transaction: { ...transaction, polarity: 'credit' } })).toMatchObject({
+      kind: 'card_refund',
+      received: '205.4800',
+      sent: null,
+    });
+  });
+  it('uses zero-based account and one-based card pagination without duplicating topups', async () => {
+    const calls: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: URL | string) => {
+        const p = new URL(String(url)).searchParams;
+        calls.push(`${p.get('feature')}:${p.get('currentPage')}`);
+        return new Response(
+          JSON.stringify(
+            p.get('resource') === 'account'
+              ? { nodes: [], pageInfo: { currentPage: 0, hasNextPage: false } }
+              : { userCardTransactions: [], pagination: { currentPage: 1, hasNextPage: false } },
+          ),
+        );
+      }),
+    );
+    expect(
+      await financeHistory(
+        'lootrush',
+        'synthetic',
+        'id',
+        '2026-10-01T00:00:00Z',
+        '2026-11-01T00:00:00Z',
+        [],
+      ),
+    ).toEqual([]);
+    expect(calls).toEqual(['account:0', 'cards-transactions:1']);
+  });
   it.each(['application/json', 'text/event-stream'])(
     'negotiates MCP transport and reads %s',
     async (contentType) => {

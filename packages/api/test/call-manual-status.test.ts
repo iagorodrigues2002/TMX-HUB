@@ -68,6 +68,10 @@ describe.skipIf(!process.env.TASK_TEST_DATABASE_URL)(
         '108_native_task_management.sql',
         '109_company_memberships.sql',
         '111_sale_notice_preferences.sql',
+        '113_company_finance.sql',
+        '115_finance_classification.sql',
+        '116_finance_card_ledger.sql',
+        '117_finance_notifications.sql',
       ])
         await db.unsafe(readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8'));
     });

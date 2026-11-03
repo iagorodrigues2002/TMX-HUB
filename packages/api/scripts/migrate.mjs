@@ -121,6 +121,8 @@ const migrations = [
   '113_company_finance.sql',
   '114_ads_previous_pageview_index.sql',
   '115_finance_classification.sql',
+  '116_finance_card_ledger.sql',
+  '117_finance_notifications.sql',
 ];
 
 await sql`

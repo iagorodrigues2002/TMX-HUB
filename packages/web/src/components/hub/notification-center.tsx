@@ -33,6 +33,7 @@ import {
   RefreshCw,
   ShoppingBag,
   Trash2,
+  Wallet,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import styles from './notification-center-preview.module.css';
@@ -120,20 +121,21 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
             <div>
               <DialogTitle>Central de notificações</DialogTitle>
               <DialogDescription className="mt-1">
-                Suas tarefas, vendas e calls. Atualização automática.
+                Tarefas, vendas, calls e movimentações autorizadas.
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
         <div className="border-b border-border/60 bg-muted/20 px-5 py-3 sm:px-6">
           <Tabs value={filter} onValueChange={(value) => setFilter(value as Filter)}>
-            <TabsList className="grid grid-cols-4">
+            <TabsList className="grid grid-cols-3 sm:grid-cols-5 h-auto">
               {(
                 [
                   ['all', 'Todas'],
                   ['task', 'Tarefas'],
                   ['sale', 'Vendas'],
                   ['call', 'Calls'],
+                  ['finance', 'Financeiro'],
                 ] as const
               ).map(([value, label]) => (
                 <TabsTrigger key={value} value={value}>
@@ -170,7 +172,9 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
                 void mutate(
                   () =>
                     notificationApi.read(notifications.filter((n) => n.unread).map((n) => n.id)),
-                  notifications.filter((n) => n.kind === 'sale' && n.unread).map((n) => n.id),
+                  notifications
+                    .filter((n) => (n.kind === 'sale' || n.kind === 'finance') && n.unread)
+                    .map((n) => n.id),
                 )
               }
             >
@@ -243,6 +247,8 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
                     <div className="flex min-w-0 items-start gap-2">
                       {item.kind === 'sale' ? (
                         <ShoppingBag className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden />
+                      ) : item.kind === 'finance' ? (
+                        <Wallet className="h-4 w-4 shrink-0 text-primary" aria-hidden />
                       ) : item.kind === 'call' ? (
                         <CalendarClock className="h-4 w-4 shrink-0 text-primary" aria-hidden />
                       ) : (
@@ -335,6 +341,27 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
                       </dl>
                     </>
                   )}
+                  {item.kind === 'finance' && (
+                    <>
+                      <p className="mt-3 text-xl font-semibold tabular-nums">
+                        {isPrivate
+                          ? '****'
+                          : `${Number(item.finance.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${item.finance.currency}`}
+                      </p>
+                      <p className="mt-2 text-xs">
+                        {item.finance.companyName} · {item.finance.provider}
+                      </p>
+                      <Badge
+                        className="mt-3"
+                        variant={item.finance.direction === 'incoming' ? 'success' : 'warning'}
+                      >
+                        {item.finance.direction === 'incoming' ? 'Entrada' : 'Saída'}
+                      </Badge>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Movimentação em {taskDate(item.finance.occurredAt)} · Não é uma venda.
+                      </p>
+                    </>
+                  )}
                   {item.kind === 'call' && (
                     <>
                       <p className="mt-3 text-xs text-primary">
@@ -365,7 +392,7 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
                         onClick={() =>
                           void mutate(
                             () => notificationApi.read([item.id]),
-                            item.kind === 'sale' ? [item.id] : [],
+                            item.kind === 'sale' || item.kind === 'finance' ? [item.id] : [],
                           )
                         }
                       >

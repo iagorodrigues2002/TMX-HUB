@@ -62,6 +62,7 @@ export function registerCompanyFinance(
       const rows =
         await tx`UPDATE company_finance_entries SET category_override=${input.category},updated_at=now()
         WHERE company_id=${id} AND connection_id=${input.connectionId} AND external_id=${input.externalId}
+        AND kind<>'card_topup'
         AND (${input.category}::text IS NULL OR ${input.category}='transfer'
           OR (${input.category}='income' AND received>0 AND coalesce(sent,0)=0)
           OR (${input.category} IN ('fixed','variable','withdrawal') AND sent>0 AND coalesce(received,0)=0)) RETURNING external_id`;
@@ -116,7 +117,7 @@ export function registerCompanyFinance(
       ), classified AS (
         SELECT *, CASE
           WHEN lower(status) NOT IN ('completed','complete','success','succeeded','settled','paid','confirmed') THEN 'excluded'
-          WHEN category='transfer' THEN 'excluded'
+          WHEN category IN ('transfer','card_topup') THEN 'excluded'
           WHEN received > 0 AND coalesce(sent,0)=0 AND received_currency IS NOT NULL THEN 'incoming'
           WHEN sent > 0 AND coalesce(received,0)=0 AND sent_currency IS NOT NULL THEN 'outgoing'
           ELSE 'excluded' END AS direction
@@ -149,7 +150,7 @@ export function registerCompanyFinance(
       await app.db!`SELECT vendepay_income,withdrawal_recipient FROM company_finance_rules WHERE company_id=${id}`;
     const entries =
       await app.db!`SELECT e.connection_id,e.external_id,e.occurred_at,e.kind,e.status,e.description,e.sent::text,e.sent_currency,e.received::text,e.received_currency,c.provider,e.category_override,e.category FROM company_finance_classified e JOIN company_finance_connections c ON c.id=e.connection_id AND c.company_id=e.company_id WHERE e.company_id=${id} AND (${query.provider ?? null}::text IS NULL OR c.provider=${query.provider ?? null})
-        AND (${query.view}='all' OR (${query.view}='withdrawals' AND e.category='withdrawal') OR (${query.view}='outgoing' AND e.category IN ('fixed','variable')))
+        AND (${query.view}='all' OR (lower(e.status) IN ('completed','complete','success','succeeded','settled','paid','confirmed') AND ((${query.view}='withdrawals' AND e.category='withdrawal') OR (${query.view}='outgoing' AND e.sent>0 AND coalesce(e.received,0)=0 AND e.category NOT IN ('withdrawal','transfer','card_topup')))))
         ORDER BY e.occurred_at DESC,e.external_id LIMIT 51 OFFSET ${(query.page - 1) * 50}`;
     return {
       connections,

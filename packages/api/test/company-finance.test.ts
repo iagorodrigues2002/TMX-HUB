@@ -24,7 +24,7 @@ describe.skipIf(!process.env.TASK_TEST_DATABASE_URL)(
         status,
         headers: { 'Content-Type': 'application/json' },
       });
-    function mockProvider(statementStatus = 200) {
+    function mockProvider(statementStatus = 200, transactionDate = '2026-10-01T00:00:00Z') {
       return vi.stubGlobal(
         'fetch',
         vi.fn(async (url: URL | string) => {
@@ -39,7 +39,7 @@ describe.skipIf(!process.env.TASK_TEST_DATABASE_URL)(
                 transactions: [
                   {
                     referenceNumber: 'TRANSFER-1',
-                    date: '2026-10-01T00:00:00Z',
+                    date: transactionDate,
                     type: 'CREDIT',
                     amount: { value: 25, currency: 'USD' },
                   },
@@ -93,6 +93,8 @@ describe.skipIf(!process.env.TASK_TEST_DATABASE_URL)(
         '109_company_memberships.sql',
         '113_company_finance.sql',
         '115_finance_classification.sql',
+        '116_finance_card_ledger.sql',
+        '117_finance_notifications.sql',
       ])
         await db.unsafe(readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8'));
       await db`INSERT INTO companies(id,name,created_by) VALUES(${company},'Company A','owner'),(${other},'Company B','outsider')`;
@@ -155,6 +157,18 @@ describe.skipIf(!process.env.TASK_TEST_DATABASE_URL)(
       expect(row!.history_cursor).toBeTruthy();
       expect(row!.status).toBe('ready');
     });
+    it('never notifies historical imports and deduplicates newly settled movements', async () => {
+      expect((await db`SELECT * FROM company_finance_notifications`).length).toBe(0);
+      const at = new Date(Date.now() - 1000).toISOString();
+      mockProvider(200, at);
+      await db`UPDATE company_finance_connections SET notification_ready_at=now()-interval '1 minute',history_cursor=now(),next_sync_at=now()`;
+      await runFinanceSync(db);
+      expect((await db`SELECT * FROM company_finance_notifications`).length).toBe(1);
+      await db`UPDATE company_finance_connections SET next_sync_at=now()`;
+      await runFinanceSync(db);
+      expect((await db`SELECT * FROM company_finance_notifications`).length).toBe(1);
+      await db`DELETE FROM company_finance_notifications`;
+    });
     it('preserves cursor and saved balances on provider failure', async () => {
       const [before] = await db`SELECT history_cursor,balances FROM company_finance_connections`;
       vi.stubGlobal(
@@ -204,6 +218,26 @@ describe.skipIf(!process.env.TASK_TEST_DATABASE_URL)(
       expect(after!.history_cursor).toEqual(before!.history_cursor);
       expect(after!.history_supported).toBeNull();
     });
+    it('schedules a one-time LootRush repair without deleting history or manual categories', async () => {
+      const id = randomUUID();
+      await db`INSERT INTO company_finance_connections(id,company_id,provider,profile_id,label,key_encrypted,history_start,history_cursor)
+        VALUES(${id},${company},'lootrush','synthetic-loot-repair','Synthetic','not-a-real-key','2026-08-05','2026-11-03')`;
+      await db`INSERT INTO company_finance_entries(company_id,connection_id,external_id,operation_id,occurred_at,kind,status,description,sent,sent_currency,category_override)
+        VALUES(${company},${id},'repair','repair','2026-10-01','unknown','unknown','Preserve manual',5,'USD','fixed')`;
+      await db.unsafe(
+        readFileSync(new URL('../migrations/116_finance_card_ledger.sql', import.meta.url), 'utf8'),
+      );
+      const [row] =
+        await db`SELECT history_cursor,history_start,key_encrypted FROM company_finance_connections WHERE id=${id}`;
+      expect(row!.history_cursor).toBeNull();
+      expect(row!.key_encrypted).toBe('not-a-real-key');
+      expect(
+        (
+          await db`SELECT category_override FROM company_finance_entries WHERE connection_id=${id}`
+        )[0]!.category_override,
+      ).toBe('fixed');
+      await db`DELETE FROM company_finance_connections WHERE id=${id}`;
+    });
     it('disconnects only the chosen tenant, erases its key and retains history', async () => {
       expect(
         (
@@ -226,6 +260,35 @@ describe.skipIf(!process.env.TASK_TEST_DATABASE_URL)(
       await runFinanceSync(db);
       expect(fetch).not.toHaveBeenCalled();
       expect((await db`SELECT * FROM company_finance_entries`).length).toBe(1);
+    });
+    it('counts settled card purchases once without prepaid topups or declined charges', async () => {
+      const base = `/companies/${company}/finance`;
+      for (const [id, kind, status, amount] of [
+        ['topup', 'card_topup', 'settled', 100],
+        ['charge', 'card_charge', 'settled', 25],
+        ['declined-card', 'card_charge', 'declined', 30],
+        ['hold-card', 'card_charge', 'on_hold', 40],
+      ] as const)
+        await db`INSERT INTO company_finance_entries(company_id,connection_id,external_id,operation_id,occurred_at,kind,status,description,sent,sent_currency)
+          VALUES(${company},${connection},${id},${id},'2019-10-02T12:00:00Z',${kind},${status},${id},${amount},'USD')`;
+      const days = (await call('owner', 'GET', `${base}/analytics?month=2019-10`)).json().days;
+      expect(days.find((d: { currency: string }) => d.currency === 'USD')).toMatchObject({
+        outgoing: '25',
+        variable: '25',
+        transactions: 1,
+      });
+      expect(
+        (
+          await call('owner', 'PUT', `${base}/classification`, {
+            connectionId: connection,
+            externalId: 'topup',
+            category: 'variable',
+          })
+        ).statusCode,
+      ).not.toBe(200);
+      const expenses = (await call('owner', 'GET', `${base}?view=outgoing`)).json().entries;
+      expect(expenses.map((r: { external_id: string }) => r.external_id)).toEqual(['charge']);
+      await db`DELETE FROM company_finance_entries WHERE external_id IN ('topup','charge','declined-card','hold-card')`;
     });
     it('classifies scoped history, aggregates beyond pagination and preserves currencies and local dates', async () => {
       const rules = {
