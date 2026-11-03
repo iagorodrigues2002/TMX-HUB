@@ -25,6 +25,8 @@ const EnvSchema = z
     WEB_PUSH_PRIVATE_KEY: z.string().optional(),
     WEB_PUSH_SUBJECT: z.string().url().default('https://theminex.com'),
     TASK_AUTOMATION_SECRET: z.string().min(32).optional(),
+    TASK_MANAGEMENT_MODE: z.enum(['clickup', 'native']).default('clickup'),
+    TASK_DISCORD_CHANNELS_JSON: z.string().default('{}'),
     META_GRAPH_API_VERSION: z
       .string()
       .regex(/^v\d+\.\d+$/)
@@ -72,6 +74,8 @@ const EnvSchema = z
     // Allow self-registration via /v1/auth/register. Off by default — TMX HUB
     // is intended for invited operators.
     ALLOW_REGISTRATION: booleanFromString.default(false),
+    // Cutover only: freeze identity/company/offer changes, never commercial webhooks.
+    COMPANY_TRANSITION_WRITES_PAUSED: booleanFromString.default(false),
 
     // Accept any string so Railway template refs like "https://${{DOMAIN}}"
     // don't crash on startup if the variable isn't resolved yet.

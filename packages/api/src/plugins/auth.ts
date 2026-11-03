@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { env } from '../env.js';
 import { AuthUserCache } from '../lib/auth-user-cache.js';
+import { effectiveCompanyTools } from '../lib/company-tools.js';
 import { type JwtPayload, verifyJwt } from '../lib/jwt.js';
 import { hashPassword } from '../lib/password.js';
 import { HttpProblem } from '../lib/problem.js';
@@ -83,9 +84,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     req.user = {
       ...payload,
       role: user.role,
-      ...(user.allowedTools && user.allowedTools.length > 0
-        ? { tools: user.allowedTools }
-        : { tools: undefined }),
+      tools: await effectiveCompanyTools(app.db, payload.sub, user.role, user.allowedTools),
     };
   };
 

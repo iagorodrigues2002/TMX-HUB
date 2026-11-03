@@ -28,7 +28,7 @@ export type CenterNotification =
   | {
       id: string;
       kind: 'call';
-      unread: true;
+      unread: boolean;
       createdAt: string;
       title: string;
       call: {
@@ -36,6 +36,6 @@ export type CenterNotification =
         message: string;
         startsAt: string;
         meetingUrl: string;
-        minutes: number;
+        minutes: number | null;
       };
     };

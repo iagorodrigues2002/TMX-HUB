@@ -2,8 +2,12 @@ node_modules
 graphify-out/
 dist
 .next
+.next-*/
 .next-dev/
 .next-build/
+.next-native-preview/
+.next-native-compiled/
+.next-live-copy-qa/
 coverage
 .env
 .env.local

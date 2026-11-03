@@ -7,10 +7,7 @@
       "name": "Receber tarefa confirmada",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [
-        0,
-        0
-      ],
+      "position": [0, 0],
       "parameters": {
         "httpMethod": "POST",
         "path": "tmx-task-confirmed",
@@ -30,10 +27,7 @@
       "name": "Ler vínculos TMX",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        240,
-        0
-      ],
+      "position": [240, 0],
       "parameters": {
         "method": "GET",
         "url": "={{ $vars.TMX_TASK_API_BASE + '/v1/task-automation/people' }}",
@@ -55,10 +49,7 @@
       "name": "Buscar vínculo da tarefa",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        400,
-        0
-      ],
+      "position": [400, 0],
       "credentials": {
         "httpHeaderAuth": {
           "id": "CONFIGURE_TMX_TASK_HEADER_AUTH",
@@ -80,10 +71,7 @@
       "name": "Normalizar tarefa",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        480,
-        0
-      ],
+      "position": [480, 0],
       "parameters": {
         "jsCode": "const input=$('Receber tarefa confirmada').item.json.body;\nconst people=$('Ler vínculos TMX').first().json.people;\nconst previous=$input.first().json.task;\nif(!input || !input.eventId || !['discord','clickup'].includes(input.source)) throw new Error('Envelope inválido');\nconst remote=input.task;\nif(!remote?.id || !/^[a-zA-Z0-9_-]+$/.test(String(remote.id))) throw new Error('taskId ausente');\nconst config=JSON.parse($vars.TMX_TASK_CONFIG_JSON || '{}');\nconst match=Object.entries(config).find(([sector,value])=>String(value.listId)===String(remote.list?.id));\nif(!match) throw new Error('Lista ClickUp sem mapeamento de setor');\nconst [sector,settings]=match;\nconst state=Object.entries(settings.statuses).find(([key,value])=>value===remote.status?.status)?.[0];\nif(!['pending','progress','done'].includes(state)) throw new Error('Status da lista não mapeado');\nconst iso=value=>value && Number.isFinite(Number(value))?new Date(Number(value)).toISOString():null;\nconst updatedAt=iso(remote.date_updated);\nif(!updatedAt) throw new Error('Data de atualização ausente');\nconst assignees=(remote.assignees||[]).map(p=>{ const person=people.find(saved=>saved.clickupId===String(p.id)); if(!person) throw new Error('Responsável sem vínculo TMX: '+p.id); return person; });\nconst task={clickupId:String(remote.id),discordMessageId:input.discordMessageId||previous?.discordMessageId||null,discordChannelId:input.discordChannelId||previous?.discordChannelId||null,\ntitle:String(remote.name||''),description:String(remote.description||''),sector,offer:input.offer||previous?.offer||String(remote.description||'').match(/Oferta:\\s*([^\\n]+)/i)?.[1]?.trim()||null,assignees,status:state,\npriority:({1:'urgent',2:'high',3:'normal',4:'low'})[remote.priority?.id]||'normal',source:input.source,\nreceivedAt:iso(remote.date_created)||updatedAt,assignedAt:null,startedAt:input.startedAt||previous?.startedAt||null,\ncompletedAt:state==='done'?iso(remote.date_done||remote.date_closed):null,dueAt:iso(remote.due_date),updatedAt,\nsyncState:'synced',discordState:'pending'};\nif(previous) task.id=previous.id;\nif(!/^\\d+$/.test(String(input.discordMessageId||'')) || !/^\\d+$/.test(String(input.discordChannelId||''))) throw new Error('Recibo Discord confirmado obrigatório');\ntask.discordState='synced';\nreturn [{json:{eventId:String(input.eventId)+':confirmed',task}}];"
       }
@@ -93,10 +81,7 @@
       "name": "Persistir evento idempotente",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        720,
-        0
-      ],
+      "position": [720, 0],
       "parameters": {
         "method": "POST",
         "url": "={{ $vars.TMX_TASK_API_BASE + '/v1/task-automation/events' }}",
@@ -121,10 +106,7 @@
       "name": "Confirmar recebimento",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
-      "position": [
-        960,
-        0
-      ],
+      "position": [960, 0],
       "parameters": {
         "respondWith": "json",
         "responseBody": "={{ $json }}",

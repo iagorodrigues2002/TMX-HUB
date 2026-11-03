@@ -1,14 +1,16 @@
 'use client';
 
 import { AuthGate } from '@/components/auth/auth-gate';
-import { usePathname, useSearchParams } from 'next/navigation';
-import { type ReactNode, type RefObject, Suspense, useEffect, useRef, useState } from 'react';
+import { type ReactNode, Suspense, useEffect, useRef, useState } from 'react';
 import { AmbientBackground } from './ambient-background';
 import { CommandPalette } from './command-palette';
 import { FinancialPrivacyMask } from './financial-privacy-mask';
 import { MicroFooter } from './micro-footer';
+import { NavigationAccessGate } from './navigation-access-gate';
 import { NotificationCenter } from './notification-center';
 import { OfferContextProvider } from './offer-context-switcher';
+import { RouteMotion } from './route-motion';
+import motionStyles from './route-motion.module.css';
 import { Sidebar } from './sidebar';
 import { Topbar } from './topbar';
 import { UserMenu } from './user-menu';
@@ -21,28 +23,6 @@ interface HubShellProps {
   onOpenNotifications?: () => void;
   /** When true, the children control their own scroll/layout (e.g. the editor). */
   fullBleed?: boolean;
-}
-
-function RouteMotion({
-  content,
-  fullBleed,
-}: { content: RefObject<HTMLDivElement | null>; fullBleed?: boolean }) {
-  const pathname = usePathname();
-  const search = useSearchParams();
-  const screenKey = `${pathname}:${search.get('view') ?? ''}:${search.get('section') ?? ''}`;
-  useEffect(() => {
-    const element = content.current;
-    if (!element || !screenKey || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const animation = element.animate(
-      [
-        { opacity: 0, transform: fullBleed ? 'none' : 'translateY(8px)' },
-        { opacity: 1, transform: 'translateY(0)' },
-      ],
-      { duration: 320, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
-    );
-    return () => animation.cancel();
-  }, [screenKey, fullBleed, content]);
-  return null;
 }
 
 export function HubShell({
@@ -118,9 +98,12 @@ export function HubShell({
                 ref={content}
                 id="conteudo-principal"
                 tabIndex={-1}
-                className="min-w-0 flex-1 overflow-hidden"
+                data-motion-coordinated="true"
+                className={`min-w-0 flex-1 overflow-hidden ${motionStyles.coordinated}`}
               >
-                {children}
+                <Suspense fallback={null}>
+                  <NavigationAccessGate>{children}</NavigationAccessGate>
+                </Suspense>
               </div>
             ) : (
               <main
@@ -129,17 +112,28 @@ export function HubShell({
                 className="relative min-h-0 min-w-0 flex-1 scroll-smooth overflow-x-hidden overflow-y-auto overscroll-y-contain p-4 pb-8"
               >
                 {process.env.NEXT_PUBLIC_TMX_SIGNAL_PREVIEW === '1' &&
-                  process.env.NODE_ENV !== 'production' && (
+                  (process.env.NODE_ENV !== 'production' ||
+                    process.env.NEXT_PUBLIC_TMX_LOCAL_PREVIEW_KIND === 'synthetic' ||
+                    process.env.NEXT_PUBLIC_TMX_LOCAL_PREVIEW_KIND === 'live-copy') && (
                     <div
                       role="note"
                       className="mb-4 rounded-md border border-warning/30 bg-card px-4 py-2 text-xs text-warning"
                     >
-                      Prévia local · dados reais · gravações e envios bloqueados. Fundo global e
-                      novo visual das visões gerais em avaliação.
+                      {process.env.NEXT_PUBLIC_TMX_LOCAL_PREVIEW_KIND === 'synthetic'
+                        ? `Homologação local · base live ${process.env.NEXT_PUBLIC_TMX_LOCAL_BASE ?? 'não conferida'} · dados sintéticos · nenhuma gravação em produção.`
+                        : process.env.NEXT_PUBLIC_TMX_LOCAL_PREVIEW_KIND === 'live-copy'
+                          ? `Homologação isolada · cópia do live · base ${process.env.NEXT_PUBLIC_TMX_LOCAL_BASE ?? 'não conferida'} · alterações somente locais e envios externos bloqueados.`
+                          : 'Prévia local · dados reais · gravações e envios bloqueados. Fundo global e novo visual das visões gerais em avaliação.'}
                     </div>
                   )}
-                <div ref={content} className="tmx-route-content mx-auto w-full max-w-[1440px]">
-                  {children}
+                <div
+                  ref={content}
+                  data-motion-coordinated="true"
+                  className={`tmx-route-content mx-auto w-full max-w-[1440px] ${motionStyles.coordinated}`}
+                >
+                  <Suspense fallback={null}>
+                    <NavigationAccessGate>{children}</NavigationAccessGate>
+                  </Suspense>
                 </div>
                 <MicroFooter />
               </main>
@@ -152,7 +146,7 @@ export function HubShell({
             onOpenChange={setNotificationCenterOpen}
             onUnreadCountChange={setUnreadCount}
           />
-          {fullBleed && <MicroFooter />}
+          {fullBleed && <MicroFooter floating />}
         </div>
       </OfferContextProvider>
     </AuthGate>

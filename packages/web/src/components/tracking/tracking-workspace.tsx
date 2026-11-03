@@ -8,6 +8,7 @@ import {
   type TrackingView,
   buildTrackingHref,
   resolveTrackingLocation,
+  trackingWorkspaceNavigation,
 } from '@/components/tracking/tracking-nav';
 import {
   TrackingOfferProvider,
@@ -18,7 +19,7 @@ import { DataState } from '@/components/ui/data-state';
 import type { OfferView } from '@/lib/api-client';
 import { useDisplayCurrency } from '@/lib/currency-preference';
 import { cn } from '@/lib/utils';
-import { ChevronDown, RadioTower, RefreshCw, Store } from 'lucide-react';
+import { ChevronDown, RefreshCw, Store } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useMemo } from 'react';
 
@@ -58,6 +59,8 @@ function TrackingWorkspaceContent() {
     searchParams.get('section'),
   );
   const activeArea = TRACKING_NAV.find((item) => item.id === view)!;
+  const workspaceNav = trackingWorkspaceNavigation(view, section);
+  const AreaIcon = activeArea.icon;
 
   const navigate = (nextView: TrackingView, nextSection = DEFAULT_TRACKING_SECTION[nextView]) => {
     if (!activeOfferId) return;
@@ -74,20 +77,20 @@ function TrackingWorkspaceContent() {
   };
 
   return (
-    <div data-surface="tracking" className="signal-reveal space-y-4">
+    <div data-surface="tracking" className="space-y-4">
       <TrackingBackdrop />
       <header className="rounded-xl border border-[var(--hairline-strong)] bg-bg-elevated/75 p-4 md:p-5">
         <div className="flex flex-wrap items-center justify-between gap-2 sm:items-start sm:gap-4">
           <div className="flex min-w-0 items-center gap-2 sm:items-start sm:gap-3">
             <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-[var(--hairline-strong)] bg-[var(--hairline)] sm:h-10 sm:w-10">
-              <RadioTower className="h-5 w-5 text-[var(--signal-300)]" />
+              <AreaIcon className="h-5 w-5 text-[var(--signal-300)]" />
             </div>
             <div className="min-w-0">
               <h1 className="text-lg font-semibold tracking-tight text-white sm:text-xl md:text-2xl">
-                Rastreamento
+                {workspaceNav.title}
               </h1>
               <p className="mt-1 hidden max-w-2xl text-sm leading-6 text-white/55 sm:block">
-                Acompanhe cada sinal da entrada à receita e configure somente o ponto em foco.
+                {workspaceNav.description}
               </p>
             </div>
           </div>
@@ -157,55 +160,62 @@ function TrackingWorkspaceContent() {
         </div>
       </header>
 
-      <div className="grid min-w-0 gap-4 xl:grid-cols-[230px_minmax(0,1fr)]">
-        <aside className="h-fit min-w-0 rounded-lg border border-white/[0.08] bg-black/15 p-2 xl:sticky xl:top-20">
-          <div className="px-2 py-2">
-            <h2 className="text-sm font-semibold text-white/85">{activeArea.label}</h2>
-            <p className="mt-1 hidden text-xs leading-5 text-white/45 xl:block">
-              {activeArea.description}
-            </p>
-          </div>
-          <nav
-            aria-label={`Seções de ${activeArea.label}`}
-            className="mt-1 flex gap-1.5 overflow-x-auto rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--signal-500)] xl:block xl:overflow-visible"
-          >
-            {activeArea.sections.map((item) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  aria-current={section === item.id ? 'page' : undefined}
-                  onClick={() => navigate(view, item.id)}
-                  className={cn(
-                    'flex min-h-11 min-w-max shrink-0 items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--signal-500)] xl:mb-1 xl:w-full xl:min-w-0 xl:items-start',
-                    section === item.id && 'bg-white/[0.06]',
-                  )}
-                >
-                  <Icon
+      <div
+        className={cn(
+          'grid min-w-0 gap-4',
+          workspaceNav.sections.length > 0 && 'xl:grid-cols-[230px_minmax(0,1fr)]',
+        )}
+      >
+        {workspaceNav.sections.length > 0 && (
+          <aside className="h-fit min-w-0 rounded-lg border border-white/[0.08] bg-black/15 p-2 xl:sticky xl:top-20">
+            <div className="px-2 py-2">
+              <h2 className="text-sm font-semibold text-white/85">Nesta área</h2>
+              <p className="mt-1 hidden text-xs leading-5 text-white/45 xl:block">
+                {workspaceNav.description}
+              </p>
+            </div>
+            <nav
+              aria-label={`Seções de ${workspaceNav.title}`}
+              className="mt-1 flex gap-1.5 overflow-x-auto rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--signal-500)] xl:block xl:overflow-visible"
+            >
+              {workspaceNav.sections.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    aria-current={section === item.id ? 'location' : undefined}
+                    onClick={() => navigate(view, item.id)}
                     className={cn(
-                      'mt-0.5 h-4 w-4 shrink-0 text-white/35',
-                      section === item.id && 'text-[var(--signal-300)]',
+                      'flex min-h-11 min-w-max shrink-0 items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--signal-500)] xl:mb-1 xl:w-full xl:min-w-0 xl:items-start',
+                      section === item.id && 'bg-white/[0.06]',
                     )}
-                  />
-                  <span>
-                    <span
+                  >
+                    <Icon
                       className={cn(
-                        'block text-xs font-medium text-white/55',
-                        section === item.id && 'text-white',
+                        'mt-0.5 h-4 w-4 shrink-0 text-white/35',
+                        section === item.id && 'text-[var(--signal-300)]',
                       )}
-                    >
-                      {item.label}
+                    />
+                    <span>
+                      <span
+                        className={cn(
+                          'block text-xs font-medium text-white/55',
+                          section === item.id && 'text-white',
+                        )}
+                      >
+                        {item.label}
+                      </span>
+                      <span className="mt-0.5 hidden text-[11px] leading-4 text-white/35 xl:block">
+                        {item.description}
+                      </span>
                     </span>
-                    <span className="mt-0.5 hidden text-[11px] leading-4 text-white/35 xl:block">
-                      {item.description}
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
-          </nav>
-        </aside>
+                  </button>
+                );
+              })}
+            </nav>
+          </aside>
+        )}
 
         <section className="min-w-0" aria-label={`Conteúdo de ${activeArea.label}`}>
           {isLoading ? (
@@ -232,10 +242,7 @@ function TrackingWorkspaceContent() {
               }
             />
           ) : (
-            <div
-              key={`${activeOffer.id}:${view}:${section}`}
-              className="tmx-tracking-section-transition"
-            >
+            <div key={`${activeOffer.id}:${view}:${section}`}>
               <TrackingAdvancedCenter
                 offerId={activeOffer.id}
                 canManage={canManage}

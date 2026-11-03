@@ -11,39 +11,30 @@ import {
 import { callApi } from '@/lib/api-client/endpoints-calls';
 import { taskApi } from '@/lib/api-client/endpoints-tasks';
 import { useAuth } from '@/lib/auth-context';
-import {
-  callDate,
-  callInputDate,
-  callStartIso,
-  parseCallReminders,
-  reminderLabel,
-} from '@/lib/call-dashboard';
+import { callInputDate, callStartIso, parseCallReminders } from '@/lib/call-dashboard';
 import { CallCreateSchema, type ManagedCall } from '@page-cloner/shared';
-import { useQuery } from '@tanstack/react-query';
-import {
-  CalendarDays,
-  CheckCheck,
-  ExternalLink,
-  Plus,
-  RefreshCw,
-  ShieldCheck,
-  Users,
-} from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { CalendarDays, Plus, RefreshCw, ShieldCheck } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { CallCard } from './call-card';
 import styles from './task-dashboard.module.css';
 
 const field =
   'min-h-11 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary';
-const statusLabels = { scheduled: 'Agendada', completed: 'Realizada', cancelled: 'Cancelada' };
-const syncLabels = {
-  queued: 'Aguardando integração',
-  synced: 'ClickUp e Discord confirmados',
-  failed: 'Falha na integração',
-};
 
-export function CallsDashboard() {
+export function CallsDashboard({
+  companyId,
+  companyAccess = false,
+}: { companyId?: string; companyAccess?: boolean }) {
   const { user, loading } = useAuth();
-  const allowed = user?.role === 'admin';
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const queryClient = useQueryClient();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const allowed = companyAccess || user?.role === 'admin';
   const [filter, setFilter] = useState('scheduled');
   const [editing, setEditing] = useState<ManagedCall | null>(null);
   const [open, setOpen] = useState(false);
@@ -57,20 +48,28 @@ export function CallsDashboard() {
   const key = useRef<string | null>(null);
   const pending = useRef(false);
   const callsQuery = useQuery({
-    queryKey: ['managed-calls', user?.id, filter],
-    queryFn: () => callApi.list(filter),
+    queryKey: ['managed-calls', user?.id, companyId, filter],
+    queryFn: () => callApi.list(filter, companyId),
     enabled: allowed,
     refetchInterval: 15000,
     retry: false,
   });
   const peopleQuery = useQuery({
-    queryKey: ['task-people', user?.id],
-    queryFn: taskApi.people,
+    queryKey: ['task-people', user?.id, companyId],
+    queryFn: () => taskApi.people(companyId),
     enabled: allowed,
     retry: false,
   });
   const calls = callsQuery.data?.calls ?? [];
+  const native = callsQuery.data?.managementMode === 'native';
   const people = peopleQuery.data ?? [];
+  async function refreshCalls() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['managed-calls'] }),
+      queryClient.invalidateQueries({ queryKey: ['call-notifications', user?.id] }),
+      queryClient.invalidateQueries({ queryKey: ['notification-center', user?.id] }),
+    ]);
+  }
 
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -79,6 +78,7 @@ export function CallsDashboard() {
     const form = new FormData(event.currentTarget);
     try {
       const parsed = CallCreateSchema.safeParse({
+        companyId: editing ? editing.companyId : companyId,
         title: form.get('title'),
         description: form.get('description'),
         message: form.get('message'),
@@ -101,9 +101,11 @@ export function CallsDashboard() {
       setOpen(false);
       key.current = null;
       setNotice(
-        'Agendamento salvo. A sincronização só será confirmada após o retorno do ClickUp e do Discord.',
+        native
+          ? 'Agendamento salvo no TMX. Os lembretes privados não dependem do ClickUp.'
+          : 'Agendamento salvo. A sincronização só será confirmada após o retorno do ClickUp e do Discord.',
       );
-      await callsQuery.refetch();
+      await refreshCalls();
     } catch {
       if (!pending.current) {
         setError('Confira a data, o horário e os lembretes antes de salvar.');
@@ -125,7 +127,7 @@ export function CallsDashboard() {
     setError('');
     key.current ??= crypto.randomUUID();
     try {
-      await callApi.status(
+      const updated = await callApi.status(
         confirmation.call.id,
         confirmation.call.revision,
         confirmation.action,
@@ -134,9 +136,9 @@ export function CallsDashboard() {
       key.current = null;
       setConfirmation(null);
       setNotice(
-        'Alteração salva. Os avisos e a integração serão atualizados sem criar outra call.',
+        `${updated.status === 'completed' ? 'Call concluída' : 'Call cancelada'} no TMX. Histórico preservado e lembretes pendentes encerrados. ${updated.managementMode === 'native' ? 'A atualização no Discord será confirmada separadamente.' : 'A sincronização da integração antiga está pendente.'}`,
       );
-      await callsQuery.refetch();
+      await refreshCalls();
     } catch {
       setError(
         'Alteração não confirmada. Atualize a lista e confira o estado da call antes de tentar novamente.',
@@ -159,18 +161,25 @@ export function CallsDashboard() {
 
   return (
     <section className={`${styles.dashboard} space-y-5`} aria-label="Gestão de calls">
-      <header className="flex flex-wrap items-start justify-between gap-4">
+      <header className={styles.pageHeader} data-motion-panel>
         <div>
-          <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight">
-            <CalendarDays className="text-primary" aria-hidden />
+          <p className="mb-2 flex items-center gap-2 text-[10px] font-medium uppercase tracking-[.18em] text-primary">
+            <CalendarDays className="h-4 w-4" aria-hidden /> Agenda da equipe
+          </p>
+          <h1
+            ref={headingRef}
+            tabIndex={-1}
+            className="text-2xl font-semibold tracking-tight sm:text-3xl"
+          >
             Agenda de calls
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Agende no TMX. Acompanhe os registros no ClickUp e os avisos no Calendário de Calls do
-            Discord.
+            {native
+              ? 'Agendamentos e lembretes gerenciados no TMX, com avisos no Calendário de Calls do Discord.'
+              : 'Agende no TMX. Acompanhe os registros no ClickUp e os avisos no Calendário de Calls do Discord.'}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className={styles.headerActions}>
           <Button
             variant="outline"
             aria-label="Atualizar calls"
@@ -180,7 +189,7 @@ export function CallsDashboard() {
             <RefreshCw aria-hidden />
           </Button>
           <Button
-            disabled={!callsQuery.data || !people.length}
+            disabled={!callsQuery.data || !people.length || !companyId}
             onClick={() => {
               setEditing(null);
               setError('');
@@ -193,6 +202,12 @@ export function CallsDashboard() {
           </Button>
         </div>
       </header>
+      {!companyId && (
+        <p className="text-sm text-muted-foreground">
+          Selecione uma empresa para agendar uma nova call. Agendamentos legados mantêm a integração
+          original.
+        </p>
+      )}
       <p className="text-xs text-muted-foreground">
         Datas e horários de São Paulo. Reagendamentos invalidam os lembretes da versão anterior.
       </p>
@@ -213,12 +228,15 @@ export function CallsDashboard() {
           demonstrativos não substituem calls reais.
         </p>
       )}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div
+        className={`${styles.surface} flex flex-wrap items-center justify-between gap-3 p-3`}
+        data-motion-panel
+      >
         <label className="flex items-center gap-3 text-sm">
           Mostrar
           <select className={field} value={filter} onChange={(e) => setFilter(e.target.value)}>
             <option value="scheduled">Agendadas</option>
-            <option value="completed">Realizadas</option>
+            <option value="completed">Concluídas</option>
             <option value="cancelled">Canceladas</option>
             <option value="all">Todas</option>
           </select>
@@ -235,114 +253,25 @@ export function CallsDashboard() {
           </p>
         </div>
       )}
-      <div className="space-y-3">
+      <div className="space-y-3" data-motion-panel>
         {calls.map((call) => (
-          <article key={call.id} className="rounded-xl border border-border bg-card p-5">
-            <div className="flex flex-wrap justify-between gap-4">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-3">
-                  <h2 className="break-words text-lg font-semibold">{call.title}</h2>
-                  <span
-                    className={`rounded-full border px-2 py-1 text-xs ${call.status === 'cancelled' ? 'text-muted-foreground' : call.status === 'completed' ? 'text-emerald-500' : 'text-primary'}`}
-                  >
-                    {statusLabels[call.status]}
-                  </span>
-                </div>
-                <p className="mt-2 font-medium tabular-nums">
-                  {callDate(call.startsAt)} · {call.durationMinutes} minutos
-                </p>
-              </div>
-            </div>
-            {call.syncState !== 'synced' && (
-              <p
-                className={`mt-2 text-xs ${call.syncState === 'failed' ? 'text-red-500' : 'text-amber-500'}`}
-              >
-                {syncLabels[call.syncState]}
-              </p>
-            )}
-            <p className="mt-3 flex items-start gap-2 text-sm">
-              <Users className="h-4 w-4 shrink-0 text-primary" aria-hidden />
-              {call.participants.map((p) => p.name).join(' · ')}
-            </p>
-            <Button asChild variant="outline" className="mt-4">
-              <a href={call.meetingUrl} target="_blank" rel="noopener noreferrer">
-                <ExternalLink aria-hidden />
-                Entrar na call
-              </a>
-            </Button>
-            <details className="mt-4 border-t border-border pt-3">
-              <summary className="cursor-pointer rounded-md text-sm text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-                Detalhes e gerenciamento
-              </summary>
-              <p
-                className={`mt-3 text-xs ${call.syncState === 'failed' ? 'text-red-500' : 'text-muted-foreground'}`}
-              >
-                {syncLabels[call.syncState]}
-              </p>
-              {call.description && (
-                <p className="mt-3 whitespace-pre-wrap break-words text-sm text-muted-foreground">
-                  {call.description}
-                </p>
-              )}
-              <p className="mt-3 text-xs text-muted-foreground">
-                Lembretes: {call.reminderMinutes.map(reminderLabel).join(' · ') || 'Nenhum'}
-              </p>
-              {call.message && (
-                <p className="mt-2 whitespace-pre-wrap break-words border-l-2 border-primary/40 pl-3 text-sm">
-                  {call.message}
-                </p>
-              )}
-              <div className="mt-4 flex flex-wrap gap-2">
-                {call.clickupId && (
-                  <Button asChild variant="ghost">
-                    <a
-                      href={`https://app.clickup.com/t/${encodeURIComponent(call.clickupId)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Abrir no ClickUp
-                    </a>
-                  </Button>
-                )}
-                {call.status === 'scheduled' && (
-                  <>
-                    <Button
-                      variant="outline"
-                      disabled={busy}
-                      onClick={() => {
-                        setEditing(call);
-                        key.current = null;
-                        setError('');
-                        setOpen(true);
-                      }}
-                    >
-                      Editar / reagendar
-                    </Button>
-                    <Button
-                      variant="outline"
-                      disabled={busy}
-                      onClick={() => {
-                        key.current = null;
-                        setConfirmation({ call, action: 'complete' });
-                      }}
-                    >
-                      <CheckCheck aria-hidden />
-                      Marcar realizada
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      disabled={busy}
-                      onClick={() => {
-                        key.current = null;
-                        setConfirmation({ call, action: 'cancel' });
-                      }}
-                    >
-                      Cancelar call
-                    </Button>
-                  </>
-                )}
-              </div>
-            </details>
+          <article key={call.id} className={`${styles.surface} ${styles.call} p-4 sm:p-5`}>
+            <CallCard
+              call={call}
+              now={now}
+              busy={busy}
+              onEdit={(selected) => {
+                setEditing(selected);
+                key.current = null;
+                setError('');
+                setOpen(true);
+              }}
+              onStatus={(selected, action) => {
+                key.current = null;
+                setError('');
+                setConfirmation({ call: selected, action });
+              }}
+            />
           </article>
         ))}
       </div>
@@ -352,7 +281,13 @@ export function CallsDashboard() {
           if (!busy) setOpen(value);
         }}
       >
-        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
+        <DialogContent
+          className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl"
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            headingRef.current?.focus();
+          }}
+        >
           <DialogHeader>
             <DialogTitle>{editing ? 'Editar call' : 'Nova call'}</DialogTitle>
             <DialogDescription>
@@ -423,13 +358,16 @@ export function CallsDashboard() {
                       type="checkbox"
                       name="participants"
                       value={p.id}
+                      disabled={native && !p.userId}
                       defaultChecked={editing?.participants.some((saved) => saved.id === p.id)}
                       className="h-4 w-4 accent-primary"
                     />
                     <span>
                       {p.name}
                       {!p.userId && (
-                        <span className="ml-1 text-xs text-muted-foreground">Somente Discord</span>
+                        <span className="ml-1 text-xs text-muted-foreground">
+                          {native ? 'Sem conta TMX' : 'Somente Discord'}
+                        </span>
                       )}
                       {!p.discordId && (
                         <span className="ml-1 text-xs text-amber-500">Sem vínculo Discord</span>
@@ -488,18 +426,28 @@ export function CallsDashboard() {
           if (!busy && !value) setConfirmation(null);
         }}
       >
-        <DialogContent>
+        <DialogContent
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            headingRef.current?.focus();
+          }}
+        >
           <DialogHeader>
             <DialogTitle>
               {confirmation?.action === 'cancel'
                 ? 'Cancelar esta call?'
-                : 'Marcar esta call como realizada?'}
+                : 'Marcar esta call como concluída?'}
             </DialogTitle>
             <DialogDescription>
               {confirmation?.call.title}. Os lembretes pendentes serão invalidados. O histórico será
               preservado.
             </DialogDescription>
           </DialogHeader>
+          {error && (
+            <p role="alert" className="text-sm text-red-500">
+              {error}
+            </p>
+          )}
           <div className="flex justify-end gap-2">
             <Button variant="ghost" disabled={busy} onClick={() => setConfirmation(null)}>
               Voltar

@@ -1,6 +1,7 @@
 'use client';
 
 import { type OfferView, apiClient } from '@/lib/api-client';
+import { companyApi } from '@/lib/api-client/endpoints-companies';
 import { useAuth } from '@/lib/auth-context';
 import { type DateRange, rollingDateRange } from '@/lib/date-range';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -13,25 +14,27 @@ export function useOfferListState() {
   const [period, setPeriod] = useState(() => rollingDateRange(7));
   const { from, to } = period;
   const [showCreate, setShowCreate] = useState(false);
-  const [companyName, setCompanyName] = useState('');
+  const [companyId, setCompanyId] = useState('');
   const [name, setName] = useState('');
   const [dashboardId, setDashboardId] = useState('');
   const [utmifyLogin, setUtmifyLogin] = useState('');
   const [utmifyAccess, setUtmifyAccess] = useState(false);
   const [utmifyPassword, setUtmifyPassword] = useState('');
   const [editing, setEditing] = useState<OfferView | null>(null);
-  const [memberIds, setMemberIds] = useState<string[]>([]);
   const [createAttempted, setCreateAttempted] = useState(false);
   const [filterPhase, setFilterPhase] = useState<'idle' | 'exiting' | 'waiting' | 'entering'>(
     'idle',
   );
   const filterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const usersQuery = useQuery({
-    queryKey: ['users-list'],
-    queryFn: () => apiClient.listUsers(),
-    enabled: user?.role === 'admin',
+  const companiesQuery = useQuery({
+    queryKey: ['companies', user?.id],
+    queryFn: () => companyApi.list(),
+    enabled: Boolean(user),
   });
+  const companies = (companiesQuery.data?.companies ?? []).filter(
+    (company) => user?.role === 'admin' || company.role === 'owner' || company.role === 'admin',
+  );
 
   const offersQuery = useQuery<OfferView[]>({
     queryKey: ['offers'],
@@ -73,7 +76,7 @@ export function useOfferListState() {
   const createMut = useMutation({
     mutationFn: () =>
       apiClient.createOffer({
-        company_name: companyName.trim(),
+        company_id: companyId,
         name: name.trim(),
         utmify_access_enabled: utmifyAccess,
         ...(utmifyAccess
@@ -83,18 +86,16 @@ export function useOfferListState() {
               utmify_password: utmifyPassword,
             }
           : {}),
-        ...(user?.role === 'admin' ? { member_ids: memberIds } : {}),
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['offers'] });
       void qc.invalidateQueries({ queryKey: ['dashboard-summary'] });
       setShowCreate(false);
-      setCompanyName('');
+      setCompanyId('');
       setName('');
       setDashboardId('');
       setUtmifyLogin('');
       setUtmifyPassword('');
-      setMemberIds([]);
       setCreateAttempted(false);
       toast.success(
         utmifyAccess
@@ -131,11 +132,14 @@ export function useOfferListState() {
   });
 
   const canCreate =
-    companyName.trim() &&
+    !companiesQuery.isError &&
+    companies.some((company) => company.id === companyId) &&
     name.trim() &&
     (!utmifyAccess || (dashboardId.trim() && utmifyLogin.trim() && utmifyPassword));
   const createErrors = {
-    companyName: companyName.trim() ? null : 'Informe o nome da empresa.',
+    companyId: companies.some((company) => company.id === companyId)
+      ? null
+      : 'Selecione uma empresa que você administra.',
     name: name.trim() ? null : 'Informe o nome da oferta.',
     dashboardId: !utmifyAccess || dashboardId.trim() ? null : 'Informe o ID da dashboard.',
     utmifyLogin: !utmifyAccess || utmifyLogin.trim() ? null : 'Informe o login da UTMify.',
@@ -156,8 +160,10 @@ export function useOfferListState() {
     period,
     showCreate,
     setShowCreate,
-    companyName,
-    setCompanyName,
+    companyId,
+    setCompanyId,
+    companies,
+    companiesQuery,
     name,
     setName,
     dashboardId,
@@ -170,11 +176,8 @@ export function useOfferListState() {
     setUtmifyPassword,
     editing,
     setEditing,
-    memberIds,
-    setMemberIds,
     createAttempted,
     setCreateAttempted,
-    usersQuery,
     offersQuery,
     summaryQuery,
     offers,

@@ -6,7 +6,6 @@ import {
 } from '@page-cloner/shared';
 import type { FastifyInstance } from 'fastify';
 import { BadRequestError, HttpProblem, zodToProblem } from '../../lib/problem.js';
-import { canManageOffer } from '../../services/offer-store.js';
 import {
   IntradayQuerySchema,
   RangeQuerySchema,
@@ -23,12 +22,20 @@ export function registerGetOffersRoutes(app: FastifyInstance) {
     const offers = await app.offerStore.listAccessible(req.user.sub, req.user.role === 'admin');
     const includeAccess = req.user.role === 'admin';
     return reply.send({
-      offers: offers.map((offer) =>
-        offerToWire(offer, {
-          includeAccess,
-          canManage: canManageOffer(offer, req.user!.sub, req.user!.role === 'admin'),
-          userId: req.user!.sub,
-          isAdmin: req.user!.role === 'admin',
+      offers: await Promise.all(
+        offers.map(async (offer) => {
+          const access = await app.offerStore.permissions(
+            offer,
+            req.user!.sub,
+            req.user!.role === 'admin',
+          );
+          return offerToWire(offer, {
+            includeAccess,
+            canManage: access.manage,
+            canConfigureTracking: access.manage,
+            userId: req.user!.sub,
+            isAdmin: req.user!.role === 'admin',
+          });
         }),
       ),
     });
@@ -57,6 +64,8 @@ export function registerGetOffersRoutes(app: FastifyInstance) {
         : undefined;
     const offer = await app.offerStore.create({
       userId: req.user.sub,
+      companyId: parsed.data.company_id,
+      isAdmin: req.user.role === 'admin',
       name: parsed.data.name,
       utmifyAccessEnabled:
         parsed.data.utmify_access_enabled ??
@@ -121,10 +130,15 @@ export function registerGetOffersRoutes(app: FastifyInstance) {
       req.user.role === 'admin'
         ? await validateMemberIds(app, parsed.data.member_ids, current.userId)
         : undefined;
-    const updated = await app.offerStore.update(req.params.id, current.userId, {
-      ...parsed.data,
-      ...(memberIds !== undefined ? { member_ids: memberIds } : {}),
-    });
+    const updated = await app.offerStore.update(
+      req.params.id,
+      req.user.sub,
+      {
+        ...parsed.data,
+        ...(memberIds !== undefined ? { member_ids: memberIds } : {}),
+      },
+      req.user.role === 'admin',
+    );
     if (nextUtmifyCredentials) {
       await app.offerStore.setUtmifyCredentials(updated.id, nextUtmifyCredentials);
     }
@@ -203,10 +217,18 @@ export function registerGetOffersRoutes(app: FastifyInstance) {
       const range = resolveRange(RangeQuerySchema.parse(req.query));
       const snapshots = await app.snapshotStore.listRange(offer.id, range.from, range.to);
       const totals = app.snapshotStore.aggregate(snapshots);
+      const access = await app.offerStore.permissions(
+        offer,
+        req.user.sub,
+        req.user.role === 'admin',
+      );
       return reply.send({
         offer: offerToWire(offer, {
           includeAccess: req.user.role === 'admin',
-          canManage: canManageOffer(offer, req.user.sub, req.user.role === 'admin'),
+          canManage: access.manage,
+          canConfigureTracking: access.manage,
+          userId: req.user.sub,
+          isAdmin: req.user.role === 'admin',
         }),
         from: range.from,
         to: range.to,

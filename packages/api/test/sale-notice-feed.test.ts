@@ -39,6 +39,10 @@ it('broadcasts the same sale and server timestamp to two users in one scan', asy
   vi.setSystemTime(Date.now() + 1000);
   await feed.tick();
   expect(db).toHaveBeenCalledTimes(1);
+  const query = db.mock.calls[0]![0].join(' ');
+  expect(query).toContain('JOIN browser_sale_events e ON e.order_id=o.id');
+  expect(query).toContain('e.created_at AS occurred_at');
+  expect(query).not.toContain('o.occurred_at>');
   expect(first.send.mock.calls[0]).toEqual(second.send.mock.calls[0]);
   expect(first.send.mock.calls[0][0].items[0].id).toBe('sale');
   await feed.tick();

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
+import { filterCompanyNavigationOffers } from '../../lib/company-navigation-access.js';
 import { getBrlRate } from '../../services/exchange-rate.js';
 import { loadGatewayFees, totalGatewayFees } from '../../services/gateway-fees.js';
 import { gatewayOverviewForOffers, mergeGatewayFees } from '../../services/gateway-overview.js';
@@ -27,7 +28,12 @@ export function registerGetTrackingOverviewRoutes(app: FastifyInstance) {
       const from = new Date(saoPauloDayRange(fromDate, now).from);
       const to = new Date(saoPauloDayRange(toDate, now).to);
 
-      const offers = await app.offerStore.listAccessible(req.user.sub, req.user.role === 'admin');
+      const offers = await filterCompanyNavigationOffers(
+        app.db,
+        req.user,
+        await app.offerStore.listAccessible(req.user.sub, req.user.role === 'admin'),
+        '/tracking/overview',
+      );
       if (offers.length === 0) {
         return reply.send({
           from: fromDate,

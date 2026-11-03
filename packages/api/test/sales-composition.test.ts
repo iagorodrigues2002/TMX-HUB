@@ -67,7 +67,9 @@ async function appFor(db: unknown, authenticated = true) {
 }
 it('returns general ARPU by front purchases from the endpoint', async () => {
   const db = Object.assign(
-    vi.fn(async () => [row({ fronts: 2, customers: 1 })]),
+    vi.fn(async (parts: TemplateStringsArray) =>
+      parts.join('').includes('FROM company_offers') ? [] : [row({ fronts: 2, customers: 1 })],
+    ),
     {
       unsafe: vi.fn(() => true),
     },
@@ -114,6 +116,10 @@ describe.skipIf(!process.env.TASK_TEST_DATABASE_URL)(
       await db.unsafe(
         'CREATE TABLE tracking_projects(id text PRIMARY KEY,offer_id text,enabled boolean);CREATE TABLE tracking_orders(id text PRIMARY KEY,project_id text,order_kind text,paid_at timestamptz,buyer jsonb,amount_brl_minor bigint,currency text,amount_minor bigint);CREATE TABLE tracking_upsell_operator_attempts(project_id text,order_id text,view_only boolean,opened_at timestamptz);CREATE TABLE tracking_upsell_operator_credits(order_id text,project_id text,front_order_id text,operator_id text,reason text);CREATE TABLE exchange_rate_cache(base_currency text,target_currency text,rate numeric);',
       );
+      await db`CREATE TABLE company_offers(offer_id text,company_id text)`;
+      await db`CREATE TABLE company_memberships(company_id text,user_id text,role text,status text,tools jsonb)`;
+      await db`INSERT INTO company_offers VALUES('offer','company')`;
+      await db`INSERT INTO company_memberships VALUES('company','owner','member','active','["ofertas","nav:scoped","nav:overview"]')`;
       await db`INSERT INTO tracking_projects VALUES('project','offer',true),('private','private-offer',true)`;
       for (const [id, kind, amount, buyer, project, paid] of [
         [

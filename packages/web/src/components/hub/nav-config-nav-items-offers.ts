@@ -1,11 +1,4 @@
-import {
-  Boxes,
-  ChartNoAxesCombined,
-  CircleGauge,
-  RefreshCcw,
-  RotateCcw,
-  Target,
-} from 'lucide-react';
+import { Boxes, ChartNoAxesCombined, CircleGauge, RefreshCcw, Target } from 'lucide-react';
 import type { NavItem } from './nav-config-nav-item';
 
 export const nav_items_offers: NavItem = {
@@ -29,11 +22,12 @@ export const nav_items_offers: NavItem = {
     },
     {
       id: 'offers-all',
-      label: 'Todas as ofertas',
+      label: 'Catálogo de ofertas',
       href: '/ofertas',
       icon: Boxes,
       group: 'Ofertas',
       requiresTool: 'ofertas',
+      keywords: ['todas as ofertas', 'produtos'],
     },
     {
       id: 'offer-detail',
@@ -43,15 +37,6 @@ export const nav_items_offers: NavItem = {
       group: 'Ofertas',
       requiresTool: 'ofertas',
       keywords: ['métricas', 'anúncios'],
-    },
-    {
-      id: 'refunds',
-      label: 'Reembolsos',
-      href: '/reembolsos',
-      icon: RotateCcw,
-      group: 'Ofertas',
-      requiresTool: 'ofertas',
-      keywords: ['chargeback', 'financeiro'],
     },
     {
       id: 'recovery',

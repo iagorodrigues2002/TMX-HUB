@@ -7,11 +7,11 @@ test('sends personal sale preferences as a JSON object, not an encoded string', 
   globalThis.fetch = async (_url, options) => {
     assert.equal(options?.method, 'PUT');
     const body = JSON.parse(String(options?.body));
-    assert.deepEqual(body, { scope: 'own' });
+    assert.deepEqual(body, { offer_ids: ['offer-a'] });
     return Response.json(body);
   };
   try {
-    assert.deepEqual(await saveSaleNoticeScope('own'), { scope: 'own' });
+    assert.deepEqual(await saveSaleNoticeScope(['offer-a']), { offer_ids: ['offer-a'] });
   } finally {
     globalThis.fetch = original;
   }

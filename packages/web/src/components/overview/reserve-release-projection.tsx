@@ -45,7 +45,7 @@ export function ReserveProjectionView({
     <>
       <p className="mt-1 text-xs text-muted-foreground">
         Posição em {dateLabel(data.as_of)} · BRL · VendePay · {data.offer_count} oferta(s). Não
-        depende do filtro de período acima.
+        depende do filtro de período.
       </p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map(([label, value]) => (

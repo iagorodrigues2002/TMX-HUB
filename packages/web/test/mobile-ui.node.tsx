@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MicroFooter } from '../src/components/hub/micro-footer';
 import { Button } from '../src/components/ui/button';
+import { DateRangeFilter } from '../src/components/ui/date-range-filter';
 import { DialogHeader } from '../src/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger } from '../src/components/ui/tabs';
 
@@ -47,10 +49,55 @@ test('dialog titles reserve space for the close button', () => {
   assert.match(html, /Configuração com título longo/);
 });
 
-test('mobile footer stays in document flow, leaving fixed positioning to desktop', () => {
+test('wrapped date controls stay left aligned and preserve the selected range', () => {
+  const html = renderToStaticMarkup(
+    <DateRangeFilter
+      value={{ from: '2026-10-27', to: '2026-11-02' }}
+      onChange={() => undefined}
+      onRefresh={() => undefined}
+      max="2026-11-02"
+    />,
+  );
+  assert.doesNotMatch(html, /xl:ml-auto/);
+  assert.match(html, /flex w-full flex-wrap items-end gap-2 xl:w-auto/);
+  assert.match(html, /h-11 w-full sm:h-9/);
+  const inputs = html.match(/<input\b[^>]*>/g) ?? [];
+  assert.equal(inputs.length, 2);
+  assert.match(inputs[0], /value="2026-10-27"/);
+  assert.match(inputs[0], /max="2026-11-02"/);
+  assert.match(inputs[1], /value="2026-11-02"/);
+  assert.match(inputs[1], /min="2026-10-27"/);
+  assert.match(inputs[1], /max="2026-11-02"/);
+});
+
+test('status footer stays below content on mobile and desktop', () => {
   const html = renderToStaticMarkup(<MicroFooter />);
   assert.match(html, /aria-label="Status"/);
   assert.match(html, /relative/);
-  assert.match(html, /sm:fixed/);
-  assert.doesNotMatch(html, /class="[^"]*(?<!:)\bfixed\s/);
+  assert.match(html, /border-t/);
+  assert.doesNotMatch(html, /\b(?:fixed|absolute)\b/);
+  const editor = renderToStaticMarkup(<MicroFooter floating />);
+  assert.match(editor, /absolute bottom-3/);
+});
+
+test('tabs use theme tokens and legible labels without forcing uppercase', () => {
+  const html = renderToStaticMarkup(
+    <Tabs defaultValue="one">
+      <TabsList>
+        <TabsTrigger value="one">Financeiro</TabsTrigger>
+      </TabsList>
+    </Tabs>,
+  );
+  assert.match(html, /bg-bg-elevated/);
+  assert.match(html, /text-muted-foreground/);
+  assert.doesNotMatch(html, /text-white|uppercase|tracking-\[0\.18em\]/);
+});
+
+test('reading surfaces avoid backdrop blur and sidebar resizing is not animated', () => {
+  const css = readFileSync(new URL('../src/app/globals.css', import.meta.url), 'utf8');
+  for (const selector of ['glass-card', 'surface-panel', 'tmx-sidebar']) {
+    const block = css.match(new RegExp(`\\.${selector} \\{([^}]+)\\}`))?.[1];
+    assert.ok(block, `${selector} is present`);
+    assert.doesNotMatch(block, /backdrop-filter|transition:\s*width/);
+  }
 });

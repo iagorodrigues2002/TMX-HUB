@@ -46,7 +46,7 @@ export function Kpi({
   className,
 }: KpiProps) {
   const styles = toneStyles[tone];
-  const animatedValue = useCountUp(countUp?.value, countUp?.duration);
+  const animatedValue = useCountUp(countUp?.value, countUp?.duration, label);
   const displayValue =
     countUp && animatedValue !== undefined ? countUp.format(animatedValue) : value;
 

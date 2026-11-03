@@ -5,12 +5,12 @@ import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
 import { Loader2 } from 'lucide-react';
 import type { useOfferListState } from './offer-list-use-offer-list-state';
-import { OfferMemberPicker } from './offer-member-picker';
 
 export function renderCreateOfferForm({
-  user,
-  companyName,
-  setCompanyName,
+  companyId,
+  setCompanyId,
+  companies,
+  companiesQuery,
   name,
   setName,
   dashboardId,
@@ -21,19 +21,17 @@ export function renderCreateOfferForm({
   setUtmifyAccess,
   utmifyPassword,
   setUtmifyPassword,
-  memberIds,
-  setMemberIds,
   createAttempted,
   setCreateAttempted,
-  usersQuery,
   createMut,
   canCreate,
   createErrors,
 }: Pick<
   ReturnType<typeof useOfferListState>,
-  | 'user'
-  | 'companyName'
-  | 'setCompanyName'
+  | 'companyId'
+  | 'setCompanyId'
+  | 'companies'
+  | 'companiesQuery'
   | 'name'
   | 'setName'
   | 'dashboardId'
@@ -44,11 +42,8 @@ export function renderCreateOfferForm({
   | 'setUtmifyAccess'
   | 'utmifyPassword'
   | 'setUtmifyPassword'
-  | 'memberIds'
-  | 'setMemberIds'
   | 'createAttempted'
   | 'setCreateAttempted'
-  | 'usersQuery'
   | 'createMut'
   | 'canCreate'
   | 'createErrors'
@@ -63,23 +58,52 @@ export function renderCreateOfferForm({
       className="glass-card space-y-4 p-5"
     >
       <div>
-        <p className="hud-label">Nova conexão UTMify</p>
+        <p className="hud-label">Nova oferta da empresa</p>
         <p className="mt-1 text-[12px] text-white/45">
-          Login e senha ficam criptografados no backend e nunca retornam para o navegador.
+          A oferta ficará vinculada à empresa selecionada e respeitará as permissões dos seus
+          membros.
         </p>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         <FormField
           id="offer-company"
           label="Empresa"
-          error={createAttempted ? createErrors.companyName : null}
+          error={
+            companiesQuery.isError
+              ? 'Não foi possível carregar as empresas. Tente novamente.'
+              : createAttempted
+                ? createErrors.companyId
+                : null
+          }
         >
-          <Input
-            value={companyName}
-            onChange={(e) => setCompanyName(e.target.value)}
-            placeholder="Ex: Empresa 1"
-          />
+          <select
+            id="offer-company"
+            value={companyId}
+            onChange={(e) => setCompanyId(e.target.value)}
+            disabled={companiesQuery.isLoading || companiesQuery.isError}
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+          >
+            <option value="">
+              {companiesQuery.isLoading ? 'Carregando empresas…' : 'Selecione a empresa'}
+            </option>
+            {companies.map((company) => (
+              <option key={company.id} value={company.id}>
+                {company.name}
+              </option>
+            ))}
+          </select>
         </FormField>
+        {companiesQuery.isError && (
+          <Button type="button" variant="outline" onClick={() => void companiesQuery.refetch()}>
+            Tentar novamente
+          </Button>
+        )}
+        {!companiesQuery.isLoading && !companiesQuery.isError && companies.length === 0 && (
+          <p className="col-span-full text-sm text-muted-foreground">
+            Você precisa criar uma empresa ou ser administrador de uma empresa para cadastrar
+            ofertas.
+          </p>
+        )}
         <FormField
           id="offer-name"
           label="Nome da oferta"
@@ -149,17 +173,10 @@ export function renderCreateOfferForm({
           </>
         )}
       </div>
-      {user?.role === 'admin' && (
-        <OfferMemberPicker
-          members={usersQuery.data ?? []}
-          selected={memberIds}
-          onChange={setMemberIds}
-          loading={usersQuery.isLoading}
-        />
-      )}
       <div className="flex justify-end">
-        <Button type="submit" disabled={createMut.isPending}>
-          {createMut.isPending && <Loader2 className="h-4 w-4 animate-spin" />}Criar e sincronizar
+        <Button type="submit" disabled={createMut.isPending || !canCreate}>
+          {createMut.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+          {utmifyAccess ? 'Criar e sincronizar' : 'Criar oferta'}
         </Button>
       </div>
     </form>

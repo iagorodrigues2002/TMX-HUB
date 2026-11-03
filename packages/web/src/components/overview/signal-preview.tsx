@@ -25,7 +25,6 @@ import { GatewayOverview } from './gateway-overview';
 import { Dataset } from './overview-dashboard-dataset';
 import { type OverviewDataset, formatConversionRate } from './overview-dashboard-support';
 import { ReceiptRevenueChart } from './receipt-revenue-chart';
-import { ReserveReleaseProjection } from './reserve-release-projection';
 import styles from './signal-preview.module.css';
 
 export const SIGNAL_PREVIEW = process.env.NEXT_PUBLIC_TMX_SIGNAL_PREVIEW === '1';
@@ -35,13 +34,16 @@ export function SignalPreview({
   accounts,
   period,
   salesView = 'general',
+  selected,
+  onSelect,
 }: {
   datasets: OverviewDataset[];
   accounts?: TrackingOverviewAccount[];
   period: DateRange;
   salesView?: 'general' | 'natural';
+  selected: string;
+  onSelect: (key: string) => void;
 }) {
-  const [selected, setSelected] = useState('');
   const { visual: effects } = useInterfaceEffects();
   const [motion, setMotion] = useState(false);
   const [hidden, setHidden] = useState(false);
@@ -160,7 +162,7 @@ export function SignalPreview({
           <select
             aria-label="Escopo dos dados"
             value={dataset.key}
-            onChange={(event) => setSelected(event.target.value)}
+            onChange={(event) => onSelect(event.target.value)}
           >
             {datasets.map((item) => (
               <option key={item.key} value={item.key}>
@@ -253,7 +255,6 @@ export function SignalPreview({
         </div>
       </section>
       <Dataset dataset={dataset} salesView={salesView} />
-      <ReserveReleaseProjection salesView={salesView} offerIds={dataset.offerIds ?? []} />
       {accounts && (
         <GatewayOverview
           accounts={accounts.filter((account) => dataset.key.startsWith(`${account.owner_id}:`))}

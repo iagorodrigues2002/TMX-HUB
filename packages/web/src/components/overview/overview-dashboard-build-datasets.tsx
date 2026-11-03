@@ -28,6 +28,9 @@ export function buildDatasets(
   finances: TrackingOverviewOffer[] | undefined,
 ): OverviewDataset[] {
   const groups = new Map<string, DatasetAccumulator>();
+  const revenueMinor = new Map<string, number>();
+  const incompleteFinancialGroups = new Set<string>();
+  const incompleteTrackingGroups = new Set<string>();
 
   offers.forEach((descriptor, index) => {
     const snapshot = snapshots[index];
@@ -68,9 +71,39 @@ export function buildDatasets(
     if (summary) {
       group.pageViews += summary.page_views;
       group.fallbackClicks += summary.ad_clicks;
-      group.totals.sales += summary.paid_orders;
-      group.totals.revenue += Number(summary.paid_revenue_brl_minor) / 100;
       group.totals.ic += summary.checkout_events;
+    } else {
+      incompleteTrackingGroups.add(key);
+    }
+
+    // Both endpoints use the same period/sales view and paid-order ledger.
+    // Prefer the complete financial response: a failed heavy tracking query
+    // must not silently remove an offer's revenue from the displayed total.
+    const financial = finances?.find((row) => row.offer_id === descriptor.id);
+    const financialGross = Number(financial?.gross_revenue_brl_minor);
+    const summaryGross = Number(summary?.paid_revenue_brl_minor);
+    const financialValid =
+      financial &&
+      /^\d+$/.test(financial.gross_revenue_brl_minor) &&
+      Number.isSafeInteger(financialGross) &&
+      financialGross >= 0 &&
+      Number.isSafeInteger(financial.paid_orders) &&
+      financial.paid_orders >= 0;
+    const summaryValid =
+      summary &&
+      /^\d+$/.test(summary.paid_revenue_brl_minor) &&
+      Number.isSafeInteger(summaryGross) &&
+      summaryGross >= 0 &&
+      Number.isSafeInteger(summary.paid_orders) &&
+      summary.paid_orders >= 0;
+    if (financialValid || summaryValid) {
+      group.totals.sales += financialValid ? financial.paid_orders : summary!.paid_orders;
+      revenueMinor.set(
+        key,
+        (revenueMinor.get(key) ?? 0) + (financialValid ? financialGross : summaryGross),
+      );
+    } else {
+      incompleteFinancialGroups.add(key);
     }
 
     for (const window of intradaySummary?.windows ?? []) {
@@ -86,45 +119,60 @@ export function buildDatasets(
     groups.set(key, group);
   });
 
-  return [...groups.values()].map((group) => {
-    const offerIds = offers
-      .filter(
-        (offer) =>
-          (scope === 'offer'
-            ? offer.id
-            : `${offer.ownerId}:${snapshots[offers.indexOf(offer)]?.offer.currency ?? offer.currency}`) ===
-          group.key,
-      )
-      .map((offer) => offer.id);
-    const finance = overviewFinancials(offerIds, finances);
-    const totals = computedMetrics(group.totals);
-    const pageViewConversion = group.pageViews > 0 ? group.totals.sales / group.pageViews : null;
+  return [...groups.values()]
+    .filter((group) => !incompleteFinancialGroups.has(group.key))
+    .map((group) => {
+      const offerIds = offers
+        .filter(
+          (offer) =>
+            (scope === 'offer'
+              ? offer.id
+              : `${offer.ownerId}:${snapshots[offers.indexOf(offer)]?.offer.currency ?? offer.currency}`) ===
+            group.key,
+        )
+        .map((offer) => offer.id);
+      const finance = overviewFinancials(offerIds, finances);
+      group.totals.revenue = (revenueMinor.get(group.key) ?? 0) / 100;
+      const totals = computedMetrics(group.totals);
+      const trackingComplete = !incompleteTrackingGroups.has(group.key);
+      const pageViewConversion =
+        trackingComplete && group.pageViews > 0 ? group.totals.sales / group.pageViews : null;
+      if (!trackingComplete) {
+        totals.conversionRate = null;
+        totals.icCpa = null;
+      }
 
-    return {
-      key: group.key,
-      offerIds,
-      finance,
-      label: group.ownerName,
-      currency: 'BRL',
-      offerCount: group.offerNames.length,
-      totals,
-      clicks: group.clicks || group.fallbackClicks,
-      pageViews: group.pageViews,
-      conversionRate: pageViewConversion,
-      daily: [...group.daily.entries()]
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([date, metrics]) => ({
-          key: date,
-          label: shortDate(date),
-          value: metrics.revenue,
-          secondary: metrics.sales,
+      return {
+        key: group.key,
+        offerIds,
+        finance,
+        label: group.ownerName,
+        currency: 'BRL',
+        offerCount: group.offerNames.length,
+        totals,
+        clicks: group.clicks || group.fallbackClicks,
+        pageViews: group.pageViews,
+        conversionRate: pageViewConversion,
+        daily: [...group.daily.entries()]
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([date, metrics]) => ({
+            key: date,
+            label: shortDate(date),
+            value: metrics.revenue,
+            secondary: metrics.sales,
+          })),
+        intraday: [...group.intraday.values()].map((window) => ({
+          key: window.label,
+          label: window.label,
+          value: window.metrics.revenue,
+          secondary: window.metrics.sales,
         })),
-      intraday: [...group.intraday.values()].map((window) => ({
-        key: window.label,
-        label: window.label,
-        value: window.metrics.revenue,
-        secondary: window.metrics.sales,
-      })),
-    };
-  });
+      };
+    });
+}
+
+/** Do not let a renderer fall back to another account when a whole group is missing. */
+export function hasCompleteOverviewScope(offers: OfferDescriptor[], datasets: OverviewDataset[]) {
+  const covered = new Set(datasets.flatMap((dataset) => dataset.offerIds ?? []));
+  return offers.every((offer) => covered.has(offer.id));
 }

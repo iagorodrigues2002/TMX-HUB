@@ -85,6 +85,11 @@ export const DASHBOARD_DATE_PRESETS: readonly DateRangePreset[] = [
   { id: 'last-7-days', label: 'Últimos 7 dias', getRange: () => rollingDateRange(7) },
   { id: 'last-30-days', label: 'Últimos 30 dias', getRange: () => rollingDateRange(30) },
   ...MONTH_DATE_PRESETS,
+  {
+    id: 'all-time',
+    label: 'Período total',
+    getRange: () => ({ from: '2026-07-26', to: todayIso() }),
+  },
 ];
 
 export const PERIOD_DATE_PRESETS: readonly DateRangePreset[] = [

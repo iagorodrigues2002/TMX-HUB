@@ -16,10 +16,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { usePrivacy } from '@/lib/privacy-context';
-import { type ApprovedSaleClick, isActiveNotification, saleClickDetail } from '@/lib/notification-center';
+import {
+  type ApprovedSaleClick,
+  isActiveNotification,
+  saleClickDetail,
+} from '@/lib/notification-center';
 import { animateNotificationExit } from '@/lib/notification-center-motion';
-import styles from './notification-center-preview.module.css';
+import { usePrivacy } from '@/lib/privacy-context';
 import {
   Banknote,
   CheckCheck,
@@ -34,6 +37,7 @@ import {
   Undo2,
 } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import styles from './notification-center-preview.module.css';
 
 interface NotificationCenterPreviewProps {
   open: boolean;
@@ -180,25 +184,30 @@ export function NotificationCenterPreview({
   const visible = active.filter(({ kind }) => filter === 'all' || kind === filter);
 
   useLayoutEffect(() => {
-    const next = new Map([...cards.current].map(([id, element]) => [id, element.getBoundingClientRect().top]));
+    const next = new Map(
+      [...cards.current].map(([id, element]) => [id, element.getBoundingClientRect().top]),
+    );
     if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       for (const [id, top] of next) {
         const previous = positions.current.get(id);
         if (previous !== undefined && previous !== top) {
-          cards.current.get(id)?.animate?.(
-            [{ transform: `translateY(${previous - top}px)` }, { transform: 'translateY(0)' }],
-            { duration: 220, easing: 'cubic-bezier(.16,1,.3,1)' },
-          );
+          cards.current
+            .get(id)
+            ?.animate?.(
+              [{ transform: `translateY(${previous - top}px)` }, { transform: 'translateY(0)' }],
+              { duration: 220, easing: 'cubic-bezier(.16,1,.3,1)' },
+            );
         }
       }
     }
     positions.current = next;
   });
 
-  const exitCards = (ids: string[]) => animateNotificationExit(
-    ids.flatMap((id) => cards.current.get(id) ?? []),
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-  );
+  const exitCards = (ids: string[]) =>
+    animateNotificationExit(
+      ids.flatMap((id) => cards.current.get(id) ?? []),
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    );
 
   useEffect(() => onUnreadCountChange(unreadCount), [onUnreadCountChange, unreadCount]);
 
@@ -233,7 +242,10 @@ export function NotificationCenterPreview({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent overlayClassName="bg-background/40 backdrop-blur-[2px]" className={`${styles.drawer} tmx-sidebar-dialog left-auto right-0 top-0 h-dvh max-h-none w-full max-w-none gap-0 overflow-hidden rounded-none border-y-0 border-r-0 bg-popover p-0 sm:w-[460px] sm:max-h-none sm:p-0`}>
+      <DialogContent
+        overlayClassName="bg-background/40 backdrop-blur-[2px]"
+        className={`${styles.drawer} tmx-sidebar-dialog left-auto right-0 top-0 h-dvh max-h-none w-full max-w-none gap-0 overflow-hidden rounded-none border-y-0 border-r-0 bg-popover p-0 sm:w-[460px] sm:max-h-none sm:p-0`}
+      >
         <DialogHeader className="border-b border-border/70 px-5 py-5 pr-16 sm:px-6">
           <div className="flex items-center gap-3">
             <div className="grid h-10 w-10 place-items-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
@@ -325,7 +337,10 @@ export function NotificationCenterPreview({
               {visible.map((notification, index) => (
                 <li
                   key={notification.id}
-                  ref={(element) => { if (element) cards.current.set(notification.id, element); else cards.current.delete(notification.id); }}
+                  ref={(element) => {
+                    if (element) cards.current.set(notification.id, element);
+                    else cards.current.delete(notification.id);
+                  }}
                   className={`relative ${styles.card}`}
                   style={{ animationDelay: `${Math.min(index, 3) * 35}ms` }}
                 >
@@ -368,7 +383,10 @@ export function NotificationCenterPreview({
                           <dd className="font-medium text-foreground">{notification.source}</dd>
                         </div>
                       </dl>
-                      <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label={`Status de ${notification.title} — simulação local`}>
+                      <fieldset
+                        className="mt-3 min-w-0 border-0 p-0 flex flex-wrap gap-2"
+                        aria-label={`Status de ${notification.title} — simulação local`}
+                      >
                         {(['Pendente', 'Em progresso', 'Concluído'] as const).map((status) => (
                           <Button
                             key={status}
@@ -378,18 +396,31 @@ export function NotificationCenterPreview({
                             aria-pressed={notification.status === status}
                             onClick={async () => {
                               if (status === 'Concluído') await exitCards([notification.id]);
-                              setNotifications((current) => current.map((item) =>
-                              item.id === notification.id && item.kind === 'task'
-                                ? { ...item, status, statusVariant: status === 'Concluído' ? 'success' : status === 'Pendente' ? 'warning' : 'default' }
-                                : item,
-                              ));
+                              setNotifications((current) =>
+                                current.map((item) =>
+                                  item.id === notification.id && item.kind === 'task'
+                                    ? {
+                                        ...item,
+                                        status,
+                                        statusVariant:
+                                          status === 'Concluído'
+                                            ? 'success'
+                                            : status === 'Pendente'
+                                              ? 'warning'
+                                              : 'default',
+                                      }
+                                    : item,
+                                ),
+                              );
                             }}
                           >
                             {status}
                           </Button>
                         ))}
-                      </div>
-                      <p className="mt-2 text-[10px] text-muted-foreground">Simulação local · não altera o ClickUp nem o Discord.</p>
+                      </fieldset>
+                      <p className="mt-2 text-[10px] text-muted-foreground">
+                        Simulação local · não altera o ClickUp nem o Discord.
+                      </p>
                       <div className="mt-4 flex items-center justify-between gap-2 border-t border-border/50 pt-3">
                         <ReadAction
                           unread={notification.unread}

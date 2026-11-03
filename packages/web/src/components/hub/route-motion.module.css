@@ -1,0 +1,36 @@
+/* The shell owns page entrance; transient dialogs/toasts keep their own feedback. */
+.coordinated [class~="page-transition"],
+.coordinated [class~="tmx-tabs-content"],
+.coordinated [class~="tmx-tracking-section-transition"],
+.coordinated [class~="signal-reveal"],
+.coordinated [class~="refund-header"],
+.coordinated [class~="refund-chart-reveal"],
+.coordinated [class~="refund-bar-reveal"],
+.coordinated [class*="animate-[tmx-reveal"],
+.coordinated [class*="animate-[tmx-tabs-content-in"],
+.coordinated [data-motion-panel],
+.coordinated [data-motion="on"] > div {
+  animation: none !important;
+}
+
+/* Legacy scroll reveals must not hide or replay panels already owned by RouteMotion. */
+.coordinated [class~="refund-panel"] {
+  transition: none !important;
+}
+.coordinated [class~="refund-panel"][data-reveal="pending"] {
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+html[data-tmx-motion="off"] .coordinated *,
+html[data-tmx-motion="off"] .coordinated *::before,
+html[data-tmx-motion="off"] .coordinated *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+html[data-tmx-motion-paused="true"] .coordinated *,
+html[data-tmx-motion-paused="true"] .coordinated *::before,
+html[data-tmx-motion-paused="true"] .coordinated *::after {
+  animation-play-state: paused !important;
+}

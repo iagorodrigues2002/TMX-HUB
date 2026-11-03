@@ -1,5 +1,6 @@
 import type { NavItem } from './nav-config-nav-item';
 import { nav_items_admin } from './nav-config-nav-items-admin';
+import { nav_items_company } from './nav-config-nav-items-company';
 import { nav_items_integrations } from './nav-config-nav-items-integrations';
 import { nav_items_offers } from './nav-config-nav-items-offers';
 import { nav_items_overview } from './nav-config-nav-items-overview';
@@ -10,6 +11,7 @@ export const NAV_ITEMS: NavItem[] = [
   nav_items_overview,
   nav_items_offers,
   nav_items_tracking,
+  nav_items_company,
   nav_items_tools,
   nav_items_integrations,
   nav_items_admin,

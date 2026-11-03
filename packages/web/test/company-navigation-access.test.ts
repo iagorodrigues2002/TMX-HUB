@@ -1,0 +1,46 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import {
+  navigationTools,
+  permissionGroups,
+  selectedNavigation,
+} from '../src/components/admin/company-navigation-access';
+import { visibleNavigation } from '../src/components/hub/navigation';
+import type { AuthUser } from '../src/lib/api-client/auth-types';
+
+test('permissions reuse sidebar labels and hierarchy, without exposing global admin as a grant', () => {
+  assert.deepEqual(
+    permissionGroups.map((group) => group.label),
+    ['Visão geral', 'Ofertas', 'Rastreamento', 'Empresa', 'Ferramentas', 'Integrações'],
+  );
+  assert.ok(
+    permissionGroups
+      .find((group) => group.id === 'tracking')
+      ?.entries.some((item) => item.id === 'tracking-upsell-intelligence'),
+  );
+  assert.ok(!permissionGroups.some((group) => group.id === 'admin'));
+});
+test('catalog does not enable intelligence or overview and selection survives serialization', () => {
+  const tools = navigationTools(['offers-all'], []);
+  assert.deepEqual(selectedNavigation(JSON.parse(JSON.stringify(tools))), ['offers-all']);
+  assert.ok(tools.includes('ofertas'));
+  const user = {
+    id: 'member',
+    name: 'Member',
+    email: 'member@example.test',
+    role: 'user',
+    allowedTools: tools,
+    createdAt: '',
+  } as AuthUser;
+  const visible = visibleNavigation(user);
+  assert.ok(!visible.some((group) => group.id === 'tracking' || group.id === 'overview'));
+  assert.deepEqual(
+    visible.find((group) => group.id === 'offers')?.children?.map((child) => child.id),
+    ['offers-all'],
+  );
+});
+test('empty selection is explicit and legacy offers selection is understood before editing', () => {
+  assert.deepEqual(navigationTools([], ['ofertas']), ['nav:scoped']);
+  assert.ok(selectedNavigation(['ofertas']).includes('tracking-upsell-intelligence'));
+  assert.ok(!selectedNavigation(['ofertas']).includes('ads-intelligence'));
+});

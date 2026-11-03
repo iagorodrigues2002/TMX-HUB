@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import Fastify from 'fastify';
+import errorHandler from '../src/plugins/error-handler.js';
 import plugin from '../src/routes/refunds-dashboard.js';
 import type { buildRefundAnalytics } from '../src/services/refund-analytics.js';
 
-// Route-level fixture: no server, Redis, PostgreSQL or provider connections.
-async function report(sub: string, role: string, query: Record<string, string> = {}) {
-  let handler: ((request: unknown, reply: unknown) => Promise<unknown>) | undefined;
+// Route-level injection: no listening server, Redis, PostgreSQL or provider connections.
+async function report(sub: string, role: 'admin' | 'user', query: Record<string, string> = {}) {
   let queriedIds: unknown;
   const candidates = [
     { id: 'mine', userId: 'admin-owner', companyName: ' TMX ', name: 'PJR_ENG', memberIds: [] },
@@ -19,52 +20,60 @@ async function report(sub: string, role: string, query: Record<string, string> =
     },
     { id: 'mine-no-company', userId: 'admin-owner', name: 'SLM_DE', memberIds: [] },
   ];
-  const app = {
-    get: (_path: string, fn: NonNullable<typeof handler>) => {
-      handler = fn;
-    },
-    offerStore: {
-      listAccessible: async (_id: string, admin: boolean) =>
-        admin ? candidates : candidates.filter((o) => o.userId === sub),
-    },
-    db: async (_strings: TemplateStringsArray, ...values: unknown[]) => {
-      if (_strings.join('').includes('FROM webhook_receipts wr')) return [];
-      queriedIds = values.find(Array.isArray);
-      return (queriedIds as string[]).map((id) => ({
-        id,
-        offer_id: id,
+  const app = Fastify();
+  app.decorate('offerStore', {
+    listAccessible: async (_id: string, admin: boolean) =>
+      admin ? candidates : candidates.filter((o) => o.userId === sub),
+  });
+  const db = async (_strings: TemplateStringsArray, ...values: unknown[]) => {
+    const statement = _strings.join('');
+    // These cases exercise legacy owners without migrated company memberships.
+    if (/FROM company_memberships|FROM company_offers/.test(statement)) return [];
+    if (_strings.join('').includes('FROM webhook_receipts wr'))
+      return (values.find(Array.isArray) as string[]).map((id) => ({
+        order_id: id,
+        external_id: id,
         provider: 'vendepay',
-        connection_name: 'Fixture',
-        product_name: 'Front',
-        paid_at: '2026-09-01T12:00:00Z',
-        reversal_at: '2026-09-10T12:00:00Z',
-        amount_brl_minor: id === 'mine' ? '10000' : '90000',
-        penalty_brl_minor: '2700',
+        received_at: '2026-09-10T12:00:00Z',
+        payload: { checkoutId: id, event: 'refund' },
       }));
-    },
+    queriedIds = values.find(Array.isArray);
+    return (queriedIds as string[]).map((id) => ({
+      id,
+      external_id: id,
+      status: 'refunded',
+      origin: 'natural',
+      offer_id: id,
+      provider: 'vendepay',
+      connection_name: 'Fixture',
+      product_name: 'Front',
+      paid_at: '2026-09-01T12:00:00Z',
+      reversal_at: '2026-09-10T12:00:00Z',
+      amount_brl_minor: id === 'mine' ? '10000' : '90000',
+      penalty_brl_minor: '2700',
+    }));
   };
-  await plugin(app as unknown as Parameters<typeof plugin>[0], {});
-  let status = 200;
-  const reply = {
-    code: (value: number) => {
-      status = value;
-      return reply;
-    },
-    send: (value: unknown) => value,
-  };
-  assert.ok(handler);
-  const body = (await handler(
-    {
-      user: { sub, role },
-      query: {
-        from: '2026-09-01',
-        to: '2026-09-30',
-        ...query,
-      },
-    },
-    reply,
-  )) as ReturnType<typeof buildRefundAnalytics>;
-  return { queriedIds, status, body };
+  Object.assign(db, { unsafe: (sql: string) => sql });
+  app.decorate('db', db);
+  app.addHook('preHandler', async (request) => {
+    request.user = { sub, role, email: 'fixture@example.test', iat: 0, exp: 9999999999 };
+  });
+  await errorHandler(app, {});
+  await app.register(plugin);
+  try {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/tracking/refunds-dashboard',
+      query: { from: '2026-09-01', to: '2026-09-30', ...query },
+    });
+    return {
+      queriedIds,
+      status: response.statusCode,
+      body: response.json<ReturnType<typeof buildRefundAnalytics>>(),
+    };
+  } finally {
+    await app.close();
+  }
 }
 
 test('administrator default includes only owned TMX offers, excluding other companies and missing company', async () => {

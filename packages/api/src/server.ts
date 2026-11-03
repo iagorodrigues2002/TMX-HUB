@@ -2,6 +2,7 @@ import { buildApp } from './app.js';
 import { env } from './env.js';
 import { runAdsImport } from './services/ads-intelligence.js';
 import { startBrowserPush } from './services/browser-push.js';
+import { runFinanceSync } from './services/company-finance.js';
 import { runRecoveryEmailAutomation } from './services/recovery-automation.js';
 import { runSyzepayAutoClassification } from './services/syzepay-auto.js';
 import { recoverTrackingDeliveries } from './services/tracking-delivery-recovery.js';
@@ -23,6 +24,20 @@ import { createVslWorker } from './workers/vsl.worker.js';
 
 async function main() {
   const app = await buildApp();
+  let financeRunning = false;
+  const financeTimer = setInterval(() => {
+    if (financeRunning || !app.db) return;
+    financeRunning = true;
+    void runFinanceSync(app.db)
+      .catch(() => app.log.error('Finance sync cycle failed'))
+      .finally(() => {
+        financeRunning = false;
+      });
+  }, 15_000);
+  financeTimer.unref();
+  app.addHook('onClose', async () => {
+    clearInterval(financeTimer);
+  });
   const stopBrowserPush = startBrowserPush(app);
   // Start the financial consumer before seeding/recovering any backlog.
   // Recovery also performs network-bound FX repair and must never delay the

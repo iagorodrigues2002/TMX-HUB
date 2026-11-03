@@ -69,7 +69,8 @@ export function UpsellOperatorLogs() {
       {logs.isLoading && <output className="block text-sm">Carregando auditoria…</output>}
       {logs.isError && (
         <p role="alert" className="text-sm text-destructive">
-          Não foi possível consultar esta auditoria. Verifique sua permissão e tente atualizar.
+          Não foi possível consultar esta auditoria. A consulta pode estar indisponível neste
+          ambiente. Verifique sua permissão ou tente atualizar.
         </p>
       )}
       {data && !logs.isError && (

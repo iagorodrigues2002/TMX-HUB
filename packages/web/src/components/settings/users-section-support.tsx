@@ -36,7 +36,7 @@ export function formatDate(iso: string): string {
 
 export function detectScope(user: AuthUser): AccessScope {
   if (user.role === 'admin') return 'full';
-  if (!user.allowedTools || user.allowedTools.length === 0) return 'full';
+  if (user.allowedTools === undefined) return 'full';
   if (
     user.allowedTools.length === 1 &&
     (user.allowedTools[0] === 'video-shield' || user.allowedTools[0] === 'creative-studio')
@@ -48,5 +48,5 @@ export function detectScope(user: AuthUser): AccessScope {
 export function scopeToAllowedTools(scope: AccessScope, custom: ToolKey[]): ToolKey[] | null {
   if (scope === 'full') return null;
   if (scope === 'video-shield') return ['video-shield'];
-  return custom.length > 0 ? custom : null;
+  return custom;
 }

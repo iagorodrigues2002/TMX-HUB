@@ -3,27 +3,43 @@ import { CallCreateSchema, type ManagedCall, type TaskPerson } from '@page-clone
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { env } from '../env.js';
+import {
+  assertCompanyPeople,
+  assertOperationAccess,
+  assertOperationCompany,
+  operationScope,
+  participantHasCompanyAccess,
+} from '../lib/company-operation-access.js';
 import { HttpProblem, zodToProblem } from '../lib/problem.js';
+import { saveNativeCall } from '../services/native-calls.js';
 import { validTaskBridgeSecret } from './task-management.js';
 
 const problem = (status: number, code: string, detail: string) =>
   new HttpProblem({ status, code, title: code, detail });
 const uuid = z.string().uuid();
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
-const admin = (user: { role: string } | undefined) => {
-  if (user?.role !== 'admin')
-    throw problem(403, 'admin_required', 'Área exclusiva para administradores.');
-};
 export async function callManagementRoutes(app: FastifyInstance) {
   app.addHook('preHandler', async (req) => {
     if (!req.user) throw problem(401, 'unauthorized', 'Entre na sua conta.');
     if (!app.db) throw problem(503, 'call_database_unavailable', 'Banco de calls indisponível.');
   });
-  app.get('/calls/notifications', async (req) => ({
-    notifications: (
-      await app.db!`SELECT n.id,n.body,n.received_at FROM managed_call_notifications n JOIN managed_calls c ON c.id=n.call_id WHERE n.user_id=${req.user!.sub} AND n.read_at IS NULL AND n.revision=(c.body->>'revision')::int AND c.body->>'status'='scheduled' AND (c.body->>'startsAt')::timestamptz + ((c.body->>'durationMinutes')::int * interval '1 minute')>now() ORDER BY n.received_at DESC LIMIT 50`
-    ).map((r) => ({ id: r.id, ...r.body, receivedAt: r.received_at })),
-  }));
+  app.get('/calls/notifications', async (req) => {
+    const rows =
+      await app.db!`SELECT n.id,n.body,n.received_at,c.body AS call FROM managed_call_notifications n JOIN managed_calls c ON c.id=n.call_id WHERE (${env.TASK_MANAGEMENT_MODE}='native' OR coalesce(c.body->>'managementMode','clickup')='clickup') AND n.user_id=${req.user!.sub} AND n.read_at IS NULL AND n.revision=(c.body->>'revision')::int AND c.body->>'status'='scheduled' AND (c.body->>'startsAt')::timestamptz + ((c.body->>'durationMinutes')::int * interval '1 minute')>now() ORDER BY n.received_at DESC LIMIT 50`;
+    const allowed = await Promise.all(
+      rows.map(
+        async (r) =>
+          (r.call as ManagedCall).participants.some((p) => p.userId === req.user!.sub) &&
+          (req.user!.role === 'admin' ||
+            (await participantHasCompanyAccess(app.db!, req.user!.sub, r.call.companyId))),
+      ),
+    );
+    return {
+      notifications: rows
+        .filter((_, i) => allowed[i])
+        .map((r) => ({ id: r.id, ...r.body, receivedAt: r.received_at })),
+    };
+  });
   app.post('/calls/notifications/:id/read', async (req) => {
     const parsed = z
       .object({ id: z.string().min(1).max(200) })
@@ -34,15 +50,32 @@ export async function callManagementRoutes(app: FastifyInstance) {
     return { read: true };
   });
   app.get('/calls', async (req) => {
-    admin(req.user);
     const parsed = z
-      .object({ status: z.enum(['all', 'scheduled', 'completed', 'cancelled']).default('all') })
+      .object({
+        status: z.enum(['all', 'scheduled', 'completed', 'cancelled']).default('all'),
+        companyId: uuid.optional(),
+      })
       .strict()
       .safeParse(req.query);
     if (!parsed.success) throw zodToProblem(parsed.error, req.url);
+    const scope = await operationScope(
+      app.db!,
+      { id: req.user!.sub, admin: req.user!.role === 'admin' },
+      parsed.data.companyId,
+    );
     const rows =
-      await app.db!`SELECT body FROM managed_calls WHERE (${parsed.data.status}='all' OR body->>'status'=${parsed.data.status}) ORDER BY (body->>'startsAt')::timestamptz DESC LIMIT 200`;
-    return { calls: rows.map((r) => r.body), total: rows.length };
+      env.TASK_MANAGEMENT_MODE === 'native'
+        ? await app.db!`SELECT c.body,d.state delivery_state FROM managed_calls c LEFT JOIN managed_native_deliveries d ON d.entity_kind='call' AND d.entity_id=c.id WHERE (${scope.global} OR c.body->>'companyId'=ANY(${scope.companyIds}::text[])) AND (${parsed.data.status}='all' OR c.body->>'status'=${parsed.data.status}) ORDER BY (c.body->>'startsAt')::timestamptz DESC LIMIT 200`
+        : await app.db!`SELECT body FROM managed_calls WHERE coalesce(body->>'managementMode','clickup')='clickup' AND (${scope.global} OR body->>'companyId'=ANY(${scope.companyIds}::text[])) AND (${parsed.data.status}='all' OR body->>'status'=${parsed.data.status}) ORDER BY (body->>'startsAt')::timestamptz DESC LIMIT 200`;
+    return {
+      calls: rows.map((r) =>
+        env.TASK_MANAGEMENT_MODE === 'native' && ['failed', 'uncertain'].includes(r.delivery_state)
+          ? { ...r.body, discordState: 'failed' }
+          : r.body,
+      ),
+      total: rows.length,
+      managementMode: env.TASK_MANAGEMENT_MODE,
+    };
   });
   for (const action of ['create', 'update', 'cancel', 'complete'] as const) {
     const method = action === 'update' ? 'PUT' : 'POST';
@@ -52,8 +85,9 @@ export async function callManagementRoutes(app: FastifyInstance) {
       method,
       url,
       handler: async (req, reply) => {
-        admin(req.user);
-        if (!env.TASK_AUTOMATION_SECRET)
+        const actor = { id: req.user!.sub, admin: req.user!.role === 'admin' };
+        await operationScope(app.db!, actor);
+        if (env.TASK_MANAGEMENT_MODE !== 'native' && !env.TASK_AUTOMATION_SECRET)
           throw problem(
             503,
             'call_automation_unconfigured',
@@ -71,6 +105,53 @@ export async function callManagementRoutes(app: FastifyInstance) {
         if (!key.success || (action !== 'create' && !params.success) || !parsed.success)
           throw problem(400, 'invalid_call', 'Confira os campos, a revisão e a chave de criação.');
         const input = parsed.data;
+        if (
+          action === 'create' &&
+          env.TASK_MANAGEMENT_MODE === 'native' &&
+          !('companyId' in input && input.companyId)
+        )
+          throw problem(400, 'company_required', 'Selecione a empresa da call.');
+        if (
+          action === 'create' &&
+          env.TASK_MANAGEMENT_MODE !== 'native' &&
+          'companyId' in input &&
+          input.companyId
+        )
+          throw problem(
+            409,
+            'native_company_management_required',
+            'Ative a gestão nativa antes de agendar calls por empresa.',
+          );
+        const [existingCall] =
+          action !== 'create' && params.success
+            ? await app.db!`SELECT body FROM managed_calls WHERE id=${params.data.id}`
+            : [];
+        if (action !== 'create' && !existingCall)
+          throw problem(404, 'call_not_found', 'Call não encontrada.');
+        await assertOperationCompany(
+          app.db!,
+          actor,
+          existingCall?.body.companyId ?? ('companyId' in input ? input.companyId : null),
+        );
+        if (
+          env.TASK_MANAGEMENT_MODE === 'native' &&
+          (action === 'create' || existingCall?.body.managementMode === 'native')
+        ) {
+          const id = action === 'create' ? null : params.success ? params.data.id : null;
+          return reply
+            .code(action === 'create' ? 201 : 200)
+            .send(await saveNativeCall(app.db!, key.data, actor, action, id, input));
+        }
+        // A manual outcome remains local truth during cutover; the legacy outbox stays pending.
+        if (
+          !env.TASK_AUTOMATION_SECRET &&
+          !(env.TASK_MANAGEMENT_MODE === 'native' && (action === 'complete' || action === 'cancel'))
+        )
+          throw problem(
+            503,
+            'call_automation_unconfigured',
+            'A call legada depende da integração existente.',
+          );
         const callId = action === 'create' ? randomUUID() : params.success ? params.data.id : '';
         const requestHash = hash({ action, callId: action === 'create' ? null : callId, input });
         const saved = await app.db!.begin(async (tx) => {
@@ -80,10 +161,25 @@ export async function callManagementRoutes(app: FastifyInstance) {
           if (previous) {
             if (previous.user_id !== req.user!.sub || previous.request_hash !== requestHash)
               throw problem(409, 'idempotency_conflict', 'Chave já utilizada em outra operação.');
-            return (await tx`SELECT body FROM managed_calls WHERE id=${previous.call_id}`)[0]!.body;
+            const saved = (
+              await tx`SELECT body FROM managed_calls WHERE id=${previous.call_id}`
+            )[0]!.body;
+            await assertOperationAccess(tx, actor, saved.companyId);
+            return saved;
           }
           const [row] = await tx`SELECT body FROM managed_calls WHERE id=${callId} FOR UPDATE`;
           const current = row?.body as ManagedCall | undefined;
+          await assertOperationCompany(
+            tx,
+            actor,
+            current?.companyId ?? ('companyId' in input ? input.companyId : null),
+          );
+          if (current && 'companyId' in input && input.companyId !== current.companyId)
+            throw problem(
+              409,
+              'call_company_immutable',
+              'A empresa da call não pode ser alterada.',
+            );
           if (action !== 'create') {
             if (!current) throw problem(404, 'call_not_found', 'Call não encontrada.');
             if (!('revision' in input) || input.revision !== current.revision)
@@ -106,6 +202,11 @@ export async function callManagementRoutes(app: FastifyInstance) {
               throw problem(400, 'call_in_past', 'Escolha um horário futuro.');
             const people =
               await tx`SELECT body FROM managed_task_people WHERE id IN ${tx(input.participantIds)}`;
+            await assertCompanyPeople(
+              tx,
+              current?.companyId ?? input.companyId,
+              people.map((p) => p.body as TaskPerson),
+            );
             if (
               people.length !== input.participantIds.length ||
               people.some((p) => !p.body.clickupId || !p.body.discordId)
@@ -118,6 +219,7 @@ export async function callManagementRoutes(app: FastifyInstance) {
             const { participantIds: _ids, ...fields } = input;
             body = {
               ...fields,
+              companyId: current?.companyId ?? input.companyId,
               startsAt: new Date(input.startsAt).toISOString(),
               id: callId,
               participants: people.map((p) => p.body as TaskPerson),
@@ -161,7 +263,7 @@ export async function callAutomationRoutes(app: FastifyInstance) {
     app.db!.begin(async (tx) => {
       // Claim and edits lock the call first: cancellation cannot race an old reminder lease.
       const calls =
-        await tx`SELECT c.id FROM managed_calls c WHERE EXISTS (SELECT 1 FROM managed_call_commands q WHERE q.call_id=c.id AND q.state='queued') OR EXISTS (SELECT 1 FROM managed_call_reminders r WHERE r.call_id=c.id AND r.state='queued' AND r.due_at<=now()) ORDER BY c.id LIMIT 15 FOR UPDATE OF c SKIP LOCKED`;
+        await tx`SELECT c.id FROM managed_calls c WHERE coalesce(c.body->>'managementMode','clickup')='clickup' AND (EXISTS (SELECT 1 FROM managed_call_commands q WHERE q.call_id=c.id AND q.state='queued') OR EXISTS (SELECT 1 FROM managed_call_reminders r WHERE r.call_id=c.id AND r.state='queued' AND r.due_at<=now())) ORDER BY c.id LIMIT 15 FOR UPDATE OF c SKIP LOCKED`;
       if (!calls.length) return { commands: [] };
       const ids = calls.map((c) => c.id);
       await tx`UPDATE managed_call_reminders SET state='expired' WHERE call_id IN ${tx(ids)} AND state='queued' AND due_at<now()-interval '2 minutes'`;
@@ -198,6 +300,12 @@ export async function callAutomationRoutes(app: FastifyInstance) {
       if (!identity) throw problem(404, 'call_command_not_found', 'Comando não encontrado.');
       const [row] =
         await tx`SELECT body FROM managed_calls WHERE id=${identity.call_id} FOR UPDATE`;
+      if (!row || (row.body.managementMode ?? 'clickup') !== 'clickup')
+        throw problem(
+          409,
+          'call_bridge_mode_conflict',
+          'A ponte legada aceita apenas calls do ClickUp.',
+        );
       const [command] =
         await tx`SELECT revision,state FROM managed_call_commands WHERE id=${input.id} FOR UPDATE`;
       const call = row!.body as ManagedCall;
@@ -238,6 +346,12 @@ export async function callAutomationRoutes(app: FastifyInstance) {
       if (!identity) throw problem(404, 'call_command_not_found', 'Comando não encontrado.');
       const [row] =
         await tx`SELECT body FROM managed_calls WHERE id=${identity.call_id} FOR UPDATE`;
+      if (!row || (row.body.managementMode ?? 'clickup') !== 'clickup')
+        throw problem(
+          409,
+          'call_bridge_mode_conflict',
+          'A ponte legada aceita apenas calls do ClickUp.',
+        );
       const [entry] = command
         ? await tx`SELECT * FROM managed_call_commands WHERE id=${result.id} FOR UPDATE`
         : await tx`SELECT * FROM managed_call_reminders WHERE id=${result.id} FOR UPDATE`;

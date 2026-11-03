@@ -21,7 +21,7 @@ export function registerGetSaleNoticeStream(app: FastifyInstance) {
     const authorize = async () => {
       await app.requireAuth(req);
       if (
-        req.user!.tools?.length &&
+        req.user!.tools !== undefined &&
         req.user!.role !== 'admin' &&
         !req.user!.tools.includes('ofertas')
       )

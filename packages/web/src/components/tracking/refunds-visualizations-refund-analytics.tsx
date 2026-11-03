@@ -58,9 +58,9 @@ export function RefundAnalytics({
           />
         </dl>
         <p className="mt-6 border-t border-white/10 pt-4 text-xs leading-5 text-white/65">
-          Percentual = devoluções ocorridas no período ÷ faturamento das vendas no período. Pode
-          incluir devoluções de compras antigas e superar 100%. Para avaliar a qualidade das
-          compras, consulte os meses de compra abaixo.
+          Percentual = devoluções recebidas por webhook no período ÷ faturamento das vendas no
+          período. Pode incluir devoluções de compras antigas e superar 100%. Para avaliar a
+          qualidade das compras, consulte os meses de compra abaixo.
         </p>
         {(t.missing_brl_orders > 0 || t.missing_fee_orders > 0) && (
           <output className="mt-4 block rounded-xl border border-amber-200/20 bg-amber-200/5 px-4 py-3 text-sm leading-6 text-amber-200">
@@ -69,6 +69,64 @@ export function RefundAnalytics({
           </output>
         )}
       </section>
+      {data.origin_totals && (
+        <section className={panel} aria-label="Conciliação das origens das devoluções">
+          <h2 className="text-base font-semibold text-cyan-200">De onde vêm as devoluções</h2>
+          <p className="mt-2 text-xs leading-5 text-white/65">
+            No mesmo período e filtros: geral = natural + com clique registrado + origem
+            indeterminada. Clique registrado é o clique operacional do colaborador antes da
+            aprovação, não o clique do anúncio.
+          </p>
+          <dl className="mt-5 grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
+            {(
+              [
+                ['general', 'Visão geral'],
+                ['natural', 'Visão natural'],
+                ['assisted', 'Com clique registrado'],
+                ['unknown', 'Origem indeterminada'],
+              ] as const
+            ).map(([key, label]) => {
+              const value = data.origin_totals![key];
+              return (
+                <Metric
+                  key={key}
+                  label={label}
+                  value={pick(value.brl_minor)}
+                  detail={`${value.count} devoluções · multas ${pick(value.fee_brl_minor)} · impacto ${pick(value.impact_brl_minor)}`}
+                />
+              );
+            })}
+          </dl>
+          {data.origin_totals.unknown.count > 0 && (
+            <p className="mt-5 rounded-xl border border-amber-200/20 bg-amber-200/5 px-4 py-3 text-sm leading-6 text-amber-200">
+              Origem indeterminada: falta evidência suficiente para classificar essas compras. Elas
+              permanecem na visão geral e não são tratadas automaticamente como naturais.
+            </p>
+          )}
+        </section>
+      )}
+      {!!data.undated_refunds?.count && (
+        <section
+          className={`${panel} border-amber-200/20`}
+          aria-label="Devoluções sem data comprovada"
+        >
+          <h2 className="text-base font-semibold text-amber-200">Sem recebimento comprovado</h2>
+          <p className="mt-2 text-sm leading-6 text-white/65">
+            {data.undated_refunds.count} devoluções no histórico das ofertas e filtros desta visão:{' '}
+            {pick(data.undated_refunds.brl_minor)}, multas{' '}
+            {pick(data.undated_refunds.fee_brl_minor)} e impacto{' '}
+            {pick(data.undated_refunds.impact_brl_minor)}. Sem o webhook de devolução
+            correspondente, não entram nos totais por período. Nenhuma data de compra é usada como
+            data de devolução.
+          </p>
+          {(data.undated_refunds.missing_brl_orders > 0 ||
+            data.undated_refunds.missing_fee_orders > 0) && (
+            <p className="mt-2 text-xs text-amber-200">
+              Valores parciais: há conversões BRL ou multas ainda não identificadas.
+            </p>
+          )}
+        </section>
+      )}
       <section className={`${panel} refund-comparison`}>
         <h2 className="text-lg font-semibold text-white">Comparação com o período anterior</h2>
         <p className="mt-1 text-xs text-white/50">

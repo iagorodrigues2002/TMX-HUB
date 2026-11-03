@@ -57,6 +57,14 @@ describe.skipIf(!url)('operator report end-to-end (local PostgreSQL)', () => {
     const app = Fastify();
     app.decorate('db', db);
     app.decorate('offerStore', {
+      listAccessible: async (userId: string, isAdmin: boolean) =>
+        (isAdmin ? [id, second] : userId === 'no-offers' ? [] : [id]).map((offerId) => ({
+          id: offerId,
+          userId,
+        })),
+      permissions: async (offer: { userId: string }, userId: string, isAdmin: boolean) => ({
+        read: isAdmin || offer.userId === userId,
+      }),
       assertAccess: async () => ({ id }),
       maybeGet: async (offerId: string) =>
         (admin ? [id, second] : user === 'no-offers' ? [] : [id]).includes(offerId)

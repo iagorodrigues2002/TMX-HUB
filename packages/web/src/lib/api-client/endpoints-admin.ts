@@ -1,6 +1,19 @@
+import { z } from 'zod';
 import type { AuthUser } from './auth-types.js';
 import type { ToolKey } from './auth-types.js';
 import { request } from './request.js';
+
+const ActivityResponse = z.object({
+  entries: z.array(
+    z.object({
+      kind: z.enum(['clone', 'vsl', 'funnel', 'inspect', 'webhook', 'page-diff']),
+      id: z.string(),
+      label: z.string(),
+      status: z.string(),
+      createdAt: z.string(),
+    }),
+  ),
+});
 export const endpoints = {
   async getAdminOverview(): Promise<{
     totals: { users: number; admins: number; restricted: number; active30d: number };
@@ -86,6 +99,6 @@ export const endpoints = {
         createdAt: string;
       }>;
     }>('/v1/activity');
-    return wire.entries;
+    return ActivityResponse.parse(wire).entries;
   },
 };

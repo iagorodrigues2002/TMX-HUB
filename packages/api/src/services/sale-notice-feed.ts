@@ -89,12 +89,13 @@ export class SaleNoticeFeed {
       let after = '';
       while (active.some((client) => this.clients.has(client))) {
         const rows: SaleNoticeRow[] = await this.app.db<SaleNoticeRow[]>`
-          SELECT o.id,o.status,o.provider,o.amount_minor,o.currency,o.occurred_at,p.offer_id
+          SELECT o.id,o.status,o.provider,o.amount_minor,o.currency,e.created_at AS occurred_at,p.offer_id
           FROM tracking_orders o JOIN tracking_projects p ON p.id=o.project_id
+          JOIN browser_sale_events e ON e.order_id=o.id
           WHERE p.offer_id=ANY(${ids}) AND o.status='paid'
-            AND (o.occurred_at>${since} OR (o.occurred_at=${since} AND o.id>${after}))
-            AND o.occurred_at<=${new Date(now)}
-          ORDER BY o.occurred_at,o.id LIMIT 200
+            AND (e.created_at>${since} OR (e.created_at=${since} AND o.id>${after}))
+            AND e.created_at<=${new Date(now)}
+          ORDER BY e.created_at,o.id LIMIT 200
         `;
         if (!rows.length) break;
         // Recheck all recipients before broadcasting, not just when the stream opens.

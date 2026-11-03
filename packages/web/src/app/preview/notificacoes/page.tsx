@@ -55,8 +55,8 @@ export default function NotificationsPreviewPage() {
           Tarefas e vendas dentro do TMX
         </h1>
         <p className="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground">
-          Demonstração com dados fictícios. Leitura e limpeza ficam apenas na memória desta
-          página; a integração por usuário ainda será implementada.
+          Demonstração com dados fictícios. Leitura e limpeza ficam apenas na memória desta página;
+          a integração por usuário ainda será implementada.
         </p>
       </section>
 

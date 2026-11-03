@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { type OfferView, apiClient } from '@/lib/api-client';
+import { resolveOfferContextId } from '@/lib/offer-context-selection';
 import { readPersonalStorage, writePersonalStorage } from '@/lib/personal-storage';
 import { useQuery } from '@tanstack/react-query';
 import { Store } from 'lucide-react';
@@ -66,28 +67,31 @@ export function OfferContextProvider({ children }: { children: ReactNode }) {
     enabled: isOfferContextPath(pathname),
   });
 
-  const routeOfferId = /^\/ofertas\/([^/]+)$/.exec(pathname)?.[1];
-  const queryOfferId = searchParams.get('offer') ?? '';
   const offers = offersQuery.data ?? [];
-  const currentOfferId = routeOfferId || queryOfferId || storedOfferId;
-  const resolvedOfferId = offers.some((offer) => offer.id === currentOfferId)
-    ? currentOfferId
-    : (offers[0]?.id ?? '');
+  const resolvedOfferId = resolveOfferContextId(
+    pathname,
+    searchParams,
+    offers.map((offer) => offer.id),
+    storedOfferId,
+  );
 
   useEffect(() => {
     setStoredOfferId(readPersonalStorage(OFFER_STORAGE_KEY) ?? '');
   }, []);
 
   useEffect(() => {
-    if (!resolvedOfferId) return;
+    if (!resolvedOfferId || !offers.some((offer) => offer.id === resolvedOfferId)) return;
     setStoredOfferId(resolvedOfferId);
     writePersonalStorage(OFFER_STORAGE_KEY, resolvedOfferId);
-  }, [resolvedOfferId]);
+  }, [resolvedOfferId, offers]);
 
   const setCurrentOfferId = (offerId: string) => {
-    if (!offers.some((offer) => offer.id === offerId)) return;
-    setStoredOfferId(offerId);
-    writePersonalStorage(OFFER_STORAGE_KEY, offerId);
+    const aggregateRefunds = pathname === '/reembolsos' && offerId === '';
+    if (!aggregateRefunds && !offers.some((offer) => offer.id === offerId)) return;
+    if (offerId) {
+      setStoredOfferId(offerId);
+      writePersonalStorage(OFFER_STORAGE_KEY, offerId);
+    }
 
     if (/^\/ofertas\/[^/]+$/.test(pathname)) {
       router.push(`/ofertas/${offerId}`);
@@ -96,7 +100,8 @@ export function OfferContextProvider({ children }: { children: ReactNode }) {
 
     const params = new URLSearchParams(searchParams.toString());
     params.set('offer', offerId);
-    router.replace(`${pathname}?${params.toString()}`);
+    if (pathname === '/reembolsos') params.delete('offer_id');
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
   const value: OfferContextValue = {
@@ -123,6 +128,7 @@ export function OfferContextSwitcher() {
   const params = useSearchParams();
   const router = useRouter();
   const companyMode = pathname === '/integracoes/syzepay';
+  const refundsMode = pathname === '/reembolsos';
   const allowCompany =
     companyMode ||
     (pathname === '/tracking' &&
@@ -149,10 +155,13 @@ export function OfferContextSwitcher() {
         value={
           companyMode
             ? `__company:${params.get('company') ?? offersByCompany[0]?.company ?? ''}`
-            : currentOfferId || undefined
+            : refundsMode && !currentOfferId
+              ? '__refunds:all'
+              : currentOfferId || undefined
         }
         onValueChange={(value) => {
           if (value === '__retry') retry();
+          else if (refundsMode && value === '__refunds:all') setCurrentOfferId('');
           else if (value.startsWith('__company:'))
             router.push(`/integracoes/syzepay?company=${encodeURIComponent(value.slice(10))}`);
           else if (companyMode)
@@ -182,6 +191,16 @@ export function OfferContextSwitcher() {
           className="max-w-[calc(100vw-2rem)] border-border/60 [&_[role=option]]:min-h-11 [&_[role=option]]:break-words [&_[role=option]]:whitespace-normal"
         >
           {isError && <SelectItem value="__retry">Tentar carregar novamente</SelectItem>}
+          {refundsMode && (
+            <SelectItem value="__refunds:all">Minhas ofertas da empresa TMX</SelectItem>
+          )}
+          {refundsMode &&
+            currentOfferId &&
+            !offers.some((offer) => offer.id === currentOfferId) && (
+              <SelectItem value={currentOfferId} disabled>
+                Oferta indisponível
+              </SelectItem>
+            )}
           {offersByCompany.map((group) => (
             <SelectGroup key={group.company}>
               <SelectLabel>{group.company}</SelectLabel>

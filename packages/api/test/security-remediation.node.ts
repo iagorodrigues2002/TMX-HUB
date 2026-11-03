@@ -15,11 +15,20 @@ import { configuredUpsellPage } from '../src/services/upsell-observation-policy.
 import { UserStore } from '../src/services/user-store.js';
 
 // This suite intentionally refuses any non-fixture Redis address.
-const redisUrl = process.env.SECURITY_TEST_REDIS_URL;
+function fixtureRedisUrl(settings: NodeJS.ProcessEnv) {
+  assert.equal(settings.NODE_ENV, 'test');
+  assert.equal(settings.TMX_ISOLATED_SECURITY_FIXTURE, 'network-none-dummy-redis');
+  const port = settings.SECURITY_TEST_REDIS_PORT;
+  assert.match(port ?? '', /^\d{4,5}$/);
+  assert.ok(Number(port) >= 1024 && Number(port) <= 65535);
+  assert.equal(settings.SECURITY_TEST_REDIS_URL, `redis://127.0.0.1:${port}/15`);
+  return settings.SECURITY_TEST_REDIS_URL;
+}
 async function withFixture(fn: (users: UserStore, invites: InviteStore) => Promise<void>) {
-  assert.equal(process.env.TMX_ISOLATED_SECURITY_FIXTURE, 'network-none-dummy-redis');
-  assert.equal(redisUrl, 'redis://127.0.0.1:6379/15');
-  const redis = new Redis(redisUrl!, { maxRetriesPerRequest: 1, connectTimeout: 1000 });
+  const redis = new Redis(fixtureRedisUrl(process.env), {
+    maxRetriesPerRequest: 1,
+    connectTimeout: 1000,
+  });
   try {
     await redis.flushdb();
     await fn(new UserStore(redis), new InviteStore(redis));
@@ -32,6 +41,28 @@ const account = (email: string) => ({
   name: 'Dummy',
   passwordHash: 'dummy-not-a-real-hash',
   role: 'user' as const,
+});
+
+test('security fixture rejects production, external Redis and unconfirmed database targets', () => {
+  const safe = {
+    NODE_ENV: 'test',
+    TMX_ISOLATED_SECURITY_FIXTURE: 'network-none-dummy-redis',
+    SECURITY_TEST_REDIS_PORT: '32770',
+    SECURITY_TEST_REDIS_URL: 'redis://127.0.0.1:32770/15',
+  };
+  assert.equal(fixtureRedisUrl(safe), 'redis://127.0.0.1:32770/15');
+  for (const change of [
+    { NODE_ENV: 'production' },
+    { TMX_ISOLATED_SECURITY_FIXTURE: undefined },
+    { SECURITY_TEST_REDIS_PORT: undefined },
+    { SECURITY_TEST_REDIS_PORT: '6379' },
+    { SECURITY_TEST_REDIS_PORT: '70000' },
+    { SECURITY_TEST_REDIS_URL: 'redis://example.com:32770/15' },
+    { SECURITY_TEST_REDIS_URL: 'redis://127.0.0.1:32770/0' },
+    { SECURITY_TEST_REDIS_URL: 'redis://127.0.0.1:32770/15?db=0' },
+  ]) {
+    assert.throws(() => fixtureRedisUrl({ ...safe, ...change }));
+  }
 });
 
 test('one invitation creates at most one account under concurrent registration', async () => {

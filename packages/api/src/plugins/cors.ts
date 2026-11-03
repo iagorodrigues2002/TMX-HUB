@@ -2,7 +2,12 @@ import cors, { type FastifyCorsOptions } from '@fastify/cors';
 import type { FastifyInstance, FastifyPluginAsync, FastifyRequest } from 'fastify';
 
 const ALLOWED_ORIGINS_PROD = ['https://theminex.com', 'https://app.theminex.com'];
-const ALLOWED_ORIGINS_DEV = ['http://localhost:3100', 'http://localhost:3000'];
+const ALLOWED_ORIGINS_DEV = [
+  'http://localhost:3100',
+  'http://localhost:3000',
+  'http://localhost:3120',
+  'http://localhost:3122',
+];
 
 function isAllowedOrigin(origin: string): boolean {
   if (ALLOWED_ORIGINS_PROD.includes(origin)) return true;

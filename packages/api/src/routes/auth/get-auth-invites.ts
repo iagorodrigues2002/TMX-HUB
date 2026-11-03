@@ -39,6 +39,6 @@ export function registerGetAuthInvitesRoutes(app: FastifyInstance) {
   app.get('/auth/me', { preHandler: (req) => app.requireAuth(req) }, async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');
     const u = await app.userStore.getById(req.user.sub);
-    return reply.send({ user: app.userStore.toPublic(u) });
+    return reply.send({ user: { ...app.userStore.toPublic(u), allowedTools: req.user.tools } });
   });
 }

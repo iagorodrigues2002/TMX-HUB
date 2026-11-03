@@ -18,6 +18,7 @@ export const TaskPersonSchema = z
   .strict();
 export const TaskCreateSchema = z
   .object({
+    companyId: z.string().uuid().nullable().optional(),
     title: z.string().trim().min(3).max(200),
     description: z.string().trim().max(10000).default(''),
     sector: z.enum(TASK_SECTORS),
@@ -31,9 +32,19 @@ export const TaskCreateSchema = z
     dueAt: z.string().datetime({ offset: true }).nullable(),
   })
   .strict();
+export const TaskEditSchema = TaskCreateSchema.omit({
+  sector: true,
+  offer: true,
+  companyId: true,
+}).extend({
+  revision: z.number().int().min(1),
+});
 export const ManagedTaskSchema = z
   .object({
     id: z.string().uuid(),
+    managementMode: z.enum(['clickup', 'native']).optional(),
+    companyId: z.string().uuid().nullable().optional(),
+    revision: z.number().int().min(1).optional(),
     clickupId: z
       .string()
       .regex(/^[a-zA-Z0-9_-]+$/)

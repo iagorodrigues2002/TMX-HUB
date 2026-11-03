@@ -3,6 +3,7 @@ import {
   type ManagedTask,
   type TaskCommand,
   TaskCreateSchema,
+  TaskEditSchema,
   TaskEventSchema,
   type TaskPerson,
   TaskPersonSchema,
@@ -11,7 +12,18 @@ import {
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { env } from '../env.js';
+import {
+  assertCompanyPeople,
+  assertOperationAccess,
+  assertOperationCompany,
+  operationScope,
+} from '../lib/company-operation-access.js';
 import { HttpProblem, zodToProblem } from '../lib/problem.js';
+import {
+  changeNativeTaskStatus,
+  createNativeTask,
+  editNativeTask,
+} from '../services/native-tasks.js';
 
 const problem = (status: number, code: string, detail: string) =>
   new HttpProblem({ status, code, title: code, detail });
@@ -41,9 +53,34 @@ export function validTaskBridgeSecret(provided: unknown, expected: string | unde
 export async function taskManagementRoutes(app: FastifyInstance) {
   app.addHook('preHandler', async (req) => {
     if (!req.user) throw problem(401, 'unauthorized', 'Entre na sua conta.');
-    if (req.user.role !== 'admin')
+    if (!app.db && req.user.role !== 'admin')
       throw problem(403, 'admin_required', 'Área exclusiva para administradores.');
     if (!app.db) throw problem(503, 'task_database_unavailable', 'Banco de tarefas indisponível.');
+    await operationScope(app.db, { id: req.user.sub, admin: req.user.role === 'admin' });
+  });
+
+  app.get('/tasks/access', async (req) => {
+    const scope = await operationScope(app.db!, {
+      id: req.user!.sub,
+      admin: req.user!.role === 'admin',
+    });
+    const companies =
+      await app.db!`SELECT id::text,name FROM companies WHERE (${scope.global} OR id::text=ANY(${scope.companyIds}::text[])) ORDER BY name,id`;
+    return { global: scope.global, companies };
+  });
+  app.get('/tasks/users', async (req) => {
+    const { companyId } = z.object({ companyId: idSchema }).strict().parse(req.query);
+    await operationScope(
+      app.db!,
+      { id: req.user!.sub, admin: req.user!.role === 'admin' },
+      companyId,
+    );
+    const rows =
+      await app.db!`SELECT user_id FROM company_memberships WHERE company_id::text=${companyId} AND status='active' ORDER BY user_id`;
+    const users = await Promise.all(rows.map((r) => app.userStore.maybeGetById(r.user_id)));
+    return {
+      users: users.filter((u) => !!u).map((u) => ({ id: u!.id, name: u!.name, email: u!.email })),
+    };
   });
 
   app.get('/tasks', async (req) => {
@@ -54,47 +91,120 @@ export async function taskManagementRoutes(app: FastifyInstance) {
         person: z.union([idSchema, z.literal('all')]).default('all'),
         status: z.enum(['all', 'pending', 'progress', 'done', 'overdue']).default('all'),
         q: z.string().max(200).default(''),
+        companyId: idSchema.optional(),
       })
       .strict()
       .safeParse(req.query);
     if (!parsed.success) throw zodToProblem(parsed.error, req.url);
     const { page, limit, person, status, q } = parsed.data;
     const db = app.db!;
+    const scope = await operationScope(
+      db,
+      { id: req.user!.sub, admin: req.user!.role === 'admin' },
+      parsed.data.companyId,
+    );
     const [rows, counts, summary, perPerson] = await Promise.all([
       // The resilient client executes tagged queries eagerly; WHERE cannot be a separate fragment.
       db`SELECT body FROM managed_tasks
-        WHERE (${person}='all' OR body->'assignees' @> ${db.json([{ id: person }])})
+        WHERE coalesce(body->>'managementMode','clickup')=${env.TASK_MANAGEMENT_MODE}
+        AND (${scope.global} OR body->>'companyId'=ANY(${scope.companyIds}::text[]))
+        AND (${person}='all' OR body->'assignees' @> ${db.json([{ id: person }])})
         AND (${status}='all' OR body->>'status'=${status} OR (${status}='overdue' AND body->>'status'<>'done' AND (body->>'dueAt')::timestamptz < now()))
         AND (${q}='' OR strpos(lower((body->>'title') || ' ' || (body->>'sector') || ' ' || coalesce(body->>'offer','')),lower(${q}))>0
           OR EXISTS (SELECT 1 FROM jsonb_array_elements(body->'assignees') assignee WHERE strpos(lower(assignee->>'name'),lower(${q}))>0))
         ORDER BY updated_at DESC,id LIMIT ${limit} OFFSET ${(page - 1) * limit}`,
       db`SELECT count(*) AS total FROM managed_tasks
-        WHERE (${person}='all' OR body->'assignees' @> ${db.json([{ id: person }])})
+        WHERE coalesce(body->>'managementMode','clickup')=${env.TASK_MANAGEMENT_MODE}
+        AND (${scope.global} OR body->>'companyId'=ANY(${scope.companyIds}::text[]))
+        AND (${person}='all' OR body->'assignees' @> ${db.json([{ id: person }])})
         AND (${status}='all' OR body->>'status'=${status} OR (${status}='overdue' AND body->>'status'<>'done' AND (body->>'dueAt')::timestamptz < now()))
         AND (${q}='' OR strpos(lower((body->>'title') || ' ' || (body->>'sector') || ' ' || coalesce(body->>'offer','')),lower(${q}))>0
           OR EXISTS (SELECT 1 FROM jsonb_array_elements(body->'assignees') assignee WHERE strpos(lower(assignee->>'name'),lower(${q}))>0))`,
-      db`SELECT count(*) FILTER(WHERE body->>'status'<>'done')::int AS open, count(*) FILTER(WHERE body->>'status'='progress')::int AS progress, count(*) FILTER(WHERE body->>'status'='done')::int AS done, count(*) FILTER(WHERE body->>'status'<>'done' AND (body->>'dueAt')::timestamptz<now())::int AS overdue FROM managed_tasks`,
-      db`SELECT person->>'id' AS id, count(*) FILTER(WHERE body->>'status'<>'done')::int AS open, count(*) FILTER(WHERE body->>'status'='progress')::int AS progress, count(*) FILTER(WHERE body->>'status'='done')::int AS done, count(*) FILTER(WHERE body->>'status'<>'done' AND (body->>'dueAt')::timestamptz<now())::int AS overdue FROM managed_tasks CROSS JOIN LATERAL jsonb_array_elements(body->'assignees') person GROUP BY person->>'id'`,
+      db`SELECT count(*) FILTER(WHERE body->>'status'<>'done')::int AS open, count(*) FILTER(WHERE body->>'status'='progress')::int AS progress, count(*) FILTER(WHERE body->>'status'='done')::int AS done, count(*) FILTER(WHERE body->>'status'<>'done' AND (body->>'dueAt')::timestamptz<now())::int AS overdue FROM managed_tasks WHERE coalesce(body->>'managementMode','clickup')=${env.TASK_MANAGEMENT_MODE} AND (${scope.global} OR body->>'companyId'=ANY(${scope.companyIds}::text[]))`,
+      db`SELECT person->>'id' AS id, count(*) FILTER(WHERE body->>'status'<>'done')::int AS open, count(*) FILTER(WHERE body->>'status'='progress')::int AS progress, count(*) FILTER(WHERE body->>'status'='done')::int AS done, count(*) FILTER(WHERE body->>'status'<>'done' AND (body->>'dueAt')::timestamptz<now())::int AS overdue FROM managed_tasks CROSS JOIN LATERAL jsonb_array_elements(body->'assignees') person WHERE coalesce(body->>'managementMode','clickup')=${env.TASK_MANAGEMENT_MODE} AND (${scope.global} OR body->>'companyId'=ANY(${scope.companyIds}::text[])) GROUP BY person->>'id'`,
     ]);
+    const deliveryStates =
+      env.TASK_MANAGEMENT_MODE === 'native' && rows.length
+        ? await db`SELECT entity_id,state FROM managed_native_deliveries WHERE entity_kind='task' AND entity_id IN ${db(rows.map((r) => r.body.id))}`
+        : [];
+    const failed = new Set(
+      deliveryStates
+        .filter((d) => d.state === 'failed' || d.state === 'uncertain')
+        .map((d) => d.entity_id),
+    );
     return {
-      tasks: rows.map((row) => row.body),
+      tasks: rows.map((row) =>
+        failed.has(row.body.id) ? { ...row.body, discordState: 'failed' } : row.body,
+      ),
       total: Number(counts[0]?.total ?? 0),
       summary: summary[0],
       peopleSummary: perPerson,
       page,
       limit,
-      configured: !!env.TASK_AUTOMATION_SECRET,
+      configured: env.TASK_MANAGEMENT_MODE === 'native' || !!env.TASK_AUTOMATION_SECRET,
+      managementMode: env.TASK_MANAGEMENT_MODE,
     };
   });
-  app.get('/tasks/people', async () => ({
-    people: (await app.db!`SELECT body FROM managed_task_people ORDER BY body->>'name',id`).map(
-      (row) => row.body,
-    ),
-  }));
+  app.get('/tasks/people', async (req) => {
+    const { companyId } = z.object({ companyId: idSchema.optional() }).strict().parse(req.query);
+    const scope = await operationScope(
+      app.db!,
+      { id: req.user!.sub, admin: req.user!.role === 'admin' },
+      companyId,
+    );
+    if (scope.global)
+      return {
+        people: (await app.db!`SELECT body FROM managed_task_people ORDER BY body->>'name',id`).map(
+          (r) => r.body,
+        ),
+      };
+    return {
+      people: (
+        await app.db!`SELECT p.body FROM managed_task_people p WHERE EXISTS(SELECT 1 FROM company_memberships m WHERE m.user_id=p.body->>'userId' AND m.status='active' AND m.company_id::text=ANY(${scope.companyIds}::text[])) ORDER BY p.body->>'name',p.id`
+      ).map((r) => r.body),
+    };
+  });
   app.post('/tasks/people', async (req, reply) => {
     const parsed = TaskPersonSchema.safeParse(req.body);
     if (!parsed.success) throw zodToProblem(parsed.error, req.url);
     const p = parsed.data;
+    if (req.user!.role !== 'admin') {
+      if (p.discordId || p.clickupId)
+        throw problem(
+          403,
+          'person_identity_protected',
+          'Somente administradores globais podem validar vínculos de identidade do Discord e ClickUp. Selecione um vínculo existente ou cadastre a pessoa sem esses IDs.',
+        );
+      const scope = await operationScope(app.db!, { id: req.user!.sub, admin: false });
+      if (
+        !p.userId ||
+        !(
+          await app.db!`SELECT 1 FROM company_memberships WHERE user_id=${p.userId} AND status='active' AND company_id::text=ANY(${scope.companyIds}::text[])`
+        ).length
+      )
+        throw problem(403, 'person_forbidden', 'Selecione um membro ativo da sua empresa.');
+      const account = await app.userStore.getById(p.userId);
+      if (account?.role === 'admin')
+        throw problem(
+          403,
+          'person_identity_protected',
+          'Vínculos de administradores globais são gerenciados somente por administradores globais.',
+        );
+      const [existing] = await app.db!`SELECT body FROM managed_task_people WHERE id=${p.id}`;
+      if (
+        existing &&
+        (existing.body.userId !== p.userId ||
+          existing.body.discordId !== p.discordId ||
+          existing.body.clickupId !== p.clickupId)
+      )
+        throw problem(
+          403,
+          'person_identity_protected',
+          'Peça ao administrador global para alterar um vínculo de identidade existente.',
+        );
+    }
+    if (env.TASK_MANAGEMENT_MODE === 'native' && !p.userId)
+      throw problem(400, 'tmx_account_required', 'Selecione a conta TMX do responsável.');
     if (p.userId && !(await app.userStore.getById(p.userId)))
       throw problem(400, 'unknown_tmx_user', 'Selecione um usuário TMX existente.');
     if (p.userId) {
@@ -126,6 +236,25 @@ export async function taskManagementRoutes(app: FastifyInstance) {
     if (!parsed.success) throw zodToProblem(parsed.error, req.url);
     if (!key.success)
       throw problem(400, 'idempotency_required', 'Envie uma chave estável de criação.');
+    if (env.TASK_MANAGEMENT_MODE === 'native' && !parsed.data.companyId)
+      throw problem(400, 'company_required', 'Selecione a empresa da tarefa.');
+    if (env.TASK_MANAGEMENT_MODE !== 'native' && parsed.data.companyId)
+      throw problem(
+        409,
+        'native_company_management_required',
+        'Ative a gestão nativa antes de criar tarefas por empresa.',
+      );
+    if (env.TASK_MANAGEMENT_MODE === 'native')
+      return reply
+        .code(201)
+        .send(
+          await createNativeTask(
+            app.db!,
+            key.data,
+            { id: req.user!.sub, admin: req.user!.role === 'admin' },
+            parsed.data,
+          ),
+        );
     if (!env.TASK_AUTOMATION_SECRET)
       throw problem(
         503,
@@ -135,6 +264,11 @@ export async function taskManagementRoutes(app: FastifyInstance) {
     const input = parsed.data;
     const requestHash = hash(input);
     const result = await app.db!.begin(async (tx) => {
+      await assertOperationCompany(
+        tx,
+        { id: req.user!.sub, admin: req.user!.role === 'admin' },
+        input.companyId,
+      );
       await tx`SELECT pg_advisory_xact_lock(hashtext(${key.data}))`;
       const [existing] =
         await tx`SELECT user_id,request_hash,task_id FROM managed_task_commands WHERE id=${key.data}`;
@@ -142,10 +276,20 @@ export async function taskManagementRoutes(app: FastifyInstance) {
         if (existing.user_id !== req.user!.sub || existing.request_hash !== requestHash)
           throw problem(409, 'idempotency_conflict', 'Chave já utilizada em outra operação.');
         const [saved] = await tx`SELECT body FROM managed_tasks WHERE id=${existing.task_id}`;
+        await assertOperationAccess(
+          tx,
+          { id: req.user!.sub, admin: req.user!.role === 'admin' },
+          saved!.body.companyId,
+        );
         return saved!.body;
       }
       const people =
         await tx`SELECT body FROM managed_task_people WHERE id IN ${tx(input.assigneeIds)}`;
+      await assertCompanyPeople(
+        tx,
+        input.companyId,
+        people.map((p) => p.body as TaskPerson),
+      );
       if (people.length !== input.assigneeIds.length || people.some((p) => !p.body.clickupId))
         throw problem(
           400,
@@ -155,6 +299,7 @@ export async function taskManagementRoutes(app: FastifyInstance) {
       const at = new Date().toISOString();
       const task: ManagedTask = {
         id: randomUUID(),
+        companyId: input.companyId,
         clickupId: null,
         discordMessageId: null,
         discordChannelId: null,
@@ -185,16 +330,38 @@ export async function taskManagementRoutes(app: FastifyInstance) {
   });
   app.patch('/tasks/:id/status', async (req, reply) => {
     const params = z.object({ id: idSchema }).safeParse(req.params);
-    const parsed = z.object({ status: TaskStatusSchema }).strict().safeParse(req.body);
+    const parsed = z
+      .object({ status: TaskStatusSchema, revision: z.number().int().min(1).optional() })
+      .strict()
+      .safeParse(req.body);
     const key = idSchema.safeParse(req.headers['idempotency-key']);
     if (!params.success || !parsed.success || !key.success)
       throw problem(400, 'invalid_task_status', 'Status, tarefa ou chave inválidos.');
+    if (env.TASK_MANAGEMENT_MODE === 'native') {
+      if (!parsed.data.revision)
+        throw problem(400, 'revision_required', 'Atualize a tarefa antes de alterar o status.');
+      return reply.send(
+        await changeNativeTaskStatus(
+          app.db!,
+          key.data,
+          { id: req.user!.sub, admin: req.user!.role === 'admin' },
+          params.data.id,
+          parsed.data.status,
+          parsed.data.revision,
+        ),
+      );
+    }
     if (!env.TASK_AUTOMATION_SECRET)
       throw problem(503, 'task_automation_unconfigured', 'Automação ainda não configurada.');
     await app.db!.begin(async (tx) => {
       const [row] = await tx`SELECT body FROM managed_tasks WHERE id=${params.data.id} FOR UPDATE`;
       if (!row) throw problem(404, 'task_not_found', 'Tarefa não encontrada.');
       const task = row.body as ManagedTask;
+      await assertOperationAccess(
+        tx,
+        { id: req.user!.sub, admin: req.user!.role === 'admin' },
+        task.companyId,
+      );
       if (!task.clickupId || !task.discordMessageId || !task.discordChannelId)
         throw problem(
           409,
@@ -227,9 +394,34 @@ export async function taskManagementRoutes(app: FastifyInstance) {
     });
     return reply.code(202).send({ queued: true });
   });
+  app.put('/tasks/:id', async (req, reply) => {
+    if (env.TASK_MANAGEMENT_MODE !== 'native')
+      throw problem(409, 'native_mode_required', 'Edição disponível na gestão nativa.');
+    const params = z.object({ id: idSchema }).safeParse(req.params);
+    const input = TaskEditSchema.safeParse(req.body);
+    const key = idSchema.safeParse(req.headers['idempotency-key']);
+    if (!params.success || !input.success || !key.success)
+      throw problem(400, 'invalid_task_edit', 'Confira a tarefa, os campos e a revisão.');
+    return reply.send(
+      await editNativeTask(
+        app.db!,
+        key.data,
+        { id: req.user!.sub, admin: req.user!.role === 'admin' },
+        params.data.id,
+        input.data,
+      ),
+    );
+  });
   app.get('/tasks/:id/history', async (req) => {
     const parsed = z.object({ id: idSchema }).safeParse(req.params);
     if (!parsed.success) throw zodToProblem(parsed.error, req.url);
+    const [task] = await app.db!`SELECT body FROM managed_tasks WHERE id=${parsed.data.id}`;
+    if (!task) throw problem(404, 'task_not_found', 'Tarefa não encontrada.');
+    await assertOperationAccess(
+      app.db!,
+      { id: req.user!.sub, admin: req.user!.role === 'admin' },
+      task.body.companyId,
+    );
     return {
       events:
         await app.db!`SELECT event_id,body,received_at FROM managed_task_events WHERE task_id=${parsed.data.id} ORDER BY received_at DESC LIMIT 100`,
@@ -242,6 +434,12 @@ export async function taskAutomationRoutes(app: FastifyInstance) {
   app.addHook('preHandler', async (req) => {
     if (!validTaskBridgeSecret(req.headers['x-tmx-task-secret'], env.TASK_AUTOMATION_SECRET))
       throw problem(401, 'unauthorized', 'Credencial de automação inválida.');
+    if (env.TASK_MANAGEMENT_MODE === 'native')
+      throw problem(
+        410,
+        'legacy_task_bridge_disabled',
+        'A gestão nativa não recebe importações do ClickUp.',
+      );
     if (!app.db) throw problem(503, 'task_database_unavailable', 'Banco de tarefas indisponível.');
   });
   app.get('/task-automation/people', async () => ({
@@ -301,9 +499,20 @@ export async function taskAutomationRoutes(app: FastifyInstance) {
         );
       const task = {
         ...event.task,
+        companyId: existing?.body.companyId ?? event.task.companyId,
         id: existing?.id ?? event.task.id ?? randomUUID(),
         receivedAt: existing?.body.receivedAt ?? new Date().toISOString(),
       };
+      if (
+        existing?.body.companyId &&
+        event.task.companyId &&
+        existing.body.companyId !== event.task.companyId
+      )
+        throw problem(
+          409,
+          'task_company_immutable',
+          'A empresa da tarefa não pode ser alterada pelo espelho.',
+        );
       const people =
         await tx`SELECT body FROM managed_task_people WHERE id IN ${tx(task.assignees.length ? task.assignees.map((p) => p.id) : [''])}`;
       if (people.length !== task.assignees.length)

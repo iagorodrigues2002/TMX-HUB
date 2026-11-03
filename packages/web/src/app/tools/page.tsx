@@ -7,7 +7,7 @@ import { visibleToolCatalog } from '@/lib/tool-catalog';
 
 export default function ToolsIndexPage() {
   const { user } = useAuth();
-  const restricted = user && user.role !== 'admin' && (user.allowedTools?.length ?? 0) > 0;
+  const restricted = user && user.role !== 'admin' && user.allowedTools !== undefined;
   const visible = visibleToolCatalog(user);
 
   return (

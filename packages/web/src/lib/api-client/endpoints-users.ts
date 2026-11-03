@@ -22,9 +22,7 @@ export const endpoints = {
         ...(input.email ? { email: input.email } : {}),
         ...(input.name ? { name: input.name } : {}),
         ...(input.expiresInDays ? { expires_in_days: input.expiresInDays } : {}),
-        ...(input.allowedTools && input.allowedTools.length > 0
-          ? { allowed_tools: input.allowedTools }
-          : {}),
+        ...(input.allowedTools !== undefined ? { allowed_tools: input.allowedTools } : {}),
       },
     });
     return fromInviteWire(wire);

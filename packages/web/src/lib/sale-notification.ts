@@ -4,6 +4,10 @@ export interface SaleNoticeOrder {
   occurred_at: string;
 }
 
+export function canClaimSaleNotice(visible: boolean, focused: boolean) {
+  return visible && focused;
+}
+
 export function canPlaySaleNoticeSound({
   id,
   previousId,

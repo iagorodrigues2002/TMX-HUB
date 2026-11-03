@@ -113,6 +113,13 @@ const migrations = [
   '105_task_management.sql',
   '106_call_management.sql',
   '107_notification_center.sql',
+  '108_native_task_management.sql',
+  '109_company_memberships.sql',
+  '110_company_pix.sql',
+  '111_sale_notice_preferences.sql',
+  '112_company_compensation.sql',
+  '113_company_finance.sql',
+  '114_ads_previous_pageview_index.sql',
 ];
 
 await sql`

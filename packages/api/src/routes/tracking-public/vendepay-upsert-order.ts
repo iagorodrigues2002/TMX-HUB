@@ -6,11 +6,14 @@ export async function upsertVendepayOrder({
   normalized,
   req,
   connection,
+  receiptId,
   ingestBrlMinor,
   ingestExchangeRate,
   ingestConvertedAt,
 }: VendepayTransaction) {
   const event = normalized.event;
+  // Lifecycle reporting uses the durable arrival time, never the purchase date repeated in payloads.
+  const reversalReceivedAt = sql`(SELECT received_at FROM webhook_receipts WHERE id=${receiptId} AND connection_id=${connection.id})`;
   const skipsUtmify = event.status === 'cancelled' || event.status === 'abandoned';
   const trackingIdentity = event.trackingSrc
     ? readRotatingTrackingToken(event.trackingSrc, req)
@@ -153,8 +156,8 @@ export async function upsertVendepayOrder({
              ${event.occurredAt}, ${event.status === 'paid' ? event.occurredAt : null},
              ${event.paymentMethod ?? null}, ${sql.json(event.product)}, ${sql.json(resolvedAttributionSource)},
              ${orderKind}, ${event.status === 'cancelled' ? event.occurredAt : null},
-             ${event.status === 'refunded' ? event.occurredAt : null},
-             ${event.status === 'chargeback' ? event.occurredAt : null}, ${connection.id})
+             ${event.status === 'refunded' ? reversalReceivedAt : null},
+             ${event.status === 'chargeback' ? reversalReceivedAt : null}, ${connection.id})
           ON CONFLICT (project_id, provider, external_id) DO UPDATE SET
             status = CASE
               WHEN tracking_orders.status IN ('refunded', 'chargeback') THEN tracking_orders.status
@@ -187,12 +190,12 @@ export async function upsertVendepayOrder({
             END,
             refunded_at = CASE
               WHEN EXCLUDED.status = 'refunded'
-                THEN COALESCE(tracking_orders.refunded_at, EXCLUDED.refunded_at, now())
+                THEN LEAST(tracking_orders.refunded_at, EXCLUDED.refunded_at)
               ELSE tracking_orders.refunded_at
             END,
             chargeback_at = CASE
               WHEN EXCLUDED.status = 'chargeback'
-                THEN COALESCE(tracking_orders.chargeback_at, EXCLUDED.chargeback_at, now())
+                THEN LEAST(tracking_orders.chargeback_at, EXCLUDED.chargeback_at)
               ELSE tracking_orders.chargeback_at
             END,
             -- A mapping added after the order first arrived should still "heal" it on the

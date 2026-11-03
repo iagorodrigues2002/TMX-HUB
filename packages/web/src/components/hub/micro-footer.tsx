@@ -1,14 +1,14 @@
 'use client';
 
 /**
- * Floating microcopy footer (bottom-right of the viewport).
- * Mirrors the maskai/operator vibe: terminal status, version, encryption tag.
+ * Normal pages keep status below content so it never covers rows or actions.
+ * Full-bleed editors retain the compact floating status.
  */
-export function MicroFooter() {
+export function MicroFooter({ floating = false }: { floating?: boolean }) {
   return (
     <footer
       aria-label="Status"
-      className="pointer-events-none relative mx-auto mt-6 flex max-w-[1440px] flex-wrap items-center gap-2 text-[10px] font-normal uppercase tracking-[0.12em] text-white/45 sm:fixed sm:bottom-3 sm:right-4 sm:z-20 sm:mt-0 sm:gap-3 sm:tracking-[0.18em] sm:text-white/30"
+      className={`pointer-events-none mx-auto flex max-w-[1440px] flex-wrap items-center justify-end gap-2 text-[10px] font-normal uppercase tracking-[0.12em] text-muted-foreground sm:gap-3 ${floating ? 'absolute bottom-3 right-4 z-20' : 'relative mt-6 border-t border-border/50 pt-4'}`}
     >
       <span aria-hidden className="status-dot" />
       <span>STATUS: ONLINE</span>

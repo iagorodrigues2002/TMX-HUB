@@ -6,6 +6,41 @@ import { ConflictError, NotFoundError } from '../lib/problem.js';
 const USER_BY_ID_PREFIX = 'user:';
 const USER_BY_EMAIL_PREFIX = 'user-email:';
 
+// Check and mutation share one Redis operation so concurrent demotions keep an administrator.
+const MUTATE_USER = `
+  if redis.call('EXISTS', KEYS[1]) == 0 then return 0 end
+  local patch = cjson.decode(ARGV[2])
+  if redis.call('HGET', KEYS[1], 'role') == 'admin' and
+     (ARGV[1] == 'delete' or patch.role == 'user') then
+    local anotherAdmin = false
+    for i = 2, #KEYS do
+      local key = KEYS[i]
+      if key ~= KEYS[1] and redis.call('TYPE', key).ok == 'hash' and
+         redis.call('HGET', key, 'role') == 'admin' then
+        anotherAdmin = true
+        break
+      end
+    end
+    if not anotherAdmin then return -1 end
+  end
+  if ARGV[1] == 'delete' then
+    local email = redis.call('HGET', KEYS[1], 'email')
+    if email then redis.call('DEL', 'user-email:' .. email) end
+    redis.call('DEL', KEYS[1])
+    return 1
+  end
+  for key, value in pairs(patch) do redis.call('HSET', KEYS[1], key, value) end
+  if ARGV[3] == '1' or redis.call('HGET', KEYS[1], 'role') == 'admin' then
+    redis.call('HDEL', KEYS[1], 'allowedTools')
+  end
+  return redis.call('HGETALL', KEYS[1])
+`;
+
+function rejectLastAdmin(result: unknown): void {
+  if (result === -1)
+    throw new ConflictError('Não é possível remover o último administrador global.', 'last_admin');
+}
+
 export interface UserRecord extends User {
   passwordHash: string;
 }
@@ -165,7 +200,7 @@ export class UserStore {
 
   /**
    * Atualiza campos editáveis (name, role, allowedTools). Email é imutável.
-   * Quando role muda admin → user, valida via countAdmins externamente.
+   * A checagem do último administrador e a alteração são atômicas.
    */
   async update(
     id: string,
@@ -176,17 +211,29 @@ export class UserStore {
       allowedTools?: ToolKey[] | null;
     },
   ): Promise<UserRecord> {
-    const current = await this.getById(id);
-    const { allowedTools: _allowedTools, ...withoutTools } = current;
-    const next: UserRecord = {
-      ...(patch.allowedTools === null ? withoutTools : current),
-      ...(patch.allowedTools != null ? { allowedTools: patch.allowedTools } : {}),
+    const fields = {
+      ...(patch.allowedTools?.length ? { allowedTools: JSON.stringify(patch.allowedTools) } : {}),
       ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
       ...(patch.role !== undefined ? { role: patch.role } : {}),
     };
-    // Re-grava a hash inteira pra que campos removidos sumam.
-    await this.redis.multi().del(idKey(id)).hset(idKey(id), this.serialize(next)).exec();
-    return next;
+    const keys = [idKey(id), ...(patch.role === 'user' ? await this.adminKeys() : [])];
+    const result = await this.redis.eval(
+      MUTATE_USER,
+      keys.length,
+      ...keys,
+      'update',
+      JSON.stringify(fields),
+      patch.allowedTools !== undefined && !patch.allowedTools?.length ? '1' : '0',
+    );
+    rejectLastAdmin(result);
+    if (result === 0) throw new NotFoundError(`Usuário não encontrado: ${id}`);
+    if (!Array.isArray(result)) throw new Error('Atomic account update failed.');
+    const entries = result as string[];
+    return this.deserialize(
+      Object.fromEntries(
+        entries.flatMap((value, index) => (index % 2 ? [] : [[value, entries[index + 1]!]])),
+      ),
+    );
   }
 
   /** Atualiza só o segredo, preservando identidade, papel e permissões. */
@@ -196,13 +243,21 @@ export class UserStore {
   }
 
   /**
-   * Apaga usuário (hash + índice por email). Caller responsável por validar
-   * que não é o último admin / não é o próprio user logado.
+   * Apaga usuário e índice por email sem remover o último admin.
+   * Caller responsável por impedir remoção da própria conta autenticada.
    */
   async delete(id: string): Promise<void> {
-    const rec = await this.maybeGetById(id);
-    if (!rec) return;
-    await this.redis.multi().del(idKey(id)).del(emailKey(rec.email)).exec();
+    const keys = [idKey(id), ...(await this.adminKeys())];
+    const result = await this.redis.eval(MUTATE_USER, keys.length, ...keys, 'delete', '{}', '0');
+    rejectLastAdmin(result);
+    if (result !== 0 && result !== 1) throw new Error('Atomic account deletion failed.');
+  }
+
+  private async adminKeys(): Promise<string[]> {
+    // Scan outside Lua; a concurrently promoted admin may require a retry, never an unsafe removal.
+    return (await this.listAll())
+      .filter((user) => user.role === 'admin')
+      .map((user) => idKey(user.id));
   }
 
   toPublic(rec: UserRecord): User {

@@ -1,11 +1,12 @@
+import { NAVIGATION_KEYS, type NavigationKey } from './navigation-access.js';
 // ---- Auth & Activity ----
 
 /**
  * Tools/áreas que podem aparecer em `allowedTools` de User/Invite.
- * Quando `allowedTools` é vazio/ausente, acesso é total (legado/admin).
- * Quando é não-vazio, usuário só vê e usa as ferramentas listadas.
+ * Ausente preserva o legado; vazio nega acesso. Admin global ignora a lista.
  */
 export type ToolKey =
+  | NavigationKey
   | 'cloner'
   | 'cloaker-urls'
   | 'video-shield'
@@ -21,6 +22,7 @@ export type ToolKey =
   | 'logs';
 
 export const ALL_TOOL_KEYS: ToolKey[] = [
+  ...NAVIGATION_KEYS,
   'cloner',
   'cloaker-urls',
   'video-shield',

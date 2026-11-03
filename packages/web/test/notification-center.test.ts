@@ -3,9 +3,15 @@ import { test } from 'node:test';
 import { isActiveNotification, saleClickDetail } from '../src/lib/notification-center';
 
 test('sale cards show the credited operator, or natural sale only when no click is credited', () => {
-  assert.deepEqual(saleClickDetail({ operatorId: 'operator-1', operatorName: 'Douglas Riti' }), { label: 'Último clique', value: 'Douglas Riti' });
+  assert.deepEqual(saleClickDetail({ operatorId: 'operator-1', operatorName: 'Douglas Riti' }), {
+    label: 'Último clique',
+    value: 'Douglas Riti',
+  });
   assert.deepEqual(saleClickDetail(null), { label: 'Origem', value: 'Venda natural' });
-  assert.deepEqual(saleClickDetail({ operatorId: 'deleted-user', operatorName: null }), { label: 'Último clique', value: 'Usuário não identificado' });
+  assert.deepEqual(saleClickDetail({ operatorId: 'deleted-user', operatorName: null }), {
+    label: 'Último clique',
+    value: 'Usuário não identificado',
+  });
 });
 
 test('sales disappear only after being read', () => {

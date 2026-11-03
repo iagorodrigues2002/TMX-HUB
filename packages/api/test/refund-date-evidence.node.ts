@@ -122,3 +122,58 @@ test('proof of same instant remains valid; a negative interval is excluded', () 
   assert.equal(negative.effective_delay.sample_count, 0);
   assert.equal(negative.effective_delay.negative_delay_orders, 1);
 });
+
+test('financial date is first refund receipt in São Paulo, never the purchase date or a replay', () => {
+  const rows = recoverRefundDateEvidence(
+    [{ ...row, reversal_at: purchase }],
+    [
+      paid,
+      receipt({ event: 'chargeback', createdAt: purchase }),
+      receipt(
+        { event: 'chargeback', createdAt: purchase },
+        { received_at: '2026-10-16T02:30:00Z' },
+      ),
+    ],
+  );
+  assert.equal(rows[0]?.reversal_at, '2026-10-16T02:30:00.000Z');
+  assert.equal(
+    buildRefundAnalytics(rows, '2026-09-01', '2026-09-01', 'day', '2026-10-16').totals.count,
+    0,
+  );
+  const refundDay = buildRefundAnalytics(rows, '2026-10-15', '2026-10-15', 'day', '2026-10-16');
+  assert.equal(refundDay.totals.count, 1);
+  assert.equal(refundDay.totals.impact_brl_minor, 12700);
+  assert.equal(
+    buildRefundAnalytics(rows, '2026-10-16', '2026-10-16', 'day', '2026-10-16').totals.count,
+    0,
+  );
+});
+
+test('approval-only evidence cannot date a refund; the original value remains explicitly undated', () => {
+  const rows = recoverRefundDateEvidence([{ ...row, reversal_at: purchase }], [paid]);
+  assert.equal(rows[0]?.reversal_at, null);
+  assert.equal(rows[0]?.reversal_received_missing, true);
+  assert.equal(rows[0]?.stored_reversal_at, purchase);
+  assert.equal(rows[0]?.amount_brl_minor, 10000);
+});
+
+test('a confirmed refund is recovered even if the stored reversal timestamp is missing', () => {
+  const rows = recoverRefundDateEvidence(
+    [{ ...row, reversal_at: null, status: 'refunded' }],
+    [receipt({ event: 'refund', createdAt: purchase })],
+  );
+  assert.equal(rows[0]?.reversal_at, received);
+});
+
+test('Paysight receipt uses the verified transaction and receipt time, not occurredAt', () => {
+  const rows = recoverRefundDateEvidence(
+    [{ ...row, provider: 'paysight' }],
+    [
+      receipt(
+        { transaction_id: 'tx-1', applicationId: 200, created_at: purchase },
+        { provider: 'paysight' },
+      ),
+    ],
+  );
+  assert.equal(rows[0]?.reversal_at, received);
+});

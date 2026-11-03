@@ -8,13 +8,16 @@ import {
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { env } from '../env.js';
+import { participantHasCompanyAccess } from '../lib/company-operation-access.js';
 import { HttpProblem, zodToProblem } from '../lib/problem.js';
+import { changeNativeTaskStatus } from '../services/native-tasks.js';
 import { saleNoticeOffers } from '../services/sale-notice-preferences.js';
 const problem = (status: number, code: string, detail: string) =>
   new HttpProblem({ status, code, title: code, detail });
 const taskEventId = (t: ManagedTask) => `task:${t.id}:${t.updatedAt}`;
 export async function notificationCenterRoutes(app: FastifyInstance) {
-  app.addHook('preHandler', async (req) => {
+  app.addHook('preHandler', async (req, reply) => {
+    reply.header('Cache-Control', 'private, no-store');
     if (!req.user) throw problem(401, 'unauthorized', 'Entre na sua conta.');
     if (!app.db)
       throw problem(503, 'notifications_unavailable', 'Central temporariamente indisponível.');
@@ -22,20 +25,28 @@ export async function notificationCenterRoutes(app: FastifyInstance) {
   const offersFor = async (
     user: NonNullable<Parameters<typeof saleNoticeOffers>[1]> & { tools?: string[] },
   ) =>
-    user.role !== 'admin' && user.tools?.length && !user.tools.includes('ofertas')
+    user.role !== 'admin' && user.tools !== undefined && !user.tools.includes('ofertas')
       ? []
       : saleNoticeOffers(app, user);
   app.get('/notifications', async (req) => {
     const user = req.user!;
     const db = app.db!;
+    const global = user.role === 'admin';
+    const memberships = global
+      ? []
+      : await db`SELECT company_id::text AS id,status FROM company_memberships WHERE user_id=${user.sub}`;
+    const activeCompanies = memberships.filter((m) => m.status === 'active').map((m) => m.id);
+    // Revoked memberships must not reopen access to unscoped legacy records.
+    const legacyAllowed = global || memberships.length === 0;
+    const callModes = env.TASK_MANAGEMENT_MODE === 'native' ? ['native', 'clickup'] : ['clickup'];
     const offers = await offersFor(user);
     const offerIds = offers.map((o) => o.id);
     const names = new Map(offers.map((o) => [o.id, o.name]));
     const [tasks, calls, sales] = await Promise.all([
-      db`SELECT t.body,r.event_id AS read_id FROM managed_tasks t LEFT JOIN notification_center_reads r ON r.user_id=${user.sub} AND r.event_id='task:'||t.id||':'||(t.body->>'updatedAt') WHERE t.body->>'status'<>'done' AND EXISTS(SELECT 1 FROM managed_task_people p WHERE p.body->>'userId'=${user.sub} AND t.body->'assignees' @> jsonb_build_array(jsonb_build_object('id',p.id))) ORDER BY t.updated_at DESC LIMIT 100`,
-      db`SELECT n.id,n.body,n.received_at FROM managed_call_notifications n JOIN managed_calls c ON c.id=n.call_id WHERE n.user_id=${user.sub} AND n.read_at IS NULL AND n.revision=(c.body->>'revision')::int AND c.body->>'status'='scheduled' AND (c.body->>'startsAt')::timestamptz + ((c.body->>'durationMinutes')::int * interval '1 minute')>now() ORDER BY n.received_at DESC LIMIT 50`,
+      db`SELECT t.body,r.event_id AS read_id FROM managed_tasks t LEFT JOIN notification_center_reads r ON r.user_id=${user.sub} AND r.event_id='task:'||t.id||':'||(t.body->>'updatedAt') WHERE coalesce(t.body->>'managementMode','clickup')=${env.TASK_MANAGEMENT_MODE} AND t.body->>'status'<>'done' AND (${global} OR (t.body->>'companyId'=ANY(${activeCompanies}::text[])) OR (t.body->>'companyId' IS NULL AND ${legacyAllowed})) AND EXISTS(SELECT 1 FROM managed_task_people p WHERE p.body->>'userId'=${user.sub} AND t.body->'assignees' @> jsonb_build_array(jsonb_build_object('id',p.id))) ORDER BY t.updated_at DESC LIMIT 100`,
+      db`SELECT c.id,c.body,r.event_id AS read_id FROM managed_calls c LEFT JOIN notification_center_reads r ON r.user_id=${user.sub} AND r.event_id='call:scheduled:'||c.id||':'||(c.body->>'revision') WHERE coalesce(c.body->>'managementMode','clickup')=ANY(${callModes}::text[]) AND c.body->>'status'='scheduled' AND (${global} OR (c.body->>'companyId'=ANY(${activeCompanies}::text[])) OR (c.body->>'companyId' IS NULL AND ${legacyAllowed})) AND EXISTS(SELECT 1 FROM managed_task_people p WHERE p.body->>'userId'=${user.sub} AND c.body->'participants' @> jsonb_build_array(jsonb_build_object('id',p.id))) ORDER BY (c.body->>'startsAt')::timestamptz ASC`,
       offerIds.length
-        ? db`SELECT o.id,o.provider,o.amount_minor,o.currency,o.order_kind,o.occurred_at,p.offer_id,c.operator_id FROM tracking_orders o JOIN tracking_projects p ON p.id=o.project_id LEFT JOIN tracking_upsell_operator_credits c ON c.order_id=o.id WHERE p.offer_id=ANY(${offerIds}) AND o.status='paid' AND o.occurred_at>now()-interval '24 hours' AND o.occurred_at<=now() AND NOT EXISTS(SELECT 1 FROM notification_center_reads r WHERE r.user_id=${user.sub} AND r.event_id='sale:'||o.id) ORDER BY o.occurred_at DESC,o.id DESC LIMIT 200`
+        ? db`SELECT o.id,o.provider,o.amount_minor,o.currency,o.order_kind,e.created_at AS occurred_at,p.offer_id,c.operator_id FROM tracking_orders o JOIN tracking_projects p ON p.id=o.project_id JOIN browser_sale_events e ON e.order_id=o.id LEFT JOIN tracking_upsell_operator_credits c ON c.order_id=o.id AND c.project_id=o.project_id WHERE p.offer_id=ANY(${offerIds}) AND o.status='paid' AND e.created_at<=now() AND NOT EXISTS(SELECT 1 FROM notification_center_reads r WHERE r.user_id=${user.sub} AND r.event_id='sale:'||o.id) ORDER BY e.created_at DESC,o.id DESC LIMIT 200`
         : [],
     ]);
     const operatorIds = [...new Set(sales.map((s) => s.operator_id).filter(Boolean))];
@@ -79,24 +90,28 @@ export async function notificationCenterRoutes(app: FastifyInstance) {
         },
       })),
       ...calls.map((n) => ({
-        id: `call:${n.id}`,
+        id: `call:scheduled:${n.id}:${n.body.revision}`,
         kind: 'call' as const,
-        unread: true as const,
+        unread: !n.read_id,
         title: n.body.title,
-        createdAt: new Date(n.received_at).toISOString(),
+        createdAt: n.body.updatedAt,
         call: {
-          callId: n.body.callId,
+          callId: n.id,
           message: n.body.message,
           startsAt: n.body.startsAt,
           meetingUrl: n.body.meetingUrl,
-          minutes: n.body.minutes,
+          minutes: null,
         },
       })),
     ];
     return {
-      notifications: notifications.sort(
-        (a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt),
-      ),
+      notifications: notifications.sort((a, b) => {
+        if (a.kind === 'call' && b.kind === 'call')
+          return Date.parse(a.call.startsAt) - Date.parse(b.call.startsAt);
+        if (a.kind === 'call') return -1;
+        if (b.kind === 'call') return 1;
+        return Date.parse(b.createdAt) - Date.parse(a.createdAt);
+      }),
     };
   });
   app.post('/notifications/read', async (req) => {
@@ -130,23 +145,56 @@ export async function notificationCenterRoutes(app: FastifyInstance) {
     if (!parsed.data.all) return { cleared: true };
     const ids = (await offersFor(req.user!)).map((o) => o.id);
     if (!ids.length) return { cleared: true };
-    await app.db!`INSERT INTO notification_center_reads(user_id,event_id) SELECT ${req.user!.sub},'sale:'||o.id FROM tracking_orders o JOIN tracking_projects p ON p.id=o.project_id WHERE p.offer_id=ANY(${ids}) AND o.status='paid' AND o.occurred_at>now()-interval '24 hours' AND o.occurred_at<=now() ON CONFLICT DO NOTHING`;
+    await app.db!`INSERT INTO notification_center_reads(user_id,event_id) SELECT ${req.user!.sub},'sale:'||o.id FROM tracking_orders o JOIN tracking_projects p ON p.id=o.project_id JOIN browser_sale_events e ON e.order_id=o.id WHERE p.offer_id=ANY(${ids}) AND o.status='paid' AND e.created_at<=now() ON CONFLICT DO NOTHING`;
     return { cleared: true };
   });
   app.post('/notifications/tasks/:id/status', async (req, reply) => {
-    if (!env.TASK_AUTOMATION_SECRET)
+    if (env.TASK_MANAGEMENT_MODE !== 'native' && !env.TASK_AUTOMATION_SECRET)
       throw problem(503, 'task_automation_unconfigured', 'Automação não configurada.');
     const params = z.object({ id: z.string().uuid() }).safeParse(req.params);
-    const body = z.object({ status: TaskStatusSchema }).strict().safeParse(req.body);
+    const body = z
+      .object({ status: TaskStatusSchema, revision: z.number().int().min(1).optional() })
+      .strict()
+      .safeParse(req.body);
     const key = z.string().uuid().safeParse(req.headers['idempotency-key']);
     if (!params.success || !body.success || !key.success)
       throw problem(400, 'invalid_task_status', 'Confira a tarefa e o status.');
+    const assertAssigned = async (db: NonNullable<typeof app.db>) => {
+      const [row] =
+        await db`SELECT t.body FROM managed_tasks t WHERE t.id=${params.data.id} AND coalesce(t.body->>'managementMode','clickup')=${env.TASK_MANAGEMENT_MODE} AND EXISTS(SELECT 1 FROM managed_task_people p WHERE p.body->>'userId'=${req.user!.sub} AND t.body->'assignees' @> jsonb_build_array(jsonb_build_object('id',p.id)))`;
+      if (
+        !row ||
+        (req.user!.role !== 'admin' &&
+          !(await participantHasCompanyAccess(db, req.user!.sub, row.body.companyId)))
+      )
+        throw problem(404, 'task_not_found', 'Tarefa não encontrada para sua conta.');
+    };
+    await assertAssigned(app.db!);
+    if (env.TASK_MANAGEMENT_MODE === 'native') {
+      if (!body.data.revision)
+        throw problem(400, 'revision_required', 'Atualize a tarefa antes de alterar o status.');
+      return reply.send(
+        await changeNativeTaskStatus(
+          app.db!,
+          key.data,
+          { id: req.user!.sub, admin: req.user!.role === 'admin', requireAssignment: true },
+          params.data.id,
+          body.data.status,
+          body.data.revision,
+        ),
+      );
+    }
     await app.db!.begin(async (tx) => {
       await tx`SELECT pg_advisory_xact_lock(hashtext(${key.data}))`;
       const [row] =
         await tx`SELECT t.body FROM managed_tasks t WHERE t.id=${params.data.id} AND EXISTS(SELECT 1 FROM managed_task_people p WHERE p.body->>'userId'=${req.user!.sub} AND t.body->'assignees' @> jsonb_build_array(jsonb_build_object('id',p.id))) FOR UPDATE OF t`;
       if (!row) throw problem(404, 'task_not_found', 'Tarefa não encontrada para sua conta.');
       const task = row.body as ManagedTask;
+      if (
+        req.user!.role !== 'admin' &&
+        !(await participantHasCompanyAccess(tx, req.user!.sub, task.companyId))
+      )
+        throw problem(404, 'task_not_found', 'Tarefa não encontrada para sua conta.');
       const requestHash = createHash('sha256')
         .update(JSON.stringify({ status: body.data.status, taskId: task.id }))
         .digest('hex');

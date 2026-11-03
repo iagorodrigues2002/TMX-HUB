@@ -15,7 +15,7 @@ const UpdateUserSchema = z
      * undefined = não muda. null = limpa (acesso total).
      * array = sobrescreve com essa lista. Vazio é tratado como null.
      */
-    allowed_tools: z.array(ToolKeySchema).max(20).nullable().optional(),
+    allowed_tools: z.array(ToolKeySchema).max(ALL_TOOL_KEYS.length).nullable().optional(),
   })
   .strict();
 
@@ -163,19 +163,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
 
     const target = await app.userStore.getById(req.params.id);
 
-    // Regras de segurança:
-    // 1) Não permite que último admin perca a role.
-    if (parsed.data.role === 'user' && target.role === 'admin') {
-      const adminCount = await app.userStore.countAdmins();
-      if (adminCount <= 1) {
-        throw new BusinessRuleError(
-          'Não dá pra rebaixar o último admin. Promova outro user primeiro.',
-          'last_admin',
-        );
-      }
-    }
-
-    // 2) Admin novo não deve ter allowedTools (acesso total implícito).
+    // Admin novo não deve ter allowedTools (acesso total implícito).
     let allowedTools: ToolKey[] | null | undefined;
     if (parsed.data.allowed_tools !== undefined) {
       // null OU array vazio → limpa
@@ -184,9 +172,8 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           ? null
           : parsed.data.allowed_tools;
     }
-    // Se a role final for admin, força allowedTools = null pra evitar inconsistência.
+    // The store clears tools atomically only when the current stored role is admin.
     const finalRole = parsed.data.role ?? target.role;
-    if (finalRole === 'admin') allowedTools = null;
     if (
       finalRole !== 'admin' &&
       allowedTools?.includes('ofertas-ia') &&
@@ -225,16 +212,6 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
     const target = await app.userStore.maybeGetById(req.params.id);
     if (!target) return reply.code(204).send();
 
-    // Não permite deletar o último admin.
-    if (target.role === 'admin') {
-      const adminCount = await app.userStore.countAdmins();
-      if (adminCount <= 1) {
-        throw new BusinessRuleError(
-          'Não dá pra deletar o último admin. Promova outro user primeiro.',
-          'last_admin',
-        );
-      }
-    }
     await app.userStore.delete(req.params.id);
     app.invalidateAuthUser(req.params.id);
     await app.offerStore.removeMemberFromAll(req.params.id);

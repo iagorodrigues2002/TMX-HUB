@@ -7,14 +7,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { canAccessTool } from '@/lib/api-client';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/lib/auth-context';
+import { useTaskManagementAccess } from '@/lib/hooks/use-task-management-access';
 import { cn } from '@/lib/utils';
 import { ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { NAV_ITEMS, type NavItem } from './nav-config';
+import type { NavItem } from './nav-config';
+import { navigationHref, resolveNavigation, visibleNavigation } from './navigation';
 
 const EXPANDED_STORAGE_KEY = 'tmx-ui.sidebar.expanded';
 
@@ -24,191 +32,139 @@ interface SidebarProps {
   onMobileOpenChange: (open: boolean) => void;
 }
 
-function baseHref(href: string) {
-  return href.split('?')[0]?.replace('/[id]', '') ?? href;
-}
-
-function itemIsActive(item: NavItem, pathname: string, search: string) {
-  if (item.href.includes('[id]')) return pathname.startsWith(baseHref(item.href));
-
-  const [itemPath, itemSearch] = item.href.split('?');
-  if (itemSearch) {
-    const expected = new URLSearchParams(itemSearch);
-    const current = new URLSearchParams(search);
-    return (
-      pathname === itemPath &&
-      Array.from(expected.entries()).every(([key, value]) => current.get(key) === value)
-    );
-  }
-
-  if (item.href === '/') return pathname === '/';
-  return pathname === item.href || pathname.startsWith(`${item.href}/`);
-}
-
-function visibleForUser(item: NavItem, user: ReturnType<typeof useAuth>['user']) {
-  if (item.hidden || !user) return false;
-  if (item.href.includes('[id]')) return false;
-  if (item.roles && !item.roles.includes(user.role)) return false;
-  if (item.requiresTool && !canAccessTool(user, item.requiresTool)) return false;
-  return true;
-}
-
-function DesktopItem({
+function NavigationItem({
   item,
-  collapsed,
+  collapsed = false,
   expanded,
   onExpandedChange,
   pathname,
   search,
-  user,
+  activeLeafId,
+  activeRootId,
+  mobile = false,
+  onNavigate,
 }: {
   item: NavItem;
-  collapsed: boolean;
+  collapsed?: boolean;
   expanded: boolean;
   onExpandedChange: () => void;
   pathname: string;
   search: string;
-  user: ReturnType<typeof useAuth>['user'];
+  activeLeafId?: string;
+  activeRootId?: string;
+  mobile?: boolean;
+  onNavigate?: () => void;
 }) {
-  const visibleChildren = (item.children ?? []).filter((child) => visibleForUser(child, user));
-  const ownActive = itemIsActive(item, pathname, search);
-  const childActive = visibleChildren.some((child) => itemIsActive(child, pathname, search));
-  const active = ownActive || childActive;
+  const children = item.children ?? [];
   const Icon = item.icon;
-  const submenuOpen = !collapsed && expanded && visibleChildren.length > 0;
+  const active = item.id === activeRootId;
+  const submenuId = `${mobile ? 'mobile' : 'desktop'}-submenu-${item.id}`;
+  const submenuOpen = expanded && !collapsed;
+  const itemClass = cn(
+    'nav-item relative min-h-11 w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+    collapsed && 'justify-center px-0',
+  );
+
+  if (children.length === 0) {
+    return (
+      <Link
+        prefetch={true}
+        href={navigationHref(item, pathname, search)}
+        onClick={onNavigate}
+        aria-current={item.id === activeLeafId ? 'page' : undefined}
+        aria-label={collapsed ? item.label : undefined}
+        title={collapsed ? item.label : undefined}
+        className={itemClass}
+      >
+        <Icon className="h-4 w-4 shrink-0" aria-hidden />
+        <span className={collapsed ? 'sr-only' : 'tmx-sidebar-label truncate'}>{item.label}</span>
+      </Link>
+    );
+  }
+
+  if (collapsed) {
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-label={`Abrir ${item.label}`}
+            title={item.label}
+            data-active-group={active}
+            className={cn(itemClass, active && 'bg-accent text-foreground')}
+          >
+            <Icon className="h-4 w-4 shrink-0" aria-hidden />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="right" align="start" sideOffset={10} className="w-64">
+          <DropdownMenuLabel>{item.label}</DropdownMenuLabel>
+          {children.map((child) => {
+            const ChildIcon = child.icon;
+            return (
+              <DropdownMenuItem key={child.id} asChild>
+                <Link
+                  href={navigationHref(child, pathname, search)}
+                  aria-current={child.id === activeLeafId ? 'page' : undefined}
+                  className="min-h-11"
+                >
+                  <ChildIcon className="h-4 w-4 shrink-0" aria-hidden />
+                  {child.label}
+                </Link>
+              </DropdownMenuItem>
+            );
+          })}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  }
 
   return (
     <div>
-      <div className={cn('group/row relative flex items-center', !collapsed && 'gap-1')}>
-        <Link
-          prefetch={true}
-          href={item.href}
-          aria-current={active ? 'page' : undefined}
-          aria-label={collapsed ? item.label : undefined}
-          className={cn('nav-item relative min-w-0 flex-1', collapsed && 'justify-center px-0')}
-        >
-          <Icon className="h-4 w-4 shrink-0" aria-hidden />
-          <span className="tmx-sidebar-label truncate">{item.label}</span>
-        </Link>
-        {!collapsed && visibleChildren.length > 0 && (
-          <button
-            type="button"
-            aria-label={`${expanded ? 'Recolher' : 'Expandir'} ${item.label}`}
-            aria-expanded={expanded}
-            onClick={onExpandedChange}
-            className="grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <ChevronDown
-              className={cn('h-3.5 w-3.5 transition-transform', expanded && 'rotate-180')}
-              aria-hidden
-            />
-          </button>
-        )}
-        {collapsed && (
-          <span
-            role="tooltip"
-            className="pointer-events-none absolute left-[calc(100%+10px)] top-1/2 z-50 -translate-y-1/2 whitespace-nowrap rounded-md border border-border/60 bg-popover px-2.5 py-1.5 text-xs font-medium text-popover-foreground opacity-0 shadow-card transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100"
-          >
-            {item.label}
-          </span>
-        )}
-      </div>
-
-      {visibleChildren.length > 0 && (
-        <div
-          data-expanded={submenuOpen}
-          aria-hidden={!submenuOpen}
-          className="tmx-sidebar-submenu ml-4 border-l border-border/60 pl-3"
-        >
-          <div className="py-1">
-            <p className="px-2 pb-1 pt-2 text-[11px] font-medium text-muted-foreground">
-              {item.label}
-            </p>
-            <div className="space-y-0.5">
-              {visibleChildren.map((child) => {
-                const ChildIcon = child.icon;
-                const childIsActive = itemIsActive(child, pathname, search);
-                return (
-                  <Link
-                    prefetch={submenuOpen}
-                    key={child.id}
-                    href={child.href}
-                    tabIndex={submenuOpen ? undefined : -1}
-                    aria-current={childIsActive ? 'page' : undefined}
-                    className="nav-item min-h-9 px-2.5 py-2 text-xs"
-                  >
-                    <ChildIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                    <span className="truncate">{child.label}</span>
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
+      <button
+        type="button"
+        aria-expanded={submenuOpen}
+        aria-controls={submenuId}
+        data-active-group={active}
+        onClick={onExpandedChange}
+        className={cn(itemClass, active && 'bg-accent/50 text-foreground')}
+      >
+        <Icon className="h-4 w-4 shrink-0" aria-hidden />
+        <span className="tmx-sidebar-label min-w-0 flex-1 truncate">{item.label}</span>
+        <ChevronDown
+          className={cn(
+            'h-3.5 w-3.5 shrink-0 transition-transform motion-reduce:transition-none',
+            submenuOpen && 'rotate-180',
+          )}
+          aria-hidden
+        />
+      </button>
+      <div
+        id={submenuId}
+        data-expanded={submenuOpen}
+        aria-hidden={!submenuOpen}
+        className="tmx-sidebar-submenu ml-4 border-l border-border/60 pl-3"
+      >
+        <div className="space-y-0.5 py-1">
+          {children.map((child) => {
+            const ChildIcon = child.icon;
+            return (
+              <Link
+                prefetch={submenuOpen}
+                key={child.id}
+                href={navigationHref(child, pathname, search)}
+                tabIndex={submenuOpen ? undefined : -1}
+                onClick={onNavigate}
+                aria-current={child.id === activeLeafId ? 'page' : undefined}
+                className="nav-item min-h-11 px-2.5 py-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <ChildIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                <span className="min-w-0 break-words">{child.label}</span>
+              </Link>
+            );
+          })}
         </div>
-      )}
+      </div>
     </div>
-  );
-}
-
-function MobileNavigation({
-  items,
-  pathname,
-  search,
-  onNavigate,
-}: {
-  items: NavItem[];
-  pathname: string;
-  search: string;
-  onNavigate: () => void;
-}) {
-  return (
-    <nav aria-label="Navegação móvel" className="space-y-4 pb-4">
-      {items.map((item) => {
-        const Icon = item.icon;
-        const children = item.children ?? [];
-        const active = itemIsActive(item, pathname, search);
-        return (
-          <section key={item.id} aria-labelledby={`mobile-nav-${item.id}`}>
-            <p
-              id={`mobile-nav-${item.id}`}
-              className="mb-1 px-3 text-[11px] font-medium text-muted-foreground"
-            >
-              {item.group}
-            </p>
-            <Link
-              prefetch={true}
-              href={item.href}
-              onClick={onNavigate}
-              aria-current={active ? 'page' : undefined}
-              className="nav-item min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Icon className="h-4 w-4 shrink-0" aria-hidden />
-              <span className="min-w-0 break-words">{item.label}</span>
-            </Link>
-            {children.length > 0 && (
-              <div className="ml-5 border-l border-border/60 pl-3">
-                {children.map((child) => {
-                  const ChildIcon = child.icon;
-                  return (
-                    <Link
-                      prefetch={true}
-                      key={child.id}
-                      href={child.href}
-                      onClick={onNavigate}
-                      aria-current={itemIsActive(child, pathname, search) ? 'page' : undefined}
-                      className="nav-item min-h-11 px-3 py-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <ChildIcon className="h-4 w-4 shrink-0" aria-hidden />
-                      <span className="min-w-0 break-words">{child.label}</span>
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-        );
-      })}
-    </nav>
   );
 }
 
@@ -216,68 +172,78 @@ export function Sidebar({ collapsed, mobileOpen, onMobileOpenChange }: SidebarPr
   const pathname = usePathname();
   const search = useSearchParams().toString();
   const { user } = useAuth();
+  const { canManageTasks } = useTaskManagementAccess();
   const [expandedId, setExpandedId] = useState<string | null>(null);
-
   const visibleNav = useMemo(
-    () =>
-      NAV_ITEMS.filter((item) => visibleForUser(item, user)).map((item) => ({
-        ...item,
-        children: (item.children ?? []).filter((child) => visibleForUser(child, user)),
-      })),
-    [user],
+    () => visibleNavigation(user, undefined, { canManageTasks }),
+    [user, canManageTasks],
   );
+  const active = useMemo(
+    () => resolveNavigation(pathname, search, visibleNav),
+    [pathname, search, visibleNav],
+  );
+  const activeRootId = active?.root.id;
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(EXPANDED_STORAGE_KEY);
-    const activeRoot = visibleNav.find((item) =>
-      [item, ...(item.children ?? [])].some((candidate) =>
-        itemIsActive(candidate, pathname, search),
-      ),
-    );
-    setExpandedId(stored ?? activeRoot?.id ?? null);
-  }, [pathname, search, visibleNav]);
+    if (active) {
+      setExpandedId(active.root.id);
+      return;
+    }
+    try {
+      const stored = window.localStorage.getItem(EXPANDED_STORAGE_KEY);
+      setExpandedId(visibleNav.some((item) => item.id === stored) ? stored : null);
+    } catch {
+      setExpandedId(null);
+    }
+  }, [active, visibleNav]);
 
   const changeExpanded = (id: string) => {
     const next = expandedId === id ? null : id;
     setExpandedId(next);
-    if (next) window.localStorage.setItem(EXPANDED_STORAGE_KEY, next);
-    else window.localStorage.removeItem(EXPANDED_STORAGE_KEY);
+    try {
+      if (next) window.localStorage.setItem(EXPANDED_STORAGE_KEY, next);
+      else window.localStorage.removeItem(EXPANDED_STORAGE_KEY);
+    } catch {
+      // Navigation remains usable when browser storage is unavailable.
+    }
   };
+
+  const renderItems = (mobile: boolean) =>
+    visibleNav.map((item) => (
+      <NavigationItem
+        key={item.id}
+        item={item}
+        collapsed={!mobile && collapsed}
+        mobile={mobile}
+        expanded={expandedId === item.id}
+        onExpandedChange={() => changeExpanded(item.id)}
+        pathname={pathname}
+        search={search}
+        activeLeafId={active?.item.id}
+        activeRootId={activeRootId}
+        onNavigate={mobile ? () => onMobileOpenChange(false) : undefined}
+      />
+    ));
 
   return (
     <>
       <aside
         aria-label="Navegação principal"
         data-collapsed={collapsed}
-        className={cn(
-          'tmx-sidebar hidden shrink-0 flex-col border-r border-border/60 bg-background/88 px-2 py-3 backdrop-blur-xl xl:flex',
-        )}
+        className="tmx-sidebar hidden shrink-0 flex-col border-r border-border/60 bg-background/88 px-2 py-3 backdrop-blur-xl xl:flex"
       >
         {!collapsed && (
           <p className="px-2 pb-2 text-[11px] font-medium text-muted-foreground">Navegação</p>
         )}
         <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overflow-x-visible">
-          {visibleNav.map((item) => (
-            <DesktopItem
-              key={item.id}
-              item={item}
-              collapsed={collapsed}
-              expanded={expandedId === item.id}
-              onExpandedChange={() => changeExpanded(item.id)}
-              pathname={pathname}
-              search={search}
-              user={user}
-            />
-          ))}
+          {renderItems(false)}
         </nav>
-
         {!collapsed && (
           <div className="mt-3 border-t border-border/60 px-2 pt-3">
             <p className="text-[11px] text-muted-foreground">TMX HUB · v0.10.0</p>
           </div>
         )}
       </aside>
-
       <Dialog open={mobileOpen} onOpenChange={onMobileOpenChange}>
         <DialogContent
           onCloseAutoFocus={(event) => {
@@ -294,12 +260,9 @@ export function Sidebar({ collapsed, mobileOpen, onMobileOpenChange }: SidebarPr
             <DialogDescription>Navegue pelas áreas disponíveis.</DialogDescription>
           </DialogHeader>
           <div className="min-h-0 overflow-y-auto pt-1">
-            <MobileNavigation
-              items={visibleNav}
-              pathname={pathname}
-              search={search}
-              onNavigate={() => onMobileOpenChange(false)}
-            />
+            <nav aria-label="Navegação móvel" className="space-y-1 pb-4">
+              {renderItems(true)}
+            </nav>
           </div>
         </DialogContent>
       </Dialog>

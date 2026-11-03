@@ -20,7 +20,7 @@ import * as React from 'react';
 const buttonVariants = cva(
   [
     'inline-flex min-h-11 min-w-11 items-center justify-center gap-2 whitespace-nowrap rounded-lg sm:min-h-0 sm:min-w-0',
-    'font-semibold tracking-[0.01em] transition-all duration-200 active:scale-[0.98]',
+    'tmx-button font-semibold tracking-[0.01em] transition-[transform,background-color,border-color,color,box-shadow] duration-150 active:scale-[0.98] motion-reduce:transform-none motion-reduce:transition-none',
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0',
     'disabled:pointer-events-none disabled:opacity-50',
     '[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
@@ -89,7 +89,10 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     const [showSuccess, setShowSuccess] = React.useState(false);
 
     React.useEffect(() => {
-      if (!success) return;
+      if (!success) {
+        setShowSuccess(false);
+        return;
+      }
 
       setShowSuccess(true);
       const timeout = window.setTimeout(() => setShowSuccess(false), successDuration);

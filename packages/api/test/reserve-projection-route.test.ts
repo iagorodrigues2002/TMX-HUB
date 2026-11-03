@@ -4,7 +4,7 @@ import { registerGetReserveProjection } from '../src/routes/tracking-overview/ge
 
 async function setup(authenticated = true) {
   const app = Fastify();
-  const db = vi.fn(async () => []);
+  const db = vi.fn(async (_parts: TemplateStringsArray, ..._args: unknown[]) => []);
   const getOrSet = vi.fn(async (_options, load) => load());
   app.decorate('db', db);
   app.decorate('analyticsCache', { getOrSet });
@@ -30,12 +30,13 @@ describe('reserve projection authorization', () => {
     expect(getOrSet).not.toHaveBeenCalled();
     await app.close();
   });
-  it('rejects foreign offers before querying or caching', async () => {
+  it('rejects foreign offers before querying financial data or caching', async () => {
     const { app, db, getOrSet } = await setup();
     expect((await app.inject('/tracking/reserve-projection?offer_ids=foreign')).statusCode).toBe(
       403,
     );
-    expect(db).not.toHaveBeenCalled();
+    expect(db).toHaveBeenCalledTimes(1);
+    expect(db.mock.calls[0]![0].join('')).toContain('FROM company_offers');
     expect(getOrSet).not.toHaveBeenCalled();
     await app.close();
   });
@@ -43,7 +44,9 @@ describe('reserve projection authorization', () => {
     const { app, db, getOrSet } = await setup();
     expect((await app.inject('/tracking/reserve-projection')).json().offer_count).toBe(1);
     expect(getOrSet.mock.calls[0]?.[0].tags).toEqual(['own']);
-    expect(db.mock.calls).toHaveLength(1);
+    expect(db.mock.calls).toHaveLength(2);
+    expect(db.mock.calls[0]![0].join('')).toContain('FROM company_offers');
+    expect(db.mock.calls[1]![0].join('')).toContain('tracking_orders');
     await app.close();
   });
 });

@@ -99,6 +99,36 @@ const fixture = {
   daily: [],
   items: [],
 } satisfies RefundReport;
+test('refund reconciliation explains unclassified origins and undated values without exposing private money', () => {
+  const data = {
+    ...fixture,
+    origin_totals: {
+      general: totals,
+      natural: totals,
+      assisted: { ...totals, brl_minor: 0 },
+      unknown: { ...totals, brl_minor: 15800 },
+    },
+    undated_refunds: {
+      ...totals,
+      brl_minor: 7900,
+      fee_brl_minor: 2700,
+      impact_brl_minor: 10600,
+      basis: 'all_history_without_confirmed_receipt' as const,
+    },
+  };
+  const html = renderToStaticMarkup(
+    <RefundAnalytics data={data} isPrivate={false} interval="day" onIntervalChange={() => {}} />,
+  );
+  assert.match(html, /Origem indeterminada/);
+  assert.match(html, /158,00/);
+  assert.match(html, /Sem recebimento comprovado/);
+  assert.match(html, /79,00/);
+  assert.match(html, /não entram nos totais por período/);
+  const hidden = renderToStaticMarkup(
+    <RefundAnalytics data={data} isPrivate interval="day" onIntervalChange={() => {}} />,
+  );
+  assert.doesNotMatch(hidden, /158,00|79,00|106,00/);
+});
 test('uses first webhook receipt as the primary delay metric', () => {
   const data = {
     ...fixture,

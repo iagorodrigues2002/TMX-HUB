@@ -18,7 +18,7 @@ const cases: {
     patch: ['tracking'],
     expected: ['tracking'],
   },
-  { name: 'preserves an explicit empty array', initial: ['ofertas'], patch: [], expected: [] },
+  { name: 'clears an explicit empty array', initial: ['ofertas'], patch: [] },
 ];
 
 it.each(cases)('$name without losing user fields', async ({ initial, patch, expected }) => {
@@ -31,14 +31,14 @@ it.each(cases)('$name without losing user fields', async ({ initial, patch, expe
     createdAt: '2026-10-18T00:00:00.000Z',
     ...(initial ? { allowedTools: JSON.stringify(initial) } : {}),
   };
-  const transaction = {
-    del: vi.fn().mockReturnThis(),
-    hset: vi.fn().mockReturnThis(),
-    exec: vi.fn().mockResolvedValue([]),
-  };
+  const evalCommand = vi.fn(async (_script, _count, _key, _op, fields, clearTools) => {
+    const saved: Record<string, string> = { ...record, ...JSON.parse(fields) };
+    return Object.entries(saved)
+      .filter(([key]) => clearTools !== '1' || key !== 'allowedTools')
+      .flat();
+  });
   const store = new UserStore({
-    hgetall: vi.fn().mockResolvedValue(record),
-    multi: () => transaction,
+    eval: evalCommand,
   } as unknown as Redis);
 
   const updated = await store.update(record.id, { name: ' Updated ', allowedTools: patch });
@@ -47,10 +47,11 @@ it.each(cases)('$name without losing user fields', async ({ initial, patch, expe
   expect(updated).toMatchObject({ ...identity, name: 'Updated' });
   expect(updated.allowedTools).toEqual(expected);
   expect(Object.hasOwn(updated, 'allowedTools')).toBe(expected !== undefined);
-  expect(transaction.del).toHaveBeenCalledWith('user:fixture-user');
-  const saved = transaction.hset.mock.calls[0]![1] as Record<string, string>;
-  expect(saved.name).toBe('Updated');
-  expect(saved.passwordHash).toBe(record.passwordHash);
-  expect(saved.allowedTools).toBe(expected?.length ? JSON.stringify(expected) : undefined);
-  expect(transaction.exec).toHaveBeenCalledOnce();
+  expect(evalCommand).toHaveBeenCalledOnce();
+  expect(evalCommand.mock.calls[0]![2]).toBe('user:fixture-user');
+  const fields = JSON.parse(evalCommand.mock.calls[0]![4]);
+  expect(fields.name).toBe('Updated');
+  expect(fields).not.toHaveProperty('passwordHash');
+  expect(fields).not.toHaveProperty('role');
+  expect(fields.allowedTools).toBe(patch?.length ? JSON.stringify(patch) : undefined);
 });

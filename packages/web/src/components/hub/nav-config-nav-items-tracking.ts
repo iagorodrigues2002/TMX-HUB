@@ -13,11 +13,12 @@ export const nav_items_tracking: NavItem = {
   children: [
     {
       id: 'tracking-overview',
-      label: 'Visão geral',
+      label: 'Resumo da oferta',
       href: '/tracking?view=overview',
       icon: ChartNoAxesCombined,
       group: 'Rastreamento',
       ...trackingTool,
+      keywords: ['visão geral', 'dashboard da oferta'],
     },
     {
       id: 'tracking-journey',
@@ -41,6 +42,7 @@ export const nav_items_tracking: NavItem = {
       id: 'tracking-capture',
       label: 'Captura',
       href: '/tracking?view=capture&section=code-pixels',
+      activeHrefs: ['/tracking?view=capture&section=domains'],
       icon: CodeXml,
       group: 'Rastreamento',
       ...trackingTool,
@@ -50,6 +52,10 @@ export const nav_items_tracking: NavItem = {
       id: 'tracking-diagnostics',
       label: 'Diagnóstico',
       href: '/tracking?view=finance&section=health',
+      activeHrefs: [
+        '/tracking?view=finance&section=console',
+        '/tracking?view=finance&section=help',
+      ],
       icon: Bug,
       group: 'Rastreamento',
       ...trackingTool,

@@ -29,6 +29,11 @@ it.skipIf(!address)(
       await db.begin(async (sql) => {
         await sql.unsafe(`CREATE SCHEMA ${schema}`);
         await sql.unsafe(`SET LOCAL search_path TO ${schema}`);
+        for (const file of ['109_company_memberships.sql', '111_sale_notice_preferences.sql']) {
+          await sql.unsafe(
+            await readFile(new URL(`../migrations/${file}`, import.meta.url), 'utf8'),
+          );
+        }
         await sql`CREATE TABLE tracking_projects(id text PRIMARY KEY,offer_id text)`;
         await sql`INSERT INTO tracking_projects VALUES('project','allowed')`;
         await sql`CREATE TABLE tracking_orders(id text PRIMARY KEY,status text,project_id text DEFAULT 'project',occurred_at timestamptz DEFAULT now())`;

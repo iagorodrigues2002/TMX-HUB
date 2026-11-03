@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { filterCompanyNavigationOffers } from '../../lib/company-navigation-access.js';
 import { saoPauloParts } from '../../services/intraday-store.js';
 import { loadReserveProjection } from '../../services/reserve-projection.js';
 
@@ -13,7 +14,12 @@ export function registerGetReserveProjection(app: FastifyInstance) {
     if (!req.user) return reply.code(401).send({ error: 'unauthorized' });
     const parsed = querySchema.safeParse(req.query);
     if (!parsed.success) return reply.code(400).send({ error: 'invalid_scope' });
-    const accessible = await app.offerStore.listAccessible(req.user.sub, req.user.role === 'admin');
+    const accessible = await filterCompanyNavigationOffers(
+      app.db,
+      req.user,
+      await app.offerStore.listAccessible(req.user.sub, req.user.role === 'admin'),
+      '/tracking/reserve-projection',
+    );
     const requested = parsed.data.offer_ids?.split(',').filter(Boolean);
     if (requested?.some((id) => !accessible.some((offer) => offer.id === id)))
       return reply.code(403).send({ error: 'offer_forbidden' });

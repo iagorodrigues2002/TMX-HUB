@@ -1,6 +1,36 @@
 import { request } from './request.js';
 import type { RefundFinancialTotals } from './response-types.js';
 import type { RefundRanking } from './response-types.js';
+
+export interface RefundMonthOriginGroup {
+  key: 'same_month' | 'previous_month' | 'older' | 'unknown';
+  purchase_month: string | null;
+  count: number;
+  brl_minor: number;
+  fee_brl_minor: number;
+  impact_brl_minor: number;
+  missing_brl_orders: number;
+  missing_fee_orders: number;
+  share_pct: number | null;
+  refund_pct: number | null;
+  impact_pct: number | null;
+}
+
+export interface RefundMonthOrigin {
+  basis: 'first_confirmed_receipt';
+  timezone: 'America/Sao_Paulo';
+  months: Array<{
+    month: string;
+    from: string;
+    to: string;
+    partial_month: boolean;
+    gross_brl_minor: number;
+    missing_gross_orders: number;
+    total: RefundFinancialTotals;
+    groups: RefundMonthOriginGroup[];
+  }>;
+}
+
 export const endpoints = {
   async getRefundsDashboard(
     from: string,
@@ -8,11 +38,23 @@ export const endpoints = {
     offerId?: string,
     product?: string,
     vendepay?: 'mainex' | 'cobrak',
-    options?: { interval?: 'day' | 'week' | 'month'; provider?: string },
+    options?: {
+      interval?: 'day' | 'week' | 'month';
+      provider?: string;
+      salesView?: 'general' | 'natural' | 'assisted';
+      companyId?: string;
+    },
   ): Promise<{
     from: string;
     to: string;
     time_zone: string;
+    company_scope?: {
+      id: string | null;
+      name: string | null;
+      mode: 'company' | 'offer' | 'legacy' | 'unselected';
+      selection_required: boolean;
+      offer_ids: string[];
+    };
     providers: string[];
     items_limit: number;
     trend: Array<{
@@ -84,6 +126,10 @@ export const endpoints = {
       buyer: { name?: string; email?: string };
     }>;
     totals: RefundFinancialTotals;
+    origin_totals?: Record<'general' | 'natural' | 'assisted' | 'unknown', RefundFinancialTotals>;
+    undated_refunds?: RefundFinancialTotals & { basis: 'all_history_without_confirmed_receipt' };
+    month_origin?: RefundMonthOrigin;
+    date_basis?: 'first_confirmed_refund_webhook_received';
   }> {
     const params = new URLSearchParams({ from, to });
     if (offerId) params.set('offer_id', offerId);
@@ -91,6 +137,8 @@ export const endpoints = {
     if (vendepay) params.set('vendepay', vendepay);
     if (options?.interval) params.set('interval', options.interval);
     if (options?.provider) params.set('provider', options.provider);
+    if (options?.salesView) params.set('sales_view', options.salesView);
+    if (options?.companyId) params.set('company_id', options.companyId);
     return request(`/v1/tracking/refunds-dashboard?${params.toString()}`);
   },
 

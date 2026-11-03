@@ -86,7 +86,7 @@ function statusColor(status: string): string {
 
 export default function LogsPage() {
   const [filter, setFilter] = useState<KindKey | 'all'>('all');
-  const { data, isLoading, isFetching, refetch } = useQuery({
+  const { data, isLoading, isFetching, isError, refetch } = useQuery({
     queryKey: ['activity'],
     queryFn: () => apiClient.listActivity(),
     refetchOnWindowFocus: false,
@@ -120,7 +120,7 @@ export default function LogsPage() {
               onClick={() => setFilter(opt.value)}
             >
               {opt.label}
-              {opt.value !== 'all' && (
+              {opt.value !== 'all' && data && !isError && (
                 <span className="ml-1.5 text-[10px] text-white/45">
                   {entries.filter((e) => e.kind === opt.value).length}
                 </span>
@@ -150,6 +150,11 @@ export default function LogsPage() {
             <div className="flex items-center justify-center p-12">
               <Loader2 className="h-6 w-6 animate-spin text-cyan-300" />
             </div>
+          ) : isError ? (
+            <p role="alert" className="p-12 text-center text-sm text-destructive">
+              Não foi possível consultar as atividades. A consulta pode estar indisponível neste
+              ambiente. Tente atualizar novamente.
+            </p>
           ) : filtered.length === 0 ? (
             <div className="p-12 text-center text-[13px] text-white/40">
               Nenhuma atividade registrada {filter !== 'all' ? 'para esse filtro' : 'ainda'}.

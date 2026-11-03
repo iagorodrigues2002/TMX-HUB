@@ -1,11 +1,14 @@
+import { normalizeExplodely } from '../integrations/explodely/normalize.js';
+import { normalizePaysight } from '../integrations/paysight/normalize.js';
 import { normalizeVendepay } from '../integrations/vendepay/normalize.js';
 import type { RefundOrder } from './refund-analytics.js';
 
 export interface RefundDateReceipt {
   order_id: string;
   external_id: string;
+  provider?: string;
   payload: unknown;
-  received_at: string;
+  received_at: string | Date;
 }
 
 function dateAt(payload: unknown, paths: string[]): string | undefined {
@@ -33,10 +36,34 @@ export function recoverRefundDateEvidence(rows: RefundOrder[], receipts: RefundD
     !a ? b : !b ? a : a < b ? a : b;
   for (const receipt of receipts) {
     if (!receipt.payload || typeof receipt.payload !== 'object') continue;
-    const result = normalizeVendepay(receipt.payload, new Date(receipt.received_at));
-    if (result.kind !== 'processable' || result.event.transactionId !== receipt.external_id)
-      continue;
-    const event = result.event;
+    const received = new Date(receipt.received_at);
+    if (!Number.isFinite(received.getTime())) continue;
+    const provider = receipt.provider ?? 'vendepay';
+    let event: { status: string; transactionId: string } | undefined;
+    if (provider === 'vendepay' || provider === 'paysight') {
+      const result =
+        provider === 'vendepay'
+          ? normalizeVendepay(receipt.payload, received)
+          : normalizePaysight(receipt.payload);
+      if (result.kind === 'processable') event = result.event;
+    } else if (provider === 'explodely') {
+      const result = normalizeExplodely(
+        receipt.payload as Record<string, unknown>,
+        Buffer.from(JSON.stringify(receipt.payload)),
+        received,
+      );
+      if (result.kind === 'processable')
+        event = {
+          transactionId: result.event.externalId,
+          status:
+            result.event.kind === 'refund'
+              ? 'refunded'
+              : ['sale', 'rebill'].includes(result.event.kind)
+                ? 'paid'
+                : result.event.kind,
+        };
+    }
+    if (!event || event.transactionId !== receipt.external_id) continue;
     const dates = evidence.get(receipt.order_id) ?? {};
     const purchase = dateAt(receipt.payload, [
       'paid_at',
@@ -74,20 +101,18 @@ export function recoverRefundDateEvidence(rows: RefundOrder[], receipts: RefundD
               'transaction.chargeback_at',
             ];
       dates.reversal = earliest(dates.reversal, dateAt(receipt.payload, paths));
-      const received = new Date(receipt.received_at);
-      if (Number.isFinite(received.getTime()))
-        dates.received = earliest(dates.received, received.toISOString());
+      dates.received = earliest(dates.received, received.toISOString());
     }
     evidence.set(receipt.order_id, dates);
   }
   return rows.map((row) => {
-    if (!row.reversal_at) return row;
-    // No evidence for another gateway's date contract: never silently turn
-    // an unverified lifecycle timestamp into a valid zero-day measurement.
-    const dates =
-      row.provider === 'vendepay' && row.payload_adapter !== 'explodely'
-        ? evidence.get(row.id)
-        : undefined;
+    const dates = evidence.get(row.id);
+    if (
+      !row.reversal_at &&
+      !dates?.received &&
+      !['refunded', 'chargeback'].includes(String(row.status))
+    )
+      return row;
     // paid_at is persisted only on approval by the ingestion route. Retain
     // this purchase evidence when an older approved receipt is unavailable.
     const storedPurchase =
@@ -96,6 +121,11 @@ export function recoverRefundDateEvidence(rows: RefundOrder[], receipts: RefundD
         : undefined;
     return {
       ...row,
+      // The financial period is determined by receipt evidence, not paid_at,
+      // provider lifecycle dates, replays, or the time this report was queried.
+      stored_reversal_at: row.reversal_at,
+      reversal_at: dates?.received ?? null,
+      reversal_received_missing: !dates?.received,
       delay_paid_at: dates?.purchase ?? storedPurchase ?? dates?.purchaseFallback ?? null,
       delay_reversal_at: dates?.reversal ?? null,
       observed_reversal_at: dates?.received ?? null,

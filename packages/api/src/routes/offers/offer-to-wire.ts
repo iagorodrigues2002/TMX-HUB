@@ -12,6 +12,7 @@ export function offerToWire(
     canManage?: boolean;
     userId?: string;
     isAdmin?: boolean;
+    canConfigureTracking?: boolean;
   } = {},
 ): Record<string, unknown> {
   return {
@@ -34,11 +35,9 @@ export function offerToWire(
     // This is deliberately computed server-side. The web app uses it only to
     // expose management controls; every write still re-checks assertManager.
     can_manage: Boolean(options.canManage),
-    can_configure_tracking: canConfigureTrackingOffer(
-      o,
-      options.userId ?? o.userId,
-      options.isAdmin ?? false,
-    ),
+    can_configure_tracking:
+      options.canConfigureTracking ??
+      canConfigureTrackingOffer(o, options.userId ?? o.userId, options.isAdmin ?? false),
   };
 }
 

@@ -1,11 +1,14 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/lib/auth-context';
+import { useTaskManagementAccess } from '@/lib/hooks/use-task-management-access';
 import { Bell, Menu, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { NAV_ITEMS, type NavItem, flattenNavItems } from './nav-config';
+import { flattenNavItems } from './nav-config';
+import { navigationHref, resolveNavigation, visibleNavigation } from './navigation';
 import { OfferContextSwitcher } from './offer-context-switcher';
 
 interface TopbarProps {
@@ -33,42 +36,28 @@ function normalizeLabel(label: string) {
     .replace(/(^|\s)\p{L}/gu, (letter) => letter.toLocaleUpperCase('pt-BR'));
 }
 
-function hrefMatches(item: NavItem, pathname: string, search: URLSearchParams) {
-  const [itemPath, itemQuery] = item.href.split('?');
-  if (itemPath?.includes('[id]')) {
-    const pattern = new RegExp(`^${itemPath.replace('[id]', '[^/]+')}$`);
-    return pattern.test(pathname);
-  }
-  if (itemPath !== pathname && !pathname.startsWith(`${itemPath}/`)) return false;
-  if (!itemQuery) return true;
-  const expected = new URLSearchParams(itemQuery);
-  return Array.from(expected.entries()).every(([key, value]) => search.get(key) === value);
-}
-
-function navTrail(pathname: string, search: URLSearchParams): NavItem[] {
-  for (const root of NAV_ITEMS) {
-    const child = (root.children ?? [])
-      .filter((item) => !item.hidden && hrefMatches(item, pathname, search))
-      .sort((a, b) => b.href.length - a.href.length)[0];
-    if (child) return [root, child];
-  }
-
-  const root = NAV_ITEMS.find((item) => !item.hidden && hrefMatches(item, pathname, search));
-  return root ? [root] : [];
-}
-
 function deriveBreadcrumbs(
   pathname: string,
   search: URLSearchParams,
+  user: ReturnType<typeof useAuth>['user'],
   override?: string[],
+  canManageTasks = false,
 ): BreadcrumbItem[] {
   const plainRoot = ROOT_PATHS.has(pathname) && search.size === 0;
   if (plainRoot) return [];
 
-  const trail = navTrail(pathname, search);
+  const trail =
+    resolveNavigation(
+      pathname,
+      search.toString(),
+      visibleNavigation(user, undefined, { includeDynamic: true, canManageTasks }),
+    )?.trail ?? [];
   const crumbs: BreadcrumbItem[] = trail.map((item) => ({
     label: item.label,
-    href: item.href.includes('[id]') ? undefined : item.href,
+    href:
+      item.children?.length || item.href.includes('[id]')
+        ? undefined
+        : navigationHref(item, pathname, search.toString()),
   }));
 
   if (trail.at(-1)?.href.includes('[id]') && override?.at(-1)) {
@@ -107,6 +96,9 @@ function Breadcrumbs({ items }: { items: BreadcrumbItem[] }) {
             ← {parent.label}
           </Link>
         )}
+        {parent && !parent.href && (
+          <span className="max-w-[50%] truncate text-muted-foreground">{parent.label}</span>
+        )}
         <span aria-hidden className="shrink-0 text-muted-foreground/50">
           /
         </span>
@@ -130,7 +122,10 @@ function Breadcrumbs({ items }: { items: BreadcrumbItem[] }) {
                 {item.label}
               </Link>
             ) : (
-              <span aria-current="page" className="truncate font-medium text-foreground">
+              <span
+                aria-current={index === items.length - 1 ? 'page' : undefined}
+                className="truncate font-medium text-foreground"
+              >
                 {item.label}
               </span>
             )}
@@ -153,7 +148,9 @@ export function Topbar({
 }: TopbarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const breadcrumbs = deriveBreadcrumbs(pathname, searchParams, breadcrumb);
+  const { user } = useAuth();
+  const { canManageTasks } = useTaskManagementAccess();
+  const breadcrumbs = deriveBreadcrumbs(pathname, searchParams, user, breadcrumb, canManageTasks);
 
   return (
     <header className="tmx-topbar relative z-30 flex h-14 shrink-0 items-center gap-1.5 border-b border-border/60 bg-background/92 px-2 backdrop-blur-xl sm:gap-2 sm:px-3">

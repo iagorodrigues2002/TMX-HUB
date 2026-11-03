@@ -1,0 +1,115 @@
+{
+  "name": "TMX — Gestão nativa | Criar pelo Discord · RASCUNHO",
+  "active": false,
+  "nodes": [
+    {
+      "name": "Do gateway de criação autenticado",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "native-0",
+      "position": [0, 0]
+    },
+    {
+      "name": "Ler pessoas TMX",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 15000
+        },
+        "method": "GET",
+        "url": "={{ $vars.TMX_TASK_API_BASE + '/v1/native-task-automation/people' }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CONFIGURE_NATIVE_TMX_HEADER",
+          "name": "TMX Native Tasks API"
+        }
+      },
+      "id": "native-1",
+      "position": [240, 0]
+    },
+    {
+      "name": "Preparar criação nativa",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "\nconst event=$('Do gateway de criação autenticado').item.json;\nconst message=event.message;\nif(!/^\\d+$/.test(String(message?.id||''))||!/^\\d+$/.test(String(message?.author?.id||'')))throw new Error('Identidade de criação Discord inválida');\nconst input=event.task;\nif(!input||!Array.isArray(input.assigneeDiscordIds)||!input.assigneeDiscordIds.length)throw new Error('Tarefa normalizada sem responsáveis');\nconst people=$input.first().json.people;\nconst assigneeIds=input.assigneeDiscordIds.map(id=>{\n const person=people.find(p=>p.discordId===String(id));if(!person)throw new Error('Responsável sem conta TMX vinculada');return person.id;\n});\nif(new Set(assigneeIds).size!==assigneeIds.length)throw new Error('Responsável duplicado');\nconst {assigneeDiscordIds:_ids,...fields}=input;\nreturn [{json:{messageId:String(message.id),actorDiscordId:String(message.author.id),task:{...fields,assigneeIds}}}];",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "native-2",
+      "position": [480, 0]
+    },
+    {
+      "name": "Criar demanda no TMX",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 15000
+        },
+        "method": "POST",
+        "url": "={{ $vars.TMX_TASK_API_BASE + '/v1/native-task-automation/create' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CONFIGURE_NATIVE_TMX_HEADER",
+          "name": "TMX Native Tasks API"
+        }
+      },
+      "id": "native-3",
+      "position": [720, 0]
+    }
+  ],
+  "connections": {
+    "Do gateway de criação autenticado": {
+      "main": [
+        [
+          {
+            "node": "Ler pessoas TMX",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler pessoas TMX": {
+      "main": [
+        [
+          {
+            "node": "Preparar criação nativa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar criação nativa": {
+      "main": [
+        [
+          {
+            "node": "Criar demanda no TMX",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false
+  }
+}

@@ -39,6 +39,7 @@ export const endpoints = {
   },
 
   async createOffer(input: {
+    company_id?: string;
     utmify_access_enabled?: boolean;
     name: string;
     company_name?: string;

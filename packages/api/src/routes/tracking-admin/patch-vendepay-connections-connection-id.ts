@@ -180,7 +180,7 @@ export function registerPatchVendepayConnectionsConnectionIdRoutes(app: FastifyI
   app.get<{ Params: { id: string }; Querystring: { connection_id?: string } }>(
     '/offers/:id/tracking/vendepay/receipts',
     async (req, reply) => {
-      await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
+      await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
       if (!app.db) return reply.code(503).send({ receipts: [] });
       const receipts = await app.db`
         SELECT r.id, r.state, r.diagnostics, r.received_at, r.processed_at,

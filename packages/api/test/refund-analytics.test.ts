@@ -101,12 +101,25 @@ describe.skipIf(!url)('refund dashboard SQL against disposable PostgreSQL', () =
   const db = postgres(url ?? 'postgres://unused', { max: 1 });
   const id = `refund-${randomUUID()}`;
   beforeAll(async () => {
+    if (!['localhost', '127.0.0.1'].includes(new URL(url!).hostname))
+      throw new Error('Local test database only');
     await db`INSERT INTO tracking_projects(id,offer_id,public_key) VALUES(${id},${id},${id})`;
     await db`INSERT INTO vendepay_connections(id,project_id,token_hash,name) VALUES(${id},${id},${id},'VendePay Mainex')`;
     await db`INSERT INTO tracking_orders(id,project_id,provider,external_id,status,order_kind,paid_at,occurred_at,refunded_at,chargeback_at,amount_minor,amount_brl_minor,currency,vendepay_connection_id) VALUES(${id},${id},'vendepay',${id},'chargeback','front','2026-09-01T12:00Z','2026-09-01T12:00Z','2026-10-01T12:00Z','2026-10-02T12:00Z',10000,10000,'BRL',${id})`;
     await db`INSERT INTO tracking_gateway_connections(id,project_id,provider,name,fee_settings) VALUES(${`${id}-gc`},${id},'paysight','Custom tariff',${db.json({ refund_fee_minor: 125, chargeback_fee_minor: 450, penalty_currency: 'BRL' })})`;
     await db`INSERT INTO tracking_orders(id,project_id,provider,external_id,status,order_kind,paid_at,occurred_at,refunded_at,chargeback_at,amount_minor,amount_brl_minor,currency,gateway_connection_id) VALUES(${`${id}-custom`},${id},'paysight',${`${id}-custom`},'chargeback','front','2026-08-01T12:00Z','2026-08-01T12:00Z','2026-10-03T12:00Z','2026-10-03T12:00Z',1000,1000,'BRL',${`${id}-gc`})`;
     await db`INSERT INTO tracking_orders(id,project_id,provider,external_id,status,order_kind,occurred_at,refunded_at,amount_minor,amount_brl_minor,currency,vendepay_connection_id) VALUES(${`${id}-unknown-paid`},${id},'vendepay',${`${id}-unknown-paid`},'refunded','front','2026-10-04T12:00Z','2026-10-04T12:00Z',500,500,'BRL',${id})`;
+    // The report requires verified webhook receipts, not lifecycle timestamps alone.
+    for (const [suffix, orderId, event, received] of [
+      ['refund', id, 'refund', '2026-10-01T12:00:00Z'],
+      ['chargeback', id, 'chargeback', '2026-10-02T12:00:00Z'],
+      ['unknown-paid', `${id}-unknown-paid`, 'refund', '2026-10-04T12:00:00Z'],
+    ]) {
+      await db`INSERT INTO webhook_receipts(id,connection_id,dedupe_key,order_id,payload,state,received_at)
+        VALUES(${`${id}-${suffix}-receipt`},${id},${suffix!},${orderId!},${db.json({ checkoutId: orderId, event })},'processed',${received!})`;
+    }
+    await db`INSERT INTO tracking_gateway_webhook_receipts(id,gateway_connection_id,dedupe_key,order_id,payload,state,received_at)
+      VALUES(${`${id}-custom-receipt`},${`${id}-gc`},'refund',${`${id}-custom`},${db.json({ transaction_id: `${id}-custom`, applicationId: 200 })},'processed','2026-10-03T12:00:00Z')`;
   });
   afterAll(async () => {
     await db`DELETE FROM tracking_projects WHERE id=${id}`;
@@ -116,15 +129,18 @@ describe.skipIf(!url)('refund dashboard SQL against disposable PostgreSQL', () =
     const app = Fastify();
     app.decorate('db', db);
     app.decorate('offerStore', {
-      listAccessible: async () => [
-        {
-          id,
-          name: 'Oferta fixture',
-          companyName: 'TMX',
-          userId: 'owner',
-          memberIds: ['legacy-member'],
-        },
-      ],
+      listAccessible: async () =>
+        owner
+          ? [
+              {
+                id,
+                name: 'Oferta fixture',
+                companyName: 'TMX',
+                userId: 'owner',
+                memberIds: ['legacy-member'],
+              },
+            ]
+          : [],
     });
     app.addHook('preHandler', async (req) => {
       req.user = {
@@ -142,7 +158,7 @@ describe.skipIf(!url)('refund dashboard SQL against disposable PostgreSQL', () =
       await app.close();
     }
   };
-  it('dedupes refund then chargeback at first lifecycle date and retains paid gross/cohort', async () => {
+  it('dedupes refund then chargeback at first receipt date and retains paid gross/cohort', async () => {
     const r = await request(true, '/tracking/refunds-dashboard?from=2026-10-01&to=2026-10-02');
     expect(r.statusCode, r.body).toBe(200);
     expect(r.json().totals).toMatchObject({ count: 1, brl_minor: 10000 });

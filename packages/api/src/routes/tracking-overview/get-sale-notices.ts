@@ -9,6 +9,7 @@ const querySchema = z.object({
 
 export function registerGetSaleNotices(app: FastifyInstance) {
   app.get('/tracking/sale-notices', async (req, reply) => {
+    reply.header('Cache-Control', 'private, no-store');
     if (!req.user) return reply.code(401).send({ error: 'unauthorized' });
     const parsed = querySchema.safeParse(req.query);
     if (!parsed.success) return reply.code(400).send({ error: 'invalid_cursor' });
@@ -31,12 +32,13 @@ export function registerGetSaleNotices(app: FastifyInstance) {
         offer_id: string;
       }[]
     >`
-      SELECT o.id,o.status,o.provider,o.amount_minor,o.currency,o.occurred_at,p.offer_id
+      SELECT o.id,o.status,o.provider,o.amount_minor,o.currency,e.created_at AS occurred_at,p.offer_id
       FROM tracking_orders o JOIN tracking_projects p ON p.id=o.project_id
+      JOIN browser_sale_events e ON e.order_id=o.id
       WHERE p.offer_id=ANY(${ids}) AND o.status='paid'
-        AND (o.occurred_at>${since} OR (o.occurred_at=${since} AND o.id>${parsed.data.after_id}))
-        AND o.occurred_at<=now()
-      ORDER BY o.occurred_at,o.id LIMIT 201
+        AND (e.created_at>${since} OR (e.created_at=${since} AND o.id>${parsed.data.after_id}))
+        AND e.created_at<=now()
+      ORDER BY e.created_at,o.id LIMIT 201
     `;
     const items = rows.slice(0, 200).map((row) => ({
       ...row,

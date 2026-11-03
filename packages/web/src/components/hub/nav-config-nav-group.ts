@@ -4,4 +4,5 @@ export type NavGroup =
   | 'Rastreamento'
   | 'Ferramentas'
   | 'Integrações'
-  | 'Admin';
+  | 'Empresa'
+  | 'Administração global';

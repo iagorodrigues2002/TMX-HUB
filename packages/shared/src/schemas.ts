@@ -187,6 +187,7 @@ export const OfferStatusSchema = z.enum(['testando', 'validando', 'escala', 'pau
 
 export const CreateOfferRequestSchema = z
   .object({
+    company_id: z.string().uuid().optional(),
     utmify_access_enabled: z.boolean().optional(),
     name: z.string().min(1).max(60),
     company_name: z.string().trim().min(1).max(80).optional(),

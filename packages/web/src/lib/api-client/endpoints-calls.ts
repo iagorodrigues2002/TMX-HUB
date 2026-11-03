@@ -3,10 +3,18 @@ import { z } from 'zod';
 import { request } from './request';
 
 export const callApi = {
-  async list(status: string) {
+  async list(status: string, companyId?: string) {
     return z
-      .object({ calls: z.array(ManagedCallSchema), total: z.number() })
-      .parse(await request(`/v1/calls?${new URLSearchParams({ status })}`));
+      .object({
+        calls: z.array(ManagedCallSchema),
+        total: z.number(),
+        managementMode: z.enum(['clickup', 'native']).default('clickup'),
+      })
+      .parse(
+        await request(
+          `/v1/calls?${new URLSearchParams({ status, ...(companyId ? { companyId } : {}) })}`,
+        ),
+      );
   },
   async save(input: CallCreate, key: string, existing?: { id: string; revision: number }) {
     const body = CallCreateSchema.parse(input);
@@ -19,10 +27,12 @@ export const callApi = {
     );
   },
   async status(id: string, revision: number, action: 'cancel' | 'complete', key: string) {
-    return request(`/v1/calls/${encodeURIComponent(id)}/${action}`, {
-      method: 'POST',
-      body: { revision },
-      headers: { 'Idempotency-Key': key },
-    });
+    return ManagedCallSchema.parse(
+      await request(`/v1/calls/${encodeURIComponent(id)}/${action}`, {
+        method: 'POST',
+        body: { revision },
+        headers: { 'Idempotency-Key': key },
+      }),
+    );
   },
 };

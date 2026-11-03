@@ -3,6 +3,7 @@ import { TaskPersonSchema } from './task-management.js';
 
 export const CallCreateSchema = z
   .object({
+    companyId: z.string().uuid().nullable().optional(),
     title: z.string().trim().min(3).max(200),
     description: z.string().trim().max(5000).default(''),
     message: z.string().trim().max(1000).default(''),
@@ -31,6 +32,8 @@ export const CallCreateSchema = z
   .strict();
 export const ManagedCallSchema = CallCreateSchema.omit({ participantIds: true }).extend({
   id: z.string().uuid(),
+  managementMode: z.enum(['clickup', 'native']).optional(),
+  discordState: z.enum(['pending', 'synced', 'failed']).optional(),
   participants: z.array(TaskPersonSchema),
   revision: z.number().int().min(1),
   status: z.enum(['scheduled', 'completed', 'cancelled']),

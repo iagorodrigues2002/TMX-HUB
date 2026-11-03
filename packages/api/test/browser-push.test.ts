@@ -73,7 +73,16 @@ it('rejects SSRF hosts, schemes, credentials and malformed browser keys', () => 
   ).toBe(false);
 });
 
-function fixture(options: { allowed?: boolean; expired?: boolean; user?: boolean } = {}) {
+function fixture(
+  options: {
+    allowed?: boolean;
+    expired?: boolean;
+    user?: boolean;
+    selection?: string[];
+    noTools?: boolean;
+    suspended?: boolean;
+  } = {},
+) {
   const row = {
     order_id: 'order',
     subscription_id: pushId(subscription.endpoint),
@@ -85,6 +94,10 @@ function fixture(options: { allowed?: boolean; expired?: boolean; user?: boolean
   };
   const db = vi.fn(async (strings: TemplateStringsArray, ..._values: unknown[]) => {
     const query = strings.join('?');
+    if (query.includes('SELECT offer_ids') && options.selection !== undefined)
+      return [{ offer_ids: options.selection }];
+    if (query.includes('FROM company_memberships') && options.suspended)
+      return [{ role: 'member', status: 'suspended', tools: ['ofertas'] }];
     if (query.includes('WITH due')) return [row];
     if (query.includes('SELECT id FROM browser_push_subscriptions'))
       return [{ id: row.subscription_id }];
@@ -95,7 +108,11 @@ function fixture(options: { allowed?: boolean; expired?: boolean; user?: boolean
     userStore: {
       maybeGetById: vi
         .fn()
-        .mockResolvedValue(options.user === false ? null : { id: 'member', role: 'user' }),
+        .mockResolvedValue(
+          options.user === false
+            ? null
+            : { id: 'member', role: 'user', ...(options.noTools ? { allowedTools: [] } : {}) },
+        ),
     },
     offerStore: {
       listAccessible: vi.fn().mockResolvedValue(options.allowed === false ? [] : [{ id: 'offer' }]),
@@ -132,6 +149,21 @@ it('honors an admin personal scope for push without silencing another admin', as
     await runBrowserPush({ ...app, redis: { get: async () => scope } } as never, send);
     expect(send).toHaveBeenCalledTimes(scope === 'all' ? 1 : 0);
   }
+});
+it('checks per-offer preferences, empty tools and company suspension before push', async () => {
+  for (const option of [
+    { selection: [] },
+    { selection: ['foreign'] },
+    { noTools: true },
+    { suspended: true },
+  ]) {
+    const { app, send } = fixture(option);
+    await runBrowserPush(app as never, send);
+    expect(send).not.toHaveBeenCalled();
+  }
+  const { app, send } = fixture({ selection: ['offer'] });
+  await runBrowserPush(app as never, send);
+  expect(send).toHaveBeenCalledTimes(1);
 });
 it('removes expired endpoints and bounds retries for transient provider failures', async () => {
   for (const statusCode of [410, 503]) {

@@ -11,7 +11,5 @@ export function saleClickDetail(click: ApprovedSaleClick | null) {
 }
 
 export function isActiveNotification(notification: CenterNotification): boolean {
-  return notification.kind === 'sale'
-    ? notification.unread
-    : notification.status !== 'Concluído';
+  return notification.kind === 'sale' ? notification.unread : notification.status !== 'Concluído';
 }

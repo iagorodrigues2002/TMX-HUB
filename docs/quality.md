@@ -49,6 +49,25 @@ explícita: exige Redis descartável e os guardrails da fixture antes de reprodu
 PostgreSQL também exigem URLs de bancos descartáveis; sem elas, há testes ignorados.
 `pnpm check` não promete essa cobertura adicional nem integração com serviços reais.
 
+Para a suíte nativa de segurança, crie um Redis descartável exclusivo e informe
+`NODE_ENV=test`, `TMX_ISOLATED_SECURITY_FIXTURE=network-none-dummy-redis`,
+`SECURITY_TEST_REDIS_PORT=<porta local publicada da fixture>` e
+`SECURITY_TEST_REDIS_URL=redis://127.0.0.1:<mesma porta>/15`. Execute com rede externa
+bloqueada e ambiente mínimo sintético. A suíte usa `FLUSHDB`: nunca reutilize o Redis
+do preview, do desenvolvimento ou da produção. A porta é explícita para não pressupor
+que o serviço preexistente em 6379 seja descartável. A suíte recusa ambiente de
+produção, endereços externos, outro banco ou porta diferente da confirmação.
+
+Não aponte todas as variáveis de teste PostgreSQL para o mesmo banco. As fixtures de
+`TASK_TEST_DATABASE_URL` criam e removem tabelas mínimas em `tmx_tasks_test`; os testes
+de reembolsos, relatório de atribuição e limites de segurança precisam de outro banco
+descartável com todas as migrações aplicadas (`REFUNDS_TEST_DATABASE_URL`,
+`ATTRIBUTION_REPORT_TEST_DATABASE_URL`, `SECURITY_BOUNDARIES_TEST_DATABASE_URL`).
+`BROWSER_PUSH_TEST_DATABASE_URL` exige o banco descartável `tmx_push_test`.
+`ADS_INDEX_TEST_DATABASE_URL` aceita `tmx_tasks_test` ou `qa_refunds` local, usando
+um schema isolado; informe-a explicitamente se o banco de reembolsos tiver outro nome.
+Nunca use bancos do preview ou uma cópia de produção para essas suítes destrutivas.
+
 Cobrir permitido/negado, tenant incorreto, entrada inválida, falha externa, dedup/replay e
 regressões da mudança. Usar fixtures sintéticas e recursos descartáveis; mock não equivale
 a produção. Não inventar cobertura/E2E. Auditoria de dependências é separada: serviços de

@@ -1,30 +1,21 @@
-import { Activity, CircleGauge, KeyRound, ListChecks, ListTodo, ShieldCheck, Users } from 'lucide-react';
+import { Activity, CircleGauge, ListChecks, ShieldCheck, Users } from 'lucide-react';
 import type { NavItem } from './nav-config-nav-item';
 
 export const nav_items_admin: NavItem = {
   id: 'admin',
-  label: 'Admin',
+  label: 'Administração global',
   href: '/admin',
   icon: ShieldCheck,
-  group: 'Admin',
+  group: 'Administração global',
   roles: ['admin'],
   keywords: ['administração'],
   children: [
     {
-      id: 'task-management',
-      label: 'Gestão de tarefas',
-      href: '/tarefas',
-      icon: ListTodo,
-      group: 'Admin',
-      roles: ['admin'],
-      keywords: ['tarefas', 'demandas', 'clickup', 'discord'],
-    },
-    {
       id: 'admin-overview',
-      label: 'Visão geral',
+      label: 'Resumo da plataforma',
       href: '/admin',
       icon: CircleGauge,
-      group: 'Admin',
+      group: 'Administração global',
       roles: ['admin'],
     },
     {
@@ -32,7 +23,7 @@ export const nav_items_admin: NavItem = {
       label: 'Pessoas e acessos',
       href: '/admin?view=people',
       icon: Users,
-      group: 'Admin',
+      group: 'Administração global',
       roles: ['admin'],
       keywords: ['usuários', 'permissões'],
     },
@@ -41,27 +32,17 @@ export const nav_items_admin: NavItem = {
       label: 'Convites',
       href: '/admin?view=invites',
       icon: ListChecks,
-      group: 'Admin',
+      group: 'Administração global',
       roles: ['admin'],
     },
     {
       id: 'admin-activity',
-      label: 'Atividade',
-      href: '/logs',
+      label: 'Atividade administrativa',
+      href: '/admin?view=activity',
       icon: Activity,
-      group: 'Admin',
+      group: 'Administração global',
       roles: ['admin'],
-      requiresTool: 'logs',
       keywords: ['logs', 'histórico'],
-    },
-    {
-      id: 'account-security',
-      label: 'Conta e segurança',
-      href: '/settings',
-      icon: KeyRound,
-      group: 'Admin',
-      roles: ['admin'],
-      keywords: ['perfil', 'senha'],
     },
   ],
 };

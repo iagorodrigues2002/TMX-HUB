@@ -43,7 +43,7 @@ function useEffectsState() {
         gain.current.gain.value = volumeRef.current / 100;
         gain.current.connect(context.destination);
       }
-      setSoundPending(context.state !== 'running');
+      setSoundPending(context.state !== 'running' || !audioBuffer.current);
       // Resume synchronously from a gesture; preload independently if autoplay is blocked.
       const resumed = context.resume();
       if (!audioBuffer.current && !loadingBuffer.current) {

@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
   callDate,
   callInputDate,
+  callScheduleState,
   callStartIso,
   parseCallReminders,
   reminderLabel,
@@ -28,16 +28,25 @@ test('invalid and normalized calendar dates are rejected before saving', () => {
   assert.equal(reminderLabel(30), '30 min antes');
 });
 
-test('scheduled cards show simple call information before collapsed management details', () => {
-  const source = readFileSync(
-    new URL('../src/components/tasks/calls-dashboard.tsx', import.meta.url),
-    'utf8',
-  );
-  const card = source.slice(source.indexOf('<article key={call.id}'));
-  const summary = card.slice(0, card.indexOf('<details'));
-  assert.match(card, /Detalhes e gerenciamento/);
-  for (const field of ['call.title', 'call.startsAt', 'call.participants', 'call.meetingUrl'])
-    assert.ok(summary.includes(field));
-  assert.doesNotMatch(summary, /call.description|call.message|Editar \/ reagendar/);
-  assert.doesNotMatch(card, /<details[^>]*\bopen\b/);
+test('elapsed scheduled calls await confirmation rather than being marked completed by the clock', () => {
+  const call = {
+    status: 'scheduled' as const,
+    startsAt: '2026-11-02T17:00:00.000Z',
+    durationMinutes: 60,
+  };
+  for (const [now, expected] of [
+    ['2026-11-02T16:59:59.999Z', 'upcoming'],
+    ['2026-11-02T17:00:00.000Z', 'ongoing'],
+    ['2026-11-02T17:59:59.999Z', 'ongoing'],
+    ['2026-11-02T18:00:00.000Z', 'elapsed'],
+    ['2026-11-03T12:00:00.000Z', 'elapsed'],
+  ])
+    assert.equal(callScheduleState(call, Date.parse(now)), expected);
+  assert.equal(call.status, 'scheduled');
+  for (const status of ['completed', 'cancelled'] as const) {
+    assert.equal(
+      callScheduleState({ ...call, status }, Date.parse('2026-11-03T12:00:00Z')),
+      status,
+    );
+  }
 });

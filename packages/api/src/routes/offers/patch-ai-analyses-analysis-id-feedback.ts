@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { filterCompanyNavigationOffers } from '../../lib/company-navigation-access.js';
 import { BadRequestError, HttpProblem, zodToProblem } from '../../lib/problem.js';
 import { canManageOffer } from '../../services/offer-store.js';
 import { computeMetrics } from '../../services/snapshot-store.js';
@@ -43,7 +44,12 @@ export function registerPatchAiAnalysesAnalysisIdFeedbackRoutes(app: FastifyInst
     async (req, reply) => {
       if (!req.user) throw new BadRequestError('No user attached.');
       const range = resolveRange(RangeQuerySchema.parse(req.query));
-      const offers = await app.offerStore.listAccessible(req.user.sub, req.user.role === 'admin');
+      const offers = await filterCompanyNavigationOffers(
+        app.db,
+        req.user,
+        await app.offerStore.listAccessible(req.user.sub, req.user.role === 'admin'),
+        '/dashboard/summary',
+      );
       const perOffer = await Promise.all(
         offers.map(async (offer) => {
           const snaps = await app.snapshotStore.listRange(offer.id, range.from, range.to);

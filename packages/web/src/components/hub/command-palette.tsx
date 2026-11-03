@@ -12,14 +12,16 @@ import {
 } from '@/components/ui/dialog';
 import { apiClient, canAccessTool } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
+import { useTaskManagementAccess } from '@/lib/hooks/use-task-management-access';
 import { usePrivacy } from '@/lib/privacy-context';
 import { cn } from '@/lib/utils';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Eye, KeyRound, LogOut, Moon, Plus, RefreshCw, Search, Store, Sun } from 'lucide-react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { type NavItem, flattenNavItems } from './nav-config';
+import type { NavItem } from './nav-config';
+import { navigationDestinations, navigationHref, visibleNavigation } from './navigation';
 import { OPEN_OFFER_SWITCHER_EVENT, useOfferContext } from './offer-context-switcher';
 
 interface CommandPaletteProps {
@@ -45,13 +47,6 @@ function isTypingTarget(target: Element | null) {
   );
 }
 
-function navVisible(item: NavItem, user: ReturnType<typeof useAuth>['user']) {
-  if (!user || item.hidden || item.href.includes('[id]')) return false;
-  if (item.roles && !item.roles.includes(user.role)) return false;
-  if (item.requiresTool && !canAccessTool(user, item.requiresTool)) return false;
-  return true;
-}
-
 function searchable(entry: CommandEntry, query: string) {
   const haystack = [entry.label, entry.detail, ...entry.keywords]
     .join(' ')
@@ -69,9 +64,11 @@ function searchable(entry: CommandEntry, query: string) {
 export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const search = useSearchParams().toString();
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
   const { user, logout } = useAuth();
+  const { canManageTasks } = useTaskManagementAccess();
   const { isPrivate, togglePrivacy } = usePrivacy();
   const { theme, toggleTheme } = useInterfaceTheme();
   const { offers, currentOffer, setCurrentOfferId } = useOfferContext();
@@ -122,17 +119,17 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 
   const navigation = useMemo<CommandEntry[]>(
     () =>
-      flattenNavItems()
-        .filter((item) => navVisible(item, user))
-        .map((item) => ({
+      navigationDestinations(visibleNavigation(user, undefined, { canManageTasks })).map(
+        (item) => ({
           id: `nav-${item.id}`,
           label: item.label,
           detail: item.group,
           keywords: item.keywords ?? [],
           icon: item.icon,
-          run: () => router.push(item.href),
-        })),
-    [router, user],
+          run: () => router.push(navigationHref(item, pathname, search)),
+        }),
+      ),
+    [router, user, pathname, search, canManageTasks],
   );
 
   const offerNavigation = useMemo<CommandEntry[]>(

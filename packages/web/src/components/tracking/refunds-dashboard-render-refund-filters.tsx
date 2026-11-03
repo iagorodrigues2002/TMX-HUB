@@ -23,6 +23,10 @@ export function renderRefundFilters({
   report,
   data,
   range,
+  companyId,
+  setCompanyId,
+  companies,
+  scopedOffers,
 }: Pick<
   ReturnType<typeof useRefundsDashboardState>,
   | 'from'
@@ -40,6 +44,10 @@ export function renderRefundFilters({
   | 'report'
   | 'data'
   | 'range'
+  | 'companyId'
+  | 'setCompanyId'
+  | 'companies'
+  | 'scopedOffers'
 >) {
   return (
     <section className={`${panel} refund-filters`} aria-label="Filtros do relatório">
@@ -51,7 +59,9 @@ export function renderRefundFilters({
         <span className="refund-scope">
           {offerId
             ? offers.data?.find((o) => o.id === offerId)?.name || 'Oferta selecionada'
-            : 'Minhas ofertas · empresa TMX'}
+            : (data?.company_scope?.name ??
+              companies.data?.companies.find((company) => company.id === companyId)?.name ??
+              'Selecione uma empresa')}
         </span>
       </div>
       <div className="mt-5 flex flex-wrap items-center gap-2">
@@ -118,20 +128,34 @@ export function renderRefundFilters({
           />
         </Field>
       </div>
-      <div className="mt-5 grid gap-3 border-t border-white/10 pt-5 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-5 grid gap-3 border-t border-white/10 pt-5 sm:grid-cols-2 xl:grid-cols-5">
+        <Field label="Empresa">
+          <select
+            aria-label="Empresa"
+            className={select}
+            value={companyId}
+            onChange={(event) => setCompanyId(event.target.value)}
+            disabled={companies.isPending || companies.isError}
+          >
+            <option value="">
+              {companies.isPending ? 'Carregando empresas…' : 'Selecione uma empresa'}
+            </option>
+            {companies.data?.companies.map((company) => (
+              <option key={company.id} value={company.id}>
+                {company.name}
+              </option>
+            ))}
+          </select>
+        </Field>
         <Field label="Oferta">
           <select
             aria-label="Oferta"
             className={select}
             value={offerId}
-            onChange={(e) => {
-              setOfferId(e.target.value);
-              setProduct('');
-              setPage(1);
-            }}
+            onChange={(e) => setOfferId(e.target.value)}
           >
-            <option value="">Minhas ofertas da empresa TMX</option>
-            {offers.data?.map((o) => (
+            <option value="">Todas as ofertas autorizadas da empresa</option>
+            {scopedOffers.map((o) => (
               <option key={o.id} value={o.id}>
                 {o.name}
               </option>
@@ -204,8 +228,16 @@ export function renderRefundFilters({
       </div>
       {!offerId && (
         <p className="mt-3 text-sm text-white/60">
-          Receita, devoluções e multas somente das ofertas criadas pelo seu perfil e vinculadas à
-          empresa TMX. Outras empresas e outros membros não entram neste consolidado.
+          Receita, devoluções e multas somente das ofertas autorizadas da empresa selecionada.
+          Outras empresas não entram neste consolidado.
+        </p>
+      )}
+      {companies.isError && (
+        <p role="alert" className="mt-3 text-sm text-amber-200">
+          Não foi possível carregar as empresas.{' '}
+          <button type="button" className="underline" onClick={() => void companies.refetch()}>
+            Tentar novamente
+          </button>
         </p>
       )}
       {offers.isError && (

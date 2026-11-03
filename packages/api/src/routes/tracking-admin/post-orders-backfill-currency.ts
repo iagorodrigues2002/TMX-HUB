@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { SUPPORTED_CURRENCIES, normalizeVendepay } from '../../integrations/vendepay/normalize.js';
 import { convertToBrlMinor, warmupBrlRates } from '../../services/exchange-rate.js';
+import { repairVendepayReversalDates } from '../../services/vendepay-reversal-dates.js';
+import { invalidateOfferAnalytics } from '../tracking-public/browser-request.js';
 import { databaseUnavailable } from './pagination-schema.js';
 
 export function registerPostOrdersBackfillCurrencyRoutes(app: FastifyInstance) {
@@ -91,60 +93,11 @@ export function registerPostOrdersBackfillCurrencyRoutes(app: FastifyInstance) {
     async (req, reply) => {
       await app.offerStore.assertManager(req.params.id, req.user!.sub, req.user!.role === 'admin');
       if (!app.db) return reply.code(503).send(databaseUnavailable);
-      const receipts = await app.db<Array<{ payload: unknown; connection_id: string }>>`
-        SELECT r.payload, r.connection_id
-        FROM webhook_receipts r
-        JOIN vendepay_connections c ON c.id = r.connection_id
-        JOIN tracking_projects p ON p.id = c.project_id
-        WHERE p.offer_id = ${req.params.id}
-          AND r.received_at >= now() - interval '180 days'
-        ORDER BY r.received_at ASC
-        LIMIT 5000
-      `;
-      let recognized = 0;
-      let updated = 0;
-      let missingOrder = 0;
-      for (const receipt of receipts) {
-        const normalized = normalizeVendepay(receipt.payload);
-        if (
-          normalized.kind !== 'processable' ||
-          !['refunded', 'chargeback'].includes(normalized.event.status)
-        )
-          continue;
-        recognized += 1;
-        const event = normalized.event;
-        const rows = await app.db`
-          UPDATE tracking_orders o
-          SET
-            status = CASE
-              WHEN o.status = 'chargeback' THEN 'chargeback'
-              WHEN o.status = 'refunded' AND ${event.status} = 'refunded' THEN 'refunded'
-              ELSE ${event.status}
-            END,
-            refunded_at = CASE
-              WHEN ${event.status} = 'refunded' THEN COALESCE(o.refunded_at, ${event.occurredAt})
-              ELSE o.refunded_at
-            END,
-            chargeback_at = CASE
-              WHEN ${event.status} = 'chargeback' THEN COALESCE(o.chargeback_at, ${event.occurredAt})
-              ELSE o.chargeback_at
-            END,
-            updated_at = now()
-          FROM tracking_projects p
-          WHERE o.project_id = p.id
-            AND p.offer_id = ${req.params.id}
-            AND o.gateway_connection_id = ${receipt.connection_id}
-            AND o.external_id = ${event.transactionId}
-          RETURNING o.id
-        `;
-        if (rows.length) updated += 1;
-        else missingOrder += 1;
-      }
+      const result = await repairVendepayReversalDates(app.db, req.params.id, true);
+      await invalidateOfferAnalytics(app, req.params.id);
       return reply.send({
-        inspected: receipts.length,
-        recognized,
-        updated,
-        missing_order: missingOrder,
+        ...result,
+        updated: result.changed,
       });
     },
   );

@@ -3,9 +3,9 @@ import { ulid } from 'ulid';
 import { z } from 'zod';
 import { env } from '../env.js';
 import { normalizeVendepay } from '../integrations/vendepay/normalize.js';
+import { filterCompanyNavigationOffers } from '../lib/company-navigation-access.js';
 import { zodToProblem } from '../lib/problem.js';
 import { decryptSecret } from '../lib/secret-box.js';
-import { canAccessOffer } from '../services/offer-store.js';
 import { buildSyzepayRecoveryUrl, validateSyzepayRecovery } from '../services/syzepay-upsell.js';
 
 const OpenSchema = z
@@ -240,13 +240,14 @@ export function registerUpsellOperatorAudit(app: FastifyInstance) {
       const projects = await app.db<
         { id: string; offer_id: string }[]
       >`SELECT id,offer_id FROM tracking_projects`;
-      const allowed = await Promise.all(
-        projects.map(async (project) => {
-          const offer = await app.offerStore.maybeGet(project.offer_id);
-          return offer && canAccessOffer(offer, req.user!.sub, admin) ? project.id : null;
-        }),
+      const scoped = await filterCompanyNavigationOffers(
+        app.db,
+        req.user,
+        await app.offerStore.listAccessible(req.user.sub, admin),
+        '/tracking/upsell-operator-logs',
       );
-      projectIds = allowed.filter((id): id is string => id !== null);
+      const permitted = new Set(scoped.map((offer) => offer.id));
+      projectIds = projects.filter((project) => permitted.has(project.offer_id)).map((p) => p.id);
     }
     const from = query.data.from ?? null;
     const to = query.data.to ?? null;

@@ -1,5 +1,11 @@
 import type { ManagedTask, TaskPerson } from '@page-cloner/shared';
 
+export function taskManagementHref(search: string, tab: 'tasks' | 'calls') {
+  const params = new URLSearchParams(search);
+  params.set('tab', tab);
+  return `/tarefas?${params.toString()}`;
+}
+
 export const taskStatusLabel = {
   pending: 'Pendente',
   progress: 'Em progresso',

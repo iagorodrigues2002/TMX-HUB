@@ -11,7 +11,10 @@ export interface NavItem {
   group: NavGroup;
   roles?: NavRole[];
   requiresTool?: ToolKey;
+  requiresTaskManagement?: boolean;
   keywords?: string[];
+  activeHrefs?: string[];
   hidden?: boolean;
+  localPreviewOnly?: boolean;
   children?: NavItem[];
 }

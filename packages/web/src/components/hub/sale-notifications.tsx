@@ -8,17 +8,26 @@ import { useInterfaceEffects } from '@/lib/interface-effects';
 import { usePrivacy } from '@/lib/privacy-context';
 import { type SaleNotice, consumeSaleNoticeStream } from '@/lib/sale-notice-stream';
 import {
+  canClaimSaleNotice,
   canPlaySaleNoticeSound,
   enqueueSaleNotices,
   saleNoticeTotals,
   takeNewApproved,
 } from '@/lib/sale-notification';
+import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
+import { getSaleNoticePreference } from './sale-notice-scope-menu';
 
 type Notice = SaleNotice;
 
 export function SaleNotifications() {
   const { user } = useAuth();
+  const { data: preference } = useQuery({
+    queryKey: ['sale-notice-preferences', user?.id],
+    queryFn: getSaleNoticePreference,
+    enabled: false,
+  });
+  const selection = JSON.stringify(preference?.offer_ids ?? null);
   const { isPrivate } = usePrivacy();
   const {
     sound,
@@ -27,13 +36,12 @@ export function SaleNotifications() {
     audioBuffer,
     playing,
     gain,
+    soundPending,
     testRequest,
   } = useInterfaceEffects();
   const [queue, setQueue] = useState<Notice[][]>([]);
   const [failed, setFailed] = useState(false);
   const [leaving, setLeaving] = useState(false);
-  const soundEnabled = useRef(sound);
-  soundEnabled.current = sound;
   const principal = user ? `${user.id}:${user.role}` : null;
   const active = queue[0];
   const first = active?.[0];
@@ -63,7 +71,7 @@ export function SaleNotifications() {
   }, [testRequest]);
 
   useEffect(() => {
-    if (!principal || !enabled) return;
+    if (!principal || !enabled || selection === '[]') return;
     let startedAt: number | undefined;
     const seen = new Set<string>();
     let cursor: string | undefined;
@@ -108,8 +116,15 @@ export function SaleNotifications() {
               .filter((batch) => batch.length),
           );
           if (message.type !== 'sales') return;
+          // A background tab must not consume the shared dedupe entry before a visible popup.
+          if (!canClaimSaleNotice(document.visibilityState === 'visible', document.hasFocus()))
+            return;
           const deliver = async () => {
-            if (stopped) return;
+            if (
+              stopped ||
+              !canClaimSaleNotice(document.visibilityState === 'visible', document.hasFocus())
+            )
+              return false;
             const storageKey = `tmx-sales-seen:${principal}:${todayIso()}`;
             // Storage restrictions must not turn a working stream into a retry loop.
             try {
@@ -126,11 +141,13 @@ export function SaleNotifications() {
               /* See above. */
             }
             if (fresh.length) setQueue((current) => enqueueSaleNotices(current, fresh));
+            return true;
           };
           // Lock only the delivery, so another tab never waits on a long-lived stream.
-          if (navigator.locks) await navigator.locks.request(`tmx-sales:${principal}`, deliver);
-          else await deliver();
-          if (message.cursor) cursor = message.cursor;
+          const claimed = navigator.locks
+            ? await navigator.locks.request(`tmx-sales:${principal}`, deliver)
+            : await deliver();
+          if (claimed && message.cursor) cursor = message.cursor;
         });
       } catch {
         if (!stopped) setFailed(true);
@@ -141,27 +158,35 @@ export function SaleNotifications() {
       }
     };
     void connect();
+    const reconnectVisible = () => {
+      if (document.visibilityState === 'visible' && document.hasFocus()) controller?.abort();
+    };
+    window.addEventListener('focus', reconnectVisible);
+    document.addEventListener('visibilitychange', reconnectVisible);
     return () => {
       stopped = true;
       clearTimeout(timer);
       controller?.abort();
+      window.removeEventListener('focus', reconnectVisible);
+      document.removeEventListener('visibilitychange', reconnectVisible);
       setQueue([]);
+      playing.current?.stop();
+      playing.current = null;
     };
-  }, [principal, enabled]);
+  }, [principal, enabled, selection, playing]);
 
   useEffect(() => {
     if (!active) return;
     setLeaving(false);
     const id = active[0]!.id;
     const previousId = lastSoundNotice.current;
-    lastSoundNotice.current = id;
     if (
       canPlaySaleNoticeSound({
         id,
         previousId,
         visible: document.visibilityState === 'visible',
         focused: document.hasFocus(),
-        enabled: soundEnabled.current,
+        enabled: sound && !soundPending,
       }) &&
       audio.current?.state === 'running' &&
       audioBuffer.current &&
@@ -178,6 +203,7 @@ export function SaleNotifications() {
         if (playing.current === source) playing.current = null;
       };
       source.start();
+      lastSoundNotice.current = id;
     }
     const silenceHiddenTab = () => {
       if (document.visibilityState === 'visible' && document.hasFocus()) return;
@@ -192,7 +218,7 @@ export function SaleNotifications() {
       document.removeEventListener('visibilitychange', silenceHiddenTab);
       window.removeEventListener('blur', silenceHiddenTab);
     };
-  }, [active, audio, audioBuffer, gain, playing]);
+  }, [active, audio, audioBuffer, gain, playing, soundPending, sound]);
 
   useEffect(() => {
     if (!leaving || !active) return;

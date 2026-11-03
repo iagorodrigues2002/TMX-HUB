@@ -50,6 +50,8 @@ export class OfferStore extends OfferAiStore {
     userId: string;
     name: string;
     companyName?: string;
+    companyId?: string;
+    isAdmin?: boolean;
     dashboardId?: string;
     utmifyAccessEnabled?: boolean;
     description?: string;
@@ -77,20 +79,65 @@ export class OfferStore extends OfferAiStore {
       status: args.status ?? 'testando',
       createdAt: new Date().toISOString(),
     };
-    await this.redis
+    if (this.db) {
+      await this.db.begin(async (sql) => {
+        if (!args.companyId) {
+          throw new HttpProblem({
+            status: 403,
+            title: 'Forbidden',
+            detail: 'Selecione a empresa da oferta.',
+          });
+        }
+        const [company] =
+          await sql`SELECT id,name FROM companies WHERE id=${args.companyId} FOR UPDATE`;
+        if (!company) throw new NotFoundError('Empresa não encontrada.');
+        const [membership] =
+          await sql`SELECT role,status FROM company_memberships WHERE company_id=${args.companyId} AND user_id=${args.userId}`;
+        if (
+          !args.isAdmin &&
+          (!membership ||
+            membership.status !== 'active' ||
+            !['owner', 'admin'].includes(membership.role))
+        )
+          throw new HttpProblem({
+            status: 403,
+            title: 'Forbidden',
+            detail: 'Sem permissão para criar ofertas nesta empresa.',
+          });
+        offer.companyName = company.name;
+        // Commit the boundary before Redis: a failed write may leave a harmless binding,
+        // but must never leave a visible company offer with legacy authorization.
+        await sql`INSERT INTO company_offers(company_id,offer_id,owner_user_id) VALUES(${args.companyId},${offer.id},${args.userId})`;
+        await sql`INSERT INTO company_access_audit(company_id,actor_id,action,subject_id) VALUES(${args.companyId},${args.userId},'offer.created',${offer.id})`;
+      });
+    } else if (args.companyId) {
+      throw new HttpProblem({
+        status: 503,
+        title: 'Unavailable',
+        detail: 'Banco empresarial indisponível.',
+      });
+    }
+    const written = await this.redis
       .multi()
       .hset(this.key(offer.id), serialize(offer))
       .sadd(this.userKey(args.userId), offer.id)
       .exec();
+    if (!written || written.some(([error]) => error))
+      throw new Error('Não foi possível salvar a oferta.');
     return offer;
   }
 
-  async update(id: string, userId: string, patch: UpdateOfferRequest): Promise<Offer> {
-    const current = await this.assertOwner(id, userId);
+  async update(
+    id: string,
+    userId: string,
+    patch: UpdateOfferRequest,
+    isAdmin = false,
+  ): Promise<Offer> {
+    const current = await this.assertManager(id, userId, isAdmin);
 
     // Name conflicts (only when changing name).
     if (patch.name && patch.name.trim().toLowerCase() !== current.name.toLowerCase()) {
-      const all = await this.listByUser(userId);
+      const all = await this.listByUser(current.userId);
       if (
         all.some((o) => o.id !== id && o.name.toLowerCase() === patch.name!.trim().toLowerCase())
       ) {
@@ -120,6 +167,14 @@ export class OfferStore extends OfferAiStore {
         : {}),
       updatedAt: new Date().toISOString(),
     };
+
+    if (this.db) {
+      const [company] = await this.db`
+        SELECT c.name FROM company_offers o JOIN companies c ON c.id=o.company_id
+        WHERE o.offer_id=${id}`;
+      // The old free-text field cannot move or rename a company-bound offer.
+      if (company) next.companyName = company.name;
+    }
 
     // Re-write the whole hash so removed optional fields actually disappear.
     await this.redis.multi().del(this.key(id)).hset(this.key(id), serialize(next)).exec();
@@ -160,9 +215,43 @@ export class OfferStore extends OfferAiStore {
 
   async listAccessible(userId: string, isAdmin = false): Promise<Offer[]> {
     const offers = await this.listAll();
-    return offers
-      .filter((offer) => canAccessOffer(offer, userId, isAdmin))
+    const permitted = await Promise.all(
+      offers.map(async (offer) =>
+        (await this.permissions(offer, userId, isAdmin)).read ? offer : null,
+      ),
+    );
+    return permitted
+      .filter((offer): offer is Offer => offer !== null)
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  }
+
+  async permissions(
+    offer: Offer,
+    userId: string,
+    isAdmin = false,
+  ): Promise<{ read: boolean; manage: boolean }> {
+    if (isAdmin) return { read: true, manage: true };
+    if (this.db) {
+      const [scope] = await this.db`
+        SELECT m.role,m.status,m.tools,m.all_offers,
+          EXISTS(SELECT 1 FROM company_offer_grants g WHERE g.company_id=c.company_id AND g.user_id=${userId} AND g.offer_id=c.offer_id) AS granted
+        FROM company_offers c LEFT JOIN company_memberships m ON m.company_id=c.company_id AND m.user_id=${userId}
+        WHERE c.offer_id=${offer.id}`;
+      if (scope) {
+        const active = scope.status === 'active';
+        const manage = active && ['owner', 'admin'].includes(scope.role);
+        return {
+          manage,
+          read:
+            manage ||
+            (active &&
+              Array.isArray(scope.tools) &&
+              scope.tools.includes('ofertas') &&
+              (scope.all_offers || scope.granted)),
+        };
+      }
+    }
+    return { read: canAccessOffer(offer, userId), manage: canManageOffer(offer, userId) };
   }
 
   async removeMemberFromAll(memberId: string): Promise<void> {
@@ -185,7 +274,7 @@ export class OfferStore extends OfferAiStore {
   }
 
   async delete(id: string, userId: string): Promise<void> {
-    await this.redis
+    const removed = await this.redis
       .multi()
       .del(this.key(id))
       .del(this.credentialKey(id))
@@ -193,6 +282,10 @@ export class OfferStore extends OfferAiStore {
       .del(`${AI_HISTORY_PREFIX}${id}`)
       .srem(this.userKey(userId), id)
       .exec();
+    if (!removed || removed.some(([error]) => error))
+      throw new Error('Não foi possível remover a oferta.');
+    // Removing the binding first could re-enable legacy ownership on Redis failure.
+    if (this.db) await this.db`DELETE FROM company_offers WHERE offer_id=${id}`;
   }
 
   async listAll(): Promise<Offer[]> {
@@ -269,7 +362,7 @@ export class OfferStore extends OfferAiStore {
   /** Verify the offer exists AND belongs to the given user. Throws otherwise. */
   async assertOwner(id: string, userId: string): Promise<Offer> {
     const offer = await this.get(id);
-    if (offer.userId !== userId) {
+    if (offer.userId !== userId || !(await this.permissions(offer, userId)).manage) {
       throw new NotFoundError(`Oferta não encontrada: ${id}`);
     }
     return offer;
@@ -277,7 +370,7 @@ export class OfferStore extends OfferAiStore {
 
   async assertManager(id: string, userId: string, isAdmin = false): Promise<Offer> {
     const offer = await this.get(id);
-    if (!canManageOffer(offer, userId, isAdmin)) {
+    if (!(await this.permissions(offer, userId, isAdmin)).manage) {
       throw new NotFoundError(`Oferta não encontrada: ${id}`);
     }
     return offer;
@@ -294,18 +387,11 @@ export class OfferStore extends OfferAiStore {
     isAdmin = false,
   ): Promise<Offer> {
     const offer = await this.get(id);
-    if (!canAccessOffer(offer, userId, isAdmin)) {
+    const access = await this.permissions(offer, userId, isAdmin);
+    if (!access.read) {
       throw new NotFoundError(`Oferta não encontrada: ${id}`);
     }
-    let role: OfferMemberRole = isAdmin || offer.userId === userId ? 'owner' : 'member';
-    if (role === 'member' && this.db) {
-      const [membership] = await this.db<Array<{ role: OfferMemberRole }>>`
-        SELECT role FROM offer_members
-        WHERE offer_id=${id} AND user_id=${userId}
-        LIMIT 1
-      `;
-      role = membership?.role ?? 'member';
-    }
+    const role: OfferMemberRole = access.manage ? 'owner' : 'member';
     if (!allowedRoles.includes(role)) {
       throw new HttpProblem({
         status: 403,
@@ -319,7 +405,7 @@ export class OfferStore extends OfferAiStore {
 
   async assertAccess(id: string, userId: string, isAdmin = false): Promise<Offer> {
     const offer = await this.get(id);
-    if (!canAccessOffer(offer, userId, isAdmin)) {
+    if (!(await this.permissions(offer, userId, isAdmin)).read) {
       throw new NotFoundError(`Oferta não encontrada: ${id}`);
     }
     return offer;

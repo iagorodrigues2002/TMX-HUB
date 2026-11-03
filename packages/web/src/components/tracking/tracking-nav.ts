@@ -50,7 +50,7 @@ export interface TrackingNavArea {
 export const TRACKING_NAV: TrackingNavArea[] = [
   {
     id: 'overview',
-    label: 'Visão geral',
+    label: 'Resumo da oferta',
     description: 'Resumo da operação e prontidão da oferta.',
     icon: CircleGauge,
     sections: [
@@ -232,6 +232,31 @@ export const DEFAULT_TRACKING_SECTION: Record<TrackingView, string> = {
   destinations: 'meta',
   finance: 'payments',
 };
+
+export function trackingWorkspaceNavigation(view: TrackingView, section: string) {
+  const area = TRACKING_NAV.find((item) => item.id === view)!;
+  const current = area.sections.find((item) => item.id === section) ?? area.sections[0]!;
+  if (view === 'destinations') {
+    return { title: current.label, description: current.description, sections: [] };
+  }
+  if (view === 'finance') {
+    const payments = ['payments', 'fees'].includes(section);
+    return {
+      title: payments ? 'Pagamentos e webhooks' : 'Diagnóstico da oferta',
+      description: payments
+        ? 'Conexões e taxas dos gateways desta oferta.'
+        : 'Saúde, eventos e testes da oferta selecionada.',
+      sections: area.sections.filter((item) =>
+        payments ? ['payments', 'fees'].includes(item.id) : !['payments', 'fees'].includes(item.id),
+      ),
+    };
+  }
+  return {
+    title: area.label,
+    description: area.description,
+    sections: area.sections.length > 1 ? area.sections : [],
+  };
+}
 
 interface BuildTrackingHrefOptions {
   view: TrackingView;

@@ -12,6 +12,7 @@ import {
 import { taskApi } from '@/lib/api-client/endpoints-tasks';
 import { endpoints as userApi } from '@/lib/api-client/endpoints-users';
 import { useAuth } from '@/lib/auth-context';
+import { callInputDate, callStartIso } from '@/lib/call-dashboard';
 import { summarizeTasks, taskDate, taskStatusLabel } from '@/lib/task-dashboard';
 import {
   type ManagedTask,
@@ -29,6 +30,7 @@ import {
   Clock3,
   ListTodo,
   Loader2,
+  Pencil,
   Plus,
   RefreshCw,
   Search,
@@ -43,9 +45,13 @@ const field =
   'min-h-11 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary';
 const priorityLabel = { urgent: 'Urgente', high: 'Alta', normal: 'Normal', low: 'Baixa' };
 
-export function TaskDashboard({ preview = false }: { preview?: boolean }) {
+export function TaskDashboard({
+  preview = false,
+  companyId,
+  companyAccess = false,
+}: { preview?: boolean; companyId?: string; companyAccess?: boolean }) {
   const { user, loading } = useAuth();
-  const allowed = preview || user?.role === 'admin';
+  const allowed = preview || companyAccess || user?.role === 'admin';
   const [page, setPage] = useState(1);
   const [demo, setDemo] = useState(demoTasks);
   const [peopleDemo, setPeopleDemo] = useState(demoTaskPeople);
@@ -61,27 +67,35 @@ export function TaskDashboard({ preview = false }: { preview?: boolean }) {
     return () => clearTimeout(timer);
   }, [search]);
   const tasksQuery = useQuery({
-    queryKey: ['managed-tasks', user?.id, page, personId, status, query],
-    queryFn: () => taskApi.list(page, { person: personId, status, q: query }),
+    queryKey: ['managed-tasks', user?.id, companyId, page, personId, status, query],
+    queryFn: () =>
+      taskApi.list(page, {
+        person: personId,
+        status,
+        q: query,
+        ...(companyId ? { companyId } : {}),
+      }),
     enabled: allowed && !preview,
     refetchInterval: 15000,
     retry: false,
   });
   const peopleQuery = useQuery({
-    queryKey: ['task-people', user?.id],
-    queryFn: taskApi.people,
+    queryKey: ['task-people', user?.id, companyId],
+    queryFn: () => taskApi.people(companyId),
     enabled: allowed && !preview,
     retry: false,
   });
   const tasks = preview ? demo : (tasksQuery.data?.tasks ?? []);
   const people = preview ? peopleDemo : (peopleQuery.data ?? []);
   const configured = preview || !!tasksQuery.data?.configured;
+  const native = tasksQuery.data?.managementMode === 'native';
+  const [editingTask, setEditingTask] = useState<ManagedTask | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [addingPerson, setAddingPerson] = useState(false);
   const usersQuery = useQuery({
-    queryKey: ['task-link-users', user?.id],
-    queryFn: userApi.listUsers,
+    queryKey: ['task-link-users', user?.id, companyId],
+    queryFn: () => (companyId ? taskApi.users(companyId) : userApi.listUsers()),
     enabled: allowed && !preview && addingPerson,
     retry: false,
   });
@@ -89,6 +103,17 @@ export function TaskDashboard({ preview = false }: { preview?: boolean }) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [createKey, setCreateKey] = useState<string | null>(null);
+  const historyQuery = useQuery({
+    queryKey: [
+      'native-task-history',
+      user?.id,
+      expanded,
+      tasksQuery.data?.tasks.find((t) => t.id === expanded)?.updatedAt,
+    ],
+    queryFn: () => taskApi.history(expanded!),
+    enabled: allowed && native && !!expanded,
+    retry: false,
+  });
   const now = Date.now();
   const totals =
     !preview && tasksQuery.data
@@ -151,9 +176,13 @@ export function TaskDashboard({ preview = false }: { preview?: boolean }) {
           ),
         );
       } else {
-        await taskApi.status(task.id, next, crypto.randomUUID());
+        await taskApi.status(task.id, next, crypto.randomUUID(), task.revision);
         await refresh();
-        setNotice('Alteração solicitada. O status só muda após confirmação da automação.');
+        setNotice(
+          native
+            ? 'Status salvo no TMX. Acompanhe a entrega ao Discord nos detalhes da tarefa.'
+            : 'Alteração solicitada. O status só muda após confirmação da automação.',
+        );
       }
     } catch {
       setError('Não foi possível confirmar a alteração. Atualize antes de tentar novamente.');
@@ -167,14 +196,22 @@ export function TaskDashboard({ preview = false }: { preview?: boolean }) {
     setError('');
     const form = new FormData(event.currentTarget);
     const due = String(form.get('due') ?? '');
+    let dueAt: string | null;
+    try {
+      dueAt = due ? callStartIso(due) : null;
+    } catch {
+      setError('Confira a data e o horário do prazo.');
+      return;
+    }
     const parsed = TaskCreateSchema.safeParse({
+      companyId,
       title: form.get('title'),
       description: form.get('description'),
-      sector: form.get('sector'),
-      offer: String(form.get('offer') ?? '').trim() || null,
+      sector: editingTask?.sector ?? form.get('sector'),
+      offer: editingTask ? editingTask.offer : String(form.get('offer') ?? '').trim() || null,
       priority: form.get('priority'),
       assigneeIds: form.getAll('assignees'),
-      dueAt: due ? new Date(`${due}:00-03:00`).toISOString() : null,
+      dueAt,
     });
     if (!parsed.success) {
       setError('Preencha tarefa, setor e pelo menos um responsável. Confira os demais campos.');
@@ -213,16 +250,24 @@ export function TaskDashboard({ preview = false }: { preview?: boolean }) {
           },
           ...items,
         ]);
+      } else if (editingTask) {
+        const { sector: _sector, offer: _offer, companyId: _companyId, ...fields } = parsed.data;
+        if (!editingTask.revision) throw Error('Revisão da tarefa ausente');
+        await taskApi.edit(editingTask.id, { ...fields, revision: editingTask.revision }, key);
+        await refresh();
       } else {
         await taskApi.create(parsed.data, key);
         await refresh();
       }
       setCreating(false);
+      setEditingTask(null);
       setCreateKey(null);
       setNotice(
         preview
           ? 'Tarefa demonstrativa criada somente nesta página.'
-          : 'Solicitação salva. Aguardando confirmação do ClickUp e do Discord.',
+          : native
+            ? 'Tarefa salva no TMX. A entrega no Discord é acompanhada separadamente.'
+            : 'Solicitação salva. Aguardando confirmação do ClickUp e do Discord.',
       );
     } catch {
       setError(
@@ -239,13 +284,18 @@ export function TaskDashboard({ preview = false }: { preview?: boolean }) {
     const person: TaskPerson = {
       id: crypto.randomUUID(),
       name: String(data.get('name')).trim(),
-      clickupId: String(data.get('clickupId')).trim() || null,
+      clickupId: native ? null : String(data.get('clickupId') ?? '').trim() || null,
       discordId: String(data.get('discordId')).trim() || null,
       userId: String(data.get('userId') ?? '').trim() || null,
     };
-    const existing = people.find((p) => person.clickupId && p.clickupId === person.clickupId);
+    const existing = people.find((p) =>
+      native
+        ? person.userId && p.userId === person.userId
+        : person.clickupId && p.clickupId === person.clickupId,
+    );
     if (existing) {
       person.id = existing.id;
+      if (native) person.clickupId = existing.clickupId;
       if (!data.get('userId')) person.userId = existing.userId ?? null;
     }
     if (data.get('userId') === '__clear') person.userId = null;
@@ -276,19 +326,25 @@ export function TaskDashboard({ preview = false }: { preview?: boolean }) {
     );
 
   return (
-    <div className={`${styles.dashboard} space-y-6`}>
-      <header className="flex flex-wrap items-start justify-between gap-4">
+    <div className={`${styles.dashboard} space-y-5`}>
+      <header className={styles.pageHeader} data-motion-panel>
         <div>
-          <p className="mb-2 flex items-center gap-2 text-xs uppercase tracking-[.2em] text-primary">
-            <ListTodo className="h-4 w-4" aria-hidden /> Operação · Admin
+          <p className="mb-2 flex items-center gap-2 text-[10px] font-medium uppercase tracking-[.18em] text-primary">
+            <ListTodo className="h-4 w-4" aria-hidden /> Operação da equipe
           </p>
-          <h1 className="text-3xl font-semibold tracking-tight">Gestão de tarefas</h1>
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Gestão de tarefas</h1>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            Quem está fazendo o quê, desde o recebimento até a conclusão.
+            {native
+              ? 'Responsáveis, prazos e histórico. Do recebimento à conclusão, no TMX.'
+              : 'Quem está fazendo o quê, desde o recebimento até a conclusão.'}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => setAddingPerson(true)}>
+        <div className={styles.headerActions}>
+          <Button
+            variant="outline"
+            disabled={!preview && !companyId}
+            onClick={() => setAddingPerson(true)}
+          >
             <Users aria-hidden /> Vincular pessoa
           </Button>
           <Button
@@ -300,9 +356,11 @@ export function TaskDashboard({ preview = false }: { preview?: boolean }) {
             <RefreshCw aria-hidden />
           </Button>
           <Button
-            disabled={!configured}
+            disabled={!configured || (!preview && !companyId)}
             onClick={() => {
               setError('');
+              setEditingTask(null);
+              setCreateKey(null);
               setCreating(true);
             }}
           >
@@ -310,6 +368,12 @@ export function TaskDashboard({ preview = false }: { preview?: boolean }) {
           </Button>
         </div>
       </header>
+      {!preview && !companyId && (
+        <p className="text-sm text-muted-foreground">
+          Selecione uma empresa para criar tarefas e vincular pessoas. Registros antigos sem empresa
+          permanecem acessíveis apenas aos administradores globais.
+        </p>
+      )}
       {preview && (
         <p className="rounded-xl border border-primary/30 bg-primary/10 p-3 text-sm">
           Prévia local interativa · pessoas, datas e tarefas fictícias. Nenhum envio para Discord ou
@@ -336,27 +400,28 @@ export function TaskDashboard({ preview = false }: { preview?: boolean }) {
       {notice && (
         <output className="block rounded-lg border border-primary/30 p-3 text-sm">{notice}</output>
       )}
-      <section
-        aria-label="Resumo geral das tarefas"
-        className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
-      >
+      <section aria-label="Resumo geral das tarefas" className={styles.summary} data-motion-panel>
         {[
           { label: 'Em aberto', count: totals.open, icon: ListTodo, color: 'text-primary' },
-          { label: 'Em progresso', count: totals.progress, icon: Clock3, color: 'text-sky-400' },
+          { label: 'Em progresso', count: totals.progress, icon: Clock3, color: 'text-primary' },
           { label: 'Atrasadas', count: totals.overdue, icon: AlertCircle, color: 'text-amber-500' },
           { label: 'Concluídas', count: totals.done, icon: CheckCheck, color: 'text-emerald-400' },
         ].map((stat) => (
-          <div key={stat.label} className="rounded-xl border border-border bg-card p-5">
-            <div className="flex items-center justify-between text-sm text-muted-foreground">
-              {stat.label}
-              <stat.icon className={`h-5 w-5 ${stat.color}`} aria-hidden />
+          <div key={stat.label} className={styles.stat}>
+            <div>
+              <p className="text-xs text-muted-foreground">{stat.label}</p>
+              <p className={`mt-1 text-3xl font-semibold tabular-nums ${stat.color}`}>
+                {stat.count}
+              </p>
             </div>
-            <p className={`mt-3 text-3xl font-semibold tabular-nums ${stat.color}`}>{stat.count}</p>
+            <span className={`${styles.statIcon} ${stat.color}`}>
+              <stat.icon className="h-5 w-5" aria-hidden />
+            </span>
           </div>
         ))}
       </section>
-      <div className="grid items-start gap-5 xl:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="rounded-xl border border-border bg-card p-4">
+      <div className="grid items-start gap-4 xl:grid-cols-[260px_minmax(0,1fr)]" data-motion-panel>
+        <aside className={`${styles.surface} p-4`}>
           <h2 className="mb-1 font-semibold">Pessoas e carga de trabalho</h2>
           <p className="mb-4 text-xs text-muted-foreground">
             Cada tarefa compartilhada aparece para todos os responsáveis.
@@ -381,7 +446,7 @@ export function TaskDashboard({ preview = false }: { preview?: boolean }) {
                   setPersonId(person.id);
                   setPage(1);
                 }}
-                className={`w-full rounded-xl border p-3 text-left transition-colors ${personId === person.id ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted'}`}
+                className={`${styles.person} w-full rounded-xl border p-3 text-left ${personId === person.id ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted'}`}
               >
                 <div className="flex items-center gap-3">
                   <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
@@ -408,12 +473,14 @@ export function TaskDashboard({ preview = false }: { preview?: boolean }) {
             ))}
             {!people.length && (
               <p className="p-3 text-sm text-muted-foreground">
-                Vincule as pessoas do ClickUp para começar.
+                {native
+                  ? 'Vincule contas TMX para atribuir tarefas.'
+                  : 'Vincule as pessoas do ClickUp para começar.'}
               </p>
             )}
           </div>
         </aside>
-        <section className="min-w-0 rounded-xl border border-border bg-card">
+        <section className={`${styles.surface} min-w-0`}>
           <div className="flex flex-wrap items-center gap-3 border-b border-border p-4">
             <div className="relative min-w-48 flex-1">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" aria-hidden />
@@ -452,7 +519,7 @@ export function TaskDashboard({ preview = false }: { preview?: boolean }) {
               <article key={task.id} className={styles.task}>
                 <button
                   type="button"
-                  className="flex w-full items-start gap-3 p-5 text-left hover:bg-muted/30"
+                  className={`${styles.taskTrigger} flex w-full items-start gap-3 p-4 text-left sm:p-5`}
                   aria-expanded={expanded === task.id}
                   onClick={() => setExpanded(expanded === task.id ? null : task.id)}
                 >
@@ -471,6 +538,13 @@ export function TaskDashboard({ preview = false }: { preview?: boolean }) {
                           {task.syncState === 'queued'
                             ? 'Aguardando automação'
                             : 'Requer conferência'}
+                        </Badge>
+                      )}
+                      {native && task.discordState !== 'synced' && (
+                        <Badge variant="warning">
+                          {task.discordState === 'failed'
+                            ? 'Discord requer conferência'
+                            : 'Discord pendente'}
                         </Badge>
                       )}
                     </div>
@@ -565,7 +639,52 @@ export function TaskDashboard({ preview = false }: { preview?: boolean }) {
                           </a>
                         </Button>
                       )}
+                      {native && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() => {
+                            setEditingTask(task);
+                            setCreateKey(null);
+                            setError('');
+                            setCreating(true);
+                          }}
+                        >
+                          <Pencil aria-hidden className="h-4 w-4" />
+                          Editar tarefa
+                        </Button>
+                      )}
                     </div>
+                    {native && (
+                      <details className="border-t border-border pt-3 text-sm">
+                        <summary className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                          Histórico de alterações
+                        </summary>
+                        {historyQuery.isLoading && <output>Carregando histórico…</output>}
+                        {historyQuery.error && (
+                          <p role="alert">Não foi possível carregar o histórico.</p>
+                        )}
+                        <ol className="mt-3 space-y-2">
+                          {historyQuery.data?.map((event) => (
+                            <li key={event.event_id} className="text-xs text-muted-foreground">
+                              {taskDate(event.received_at)} ·{' '}
+                              {(
+                                {
+                                  created: 'Criada',
+                                  edited: 'Editada',
+                                  status: 'Status alterado',
+                                } as Record<string, string>
+                              )[event.body.action ?? ''] ?? 'Atualizada'}{' '}
+                              ·{' '}
+                              {people.find((p) => p.userId === event.body.actorId)?.name ??
+                                'Usuário TMX'}{' '}
+                              · {taskStatusLabel[event.body.task.status]}
+                            </li>
+                          ))}
+                        </ol>
+                      </details>
+                    )}
                   </div>
                 )}
               </article>
@@ -619,20 +738,37 @@ export function TaskDashboard({ preview = false }: { preview?: boolean }) {
       >
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Nova tarefa</DialogTitle>
+            <DialogTitle>{editingTask ? 'Editar tarefa' : 'Nova tarefa'}</DialogTitle>
             <DialogDescription>
               Mesmo modelo do Discord. Todos os responsáveis receberão a mesma tarefa.
             </DialogDescription>
           </DialogHeader>
-          <form className="space-y-4" onSubmit={createTask}>
+          <form
+            key={editingTask?.id ?? 'new'}
+            className="space-y-4"
+            onSubmit={(event) => void createTask(event)}
+          >
             <label className="block space-y-1 text-sm">
               Tarefa
-              <input className={field} name="title" required minLength={3} maxLength={200} />
+              <input
+                className={field}
+                name="title"
+                required
+                minLength={3}
+                maxLength={200}
+                defaultValue={editingTask?.title}
+              />
             </label>
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block space-y-1 text-sm">
                 Setor
-                <select className={field} name="sector" required defaultValue="Spy">
+                <select
+                  className={field}
+                  name="sector"
+                  required
+                  defaultValue={editingTask?.sector ?? 'Spy'}
+                  disabled={!!editingTask}
+                >
                   {TASK_SECTORS.map((sector) => (
                     <option key={sector} value={sector}>
                       {sector}
@@ -642,21 +778,39 @@ export function TaskDashboard({ preview = false }: { preview?: boolean }) {
               </label>
               <label className="block space-y-1 text-sm">
                 Oferta
-                <input className={field} name="offer" maxLength={100} placeholder="Opcional" />
+                <input
+                  className={field}
+                  name="offer"
+                  maxLength={100}
+                  placeholder="Opcional"
+                  defaultValue={editingTask?.offer ?? ''}
+                  disabled={!!editingTask}
+                />
               </label>
             </div>
             <label className="block space-y-1 text-sm">
               Descrição
-              <textarea name="description" className={`${field} min-h-24`} maxLength={10000} />
+              <textarea
+                name="description"
+                className={`${field} min-h-24`}
+                maxLength={10000}
+                defaultValue={editingTask?.description}
+              />
             </label>
             <fieldset className="rounded-lg border border-border p-3">
               <legend className="px-1 text-sm">Responsáveis</legend>
               <div className="grid gap-2 sm:grid-cols-2">
                 {people.map((p) => (
                   <label key={p.id} className="flex min-h-10 items-center gap-2 text-sm">
-                    <input type="checkbox" name="assignees" value={p.id} disabled={!p.clickupId} />
+                    <input
+                      type="checkbox"
+                      name="assignees"
+                      value={p.id}
+                      disabled={native ? !p.userId : !p.clickupId}
+                      defaultChecked={editingTask?.assignees.some((a) => a.id === p.id)}
+                    />
                     {p.name}
-                    {!p.clickupId && ' (sem vínculo)'}
+                    {(native ? !p.userId : !p.clickupId) && ' (sem vínculo)'}
                   </label>
                 ))}
               </div>
@@ -667,7 +821,11 @@ export function TaskDashboard({ preview = false }: { preview?: boolean }) {
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block space-y-1 text-sm">
                 Prioridade
-                <select name="priority" defaultValue="normal" className={field}>
+                <select
+                  name="priority"
+                  defaultValue={editingTask?.priority ?? 'normal'}
+                  className={field}
+                >
                   {Object.entries(priorityLabel).map(([value, label]) => (
                     <option key={value} value={value}>
                       {label}
@@ -677,7 +835,12 @@ export function TaskDashboard({ preview = false }: { preview?: boolean }) {
               </label>
               <label className="block space-y-1 text-sm">
                 Prazo · São Paulo
-                <input name="due" type="datetime-local" className={field} />
+                <input
+                  name="due"
+                  type="datetime-local"
+                  className={field}
+                  defaultValue={editingTask?.dueAt ? callInputDate(editingTask.dueAt) : ''}
+                />
               </label>
             </div>
             {error && (
@@ -694,8 +857,17 @@ export function TaskDashboard({ preview = false }: { preview?: boolean }) {
               >
                 Cancelar
               </Button>
-              <Button type="submit" disabled={busy || !people.some((p) => p.clickupId)}>
-                {busy ? 'Salvando…' : preview ? 'Criar exemplo local' : 'Criar tarefa'}
+              <Button
+                type="submit"
+                disabled={busy || !people.some((p) => (native ? p.userId : p.clickupId))}
+              >
+                {busy
+                  ? 'Salvando…'
+                  : editingTask
+                    ? 'Salvar alterações'
+                    : preview
+                      ? 'Criar exemplo local'
+                      : 'Criar tarefa'}
               </Button>
             </div>
           </form>
@@ -720,24 +892,51 @@ export function TaskDashboard({ preview = false }: { preview?: boolean }) {
               Nome
               <input name="name" required maxLength={100} className={field} />
             </label>
-            <label className="block text-sm">
-              ID do usuário ClickUp
-              <input name="clickupId" required pattern="[0-9]+" className={field} />
-            </label>
+            {!native && (
+              <label className="block text-sm">
+                ID do usuário ClickUp
+                <input
+                  name="clickupId"
+                  required
+                  pattern="[0-9]+"
+                  className={field}
+                  disabled={!preview && user?.role !== 'admin'}
+                />
+              </label>
+            )}
             <label className="block text-sm">
               ID do usuário Discord
-              <input name="discordId" pattern="[0-9]+" className={field} />
+              <input
+                name="discordId"
+                pattern="[0-9]+"
+                className={field}
+                disabled={!preview && user?.role !== 'admin'}
+              />
+              {!preview && user?.role !== 'admin' && (
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  Por segurança, somente administradores globais validam identidades do Discord.
+                  Você pode adicionar membros sem esse vínculo e usar os responsáveis já
+                  cadastrados.
+                </span>
+              )}
             </label>
             <label className="block text-sm">
-              Conta TMX para receber lembretes privados de calls
+              {native
+                ? 'Conta TMX do responsável'
+                : 'Conta TMX para receber lembretes privados de calls'}
               <select
                 name="userId"
                 className={field}
                 defaultValue=""
+                required={native}
                 disabled={preview || usersQuery.isLoading || !!usersQuery.error}
               >
-                <option value="">Manter vínculo atual (ou sem vínculo, se nova pessoa)</option>
-                <option value="__clear">Remover vínculo com a conta TMX</option>
+                <option value="">
+                  {native
+                    ? 'Selecione uma conta TMX'
+                    : 'Manter vínculo atual (ou sem vínculo, se nova pessoa)'}
+                </option>
+                {!native && <option value="__clear">Remover vínculo com a conta TMX</option>}
                 {(usersQuery.data ?? []).map((account) => (
                   <option key={account.id} value={account.id}>
                     {account.name} · {account.email}
@@ -745,8 +944,9 @@ export function TaskDashboard({ preview = false }: { preview?: boolean }) {
                 ))}
               </select>
               <span className="mt-1 block text-xs text-muted-foreground">
-                Sem vínculo, esta pessoa recebe somente avisos do Discord. Este vínculo não concede
-                permissões.
+                {native
+                  ? 'A conta recebe suas tarefas e lembretes no TMX. O ID Discord é opcional e permite menções e botões no Discord.'
+                  : 'Sem vínculo, esta pessoa recebe somente avisos do Discord. Este vínculo não concede permissões.'}
               </span>
             </label>
             {usersQuery.error && (

@@ -1,0 +1,82 @@
+{
+  "name": "TMX — Gestão nativa | Botões Discord · RASCUNHO",
+  "active": false,
+  "nodes": [
+    {
+      "name": "Do gateway Discord autenticado",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "native-0",
+      "position": [0, 0]
+    },
+    {
+      "name": "Ler ação nativa",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "\n// Input must come from the existing authenticated Discord gateway, not a public webhook.\nconst event=$input.first().json;\nconst match=String(event.data?.custom_id||'').match(/^tmx:native:([0-9a-f-]{36}):([1-9][0-9]*):(pending|progress|done)$/i);\nif(!match)return [];\nconst actor=event.member?.user?.id||event.user?.id;\nif(!/^\\d+$/.test(String(actor||''))||!/^\\d+$/.test(String(event.id||''))||!/^\\d+$/.test(String(event.message?.id||''))||!/^\\d+$/.test(String(event.channel_id||'')))throw new Error('Identidade do gateway Discord inválida');\nreturn [{json:{interactionId:String(event.id),taskId:match[1],revision:Number(match[2]),status:match[3],actorDiscordId:String(actor),messageId:String(event.message.id),channelId:String(event.channel_id)}}];",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "native-1",
+      "position": [240, 0]
+    },
+    {
+      "name": "Salvar status no TMX",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 15000
+        },
+        "method": "POST",
+        "url": "={{ $vars.TMX_TASK_API_BASE + '/v1/native-task-automation/interaction' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CONFIGURE_NATIVE_TMX_HEADER",
+          "name": "TMX Native Tasks API"
+        }
+      },
+      "id": "native-2",
+      "position": [480, 0]
+    }
+  ],
+  "connections": {
+    "Do gateway Discord autenticado": {
+      "main": [
+        [
+          {
+            "node": "Ler ação nativa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler ação nativa": {
+      "main": [
+        [
+          {
+            "node": "Salvar status no TMX",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false
+  }
+}

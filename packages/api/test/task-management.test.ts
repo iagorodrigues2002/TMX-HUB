@@ -11,6 +11,7 @@ import {
 } from '../src/routes/task-management.js';
 
 vi.hoisted(() => {
+  process.env.TASK_MANAGEMENT_MODE = 'clickup';
   process.env.JWT_SECRET ??= 'synthetic-task-tests-only-at-least-32-characters';
   process.env.TASK_AUTOMATION_SECRET = 'synthetic-task-automation-test-secret-12345';
 });
@@ -28,7 +29,7 @@ async function appFor(role?: 'admin' | 'user', db: unknown = null) {
   return app;
 }
 
-it('rejects unauthenticated and non-admin callers before touching any task storage', async () => {
+it('rejects unauthenticated callers and users without company management access', async () => {
   const db = vi.fn();
   for (const role of [undefined, 'user'] as const) {
     const app = await appFor(role, db);
@@ -48,7 +49,7 @@ it('rejects unauthenticated and non-admin callers before touching any task stora
     ).toBe(role ? 403 : 401);
     await app.close();
   }
-  expect(db).not.toHaveBeenCalled();
+  expect(db).toHaveBeenCalled(); // Non-global users must be checked against company membership.
 });
 it('automation credentials are separate from admin authentication', async () => {
   const db = vi.fn();

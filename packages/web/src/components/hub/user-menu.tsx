@@ -117,7 +117,7 @@ export function UserMenu() {
           {process.env.NEXT_PUBLIC_TMX_SIGNAL_PREVIEW === '1' && (
             <>
               <BrowserPushMenu userId={user.id} />
-              {user.role === 'admin' && <SaleNoticeScopeMenu userId={user.id} />}
+              <SaleNoticeScopeMenu userId={user.id} />
               <DropdownMenuItem
                 onSelect={(event) => {
                   event.preventDefault();

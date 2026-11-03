@@ -67,7 +67,7 @@ export function DateRangeFilter({
         </div>
       )}
 
-      <div className="flex w-full flex-wrap items-end gap-2 xl:ml-auto xl:w-auto">
+      <div className="flex w-full flex-wrap items-end gap-2 xl:w-auto">
         <div className="min-w-[140px] flex-1 space-y-1 sm:flex-none">
           <Label htmlFor={`${id}-from`} className="hud-label">
             De

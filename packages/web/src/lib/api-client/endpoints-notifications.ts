@@ -37,7 +37,7 @@ export const CenterNotificationSchema = z.discriminatedUnion('kind', [
         .string()
         .url()
         .refine((value) => /^https:\/\//i.test(value)),
-      minutes: z.number(),
+      minutes: z.number().nullable(),
     }),
   }),
 ]);
@@ -55,10 +55,10 @@ export const notificationApi = {
   async clearSales() {
     return request('/v1/notifications/clear-sales', { method: 'POST', body: { all: true } });
   },
-  async status(id: string, status: TaskStatus, key: string) {
+  async status(id: string, status: TaskStatus, key: string, revision?: number) {
     return request(`/v1/notifications/tasks/${encodeURIComponent(id)}/status`, {
       method: 'POST',
-      body: { status },
+      body: { status, revision },
       headers: { 'Idempotency-Key': key },
     });
   },

@@ -1,6 +1,7 @@
 import type { ToolKey } from '@page-cloner/shared';
 import type { FastifyInstance } from 'fastify';
 import { env } from '../../env.js';
+import { effectiveCompanyTools } from '../../lib/company-tools.js';
 import { signJwt } from '../../lib/jwt.js';
 import { hashPassword, verifyPassword } from '../../lib/password.js';
 import { BadRequestError, zodToProblem } from '../../lib/problem.js';
@@ -24,17 +25,18 @@ export function registerPostAuthLoginRoutes(app: FastifyInstance) {
     if (!user) throw new InvalidCredentialsError();
     const ok = await verifyPassword(password, user.passwordHash);
     if (!ok) throw new InvalidCredentialsError();
+    const tools = await effectiveCompanyTools(app.db, user.id, user.role, user.allowedTools);
     const { token, payload } = signJwt(
       {
         sub: user.id,
         email: user.email,
         role: user.role,
-        ...(user.allowedTools && user.allowedTools.length > 0 ? { tools: user.allowedTools } : {}),
+        ...(tools !== undefined ? { tools } : {}),
       },
       env.JWT_SECRET,
     );
     return reply.send({
-      user: app.userStore.toPublic(user),
+      user: { ...app.userStore.toPublic(user), allowedTools: tools },
       token,
       expires_at: new Date(payload.exp * 1000).toISOString(),
     });

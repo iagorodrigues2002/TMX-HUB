@@ -8,7 +8,9 @@ async function fixture(
   authenticated = true,
 ) {
   const app = Fastify();
-  const db = vi.fn(async () => rows);
+  const db = vi.fn(async (sql: TemplateStringsArray, ..._values: unknown[]) =>
+    sql.join('').includes('FROM tracking_orders') ? rows : [],
+  );
   const listAccessible = vi.fn(async () => offers);
   app.decorate('db', db);
   app.decorate('offerStore', { listAccessible });
@@ -40,7 +42,9 @@ it('empty access cannot query other offers', async () => {
       `/tracking/sale-notices?since=${new Date(Date.now() - 1000).toISOString()}`,
     );
     expect(response.json()).toEqual({ items: [], next: null, offer_ids: [] });
-    expect(db).not.toHaveBeenCalled();
+    expect(db.mock.calls.some(([sql]) => sql.join('').includes('FROM tracking_orders'))).toBe(
+      false,
+    );
   } finally {
     await app.close();
   }
@@ -59,7 +63,9 @@ it('uses authorized offers only and keyset pagination without dropping a burst',
     const response = await app.inject(`/tracking/sale-notices?since=${date}`);
     expect(response.statusCode).toBe(200);
     expect(listAccessible).toHaveBeenCalledWith('member', false);
-    expect(db.mock.calls[0]?.slice(1)).toContainEqual(['allowed']);
+    expect(
+      db.mock.calls.find(([sql]) => sql.join('').includes('FROM tracking_orders'))?.slice(1),
+    ).toContainEqual(['allowed']);
     expect(response.json().items).toHaveLength(200);
     expect(response.json().next).toEqual({ since: date, after_id: '0199' });
     expect(response.json().items[0].offerName).toBe('Offer');

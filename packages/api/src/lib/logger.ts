@@ -21,7 +21,17 @@ const piiFields = [
   'cookies',
 ] as const;
 
-const secretFields = ['password', 'secret', 'token', 'access_token', 'webhook', 'webhookUrl'];
+const secretFields = [
+  'password',
+  'secret',
+  'token',
+  'access_token',
+  'webhook',
+  'webhookUrl',
+  'apiKey',
+  'api_key',
+  'key_encrypted',
+];
 const redactFieldPaths = [...piiFields, ...secretFields].flatMap((field) => [
   field,
   `*.${field}`,

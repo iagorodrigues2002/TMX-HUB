@@ -90,6 +90,7 @@ export interface SnapshotMetrics {
 }
 
 export interface CreateOfferRequest {
+  company_id?: string;
   utmify_access_enabled?: boolean;
   name: string;
   dashboard_id?: string;

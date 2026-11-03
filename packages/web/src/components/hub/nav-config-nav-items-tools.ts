@@ -18,6 +18,14 @@ export const nav_items_tools: NavItem = {
   keywords: ['utilitários'],
   children: [
     {
+      id: 'tools-catalog',
+      label: 'Catálogo de ferramentas',
+      href: '/tools',
+      icon: Wrench,
+      group: 'Ferramentas',
+      keywords: ['utilitários', 'todas as ferramentas'],
+    },
+    {
       id: 'tool-page-cloner',
       label: 'Page Cloner',
       href: '/tools/cloner',

@@ -5,6 +5,7 @@ let loggerModule: typeof import('../src/lib/logger.js');
 
 beforeAll(async () => {
   vi.stubEnv('JWT_SECRET', 'test-only-jwt-secret-at-least-32-characters');
+  vi.stubEnv('LOG_LEVEL', 'info');
   loggerModule = await import('../src/lib/logger.js');
 });
 
@@ -31,6 +32,7 @@ describe('logger PII redaction', () => {
       user_agent: 'sensitive-browser',
       address: { street: 'Rua privada, 10' },
       authorization: 'Bearer top-secret',
+      body: { apiKey: 'banking-credential-secret', key_encrypted: 'encrypted-banking-secret' },
       headers: { 'x-tmx-task-secret': 'private-task-bridge-key' },
       cookies: 'session=top-secret',
       buyer: { email: 'nested@example.com', phone: '11999999999' },
@@ -44,6 +46,8 @@ describe('logger PII redaction', () => {
     const output = chunks.join('');
     for (const secret of [
       'buyer@example.com',
+      'banking-credential-secret',
+      'encrypted-banking-secret',
       'private-task-bridge-key',
       '+5511999999999',
       '12345678901',

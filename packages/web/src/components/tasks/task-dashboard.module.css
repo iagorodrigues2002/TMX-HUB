@@ -1,26 +1,183 @@
 .dashboard {
-  animation: enter 300ms ease both;
+  min-width: 0;
 }
-.task {
-  animation: enter 220ms ease both;
+.contextBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-background);
+}
+.viewTabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-card);
+}
+.viewTab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 20px;
+  border-radius: 7px;
+  color: var(--color-muted-foreground);
+  font-size: 14px;
+  font-weight: 500;
+  transition: color 160ms ease-out, background-color 160ms ease-out, transform 160ms ease-out;
+}
+.viewTab:hover {
+  color: var(--color-foreground);
+  background: var(--color-muted);
+}
+.viewTab[aria-pressed="true"] {
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+}
+.viewTab:active {
+  transform: scale(0.98);
+}
+.viewTab:focus-visible,
+.taskTrigger:focus-visible,
+.person:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+.pageHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.pageHeader > :first-child {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+.headerActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.headerActions button {
+  min-height: 44px;
+}
+.surface,
+.summary {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-background);
+}
+.summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  overflow: hidden;
+}
+.stat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px;
+}
+.stat + .stat {
+  border-left: 1px solid var(--color-border);
+}
+.statIcon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid currentColor;
+  border-radius: 10px;
+  opacity: 0.8;
+}
+.taskTrigger,
+.person,
+.call {
+  transition: background-color 160ms ease-out, border-color 160ms ease-out;
+}
+.taskTrigger:hover,
+.taskTrigger[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--color-primary) 4%, var(--color-background));
+}
+.taskTrigger[aria-expanded="true"] {
+  box-shadow: inset 0 1px color-mix(in srgb, var(--color-primary) 25%, transparent);
 }
 .details {
-  animation: enter 180ms ease both;
+  animation: enter 240ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+.task {
+  min-width: 0;
 }
 @keyframes enter {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(5px);
   }
   to {
     opacity: 1;
     transform: none;
   }
 }
+@media (max-width: 760px) {
+  .summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .stat {
+    padding: 16px;
+  }
+  .stat:nth-child(3) {
+    border-left: 0;
+  }
+  .stat:nth-child(n + 3) {
+    border-top: 1px solid var(--color-border);
+  }
+}
+@media (max-width: 480px) {
+  .contextBar > * {
+    width: 100%;
+  }
+  .viewTab {
+    flex: 1;
+  }
+  .headerActions {
+    width: 100%;
+  }
+  .headerActions button {
+    flex: 1 1 auto;
+  }
+}
+html[data-tmx-motion="off"] .details {
+  animation: none;
+}
+html[data-tmx-motion="off"] .viewTab,
+html[data-tmx-motion="off"] .person,
+html[data-tmx-motion="off"] .taskTrigger,
+html[data-tmx-motion="off"] .call {
+  transition: none;
+  transform: none;
+}
+.task:has(.taskTrigger:focus-visible) .details {
+  animation: none;
+}
 @media (prefers-reduced-motion: reduce) {
-  .dashboard,
-  .task,
   .details {
     animation: none;
+  }
+  .viewTab,
+  .person,
+  .taskTrigger,
+  .call {
+    transition: none;
+    transform: none;
   }
 }

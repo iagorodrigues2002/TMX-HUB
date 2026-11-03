@@ -42,3 +42,14 @@ export function parseCallReminders(value: string) {
     throw new Error('Lembretes inválidos');
   return minutes;
 }
+import type { ManagedCall } from '@page-cloner/shared';
+
+export function callScheduleState(
+  call: Pick<ManagedCall, 'status' | 'startsAt' | 'durationMinutes'>,
+  now: number,
+) {
+  if (call.status !== 'scheduled') return call.status;
+  const start = Date.parse(call.startsAt);
+  if (now < start) return 'upcoming';
+  return now >= start + call.durationMinutes * 60000 ? 'elapsed' : 'ongoing';
+}

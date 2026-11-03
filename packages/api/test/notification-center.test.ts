@@ -6,12 +6,14 @@ import postgres from 'postgres';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { notificationCenterRoutes } from '../src/routes/notification-center.js';
 vi.hoisted(() => {
+  process.env.TASK_MANAGEMENT_MODE = 'clickup';
   process.env.JWT_SECRET ??= 'synthetic-center-tests-only-at-least-32-characters';
   process.env.TASK_AUTOMATION_SECRET = 'synthetic-center-tests-only-automation-secret';
 });
 async function appFor(db: unknown, sub?: string, role: 'admin' | 'user' = 'user') {
   const app = Fastify();
   app.decorate('db', db);
+  app.decorate('redis', { get: async () => null });
   app.decorate('offerStore', {
     listAccessible: async (id: string) => [
       { id: id === 'member-1' ? 'offer-1' : 'offer-2', name: 'QA offer', userId: id },
@@ -57,13 +59,18 @@ describe.skipIf(!testUrl)('real central isolated Postgres', () => {
       '105_task_management.sql',
       '106_call_management.sql',
       '107_notification_center.sql',
+      '109_company_memberships.sql',
+      '111_sale_notice_preferences.sql',
     ])
       await db.unsafe(readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8'));
     await db`CREATE TABLE IF NOT EXISTS tracking_projects(id text PRIMARY KEY,offer_id text NOT NULL)`;
     await db`CREATE TABLE IF NOT EXISTS tracking_orders(id text PRIMARY KEY,project_id text,status text,provider text,amount_minor text,currency text,order_kind text,occurred_at timestamptz)`;
     await db`CREATE TABLE IF NOT EXISTS tracking_upsell_operator_credits(order_id text PRIMARY KEY,operator_id text)`;
+    await db`ALTER TABLE tracking_upsell_operator_credits ADD COLUMN IF NOT EXISTS project_id text`;
+    await db`CREATE TABLE IF NOT EXISTS browser_sale_events(order_id text PRIMARY KEY,created_at timestamptz NOT NULL DEFAULT now())`;
   });
   beforeEach(async () => {
+    await db`TRUNCATE browser_sale_events`;
     await db`TRUNCATE notification_center_reads,managed_call_notifications,managed_call_reminders,managed_call_commands,managed_calls,managed_task_commands,managed_task_events,managed_tasks,managed_task_people,tracking_upsell_operator_credits,tracking_orders,tracking_projects CASCADE`;
   });
   afterAll(async () => {
@@ -106,6 +113,7 @@ describe.skipIf(!testUrl)('real central isolated Postgres', () => {
     await db`INSERT INTO tracking_projects(id,offer_id) VALUES('p1','offer-1'),('p2','offer-2')`;
     await db`INSERT INTO tracking_orders(id,project_id,status,provider,amount_minor,currency,order_kind,occurred_at) VALUES('sale-1','p1','paid','vendepay','1000','BRL','front',now()),('sale-2','p2','paid','syzepay','2000','BRL','upsell',now()),('refund-1','p1','refunded','vendepay','1000','BRL','front',now())`;
     const one = await appFor(db, 'member-1');
+    await db`INSERT INTO browser_sale_events(order_id) VALUES('sale-1'),('sale-2')`;
     const two = await appFor(db, 'member-2');
     const admin = await appFor(db, 'admin', 'admin');
     const first = (await one.inject('/notifications')).json().notifications;

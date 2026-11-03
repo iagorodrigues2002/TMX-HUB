@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { ulid } from 'ulid';
 import { env } from '../../env.js';
+import { canReadNavigation } from '../../lib/navigation-access.js';
 import { NotFoundError, zodToProblem } from '../../lib/problem.js';
 import { encryptSecret } from '../../lib/secret-box.js';
 import {
@@ -58,6 +59,8 @@ export function registerGetTrackingRoutes(app: FastifyInstance) {
       ORDER BY created_at ASC
     `;
     const primaryConnection = connections[0];
+    const paymentsAllowed = canReadNavigation(req.user!, 'integration-payments');
+    const captureAllowed = canReadNavigation(req.user!, 'tracking-capture');
     const gateways = await app.db<
       Array<{
         id: string;
@@ -86,7 +89,7 @@ export function registerGetTrackingRoutes(app: FastifyInstance) {
         offer_id: req.params.id,
         public_key: project.public_key,
         enabled: project.enabled,
-        install_code: installCode(project.public_key),
+        install_code: captureAllowed ? installCode(project.public_key) : '',
         created_at: project.created_at,
         updated_at: project.updated_at,
       },
@@ -98,9 +101,9 @@ export function registerGetTrackingRoutes(app: FastifyInstance) {
         signing_secret_configured: connections.some(
           (connection) => connection.signing_secret_configured,
         ),
-        connections,
+        connections: paymentsAllowed ? connections : [],
       },
-      gateways,
+      gateways: paymentsAllowed ? gateways : [],
     };
   });
 

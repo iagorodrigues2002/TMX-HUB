@@ -80,7 +80,7 @@ export function visibleToolCatalog(
   options: { homeOnly?: boolean } = {},
 ): ToolCatalogEntry[] {
   if (!user) return [];
-  const restricted = user.role !== 'admin' && (user.allowedTools?.length ?? 0) > 0;
+  const restricted = user.role !== 'admin' && user.allowedTools !== undefined;
   return TOOL_CATALOG.filter((entry) => {
     if (options.homeOnly && !entry.showOnHome) return false;
     if (!entry.tool) return !restricted;

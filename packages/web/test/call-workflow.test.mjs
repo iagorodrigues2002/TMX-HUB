@@ -136,7 +136,9 @@ test('maximum call content fits Discord without dropping any participant mention
   const large = { ...call, title: 'T'.repeat(200), message: 'M'.repeat(1000), participants };
   for (const action of ['sync', 'remind']) {
     const [result] = new Function('$vars', '$input', prepareCommand)(vars, {
-      first: () => ({ json: { commands: [{ id: 'max-message', action, minutes: 30, call: large }] } }),
+      first: () => ({
+        json: { commands: [{ id: 'max-message', action, minutes: 30, call: large }] },
+      }),
     });
     assert.ok(result.json.discordBody.content.length <= 2000);
     assert.equal(result.json.discordBody.allowed_mentions.users.length, 30);

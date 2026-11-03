@@ -1,72 +1,22 @@
-/** Financial analytics: one reversal per order, dated by its first lifecycle event. */
-export interface RefundOrder {
-  id: string;
-  offer_id: string;
-  offer_name: string;
-  provider: string;
-  connection_name: string;
-  product_name: string;
-  paid_at: string | null;
-  reversal_at: string | null;
-  delay_paid_at?: string | null;
-  delay_reversal_at?: string | null;
-  observed_reversal_at?: string | null;
-  amount_brl_minor: number | null;
-  penalty_brl_minor: number | null;
-  [key: string]: unknown;
-}
-const dayFormatter = new Intl.DateTimeFormat('en-CA', {
-  timeZone: 'America/Sao_Paulo',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-});
-export const localDay = (date: string | Date) => dayFormatter.format(new Date(date));
-export function validDate(value: string) {
-  return (
-    /^\d{4}-\d{2}-\d{2}$/.test(value) &&
-    Number(value.slice(0, 4)) > 0 &&
-    !Number.isNaN(Date.parse(value)) &&
-    new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) === value
-  );
-}
-export function shiftDay(day: string, count: number) {
-  const d = new Date(`${day}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + count);
-  return d.toISOString().slice(0, 10);
-}
-export function bucketDay(day: string, interval: 'day' | 'week' | 'month') {
-  if (interval === 'month') return `${day.slice(0, 7)}-01`;
-  if (interval === 'week') {
-    const dow = new Date(`${day}T12:00:00Z`).getUTCDay();
-    return shiftDay(day, -((dow + 6) % 7));
-  }
-  return day;
-}
-export function emptyRefundTotals() {
-  return {
-    count: 0,
-    brl_minor: 0,
-    gross_brl_minor: 0,
-    sales: 0,
-    fee_brl_minor: 0,
-    impact_brl_minor: 0,
-    rate_pct: null as number | null,
-    impact_pct: null as number | null,
-    missing_brl_orders: 0,
-    missing_fee_orders: 0,
-  };
-}
-function finish(t: ReturnType<typeof emptyRefundTotals>) {
-  t.impact_brl_minor = t.brl_minor + t.fee_brl_minor;
-  t.rate_pct =
-    t.gross_brl_minor > 0 && !t.missing_brl_orders ? (t.brl_minor / t.gross_brl_minor) * 100 : null;
-  t.impact_pct =
-    t.gross_brl_minor > 0 && !t.missing_brl_orders && !t.missing_fee_orders
-      ? (t.impact_brl_minor / t.gross_brl_minor) * 100
-      : null;
-  return t;
-}
+import {
+  type RefundOrder,
+  bucketDay,
+  emptyRefundTotals,
+  finishRefundTotals as finish,
+  localDay,
+  shiftDay,
+} from './refund-analytics-support.js';
+import { buildRefundMonthOrigin } from './refund-month-origin.js';
+
+export {
+  type RefundOrder,
+  bucketDay,
+  emptyRefundTotals,
+  localDay,
+  shiftDay,
+  validDate,
+} from './refund-analytics-support.js';
+export { buildRefundMonthOrigin } from './refund-month-origin.js';
 export function summarizeRefunds(rows: RefundOrder[], from: string, to: string) {
   const t = emptyRefundTotals();
   const missingAmounts = new Set<string>();
@@ -87,6 +37,41 @@ export function summarizeRefunds(rows: RefundOrder[], from: string, to: string) 
   t.missing_brl_orders = missingAmounts.size;
   return finish(t);
 }
+export function summarizeRefundOrigins(rows: RefundOrder[], from: string, to: string) {
+  const origin = (row: RefundOrder) =>
+    row.origin === 'natural' || row.origin === 'assisted' ? row.origin : 'unknown';
+  return {
+    general: summarizeRefunds(rows, from, to),
+    natural: summarizeRefunds(
+      rows.filter((r) => origin(r) === 'natural'),
+      from,
+      to,
+    ),
+    assisted: summarizeRefunds(
+      rows.filter((r) => origin(r) === 'assisted'),
+      from,
+      to,
+    ),
+    unknown: summarizeRefunds(
+      rows.filter((r) => origin(r) === 'unknown'),
+      from,
+      to,
+    ),
+  };
+}
+function summarizeUndatedRefunds(rows: RefundOrder[]) {
+  const totals = emptyRefundTotals();
+  for (const row of rows) {
+    if (!row.reversal_received_missing) continue;
+    totals.count++;
+    if (row.amount_brl_minor === null) totals.missing_brl_orders++;
+    else totals.brl_minor += row.amount_brl_minor;
+    if (row.penalty_brl_minor === null) totals.missing_fee_orders++;
+    else totals.fee_brl_minor += row.penalty_brl_minor;
+  }
+  return { ...finish(totals), basis: 'all_history_without_confirmed_receipt' as const };
+}
+
 export function buildRefundAnalytics(
   rows: RefundOrder[],
   from: string,
@@ -205,6 +190,9 @@ export function buildRefundAnalytics(
   };
   return {
     totals,
+    origin_totals: summarizeRefundOrigins(rows, from, to),
+    undated_refunds: summarizeUndatedRefunds(rows),
+    month_origin: buildRefundMonthOrigin(rows, from, to),
     trend,
     daily: trend,
     comparison: {

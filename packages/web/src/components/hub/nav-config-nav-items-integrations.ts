@@ -29,6 +29,7 @@ export const nav_items_integrations: NavItem = {
       id: 'integration-payments',
       label: 'Pagamentos e webhooks',
       href: '/tracking?view=finance&section=payments',
+      activeHrefs: ['/tracking?view=finance&section=fees'],
       icon: CreditCard,
       group: 'Integrações',
       ...trackingTool,

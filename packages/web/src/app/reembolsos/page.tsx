@@ -3,18 +3,11 @@ import { HubShell } from '@/components/hub/hub-shell';
 import { RefundsDashboard } from '@/components/tracking/refunds-dashboard';
 
 export const dynamic = 'force-dynamic';
-export default async function RefundsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ offer?: string | string[] }>;
-}) {
-  const params = await searchParams;
-  const initialOfferId = typeof params.offer === 'string' ? params.offer : '';
-
+export default function RefundsPage() {
   return (
-    <HubShell breadcrumb={['FINANCEIRO', 'REEMBOLSOS E CHARGEBACKS']}>
+    <HubShell breadcrumb={['Empresa', 'Financeiro', 'Reembolsos e chargebacks']}>
       <ToolGuard tool="ofertas">
-        <RefundsDashboard initialOfferId={initialOfferId} />
+        <RefundsDashboard />
       </ToolGuard>
     </HubShell>
   );

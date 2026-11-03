@@ -1,14 +1,86 @@
 import Fastify from 'fastify';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import corsPlugin from '../src/plugins/cors.js';
 
 const apps: Array<ReturnType<typeof Fastify>> = [];
 
 afterEach(async () => {
   await Promise.all(apps.splice(0).map((app) => app.close()));
+  vi.unstubAllEnvs();
 });
 
 describe('CORS preflight', () => {
+  it.each(['development', 'test'])(
+    'allows the live-copy preview login only from its exact local origin in %s',
+    async (environment) => {
+      vi.stubEnv('NODE_ENV', environment);
+      const app = Fastify();
+      apps.push(app);
+      await app.register(corsPlugin);
+      let handled = 0;
+      app.post('/v1/auth/login', async () => ({ handled: ++handled }));
+      const origin = 'http://localhost:3122';
+      const preflight = await app.inject({
+        method: 'OPTIONS',
+        url: '/v1/auth/login',
+        headers: {
+          origin,
+          'access-control-request-method': 'POST',
+          'access-control-request-headers': 'content-type',
+        },
+      });
+      expect(preflight.statusCode).toBe(204);
+      expect(preflight.headers['access-control-allow-origin']).toBe(origin);
+      expect(preflight.headers['access-control-allow-credentials']).toBe('true');
+      const response = await app.inject({
+        method: 'POST',
+        url: '/v1/auth/login',
+        headers: { origin },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.headers['access-control-allow-origin']).toBe(origin);
+      expect(handled).toBe(1);
+      for (const unlisted of ['http://localhost:3123', 'https://localhost:3122']) {
+        const denied = await app.inject({
+          method: 'POST',
+          url: '/v1/auth/login',
+          headers: { origin: unlisted },
+        });
+        expect(denied.statusCode).toBeGreaterThanOrEqual(400);
+        expect(denied.headers['access-control-allow-origin']).toBeUndefined();
+      }
+      expect(handled).toBe(1);
+    },
+  );
+  it('never allows the live-copy local origin in production', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    const app = Fastify();
+    apps.push(app);
+    await app.register(corsPlugin);
+    let handled = 0;
+    app.post('/v1/auth/login', async () => ({ handled: ++handled }));
+    for (const method of ['OPTIONS', 'POST'] as const) {
+      const denied = await app.inject({
+        method,
+        url: '/v1/auth/login',
+        headers: {
+          origin: 'http://localhost:3122',
+          'access-control-request-method': 'POST',
+        },
+      });
+      expect(denied.statusCode).toBeGreaterThanOrEqual(400);
+      expect(denied.headers['access-control-allow-origin']).toBeUndefined();
+    }
+    expect(handled).toBe(0);
+    const live = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/login',
+      headers: { origin: 'https://theminex.com' },
+    });
+    expect(live.statusCode).toBe(200);
+    expect(live.headers['access-control-allow-origin']).toBe('https://theminex.com');
+    expect(handled).toBe(1);
+  });
   it('allows anonymous tracking from landing pages without exposing authenticated APIs', async () => {
     const app = Fastify();
     apps.push(app);

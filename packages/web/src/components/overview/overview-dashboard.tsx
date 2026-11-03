@@ -14,7 +14,7 @@ import { useQueries, useQuery } from '@tanstack/react-query';
 import { LayoutDashboard } from 'lucide-react';
 import { useState } from 'react';
 import { GatewayOverview } from './gateway-overview';
-import { buildDatasets } from './overview-dashboard-build-datasets';
+import { buildDatasets, hasCompleteOverviewScope } from './overview-dashboard-build-datasets';
 import { Dataset } from './overview-dashboard-dataset';
 import {
   type OfferDescriptor,
@@ -29,6 +29,7 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
   const { scope, initialPeriod } = props;
   const [period, setPeriod] = useState<DateRange>(() => initialPeriod ?? rollingDateRange(7));
   const [salesView, setSalesView] = useState<'general' | 'natural'>('general');
+  const [selectedDataset, setSelectedDataset] = useState('');
   const financialQuery = useQuery({
     queryKey: ['overview-financial', period.from, period.to, salesView],
     queryFn: () => apiClient.getTrackingOverview(period.from, period.to, salesView),
@@ -169,11 +170,11 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
 
       {isLoading ? (
         <OverviewLoadingSkeleton />
-      ) : hasFatalError ? (
+      ) : hasFatalError || !hasCompleteOverviewScope(offers, datasets) ? (
         <DataState
           variant="error"
-          title="Não foi possível carregar a visão geral"
-          description="Os filtros foram preservados. Tente consultar este período novamente."
+          title="Não foi possível carregar a visão geral completa"
+          description="Faltam dados de uma ou mais ofertas. Não exibiremos uma soma parcial como total. Os filtros foram preservados; tente novamente."
           isRetrying={isFetching}
           onRetry={refresh}
         />
@@ -196,6 +197,8 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
           {SIGNAL_PREVIEW ? (
             <SignalPreview
               salesView={salesView}
+              selected={selectedDataset}
+              onSelect={setSelectedDataset}
               period={period}
               datasets={datasets}
               accounts={scope === 'account' ? financialQuery.data?.accounts : undefined}

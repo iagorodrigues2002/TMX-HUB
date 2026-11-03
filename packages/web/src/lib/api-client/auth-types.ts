@@ -1,10 +1,11 @@
 // ---- Auth ----
 
 /**
- * Tools/áreas que podem aparecer em `allowedTools`. Quando ausente/vazio,
- * acesso é total. Admin sempre bypassa.
+ * Tools/áreas que podem aparecer em `allowedTools`. Ausente significa acesso
+ * legado completo; lista vazia significa nenhum acesso. Admin sempre bypassa.
  */
 export type ToolKey =
+  | import('@page-cloner/shared').NavigationKey
   | 'cloner'
   | 'cloaker-urls'
   | 'video-shield'
@@ -34,7 +35,7 @@ export function canAccessTool(user: AuthUser | null, tool: ToolKey): boolean {
   if (!user) return false;
   if (user.role === 'admin') return true;
   const list = user.allowedTools;
-  if (!list || list.length === 0) return true;
+  if (list === undefined) return true;
   if (tool === 'video-shield' || tool === 'creative-studio') {
     return list.includes('video-shield') || list.includes('creative-studio');
   }

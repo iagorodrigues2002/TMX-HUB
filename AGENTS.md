@@ -48,6 +48,11 @@ e recupera filas; `api start` também executa migrações. Nunca validar setup c
 
 ## Colaboração e continuidade
 
+Antes de apresentar uma prévia, compare a base com os deploys ativos web/API no Railway,
+não apenas com `origin/main`. Preserve mudanças pendentes; nunca sincronize credenciais ou
+dados comerciais por essa razão. Para tarefas/membros, inicie com
+`node scripts/local-members-preview.mjs`, que confere a base e a configuração visual.
+
 Delegue quando autorizado pelo usuário ou por workflow aplicável e houver benefício concreto;
 não há roster obrigatório. Sem política explícita de seleção, preserve modelo/provedor/autenticação
 da sessão. Tarefas paralelas exigem arquivos disjuntos e recursos isolados; um escritor por arquivo.

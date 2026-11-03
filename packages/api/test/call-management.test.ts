@@ -6,6 +6,7 @@ import postgres from 'postgres';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { callAutomationRoutes, callManagementRoutes } from '../src/routes/call-management.js';
 vi.hoisted(() => {
+  process.env.TASK_MANAGEMENT_MODE = 'clickup';
   process.env.JWT_SECRET ??= 'synthetic-call-tests-only-at-least-32-characters';
   process.env.TASK_AUTOMATION_SECRET = 'synthetic-call-automation-secret-123456789';
 });
@@ -35,7 +36,7 @@ it('requires authentication, admin management and separate automation credential
   expect((await app.inject({ method: 'POST', url: '/call-automation/claim' })).statusCode).toBe(
     401,
   );
-  expect(db).not.toHaveBeenCalled();
+  expect(db).toHaveBeenCalled(); // Company administrators are resolved from membership, not global role alone.
   await app.close();
 });
 it('validates meeting links and does not replay old reminders', () => {

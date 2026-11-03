@@ -91,16 +91,18 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
   }
 
   function status(item: Extract<CenterNotification, { kind: 'task' }>, next: TaskStatus) {
-    const action = `${item.task.id}:${next}`;
+    const action = `${item.task.id}:${item.task.revision ?? item.task.updatedAt}:${next}`;
     const key = actionKeys.current.get(action) ?? crypto.randomUUID();
     actionKeys.current.set(action, key);
     return mutate(
       async () => {
-        await notificationApi.status(item.task.id, next, key);
+        await notificationApi.status(item.task.id, next, key, item.task.revision);
         actionKeys.current.delete(action);
       },
-      [],
-      'Alteração solicitada. O status e a saída da tarefa aguardam a confirmação do ClickUp e do Discord.',
+      item.task.managementMode === 'native' && next === 'done' ? [item.id] : [],
+      item.task.managementMode === 'native'
+        ? 'Status salvo no TMX. A atualização do card Discord será enviada separadamente.'
+        : 'Alteração solicitada. O status e a saída da tarefa aguardam a confirmação do ClickUp e do Discord.',
     );
   }
 
@@ -168,7 +170,7 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
                 void mutate(
                   () =>
                     notificationApi.read(notifications.filter((n) => n.unread).map((n) => n.id)),
-                  notifications.filter((n) => n.kind !== 'task' && n.unread).map((n) => n.id),
+                  notifications.filter((n) => n.kind === 'sale' && n.unread).map((n) => n.id),
                 )
               }
             >
@@ -336,7 +338,9 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
                   {item.kind === 'call' && (
                     <>
                       <p className="mt-3 text-xs text-primary">
-                        {reminderLabel(item.call.minutes)}
+                        {item.call.minutes === null
+                          ? 'Call agendada · lembrete fixo'
+                          : reminderLabel(item.call.minutes)}
                       </p>
                       <p className="mt-2 text-sm">{callDate(item.call.startsAt)} · São Paulo</p>
                       {item.call.message && (
@@ -361,7 +365,7 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
                         onClick={() =>
                           void mutate(
                             () => notificationApi.read([item.id]),
-                            item.kind === 'task' ? [] : [item.id],
+                            item.kind === 'sale' ? [item.id] : [],
                           )
                         }
                       >
@@ -370,7 +374,9 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
                       </Button>
                     ) : (
                       <span className="text-xs text-muted-foreground">
-                        Lida · permanece até a conclusão
+                        {item.kind === 'call'
+                          ? 'Lida · permanece até concluir ou cancelar a call'
+                          : 'Lida · permanece até a conclusão'}
                       </span>
                     )}
                   </div>
@@ -380,7 +386,7 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
           </ol>
         </div>
         <footer className="border-t border-border/60 bg-muted/20 px-5 py-3 text-center text-[11px] text-muted-foreground">
-          Leitura individual. Conclusões de tarefas aguardam confirmação externa.
+          Leitura individual. Os status exibidos refletem a última confirmação recebida.
         </footer>
       </DialogContent>
     </Dialog>

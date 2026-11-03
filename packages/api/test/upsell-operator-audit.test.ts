@@ -59,6 +59,18 @@ async function fixture(
   const inserted: Record<string, unknown>[] = [];
   const statements: string[] = [];
   const parameters: unknown[][] = [];
+  const storedOffers = [
+    ...(options.offers ?? ['offer-1']).map((id) => ({
+      id,
+      userId: options.user ?? 'owner-1',
+    })),
+    ...(options.foreign
+      ? [{ id: 'not-authorized', userId: 'other-owner', memberIds: [options.user ?? 'owner-1'] }]
+      : []),
+  ];
+  const listAccessible = vi.fn(async (userId: string, admin: boolean) =>
+    storedOffers.filter((offer) => admin || offer.userId === userId),
+  );
   app.decorate('db', async (strings: TemplateStringsArray, ...values: unknown[]) => {
     const sql = strings.join('?');
     statements.push(sql);
@@ -126,6 +138,10 @@ async function fixture(
     return [];
   });
   app.decorate('offerStore', {
+    listAccessible,
+    permissions: async (offer: { userId: string }, userId: string, admin: boolean) => ({
+      read: admin || offer.userId === userId,
+    }),
     maybeGet: async (id: string) =>
       (options.offers ?? ['offer-1']).includes(id)
         ? { id, userId: options.user ?? 'owner-1' }
@@ -152,7 +168,7 @@ async function fixture(
   });
   await app.register(errorHandlerPlugin);
   registerUpsellOperatorAudit(app);
-  return { app, inserted, statements, parameters };
+  return { app, inserted, statements, parameters, listAccessible };
 }
 
 const openUrl = '/offers/offer-1/tracking/upsell-identities/front-1/stages/stage-1/open';
@@ -196,9 +212,13 @@ describe('upsell operator audit', () => {
     }
   });
   it('does not treat a legacy sharing entry as global authorization', async () => {
-    const { app, statements, parameters } = await fixture({ user: 'member-1', foreign: true });
+    const { app, statements, parameters, listAccessible } = await fixture({
+      user: 'member-1',
+      foreign: true,
+    });
     try {
       expect((await app.inject(globalUrl)).statusCode).toBe(200);
+      expect(listAccessible).toHaveBeenCalledWith('member-1', false);
       const index = statements.findIndex((s) => s.includes('ORDER BY opened_at'));
       expect(parameters[index][0]).toEqual(['project-1']);
     } finally {

@@ -59,7 +59,7 @@ export const CreateInviteSchema = z
      * Quando presente, o usuário criado terá acesso restrito apenas a essas
      * ferramentas. Ausente/array vazio = acesso completo (legado).
      */
-    allowed_tools: z.array(ToolKeySchema).min(1).max(20).optional(),
+    allowed_tools: z.array(ToolKeySchema).min(1).max(ALL_TOOL_KEYS.length).optional(),
   })
   .strict();
 

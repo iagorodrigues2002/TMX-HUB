@@ -1,13 +1,17 @@
 import type { ToolKey } from '@page-cloner/shared';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import { env } from '../env.js';
+import { scopeCompanyNavigationUser } from '../lib/company-navigation-access.js';
+import { assertNavigationAccess } from '../lib/navigation-access.js';
 import { HttpProblem } from '../lib/problem.js';
+import { registerCompanyTransitionPause } from '../plugins/company-transition-pause.js';
 import activityRoutes from './activity.js';
 import adsIntelligenceRoutes from './ads-intelligence.js';
 import authRoutes from './auth.js';
 import buildsRoutes from './builds.js';
 import { callAutomationRoutes, callManagementRoutes } from './call-management.js';
-import { notificationCenterRoutes } from './notification-center.js';
 import clonesRoutes from './clones.js';
+import { companyRoutes } from './companies.js';
 import formsRoutes from './forms.js';
 import funnelJobsRoutes from './funnel-jobs.js';
 import googleAdsAdminRoutes from './google-ads-admin.js';
@@ -18,7 +22,9 @@ import linksRoutes from './links.js';
 import mediaJobsRoutes from './media-jobs.js';
 import metaAdminRoutes from './meta-admin.js';
 import metaControlRoutes from './meta-control.js';
+import { nativeTaskAutomationRoutes } from './native-task-automation.js';
 import nichesRoutes from './niches.js';
+import { notificationCenterRoutes } from './notification-center.js';
 import offerCartRoutes from './offer-cart.js';
 import offersRoutes from './offers.js';
 import previewRoutes from './preview.js';
@@ -60,6 +66,10 @@ const TOOL_PATH_MAP: Array<{ prefix: string; tools: ToolKey[] }> = [
   { prefix: '/v1/offers', tools: ['ofertas'] },
   { prefix: '/v1/dashboard', tools: ['ofertas'] },
   { prefix: '/v1/tracking', tools: ['ofertas'] },
+  { prefix: '/v1/ads-intelligence', tools: ['ofertas'] },
+  { prefix: '/v1/meta-control', tools: ['ofertas'] },
+  { prefix: '/v1/recovery', tools: ['ofertas'] },
+  { prefix: '/v1/activity', tools: ['logs'] },
 ];
 
 class ToolForbiddenError extends HttpProblem {
@@ -80,6 +90,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   // /v1 prefix.
   await app.register(
     async (v1) => {
+      registerCompanyTransitionPause(v1, env.COMPANY_TRANSITION_WRITES_PAUSED);
       // Auth endpoints — explicitly public except /me which gates itself.
       await v1.register(authRoutes);
 
@@ -91,6 +102,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       await v1.register(explodelyWebhookRoutes);
       await v1.register(syzepayPublicRoutes);
       await v1.register(taskAutomationRoutes);
+      await v1.register(nativeTaskAutomationRoutes);
       await v1.register(callAutomationRoutes);
 
       // Everything below requires a valid JWT.
@@ -100,9 +112,16 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         // contra o prefixo da rota. Admin/users sem tools bypassam.
         protectedRoutes.addHook('preHandler', async (req) => {
           if (!req.user) return; // requireAuth já tratou
+          req.user = await scopeCompanyNavigationUser(
+            app.db,
+            req.user,
+            req.routeOptions.url ?? req.url,
+            req.params as Record<string, string>,
+          );
+          assertNavigationAccess(req.user, req.routeOptions.url ?? req.url, req.method);
           if (req.user.role === 'admin') return; // admin = todas
           const tools = req.user.tools;
-          if (!tools || tools.length === 0) return; // acesso completo
+          if (!tools) return; // Legacy account without an explicit restriction.
           const match = TOOL_PATH_MAP.find((m) => req.url.startsWith(m.prefix));
           if (!match) return; // rota não restrita
           if (!match.tools.some((tool) => tools.includes(tool))) {
@@ -111,6 +130,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         });
         await protectedRoutes.register(activityRoutes);
         await protectedRoutes.register(clonesRoutes);
+        await protectedRoutes.register(companyRoutes);
         await protectedRoutes.register(inspectRoutes);
         await protectedRoutes.register(formsRoutes);
         await protectedRoutes.register(linksRoutes);

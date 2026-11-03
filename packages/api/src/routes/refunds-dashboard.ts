@@ -1,25 +1,30 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { filterCompanyNavigationOffers } from '../lib/company-navigation-access.js';
 import { VENDEPAY_PENALTY_MINOR } from '../lib/gateway-fee-model.js';
-import { canAccessOffer } from '../services/offer-store.js';
 import {
   type RefundOrder,
   buildRefundAnalytics,
   localDay,
   shiftDay,
+  summarizeRefundOrigins,
   summarizeRefunds,
   validDate,
 } from '../services/refund-analytics.js';
+import { resolveRefundCompanyScope } from '../services/refund-company-scope.js';
 import {
   type RefundDateReceipt,
   recoverRefundDateEvidence,
 } from '../services/refund-date-evidence.js';
+import { refundOriginFilter } from '../services/sale-origin.js';
 import { saoPauloDayRange } from '../services/utmify-sync.js';
 
 const schema = z.object({
+  sales_view: z.enum(['general', 'natural', 'assisted']).default('general'),
   from: z.string().refine(validDate).optional(),
   to: z.string().refine(validDate).optional(),
   offer_id: z.string().min(1).optional(),
+  company_id: z.string().uuid().optional(),
   product: z.string().min(1).max(300).optional(),
   vendepay: z.enum(['mainex', 'cobrak']).optional(),
   provider: z
@@ -41,17 +46,18 @@ const plugin: FastifyPluginAsync = async (app) => {
     const to = q.to ?? today;
     if (from > to || to > today || Number(to.slice(0, 4)) - Number(from.slice(0, 4)) > 10)
       return reply.code(400).send({ error: 'invalid_range' });
-    const accessible = (
-      await app.offerStore.listAccessible(req.user.sub, req.user.role === 'admin')
-    ).filter((o) => canAccessOffer(o, req.user!.sub, req.user!.role === 'admin'));
-    // Admin visibility is not ownership. The company consolidation includes
-    // only offers created by this profile and explicitly assigned to TMX.
-    const offers = q.offer_id
-      ? accessible.filter((o) => o.id === q.offer_id)
-      : accessible.filter(
-          (o) => o.userId === req.user!.sub && o.companyName?.trim().toLowerCase() === 'tmx',
-        );
-    if (q.offer_id && !offers.length) return reply.code(404).send({ error: 'offer_not_found' });
+    const accessible = await filterCompanyNavigationOffers(
+      app.db,
+      req.user,
+      await app.offerStore.listAccessible(req.user.sub, req.user.role === 'admin'),
+      '/tracking/refunds-dashboard',
+    );
+    const { offers, company_scope } = await resolveRefundCompanyScope(
+      app.db,
+      req.user,
+      accessible,
+      { offerId: q.offer_id, companyId: q.company_id },
+    );
     const span = Math.round((Date.parse(to) - Date.parse(from)) / 86400000) + 1;
     const previousFrom = shiftDay(from, -span);
     const start = new Date(saoPauloDayRange(previousFrom).from);
@@ -76,6 +82,8 @@ const plugin: FastifyPluginAsync = async (app) => {
         >`
       WITH scoped AS (
         SELECT o.*,p.offer_id,LEAST(o.refunded_at,o.chargeback_at) reversal_at,
+          CASE WHEN ${refundOriginFilter(app.db, 'natural')} THEN 'natural'
+            WHEN ${refundOriginFilter(app.db, 'assisted')} THEN 'assisted' ELSE 'unknown' END origin,
           COALESCE(vc.payload_adapter,'') payload_adapter,
           COALESCE(NULLIF(o.product->>'name',''),'Produto não identificado') product_name,
           COALESCE(vc.name,gc.name,sc.name,INITCAP(o.provider)) connection_name,
@@ -88,7 +96,10 @@ const plugin: FastifyPluginAsync = async (app) => {
         LEFT JOIN syzepay_company_connections sc ON sc.id=o.syzepay_connection_id AND lower(trim(o.provider))='syzepay'
         LEFT JOIN exchange_rate_cache amount_fx ON amount_fx.base_currency=o.currency AND amount_fx.target_currency='BRL'
         WHERE p.offer_id=ANY(${ids})
-          AND ((o.paid_at>=${start} AND o.paid_at<${end}) OR (LEAST(o.refunded_at,o.chargeback_at)>=${start} AND LEAST(o.refunded_at,o.chargeback_at)<${end}))
+          -- Resolve receipt dates BEFORE filtering refunds by period. Old purchases can
+          -- be refunded today, and a stored paid_at fallback is not refund evidence.
+          AND ((o.paid_at>=${start} AND o.paid_at<${end}) OR o.refunded_at IS NOT NULL
+            OR o.chargeback_at IS NOT NULL OR o.status IN ('refunded','chargeback'))
           AND (${q.product ?? null}::text IS NULL OR COALESCE(NULLIF(o.product->>'name',''),'Produto não identificado')=${q.product ?? null})
           AND (${q.provider ?? null}::text IS NULL OR lower(trim(o.provider))=${q.provider ?? null})
           AND (${q.vendepay ?? null}::text IS NULL OR (lower(trim(o.provider))='vendepay' AND (lower(COALESCE(vc.name,'')) LIKE '%'||${q.vendepay ?? null}||'%' OR (${q.vendepay ?? null}='mainex' AND lower(COALESCE(vc.name,'')) LIKE '%iago%') OR (${q.vendepay ?? null}='cobrak' AND lower(COALESCE(vc.name,'')) LIKE '%lucas%'))))
@@ -97,29 +108,36 @@ const plugin: FastifyPluginAsync = async (app) => {
           COALESCE(fee_settings->>'penalty_currency',fee_settings->>'fee_currency') fee_currency FROM scoped
       ) SELECT t.id,t.offer_id,t.provider,t.connection_name,t.product_name,t.external_id,t.status,t.order_kind,
         jsonb_build_object('name',t.buyer->>'name','email',t.buyer->>'email') buyer,
-        t.paid_at,t.reversal_at,t.payload_adapter,t.brl::text amount_brl_minor,
+        t.paid_at,t.reversal_at,t.payload_adapter,t.origin,t.brl::text amount_brl_minor,
         CASE WHEN t.fee_minor ~ '^[0-9]{1,10}$' THEN CASE WHEN t.fee_minor::numeric=0 THEN 0 WHEN t.fee_currency='BRL' THEN t.fee_minor::numeric WHEN fx.rate IS NOT NULL THEN round(t.fee_minor::numeric*fx.rate) END END::text penalty_brl_minor
       FROM tariffs t LEFT JOIN exchange_rate_cache fx ON fx.base_currency=t.fee_currency AND fx.target_currency='BRL'
     `
       : [];
     const recoveryIds = rows
-      .filter(
-        (r) => r.provider === 'vendepay' && r.payload_adapter !== 'explodely' && r.reversal_at,
-      )
+      .filter((r) => r.reversal_at || ['refunded', 'chargeback'].includes(String(r.status)))
       .map((r) => r.id);
     const receipts = recoveryIds.length
       ? await app.db<RefundDateReceipt[]>`
-      SELECT wr.order_id,o.external_id,wr.payload,wr.received_at
+      SELECT wr.order_id,o.external_id,wr.payload,wr.received_at,
+        CASE WHEN vc.payload_adapter='explodely' THEN 'explodely' ELSE o.provider END provider
       FROM webhook_receipts wr
-      JOIN tracking_orders o ON o.id=wr.order_id AND o.provider='vendepay'
+      JOIN tracking_orders o ON o.id=wr.order_id
       JOIN vendepay_connections vc ON vc.id=wr.connection_id
         AND vc.id=o.vendepay_connection_id AND vc.project_id=o.project_id
+      -- Legacy ingestion persisted already-applied events as "processable".
+      -- Payload type + transaction identity are still verified below, after exact account joins.
+      WHERE wr.order_id=ANY(${recoveryIds}) AND wr.state IN ('processed','processable')
+      UNION ALL
+      SELECT wr.order_id,o.external_id,wr.payload,wr.received_at,o.provider
+      FROM tracking_gateway_webhook_receipts wr
+      JOIN tracking_orders o ON o.id=wr.order_id AND o.gateway_connection_id=wr.gateway_connection_id
+      JOIN tracking_gateway_connections gc ON gc.id=wr.gateway_connection_id
+        AND gc.project_id=o.project_id AND gc.provider=o.provider
       WHERE wr.order_id=ANY(${recoveryIds}) AND wr.state='processed'
-        AND COALESCE(vc.payload_adapter,'')<>'explodely'
-      ORDER BY wr.received_at,wr.id
+      ORDER BY received_at
     `
       : [];
-    const normalized: RefundOrder[] = recoverRefundDateEvidence(
+    const allOrigins: RefundOrder[] = recoverRefundDateEvidence(
       rows.map((r) => ({
         ...r,
         offer_name: names.get(r.offer_id) ?? r.offer_id,
@@ -128,14 +146,22 @@ const plugin: FastifyPluginAsync = async (app) => {
       })),
       receipts,
     );
+    const normalized =
+      q.sales_view === 'general'
+        ? allOrigins
+        : allOrigins.filter((row) => row.origin === q.sales_view);
     const analytics = buildRefundAnalytics(normalized, from, to, q.interval, today);
     return {
       from,
       to,
       as_of: asOf.toISOString(),
+      sales_view: q.sales_view,
+      company_scope,
       time_zone: 'America/Sao_Paulo',
       interval: q.interval,
       ...analytics,
+      origin_totals: summarizeRefundOrigins(allOrigins, from, to),
+      date_basis: 'first_confirmed_refund_webhook_received',
       offers: analytics.rankings.offers.map((r) => ({
         ...r,
         offer_id: r.key,

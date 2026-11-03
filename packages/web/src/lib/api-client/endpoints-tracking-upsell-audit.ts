@@ -43,7 +43,20 @@ export const endpoints = {
     const path = id
       ? `/v1/offers/${id}/tracking/upsell-operator-logs`
       : '/v1/tracking/upsell-operator-logs';
-    return request(`${path}?${query.toString()}`);
+    const data = await request<Awaited<ReturnType<typeof endpoints.getUpsellOperatorLogs>>>(
+      `${path}?${query.toString()}`,
+    );
+    if (
+      !data ||
+      !['offer', 'self', 'all_offers'].includes(data.scope) ||
+      !Array.isArray(data.summary) ||
+      !Array.isArray(data.unattributed_totals) ||
+      !Array.isArray(data.approvals) ||
+      !Array.isArray(data.attempts)
+    ) {
+      throw new Error('Consulta de resultados indisponível: resposta inválida da API.');
+    }
+    return data;
   },
 
   async checkTrackingUpsellCompatibility(url: string): Promise<{

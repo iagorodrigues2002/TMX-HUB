@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { env } from '../../env.js';
+import { canReadNavigation } from '../../lib/navigation-access.js';
 import { decryptSecret, encryptSecret } from '../../lib/secret-box.js';
 import { vturbAnalyticsRequest } from '../../services/vturb.js';
 import type { createCnameTargetContext } from './cname-target-context.js';
@@ -56,23 +57,33 @@ export function registerGetAdvancedRoutes(
     return {
       configured: true,
       public_key: p.public_key,
-      domains,
-      gateways: mergeAdvancedGateways(gateways, vendepayConnections),
-      meta_rules: rules[0] ?? { attributed_only: true, minimum_amount_minor: 0 },
-      ab_tests: tests.map((test) => ({
+      domains: canReadNavigation(req.user!, 'tracking-capture') ? domains : [],
+      gateways: canReadNavigation(req.user!, 'integration-payments')
+        ? mergeAdvancedGateways(gateways, vendepayConnections)
+        : [],
+      meta_rules: (canReadNavigation(req.user!, 'integration-meta') ? rules[0] : null) ?? {
+        attributed_only: true,
+        minimum_amount_minor: 0,
+      },
+      ab_tests: (canReadNavigation(req.user!, 'tracking-journey') ? tests : []).map((test) => ({
         ...test,
         redirect_url: redirectUrl(String(test.id)),
       })),
-      entry_links: entryLinks.map((link) => ({
-        ...link,
-        tracking_url: entryUrl(String(link.slug)),
-      })),
+      entry_links: (canReadNavigation(req.user!, 'tracking-journey') ? entryLinks : []).map(
+        (link) => ({
+          ...link,
+          tracking_url: entryUrl(String(link.slug)),
+        }),
+      ),
       domain_setup: {
         record_type: 'CNAME',
         target: cnameTarget,
         note: 'O TMX cria automaticamente o subdomínio tmx, como tmx.suaempresa.com.',
       },
-      vturb: vturb[0] ?? { enabled: false, endpoint_url: null },
+      vturb: (canReadNavigation(req.user!, 'integration-vturb') ? vturb[0] : null) ?? {
+        enabled: false,
+        endpoint_url: null,
+      },
     };
   });
 

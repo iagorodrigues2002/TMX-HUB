@@ -4,7 +4,9 @@ import { Button } from '@/components/ui/button';
 import { DataState } from '@/components/ui/data-state';
 import { type TrackingPeriod, apiClient } from '@/lib/api-client';
 import { usePrivacy } from '@/lib/privacy-context';
+import { refundReportHref } from '@/lib/refunds-navigation';
 import { useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
 import { Metric, ago, panel, today } from './refunds-dashboard-support';
 import './refunds-dashboard.css';
 import { refundMoney, refundPercent } from './refunds-visualizations';
@@ -45,9 +47,7 @@ export function TrackingRefundsSummary({
           </p>
         </div>
         <Button asChild variant="outline">
-          <a href={`/reembolsos?offer_id=${encodeURIComponent(offerId)}`}>
-            Abrir relatório completo
-          </a>
+          <Link href={refundReportHref(offerId, { from, to })}>Abrir relatório completo</Link>
         </Button>
       </div>
       <dl className="mt-5 grid gap-5 sm:grid-cols-3">

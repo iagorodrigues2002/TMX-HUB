@@ -158,7 +158,7 @@ export function registerGetIntradayRangeRoutes(app: FastifyInstance) {
   app.post<{ Params: { id: string } }>('/offers/:id/ai-analysis', async (req, reply) => {
     if (!req.user) throw new BadRequestError('No user attached.');
     assertAiAccess(req.user);
-    const offer = await app.offerStore.assertAccess(
+    const offer = await app.offerStore.assertManager(
       req.params.id,
       req.user.sub,
       req.user.role === 'admin',

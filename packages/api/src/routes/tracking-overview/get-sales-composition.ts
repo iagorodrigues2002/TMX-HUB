@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { filterCompanyNavigationOffers } from '../../lib/company-navigation-access.js';
 import { saoPauloParts } from '../../services/intraday-store.js';
 import { naturalSale } from '../../services/sale-origin.js';
 import { saoPauloDayRange } from '../../services/utmify-sync.js';
@@ -61,7 +62,12 @@ export function registerGetSalesComposition(app: FastifyInstance) {
       return reply.code(400).send({ error: 'invalid_date' });
     if (fromDate > toDate || toDate > today)
       return reply.code(400).send({ error: 'invalid_range' });
-    const offers = await app.offerStore.listAccessible(req.user.sub, req.user.role === 'admin');
+    const offers = await filterCompanyNavigationOffers(
+      app.db,
+      req.user,
+      await app.offerStore.listAccessible(req.user.sub, req.user.role === 'admin'),
+      '/tracking/sales-composition',
+    );
     if (!offers.length) return { offers: [], from: fromDate, to: toDate };
     const from = new Date(saoPauloDayRange(fromDate, now).from);
     const to = new Date(saoPauloDayRange(toDate, now).to);

@@ -88,11 +88,15 @@ export async function runBrowserPush(app: PushApp, send = webpush.sendNotificati
         if (
           !user ||
           (user.role !== 'admin' &&
-            user.allowedTools?.length &&
+            user.allowedTools !== undefined &&
             !user.allowedTools.includes('ofertas'))
         )
           return;
-        const offers = await saleNoticeOffers(app, { sub: user.id, role: user.role });
+        const offers = await saleNoticeOffers(app, {
+          sub: user.id,
+          role: user.role,
+          tools: user.allowedTools,
+        });
         if (!offers.some((offer) => offer.id === row.offer_id)) return;
         const subscription = pushSubscriptionSchema.parse(
           JSON.parse(decryptSecret(row.secret_encrypted, pushSecret())),
