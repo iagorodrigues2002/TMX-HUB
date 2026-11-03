@@ -32,8 +32,8 @@ export function TaskManagementPage() {
   if (access.isError)
     return (
       <p role="alert">
-        Não foi possível autorizar a gestão de tarefas. Somente administradores da empresa ou da
-        plataforma podem acessar.
+        Não foi possível autorizar a gestão de tarefas. Sua conta precisa de permissão para acessar
+        as tarefas desta empresa.
       </p>
     );
   const allowed = !!access.data && (access.data.global || companies.length > 0);

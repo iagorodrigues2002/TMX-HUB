@@ -40,6 +40,9 @@ export function visibleNavigation(
       (!options.includeDynamic && item.href.includes('[id]')) ||
       (item.localPreviewOnly && !syntheticPreview) ||
       (item.roles && !item.roles.includes(user.role)) ||
+      (item.id === 'operator-activity' &&
+        user.role !== 'admin' &&
+        !user.allowedTools?.includes('nav:operator-activity')) ||
       (item.requiresTaskManagement && user.role !== 'admin' && options.canManageTasks !== true) ||
       (item.requiresTool && !canAccessTool(user, item.requiresTool))
     )

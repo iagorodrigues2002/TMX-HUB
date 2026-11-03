@@ -13,6 +13,7 @@ import {
   useState,
 } from 'react';
 import { type AuthUser, apiClient, authToken } from './api-client';
+import { authorizationFingerprint, subscribeAuthRefresh } from './auth-refresh';
 import { disableBrowserPush } from './browser-push';
 import { setPersonalStorageOwner } from './personal-storage';
 import { ApiError } from './query-client';
@@ -38,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const principal = useRef<string | null>(null);
   const [sessionEpoch, setSessionEpoch] = useState(0);
   const [user, setUser] = useState<AuthUser | null>(null);
+  const signedInUserId = user?.id;
   const [loading, setLoading] = useState(true);
 
   const resetSession = useCallback(() => {
@@ -58,9 +60,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const u = await apiClient.me();
       if (currentRevision !== revision.current) return;
-      const identity = `${u.id}:${u.role}`;
-      // An administrator downgraded in another session must not retain the
-      // global cache when /me refreshes their role.
+      const identity = authorizationFingerprint(u);
+      // Changed permissions must discard cached data and local state from the previous scope.
       if (principal.current && principal.current !== identity) resetSession();
       principal.current = identity;
       setPersonalStorageOwner(u.id);
@@ -86,6 +87,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   useEffect(() => {
+    if (!signedInUserId) return;
+    return subscribeAuthRefresh(refresh);
+  }, [refresh, signedInUserId]);
+
+  useEffect(() => {
     const syncSession = (event: StorageEvent) => {
       if (event.key !== 'tmx-hub:auth-token' && event.key !== null) return;
       resetSession();
@@ -105,7 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (currentRevision !== revision.current) return;
       resetSession();
       authToken.set(token);
-      principal.current = `${u.id}:${u.role}`;
+      principal.current = authorizationFingerprint(u);
       setPersonalStorageOwner(u.id);
       setUser(u);
       setLoading(false);
@@ -120,7 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (currentRevision !== revision.current) return;
       resetSession();
       authToken.set(token);
-      principal.current = `${u.id}:${u.role}`;
+      principal.current = authorizationFingerprint(u);
       setPersonalStorageOwner(u.id);
       setUser(u);
       setLoading(false);

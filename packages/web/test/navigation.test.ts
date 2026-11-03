@@ -62,6 +62,11 @@ test('direct task navigation checks the same server capability and fails closed 
   assert.match(hook, /queryKey: \['task-management-access', user\?\.id\]/);
   assert.match(hook, /queryFn: taskApi\.access/);
   assert.match(hook, /!access\.isError/);
+  assert.match(hook, /refetchInterval: 60_000/);
+  assert.match(
+    gate,
+    /item\.id === 'operator-activity' && !user\?\.allowedTools\?\.includes\('nav:operator-activity'\)/,
+  );
 });
 
 test('each visible destination resolves to one canonical leaf, never to an expander', () => {

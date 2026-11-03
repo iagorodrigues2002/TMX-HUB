@@ -15,6 +15,7 @@ export function selectedNavigation(tools: string[]) {
     .flatMap((group) => group.entries)
     .filter((item) => {
       if (tools.includes('nav:scoped')) return hasNavigationAccess(tools, item.id);
+      if (item.id === 'operator-activity') return tools.includes('nav:operator-activity');
       if (item.roles?.includes('admin') && !item.roles.includes('user')) return false;
       return item.requiresTool ? tools.includes(item.requiresTool) : tools.length > 0;
     })
@@ -26,7 +27,7 @@ export function navigationTools(ids: string[], previous: string[]) {
   const base = new Set<string>();
   for (const item of entries.filter((entry) => ids.includes(entry.id))) {
     if (item.requiresTool) base.add(item.requiresTool);
-    if (item.id === 'overview') base.add('ofertas');
+    if (item.id === 'overview' || item.id === 'operator-activity') base.add('ofertas');
   }
   // Offer AI is an independent legacy entitlement, never granted by a section toggle.
   if (base.has('ofertas') && previous.includes('ofertas-ia')) base.add('ofertas-ia');

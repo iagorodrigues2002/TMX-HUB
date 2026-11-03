@@ -50,7 +50,6 @@ export const nav_items_company: NavItem = {
       href: '/logs',
       icon: Activity,
       group: 'Empresa',
-      roles: ['admin'],
       requiresTool: 'logs',
       keywords: ['logs', 'upsells', 'operadores', 'histórico'],
     },

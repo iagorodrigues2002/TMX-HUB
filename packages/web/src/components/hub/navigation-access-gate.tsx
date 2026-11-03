@@ -18,6 +18,7 @@ export function NavigationAccessGate({ children }: { children: ReactNode }) {
     user?.role !== 'admin' &&
     item &&
     ((item.requiresTaskManagement && !canManageTasks) ||
+      (item.id === 'operator-activity' && !user?.allowedTools?.includes('nav:operator-activity')) ||
       ((NAVIGATION_IDS as readonly string[]).includes(item.id) &&
         !hasNavigationAccess(user?.allowedTools, item.id)))
   ) {

@@ -154,7 +154,7 @@ export function CallsDashboard({
     return (
       <div role="alert" className="rounded-xl border border-border bg-card p-8">
         <ShieldCheck aria-hidden />
-        <h1 className="mt-3 text-xl font-semibold">Acesso exclusivo para administradores</h1>
+        <h1 className="mt-3 text-xl font-semibold">Acesso às calls não autorizado</h1>
         <p>Nenhum agendamento foi solicitado.</p>
       </div>
     );

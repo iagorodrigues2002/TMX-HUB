@@ -17,7 +17,7 @@ export function useTaskManagementAccess() {
     enabled,
     retry: false,
     staleTime: 30_000,
-    refetchInterval: (query) => (query.state.data && !query.state.error ? 60_000 : false),
+    refetchInterval: 60_000,
   });
   return {
     canManageTasks:

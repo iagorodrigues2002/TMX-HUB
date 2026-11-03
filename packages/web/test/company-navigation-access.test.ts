@@ -44,3 +44,28 @@ test('empty selection is explicit and legacy offers selection is understood befo
   assert.ok(selectedNavigation(['ofertas']).includes('tracking-upsell-intelligence'));
   assert.ok(!selectedNavigation(['ofertas']).includes('ads-intelligence'));
 });
+
+test('operator results can be explicitly delegated without other administrative access', () => {
+  const tools = navigationTools(['operator-activity'], []);
+  assert.ok(tools.includes('logs'));
+  assert.ok(tools.includes('ofertas'));
+  assert.deepEqual(selectedNavigation(tools), ['operator-activity']);
+  const item = permissionGroups
+    .flatMap((group) => group.entries)
+    .find((entry) => entry.id === 'operator-activity');
+  assert.equal(item?.roles, undefined);
+  const user = {
+    id: 'member',
+    name: 'Member',
+    email: 'member@test',
+    role: 'user',
+    allowedTools: tools,
+    createdAt: '',
+  } as AuthUser;
+  const children = visibleNavigation(user).flatMap((group) => group.children ?? [group]);
+  assert.deepEqual(
+    children.map((child) => child.id),
+    ['operator-activity'],
+  );
+  assert.ok(!selectedNavigation(['logs']).includes('operator-activity'));
+});
