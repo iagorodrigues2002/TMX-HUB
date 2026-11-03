@@ -115,7 +115,10 @@ async function providerJson(url: string, key: string, body?: unknown): Promise<u
         signal: AbortSignal.timeout(15000),
         headers: {
           Authorization: `Bearer ${key}`,
-          Accept: 'application/json',
+          Accept:
+            target.origin === 'https://mcp.lootrush.com'
+              ? 'application/json, text/event-stream'
+              : 'application/json',
           ...(body ? { 'Content-Type': 'application/json' } : {}),
         },
         ...(body ? { body: JSON.stringify(body) } : {}),
@@ -141,6 +144,23 @@ async function providerJson(url: string, key: string, body?: unknown): Promise<u
     const text = await response.text();
     if (text.length > 5_000_000) throw new FinanceProviderError('response_too_large');
     try {
+      if (
+        target.origin === 'https://mcp.lootrush.com' &&
+        response.headers.get('content-type')?.includes('text/event-stream')
+      ) {
+        for (const event of text.replace(/\r\n/g, '\n').split('\n\n')) {
+          const data = event
+            .split('\n')
+            .filter((line) => line.startsWith('data:'))
+            .map((line) => line.slice(5).trimStart())
+            .join('\n');
+          if (!data) continue;
+          const message = JSON.parse(data);
+          if (message?.id === (body as { id?: unknown })?.id && (message.result || message.error))
+            return message;
+        }
+        throw new FinanceProviderError('invalid_response');
+      }
       return JSON.parse(text);
     } catch {
       throw new FinanceProviderError('invalid_response');

@@ -10,6 +10,35 @@ import {
 
 describe('banking imports', () => {
   afterEach(() => vi.unstubAllGlobals());
+  it.each(['application/json', 'text/event-stream'])(
+    'negotiates MCP transport and reads %s',
+    async (contentType) => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (_url: unknown, options: RequestInit) => {
+          const accept = new Headers(options.headers).get('Accept');
+          if (!accept?.includes('text/event-stream'))
+            return new Response('Not Acceptable', { status: 406 });
+          const payload = {
+            jsonrpc: '2.0',
+            id: 1,
+            result: {
+              content: [{ type: 'text', text: JSON.stringify({ userId: 'transport-owner' }) }],
+            },
+          };
+          return new Response(
+            contentType === 'text/event-stream'
+              ? `: ping\r\n\r\nevent: message\r\ndata: ${JSON.stringify(payload)}\r\n\r\n`
+              : JSON.stringify(payload),
+            { headers: { 'Content-Type': contentType } },
+          );
+        }),
+      );
+      expect(await financeProfiles('lootrush', 'synthetic-key')).toEqual([
+        { id: 'transport-owner', name: 'Conta LootRush' },
+      ]);
+    },
+  );
   it('imports 90 days once, then overlaps only the incremental watermark', () => {
     const now = new Date('2026-11-02T12:00:00Z');
     expect(financeWindow(null, now).start).toBe('2026-08-04T12:00:00.000Z');
