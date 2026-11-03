@@ -3,6 +3,7 @@
 import { DataState } from '@/components/ui/data-state';
 import { DateRangeFilter } from '@/components/ui/date-range-filter';
 import { SAO_PAULO_TIME_ZONE, todayIso } from '@/lib/date-range';
+import { INTRADAY_RANGE_LIMIT_MESSAGE } from '@/lib/intraday-range';
 import { Clock3 } from 'lucide-react';
 import { renderIntradayAds } from './page-render-intraday-ads';
 import { renderIntradayOverview } from './page-render-intraday-overview';
@@ -29,6 +30,7 @@ export function renderIntradaySection({
   adCompareRight,
   setAdCompareRight,
   isIntradayRange,
+  intradayRangeSupported,
   intradayQuery,
   intraday,
   currency,
@@ -65,6 +67,7 @@ export function renderIntradaySection({
   | 'adCompareRight'
   | 'setAdCompareRight'
   | 'isIntradayRange'
+  | 'intradayRangeSupported'
   | 'intradayQuery'
   | 'intraday'
   | 'currency'
@@ -149,7 +152,13 @@ export function renderIntradaySection({
         </button>
       </div>
 
-      {intradayQuery.isLoading ? (
+      {!intradayRangeSupported ? (
+        <DataState
+          variant="empty"
+          title="Selecione até 60 dias para as janelas intradiárias"
+          description={INTRADAY_RANGE_LIMIT_MESSAGE}
+        />
+      ) : intradayQuery.isLoading ? (
         <DataState variant="loading" title="Carregando janelas intradiárias…" />
       ) : intradayQuery.isError && !intraday ? (
         <DataState

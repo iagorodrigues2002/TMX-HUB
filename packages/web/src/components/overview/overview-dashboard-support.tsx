@@ -52,6 +52,7 @@ export interface OverviewDataset {
   offerIds?: string[];
   daily: ChartPoint[];
   intraday: ChartPoint[];
+  intradayUnavailableReason?: string;
   finance: {
     fees: number;
     reserve: number;

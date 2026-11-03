@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import vm from 'node:vm';
 import {
   buildArtifacts,
   intakeHint,
@@ -293,6 +294,95 @@ const interactions = {
   ],
 };
 const artifacts = buildArtifacts(config, templates, intake, interactions);
+const workerCode = artifacts.worker.nodes.find((node) => node.name === 'Preparar entregas nativas')
+  .parameters.jsCode;
+const taskLease = {
+  id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  leaseId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+  entityKind: 'task',
+  channelId: '111111111111111111',
+  revision: 1,
+  body: {
+    id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+    managementMode: 'native',
+    revision: 1,
+    title: 'Teste sintético',
+    status: 'pending',
+    sector: 'Spy',
+    assignees: people,
+  },
+};
+const runWorker = (deliveries, code = workerCode, vars = {}) =>
+  vm.runInNewContext(`(function(){${code}\n})()`, {
+    URL: undefined,
+    URLSearchParams: undefined,
+    $vars: vars,
+    $input: { first: () => ({ json: { deliveries } }) },
+  });
+test('native worker builds task cards in n8n Code VM without URL globals', () => {
+  const output = runWorker([taskLease]);
+  assert.equal(output.length, 1);
+  assert.equal(output[0].json.discordMethod, 'POST');
+  assert.match(output[0].json.discordBody.content, /Teste sintético/);
+  assert.equal(output[0].json.discordBody.enforce_nonce, true);
+});
+const callLease = {
+  ...taskLease,
+  entityKind: 'call',
+  body: {
+    ...taskLease.body,
+    status: 'scheduled',
+    participants: people,
+    meetingUrl: 'https://meet.example.invalid/abc-defg-hij?source=tmx',
+    startsAt: '2026-11-03T17:00:00.000Z',
+    durationMinutes: 30,
+  },
+};
+test('native worker builds call and reminder cards without URL globals or require', () => {
+  const reminder = {
+    ...callLease,
+    entityKind: 'reminder',
+    body: { minutes: 15, call: callLease.body },
+  };
+  const result = runWorker([callLease, reminder]);
+  assert.equal(result.length, 2);
+  assert.equal(
+    result[0].json.discordBody.components[0].components[0].url,
+    callLease.body.meetingUrl,
+  );
+  assert.match(result[0].json.discordBody.content, /Call agendada/);
+  assert.match(result[1].json.discordBody.content, /Call em 15 minutos/);
+});
+test('empty native delivery claim is valid in restricted Code VM', () => {
+  assert.equal(runWorker([]).length, 0);
+});
+for (const meetingUrl of [
+  'http://meet.example.invalid/call',
+  'javascript:alert(1)',
+  'https://trusted.example@attacker.example/call',
+  'https://user:password@meet.example.invalid/call',
+  'https://meet.example.invalid\\@attacker.example/call',
+  'https://meet.example.invalid\n/call',
+  'https://meet.example.invalid:70000/call',
+  'https://meet.example.invalid:0/call',
+  'https://meet..example.invalid/call',
+  'https://-meet.example.invalid/call',
+  'https://%6deet.example.invalid/call',
+])
+  test(`native worker rejects unsafe meeting link ${JSON.stringify(meetingUrl)}`, () => {
+    assert.throws(
+      () => runWorker([{ ...callLease, body: { ...callLease.body, meetingUrl } }]),
+      /Link de call inválido/,
+    );
+  });
+test('unbound worker keeps localhost-only HTTP allowance for preview', () => {
+  const code = templates.worker.nodes.find((node) => node.name === 'Preparar entregas nativas')
+    .parameters.jsCode;
+  assert.equal(runWorker([], code, { TMX_TASK_WEB_BASE: 'http://localhost:3100' }).length, 0);
+  assert.equal(runWorker([], code, { TMX_TASK_WEB_BASE: 'http://127.0.0.1:3122' }).length, 0);
+  for (const base of ['http://remote.example.invalid', 'https://user@remote.example.invalid'])
+    assert.throws(() => runWorker([], code, { TMX_TASK_WEB_BASE: base }), /URL pública segura/);
+});
 test('response mode is explicit even when original templates use opposite modes', () => {
   assert.equal(artifacts.intake.nodes[0].parameters.responseMode, 'onReceived');
   assert.equal(artifacts.interactions.nodes[0].parameters.responseMode, 'responseNode');

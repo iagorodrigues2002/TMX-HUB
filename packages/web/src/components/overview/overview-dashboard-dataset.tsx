@@ -178,8 +178,11 @@ export function Dataset({
         <RevenueChart
           title="Intradiário"
           description="Receita por janela de duas horas, consolidada no período selecionado."
-          emptyMessage="A coleta intradiária ainda não produziu janelas completas."
-          points={dataset.intraday}
+          emptyMessage={
+            dataset.intradayUnavailableReason ??
+            'A coleta intradiária ainda não produziu janelas completas.'
+          }
+          points={dataset.intradayUnavailableReason ? [] : dataset.intraday}
           currency={dataset.currency}
         />
       </div>

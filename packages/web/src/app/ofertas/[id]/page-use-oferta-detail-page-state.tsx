@@ -10,6 +10,7 @@ import {
 } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
 import { rollingDateRange, singleDayRange, todayIso } from '@/lib/date-range';
+import { supportsIntradayRange } from '@/lib/intraday-range';
 import { useQuery } from '@tanstack/react-query';
 import { use, useMemo, useState } from 'react';
 
@@ -58,17 +59,18 @@ export function useOfertaDetailPageState({ params }: { params: Promise<{ id: str
   const data = snapshotsQuery.data;
 
   const isIntradayRange = intradayFrom !== intradayTo;
+  const intradayRangeSupported = supportsIntradayRange(intradayPeriod);
   const intradayQuery = useQuery<IntradaySummaryView | IntradayRangeSummaryView>({
     queryKey: ['offer-intraday', id, intradayFrom, intradayTo],
     queryFn: () =>
       isIntradayRange
         ? apiClient.getOfferIntradayRange(id, intradayFrom, intradayTo)
         : apiClient.getOfferIntraday(id, intradayFrom),
-    enabled: Boolean(offer?.utmifyConfigured),
+    enabled: Boolean(offer?.utmifyConfigured) && intradayRangeSupported,
     refetchInterval: !isIntradayRange && intradayFrom === todayIso() ? 60_000 : false,
     refetchOnWindowFocus: false,
   });
-  const intraday = intradayQuery.data;
+  const intraday = intradayRangeSupported ? intradayQuery.data : undefined;
 
   const adsetTotals = useMemo(() => {
     if (!data)
@@ -237,6 +239,7 @@ export function useOfertaDetailPageState({ params }: { params: Promise<{ id: str
     snapshotsQuery,
     data,
     isIntradayRange,
+    intradayRangeSupported,
     intradayQuery,
     intraday,
     adsetTotals,

@@ -1,7 +1,17 @@
 export const prepareNativeDeliveries = String.raw`
 const base=String($vars.TMX_TASK_WEB_BASE||'').replace(/\/$/,'');
-const web=new URL(base);
-if(web.username||web.password||(web.protocol!=='https:'&&!(web.protocol==='http:'&&['localhost','127.0.0.1'].includes(web.hostname))))throw new Error('Configure a URL pública segura do TMX');
+function isSafeWebLink(value,allowLocalHttp=false){
+ if(typeof value!=='string'||/[\s\\\u0000-\u001F\u007F]/.test(value))return false;
+ const parts=/^(https?):\/\/([^/?#]+)(?:[/?#].*)?$/i.exec(value);
+ if(!parts)return false;
+ const authority=/^([a-z0-9.-]+)(?::([0-9]{1,5}))?$/i.exec(parts[2]);
+ if(!authority)return false;
+ const host=authority[1].toLowerCase(),port=authority[2];
+ if(host.length>253||host.split('.').some(label=>!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label)))return false;
+ if(port&&(Number(port)<1||Number(port)>65535))return false;
+ return parts[1].toLowerCase()==='https'||(allowLocalHttp&&['localhost','127.0.0.1'].includes(host));
+}
+if(!isSafeWebLink(base,true))throw new Error('Configure a URL pública segura do TMX');
 const clean=value=>String(value??'').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'');
 const date=value=>new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Sao_Paulo',dateStyle:'short',timeStyle:'short'}).format(new Date(value));
 return $input.first().json.deliveries.map(lease=>{
@@ -21,7 +31,7 @@ return $input.first().json.deliveries.map(lease=>{
   lines=['**'+clean(item.title)+'**',labels[item.status]+' · '+clean(item.sector)+(item.offer?' · '+clean(item.offer):''),names,'Prazo: '+(item.dueAt?date(item.dueAt):'não definido'),clean(item.description)];
   components=[{type:1,components:Object.entries(labels).map(([status,label])=>({type:2,style:status===item.status?1:2,label,custom_id:'tmx:native:'+item.id+':'+item.revision+':'+status,disabled:status===item.status}))}];
  }else{
-  const meeting=new URL(item.meetingUrl);if(meeting.protocol!=='https:'||meeting.username||meeting.password)throw new Error('Link de call inválido');
+  if(!isSafeWebLink(item.meetingUrl))throw new Error('Link de call inválido');
   const heading=reminder?(lease.body.minutes===0?'A call começa agora':'Call em '+lease.body.minutes+' minutos'):{scheduled:'Call agendada',completed:'Call realizada',cancelled:'Call cancelada'}[item.status];
   lines=['**'+heading+' — '+clean(item.title)+'**',date(item.startsAt)+' · São Paulo · '+item.durationMinutes+' min',names,clean(item.message)];
   components=item.status==='scheduled'?[{type:1,components:[{type:2,style:5,label:'Entrar na call',url:item.meetingUrl}]}]:[];

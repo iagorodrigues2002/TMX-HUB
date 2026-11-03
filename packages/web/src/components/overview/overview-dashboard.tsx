@@ -10,6 +10,7 @@ import {
   rollingDateRange,
   todayIso,
 } from '@/lib/date-range';
+import { INTRADAY_RANGE_LIMIT_MESSAGE, supportsIntradayRange } from '@/lib/intraday-range';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { LayoutDashboard } from 'lucide-react';
 import { useState } from 'react';
@@ -72,11 +73,12 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
       staleTime: TRACKING_DASHBOARD_STALE_TIME,
     })),
   });
+  const intradayEnabled = salesView === 'general' && supportsIntradayRange(period);
   const intradayQueries = useQueries({
     queries: offers.map((offer) => ({
       queryKey: ['overview-intraday', offer.id, period.from, period.to],
       queryFn: () => apiClient.getOfferIntradayRange(offer.id, period.from, period.to),
-      enabled: salesView === 'general',
+      enabled: intradayEnabled,
       retry: false,
       refetchOnWindowFocus: false,
       staleTime: TRACKING_DASHBOARD_STALE_TIME,
@@ -89,17 +91,19 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
     offers,
     snapshotQueries.map((query) => query.data),
     trackingQueries.map((query) => query.data),
-    intradayQueries.map((query) => (salesView === 'general' ? query.data : undefined)),
+    intradayQueries.map((query) => (intradayEnabled ? query.data : undefined)),
     financialQuery.data?.offers,
   ).map((dataset) => ({
     ...dataset,
     arpu: periodArpu(composition.data, dataset.offerIds ?? [], salesView),
     daily: salesView === 'general' ? dataset.daily : [],
+    intradayUnavailableReason:
+      salesView === 'general' && !intradayEnabled ? INTRADAY_RANGE_LIMIT_MESSAGE : undefined,
   }));
   const detailQueries = [
     ...snapshotQueries,
     ...trackingQueries,
-    ...(salesView === 'general' ? intradayQueries : []),
+    ...(intradayEnabled ? intradayQueries : []),
     financialQuery,
     composition,
   ];
