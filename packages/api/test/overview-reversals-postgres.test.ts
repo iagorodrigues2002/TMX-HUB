@@ -16,16 +16,27 @@ describe.skipIf(!url)('overview reversal accounting (disposable PostgreSQL)', ()
   const db = postgres(url ?? 'postgres://unused', { max: 1 });
   const id = `reversal-test-${randomUUID()}`;
   beforeAll(async () => {
+    if (!['localhost', '127.0.0.1'].includes(new URL(url!).hostname))
+      throw new Error('Local DB only');
     await db`INSERT INTO tracking_projects(id,offer_id,public_key) VALUES(${id},${id},${id})`;
+    await db`INSERT INTO vendepay_connections(id,project_id,token_hash) VALUES(${id},${id},${id})`;
     for (const [suffix, refund, chargeback] of [
       ['refund-first', '2026-09-15T12:00Z', '2026-09-16T12:00Z'],
       ['charge-first', '2026-09-17T12:00Z', '2026-09-15T12:00Z'],
       ['tie', '2026-09-15T12:00Z', '2026-09-15T12:00Z'],
     ]) {
       await db`INSERT INTO tracking_orders(id,project_id,provider,external_id,status,order_kind,paid_at,occurred_at,
-        refunded_at,chargeback_at,amount_minor,amount_brl_minor,currency)
+        refunded_at,chargeback_at,amount_minor,amount_brl_minor,currency,vendepay_connection_id)
         VALUES(${id + suffix},${id},'vendepay',${id + suffix},'chargeback','front','2026-09-01T12:00Z','2026-09-01T12:00Z',
-        ${refund},${chargeback},10000,10000,'BRL')`;
+        ${refund},${chargeback},10000,10000,'BRL',${id})`;
+      for (const [kind, received] of [
+        ['refund', refund],
+        ['chargeback', chargeback],
+      ]) {
+        const receiptId = `${id}${suffix}-${kind}`;
+        await db`INSERT INTO webhook_receipts(id,connection_id,dedupe_key,payload,state,received_at,order_id)
+          VALUES(${receiptId},${id},${receiptId},${db.json({ checkoutId: id + suffix, event: kind })},'processed',${received},${id + suffix})`;
+      }
     }
   });
   afterAll(async () => {

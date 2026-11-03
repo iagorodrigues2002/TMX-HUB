@@ -12,10 +12,8 @@ import {
   validDate,
 } from '../services/refund-analytics.js';
 import { resolveRefundCompanyScope } from '../services/refund-company-scope.js';
-import {
-  type RefundDateReceipt,
-  recoverRefundDateEvidence,
-} from '../services/refund-date-evidence.js';
+import { recoverRefundDateEvidence } from '../services/refund-date-evidence.js';
+import { loadRefundDateReceipts } from '../services/refund-receipts.js';
 import { refundOriginFilter } from '../services/sale-origin.js';
 import { saoPauloDayRange } from '../services/utmify-sync.js';
 
@@ -116,27 +114,7 @@ const plugin: FastifyPluginAsync = async (app) => {
     const recoveryIds = rows
       .filter((r) => r.reversal_at || ['refunded', 'chargeback'].includes(String(r.status)))
       .map((r) => r.id);
-    const receipts = recoveryIds.length
-      ? await app.db<RefundDateReceipt[]>`
-      SELECT wr.order_id,o.external_id,wr.payload,wr.received_at,
-        CASE WHEN vc.payload_adapter='explodely' THEN 'explodely' ELSE o.provider END provider
-      FROM webhook_receipts wr
-      JOIN tracking_orders o ON o.id=wr.order_id
-      JOIN vendepay_connections vc ON vc.id=wr.connection_id
-        AND vc.id=o.vendepay_connection_id AND vc.project_id=o.project_id
-      -- Legacy ingestion persisted already-applied events as "processable".
-      -- Payload type + transaction identity are still verified below, after exact account joins.
-      WHERE wr.order_id=ANY(${recoveryIds}) AND wr.state IN ('processed','processable')
-      UNION ALL
-      SELECT wr.order_id,o.external_id,wr.payload,wr.received_at,o.provider
-      FROM tracking_gateway_webhook_receipts wr
-      JOIN tracking_orders o ON o.id=wr.order_id AND o.gateway_connection_id=wr.gateway_connection_id
-      JOIN tracking_gateway_connections gc ON gc.id=wr.gateway_connection_id
-        AND gc.project_id=o.project_id AND gc.provider=o.provider
-      WHERE wr.order_id=ANY(${recoveryIds}) AND wr.state='processed'
-      ORDER BY received_at
-    `
-      : [];
+    const receipts = await loadRefundDateReceipts(app.db, recoveryIds);
     const allOrigins: RefundOrder[] = recoverRefundDateEvidence(
       rows.map((r) => ({
         ...r,

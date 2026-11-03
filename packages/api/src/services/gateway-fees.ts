@@ -2,6 +2,7 @@ import { VENDEPAY_PENALTY_MINOR, gatewayFeesSchema } from '../lib/gateway-fee-mo
 export { gatewayFeesSchema } from '../lib/gateway-fee-model.js';
 import type { Sql } from 'postgres';
 import { convertToBrlMinor } from './exchange-rate.js';
+import { type ReceivedReversals, loadReceivedReversals } from './refund-receipts.js';
 import { type SalesView, saleOriginFilter } from './sale-origin.js';
 
 export interface FeeBucket {
@@ -84,15 +85,16 @@ export async function loadGatewayFees(
   from: Date,
   to: Date,
   salesView: SalesView = 'general',
+  receivedReversals?: ReceivedReversals,
 ) {
+  const reversals =
+    receivedReversals ?? (await loadReceivedReversals(db, offerIds, from, to, salesView));
   const buckets = await db<FeeBucket[]>`
     WITH scoped AS (
       SELECT p.offer_id,lower(trim(o.provider)) provider,
         CASE WHEN lower(trim(o.provider))='vendepay' THEN 'vendepay' ELSE COALESCE(o.gateway_connection_id,o.syzepay_connection_id,'unassigned') END connection_key,
-        o.paid_at,
+        o.id,o.paid_at,
         o.status IN ('refunded','chargeback') OR o.refunded_at IS NOT NULL OR o.chargeback_at IS NOT NULL reversed,
-        CASE WHEN o.chargeback_at IS NULL OR o.refunded_at<=o.chargeback_at THEN o.refunded_at END refunded_at,
-        CASE WHEN o.refunded_at IS NULL OR o.chargeback_at<o.refunded_at THEN o.chargeback_at END chargeback_at,
         CASE WHEN lower(trim(o.provider))='syzepay' AND o.attribution_source->>'gateway_fee_in_cents' ~ '^[0-9]{1,15}$'
           THEN (o.attribution_source->>'gateway_fee_in_cents')::bigint END reported_fee,
         COALESCE(o.amount_brl_minor,CASE WHEN o.currency='BRL' THEN o.amount_minor WHEN rc.rate IS NOT NULL THEN (o.amount_minor*rc.rate)::bigint END,0) amount,
@@ -107,7 +109,7 @@ export async function loadGatewayFees(
       LEFT JOIN syzepay_company_connections sc ON sc.id=o.syzepay_connection_id AND lower(trim(o.provider))='syzepay'
       LEFT JOIN exchange_rate_cache rc ON rc.base_currency=o.currency AND rc.target_currency='BRL'
       WHERE p.offer_id=ANY(${offerIds}) AND ${saleOriginFilter(db, salesView)} AND (
-        (o.paid_at>=${from} AND o.paid_at<${to}) OR (o.refunded_at>=${from} AND o.refunded_at<${to}) OR (o.chargeback_at>=${from} AND o.chargeback_at<${to}))
+        (o.paid_at>=${from} AND o.paid_at<${to}) OR o.id=ANY(${reversals.refunded}) OR o.id=ANY(${reversals.chargeback}))
     ) SELECT offer_id,provider,settings,
       COALESCE(sum(CASE WHEN provider='vendepay' AND NOT reversed
         THEN ROUND(amount*(settings->>'reserve_pct')::numeric/100) ELSE 0 END)
@@ -116,8 +118,8 @@ export async function loadGatewayFees(
       count(*) FILTER(WHERE paid_at>=${from} AND paid_at<${to})::int sales,
       COALESCE(sum(reported_fee) FILTER(WHERE paid_at>=${from} AND paid_at<${to} AND reported_fee<=amount),0)::text reported_fee_brl_minor,
       count(*) FILTER(WHERE paid_at>=${from} AND paid_at<${to} AND reported_fee<=amount)::int reported_fee_sales,
-      count(*) FILTER(WHERE refunded_at>=${from} AND refunded_at<${to})::int refunds,
-      count(*) FILTER(WHERE chargeback_at>=${from} AND chargeback_at<${to})::int chargebacks
+      count(*) FILTER(WHERE id=ANY(${reversals.refunded}))::int refunds,
+      count(*) FILTER(WHERE id=ANY(${reversals.chargeback}))::int chargebacks
     FROM scoped GROUP BY offer_id,provider,connection_key,settings`;
   const conversionCache = new Map<string, Promise<number | null>>();
   const convert = (minor: number, currency: string) => {

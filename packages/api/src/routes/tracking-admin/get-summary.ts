@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { getBrlRate } from '../../services/exchange-rate.js';
 import { loadGatewayFees, totalGatewayFees } from '../../services/gateway-fees.js';
+import { loadReceivedReversals } from '../../services/refund-receipts.js';
 import { loadTrackingSummary } from './load-tracking-summary.js';
 import {
   DEFAULT_FEE_SETTINGS,
@@ -26,14 +27,21 @@ export function registerGetSummaryRoutes(app: FastifyInstance) {
       return app.analyticsCache.getOrSet(
         {
           endpoint: 'tracking-summary',
-          offerId: salesView === 'natural' ? `${req.params.id}:natural` : req.params.id,
+          offerId: `${req.params.id}:first-receipt-v1:${salesView}`,
           tags: [req.params.id],
           from: fromDate,
           to: toDate,
           ttlSeconds: 30,
         },
         async () => {
-          const summary = await loadTrackingSummary(app, req, from, to, salesView);
+          const reversals = await loadReceivedReversals(
+            app.db!,
+            [req.params.id],
+            from,
+            to,
+            salesView,
+          );
+          const summary = await loadTrackingSummary(app, req, from, to, salesView, reversals);
           const [feeRow] = await app.db!<
             Array<{
               vendepay_fee_pct: string;
@@ -58,6 +66,7 @@ export function registerGetSummaryRoutes(app: FastifyInstance) {
                 new Date(from),
                 new Date(to),
                 salesView,
+                reversals,
               )
             ).get(req.params.id) ?? [];
           const feeTotal = totalGatewayFees(gatewayFees);

@@ -5,6 +5,7 @@ import { getBrlRate } from '../../services/exchange-rate.js';
 import { loadGatewayFees, totalGatewayFees } from '../../services/gateway-fees.js';
 import { gatewayOverviewForOffers, mergeGatewayFees } from '../../services/gateway-overview.js';
 import { saoPauloParts } from '../../services/intraday-store.js';
+import { loadReceivedReversals } from '../../services/refund-receipts.js';
 import { saoPauloDayRange } from '../../services/utmify-sync.js';
 import { loadOverviewRows } from './load-overview-rows.js';
 import { OverviewRangeSchema, databaseUnavailable } from './overview-range-schema.js';
@@ -50,7 +51,7 @@ export function registerGetTrackingOverviewRoutes(app: FastifyInstance) {
       );
       const scope = createHash('sha256')
         .update(
-          `gateway-fees-v3-reversal-once:${salesView}:${req.user.sub}:${offerIds.slice().sort().join(',')}`,
+          `gateway-fees-v4-first-receipt:${salesView}:${req.user.sub}:${offerIds.slice().sort().join(',')}`,
         )
         .digest('base64url');
 
@@ -64,6 +65,7 @@ export function registerGetTrackingOverviewRoutes(app: FastifyInstance) {
           tags: offerIds,
         },
         async () => {
+          const reversals = await loadReceivedReversals(app.db!, offerIds, from, to, salesView);
           const { rows, gatewayRows, syzeRows } = await loadOverviewRows(
             app,
             offerIds,
@@ -71,10 +73,11 @@ export function registerGetTrackingOverviewRoutes(app: FastifyInstance) {
             to,
             req.user!.sub,
             salesView,
+            reversals,
           );
           const usdRate = await getBrlRate('USD', app.db!);
           const toUsdMinor = (brlMinor: number) => (usdRate ? Math.round(brlMinor / usdRate) : 0);
-          const feeMap = await loadGatewayFees(app.db!, offerIds, from, to, salesView);
+          const feeMap = await loadGatewayFees(app.db!, offerIds, from, to, salesView, reversals);
 
           const perOffer = await Promise.all(
             rows.map(async (row) => {

@@ -136,6 +136,8 @@ describe('individual gateway fee arithmetic', () => {
       ['offer-a'],
       new Date('2026-09-01'),
       new Date('2026-10-01'),
+      'general',
+      { refunded: [], chargeback: [] },
     );
     expect(totalGatewayFees(result.get('offer-a')!)).toMatchObject({
       fees: 1288,

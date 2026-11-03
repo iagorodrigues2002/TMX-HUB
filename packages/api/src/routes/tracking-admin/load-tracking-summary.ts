@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { type ReceivedReversals, loadReceivedReversals } from '../../services/refund-receipts.js';
 import { type SalesView, saleOriginFilter } from '../../services/sale-origin.js';
 export async function loadTrackingSummary(
   app: FastifyInstance,
@@ -6,7 +7,11 @@ export async function loadTrackingSummary(
   from: Date,
   to: Date,
   salesView: SalesView = 'general',
+  receivedReversals?: ReceivedReversals,
 ) {
+  const reversals =
+    receivedReversals ??
+    (await loadReceivedReversals(app.db!, [req.params.id], from, to, salesView));
   const [summary] = await app.db!<
     Array<{
       events: number;
@@ -174,7 +179,7 @@ export async function loadTrackingSummary(
               AND rc.rate IS NULL
           )::int AS unconverted_paid_orders,
           count(*) FILTER (
-            WHERE o.refunded_at >= ${from} AND o.refunded_at < ${to}
+            WHERE o.id = ANY(${reversals.refunded})
           )::int AS refunded_orders,
           COALESCE(sum(
             CASE
@@ -184,10 +189,10 @@ export async function loadTrackingSummary(
               ELSE 0
             END
           ) FILTER (
-            WHERE o.refunded_at >= ${from} AND o.refunded_at < ${to}
+            WHERE o.id = ANY(${reversals.refunded})
           ), 0)::text AS refunded_revenue_brl_minor,
           count(*) FILTER (
-            WHERE o.chargeback_at >= ${from} AND o.chargeback_at < ${to}
+            WHERE o.id = ANY(${reversals.chargeback})
           )::int AS chargeback_orders,
           COALESCE(sum(
             CASE
@@ -197,7 +202,7 @@ export async function loadTrackingSummary(
               ELSE 0
             END
           ) FILTER (
-            WHERE o.chargeback_at >= ${from} AND o.chargeback_at < ${to}
+            WHERE o.id = ANY(${reversals.chargeback})
           ), 0)::text AS chargeback_revenue_brl_minor
         FROM tracking_orders o
         JOIN tracking_projects project ON project.id = o.project_id
@@ -210,8 +215,8 @@ export async function loadTrackingSummary(
           AND (
             (o.occurred_at >= ${from} AND o.occurred_at < ${to})
             OR (o.paid_at >= ${from} AND o.paid_at < ${to})
-            OR (o.refunded_at >= ${from} AND o.refunded_at < ${to})
-            OR (o.chargeback_at >= ${from} AND o.chargeback_at < ${to})
+            OR o.id = ANY(${reversals.refunded})
+            OR o.id = ANY(${reversals.chargeback})
             OR (
               o.status = 'cancelled'
               AND COALESCE(o.cancelled_at, o.updated_at) >= ${from}

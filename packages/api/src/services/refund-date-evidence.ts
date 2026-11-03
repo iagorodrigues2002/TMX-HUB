@@ -26,12 +26,16 @@ function dateAt(payload: unknown, paths: string[]): string | undefined {
   return undefined;
 }
 
+export interface RefundDateEvidence {
+  purchase?: string;
+  purchaseFallback?: string;
+  reversal?: string;
+  received?: string;
+}
+
 /** SQL caller enforces exact order + connection + project; no fuzzy matching. */
-export function recoverRefundDateEvidence(rows: RefundOrder[], receipts: RefundDateReceipt[]) {
-  const evidence = new Map<
-    string,
-    { purchase?: string; purchaseFallback?: string; reversal?: string; received?: string }
-  >();
+export function collectRefundDateEvidence(receipts: RefundDateReceipt[]) {
+  const evidence = new Map<string, RefundDateEvidence>();
   const earliest = (a: string | undefined, b: string | undefined) =>
     !a ? b : !b ? a : a < b ? a : b;
   for (const receipt of receipts) {
@@ -64,7 +68,7 @@ export function recoverRefundDateEvidence(rows: RefundOrder[], receipts: RefundD
         };
     }
     if (!event || event.transactionId !== receipt.external_id) continue;
-    const dates = evidence.get(receipt.order_id) ?? {};
+    const dates: RefundDateEvidence = evidence.get(receipt.order_id) ?? {};
     const purchase = dateAt(receipt.payload, [
       'paid_at',
       'approved_at',
@@ -105,6 +109,11 @@ export function recoverRefundDateEvidence(rows: RefundOrder[], receipts: RefundD
     }
     evidence.set(receipt.order_id, dates);
   }
+  return evidence;
+}
+
+export function recoverRefundDateEvidence(rows: RefundOrder[], receipts: RefundDateReceipt[]) {
+  const evidence = collectRefundDateEvidence(receipts);
   return rows.map((row) => {
     const dates = evidence.get(row.id);
     if (
