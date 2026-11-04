@@ -1,7 +1,7 @@
 'use client';
 
 import { AuthGate } from '@/components/auth/auth-gate';
-import { type ReactNode, Suspense, useEffect, useState } from 'react';
+import { type ReactNode, Suspense, useState } from 'react';
 import { AmbientBackground } from './ambient-background';
 import { CommandPalette } from './command-palette';
 import { FinancialPrivacyMask } from './financial-privacy-mask';
@@ -38,24 +38,8 @@ export function HubShell({
   const [notificationCenterOpen, setNotificationCenterOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  useEffect(() => {
-    try {
-      setSidebarCollapsed(window.localStorage.getItem('tmx-ui.sidebar.collapsed') !== 'false');
-    } catch {
-      /* Keep the rail usable without storage. */
-    }
-  }, []);
-
   const toggleSidebar = () => {
-    setSidebarCollapsed((current) => {
-      const next = !current;
-      try {
-        window.localStorage.setItem('tmx-ui.sidebar.collapsed', String(next));
-      } catch {
-        /* Optional preference. */
-      }
-      return next;
-    });
+    setSidebarCollapsed((current) => !current);
   };
 
   // The right slot defaults to the user menu; pages that need extra actions
@@ -90,9 +74,16 @@ export function HubShell({
             notificationCount={notificationCount ?? unreadCount}
             onOpenNotifications={onOpenNotifications ?? (() => setNotificationCenterOpen(true))}
           />
-          <div className="tmx-workspace relative flex min-h-0 flex-1 overflow-hidden">
+          <div
+            className="tmx-workspace relative flex min-h-0 flex-1 overflow-hidden"
+            onPointerDownCapture={(event) => {
+              if (event.target instanceof Element && !event.target.closest('.tmx-sidebar'))
+                setSidebarCollapsed(true);
+            }}
+          >
             <Sidebar
               collapsed={sidebarCollapsed}
+              onCollapse={() => setSidebarCollapsed(true)}
               mobileOpen={mobileNavOpen}
               onMobileOpenChange={setMobileNavOpen}
             />

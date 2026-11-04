@@ -35,7 +35,9 @@ Os valores demonstrativos não fazem parte dessa especificação: as telas reais
 - Texto: opaco; `foreground`, `muted-foreground` e cores de estado próprios para cada tema.
 - Ações principais: gradiente claro com texto escuro; campos e ações secundárias usam superfície discreta.
 - Desktop: lateral recolhida por padrão, expansão sobre o conteúdo por hover ou pelo controle do cabeçalho;
-  desfoque e escurecimento de fundo em 520ms. A preferência explícita do usuário é preservada.
+  desfoque e escurecimento de fundo em 520ms. A antiga preferência de fixação não é reutilizada:
+  a abertura é transitória e recolhe ao sair com o mouse ou clicar fora. Foco visível por teclado
+  mantém a navegação acessível até o foco sair da lateral.
 - Notificações: mesmo material e transição do painel lateral; saída confirmada pelo servidor antes
   da animação e recolhimento suave do espaço. Tarefas e calls preservam as regras de permanência.
 - Lateral: rótulos e controles ficam montados em uma coluna interna de largura fixa. Ao recolher,

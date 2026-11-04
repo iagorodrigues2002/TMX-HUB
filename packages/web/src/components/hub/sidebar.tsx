@@ -21,6 +21,7 @@ const EXPANDED_STORAGE_KEY = 'tmx-ui.sidebar.expanded';
 
 interface SidebarProps {
   collapsed: boolean;
+  onCollapse: () => void;
   mobileOpen: boolean;
   onMobileOpenChange: (open: boolean) => void;
 }
@@ -129,7 +130,7 @@ export function NavigationItem({
   );
 }
 
-export function Sidebar({ collapsed, mobileOpen, onMobileOpenChange }: SidebarProps) {
+export function Sidebar({ collapsed, onCollapse, mobileOpen, onMobileOpenChange }: SidebarProps) {
   const [hovered, setHovered] = useState(false);
   const desktopCollapsed = collapsed && !hovered;
   const pathname = usePathname();
@@ -199,10 +200,14 @@ export function Sidebar({ collapsed, mobileOpen, onMobileOpenChange }: SidebarPr
           const focus = document.activeElement;
           if (!focus || !event.currentTarget.contains(focus) || !focus.matches(':focus-visible')) {
             setHovered(false);
+            onCollapse();
           }
         }}
         onBlur={(event) => {
-          if (!event.currentTarget.contains(event.relatedTarget)) setHovered(false);
+          if (!event.currentTarget.contains(event.relatedTarget)) {
+            setHovered(false);
+            onCollapse();
+          }
         }}
         className="tmx-sidebar hidden shrink-0 flex-col border-r border-border/60 bg-background/88 px-2 py-3 backdrop-blur-xl xl:flex"
       >
