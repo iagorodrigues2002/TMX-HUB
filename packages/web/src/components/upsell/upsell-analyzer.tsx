@@ -49,7 +49,7 @@ export function UpsellAnalyzer() {
       <section className="glass-card space-y-4 p-6">
         <header>
           <p className="hud-label">1 · Plataforma de checkout</p>
-          <h2 className="mt-1 text-[16px] font-semibold text-white">
+          <h2 className="mt-1 text-[16px] font-semibold text-foreground">
             Selecione e suba os relatórios
           </h2>
         </header>
@@ -59,7 +59,7 @@ export function UpsellAnalyzer() {
           <select
             value={platform}
             onChange={(e) => setPlatform(e.target.value as CheckoutPlatform)}
-            className="flex h-11 w-full rounded-md border border-white/[0.10] bg-white/[0.04] px-4 text-[14px] text-white focus-visible:outline-none focus-visible:border-cyan-300/40"
+            className="flex h-11 w-full rounded-md border border-border bg-muted px-4 text-[14px] text-foreground focus-visible:outline-none focus-visible:border-border"
           >
             {PLATFORM_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -67,7 +67,7 @@ export function UpsellAnalyzer() {
               </option>
             ))}
           </select>
-          <p className="text-[12px] text-white/40">
+          <p className="text-[12px] text-muted-foreground">
             Define os hints de auto-mapeamento das colunas e quais valores de status contam como
             "aprovado" para cada plataforma.
           </p>
@@ -94,7 +94,7 @@ export function UpsellAnalyzer() {
         <section className="glass-card space-y-4 p-6">
           <header>
             <p className="hud-label">2 · Mapeamento de colunas</p>
-            <h2 className="mt-1 text-[16px] font-semibold text-white">
+            <h2 className="mt-1 text-[16px] font-semibold text-foreground">
               Ajuste se a auto-detecção errou
             </h2>
           </header>
@@ -123,7 +123,7 @@ export function UpsellAnalyzer() {
       <section className="glass-card space-y-4 p-6">
         <header>
           <p className="hud-label">3 · Configuração do funil</p>
-          <h2 className="mt-1 text-[16px] font-semibold text-white">
+          <h2 className="mt-1 text-[16px] font-semibold text-foreground">
             Defina produto + ofertas de cada etapa
           </h2>
         </header>
@@ -140,8 +140,8 @@ export function UpsellAnalyzer() {
             className="max-w-[200px]"
           />
           {frontConfig.startTime && !frontCols.dateTime && (
-            <p className="text-[12px] text-amber-300">
-              ⚠ Para usar filtro de horário, mapeie a coluna "Data/Hora" do Front acima.
+            <p className="text-[12px] text-warning">
+              ! Para usar filtro de horário, mapeie a coluna "Data/Hora" do Front acima.
             </p>
           )}
         </div>
@@ -161,7 +161,7 @@ export function UpsellAnalyzer() {
           />
         ))}
 
-        <div className="flex items-center justify-between gap-3 border-t border-white/[0.06] pt-3">
+        <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
           <Button type="button" variant="ghost" size="sm" onClick={addStep}>
             <Plus className="h-3.5 w-3.5" />
             Adicionar upsell
@@ -178,7 +178,7 @@ export function UpsellAnalyzer() {
           <header className="flex items-baseline justify-between">
             <div>
               <p className="hud-label">4 · Resultado</p>
-              <h2 className="mt-1 text-[16px] font-semibold text-white">
+              <h2 className="mt-1 text-[16px] font-semibold text-foreground">
                 {results.eligibleCount.toLocaleString('pt-BR')} clientes elegíveis no Front
               </h2>
             </div>
@@ -187,9 +187,9 @@ export function UpsellAnalyzer() {
 
           <ResultsChart results={results.steps} />
 
-          <div className="overflow-x-auto rounded-md border border-white/[0.06]">
+          <div className="overflow-x-auto rounded-md border border-border">
             <table className="w-full min-w-[640px] text-[12px]">
-              <thead className="bg-white/[0.03] text-left text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
+              <thead className="bg-muted text-left text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                 <tr>
                   <th className="px-3 py-2">Etapa</th>
                   <th className="px-3 py-2">Produto · Ofertas</th>
@@ -200,22 +200,25 @@ export function UpsellAnalyzer() {
               </thead>
               <tbody>
                 {results.steps.map((s) => (
-                  <tr key={s.name} className="border-t border-white/[0.04] text-white/75">
-                    <td className="px-3 py-2 font-semibold uppercase tracking-[0.12em] text-white/90">
+                  <tr key={s.name} className="border-t border-border text-foreground">
+                    <td className="px-3 py-2 font-semibold uppercase tracking-[0.12em] text-foreground">
                       {s.name}
                     </td>
-                    <td className="min-w-64 px-3 py-2 text-white/55">
+                    <td className="min-w-64 px-3 py-2 text-muted-foreground">
                       {s.product || '*qualquer produto*'}
                       {s.offers.length > 0 && ` · ${s.offers.join(', ')}`}
                     </td>
-                    <td className="px-3 py-2 text-right font-mono text-emerald-300">
-                      {s.accepted} <span className="text-white/40">({s.rates.accepted}%)</span>
+                    <td className="px-3 py-2 text-right font-mono text-success">
+                      {s.accepted}{' '}
+                      <span className="text-muted-foreground">({s.rates.accepted}%)</span>
                     </td>
-                    <td className="px-3 py-2 text-right font-mono text-amber-300">
-                      {s.rejected} <span className="text-white/40">({s.rates.rejected}%)</span>
+                    <td className="px-3 py-2 text-right font-mono text-warning">
+                      {s.rejected}{' '}
+                      <span className="text-muted-foreground">({s.rates.rejected}%)</span>
                     </td>
-                    <td className="px-3 py-2 text-right font-mono text-red-300">
-                      {s.notSeen} <span className="text-white/40">({s.rates.notSeen}%)</span>
+                    <td className="px-3 py-2 text-right font-mono text-danger">
+                      {s.notSeen}{' '}
+                      <span className="text-muted-foreground">({s.rates.notSeen}%)</span>
                     </td>
                   </tr>
                 ))}
@@ -229,7 +232,9 @@ export function UpsellAnalyzer() {
       <section className="glass-card space-y-3 p-6">
         <header>
           <p className="hud-label">Presets</p>
-          <h2 className="mt-1 text-[14px] font-semibold text-white">Salvos no seu navegador</h2>
+          <h2 className="mt-1 text-[14px] font-semibold text-foreground">
+            Salvos no seu navegador
+          </h2>
         </header>
         <div className="grid gap-3 md:grid-cols-[1fr_auto_auto]">
           <Input
@@ -246,7 +251,7 @@ export function UpsellAnalyzer() {
           <select
             value={selectedPresetId}
             onChange={(e) => setSelectedPresetId(e.target.value)}
-            className="flex h-11 w-full rounded-md border border-white/[0.10] bg-white/[0.04] px-4 text-[14px] text-white focus-visible:outline-none focus-visible:border-cyan-300/40"
+            className="flex h-11 w-full rounded-md border border-border bg-muted px-4 text-[14px] text-foreground focus-visible:outline-none focus-visible:border-border"
           >
             <option value="">— Selecione um preset salvo —</option>
             {savedList.map((p) => (
@@ -276,7 +281,7 @@ export function UpsellAnalyzer() {
             Excluir
           </Button>
         </div>
-        <p className="text-[11px] text-white/40">
+        <p className="text-[11px] text-muted-foreground">
           Presets guardam plataforma, mapeamento de colunas, configuração do front e dos upsells. Os
           arquivos das planilhas precisam ser carregados de novo a cada uso.
         </p>

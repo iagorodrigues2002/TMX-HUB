@@ -20,7 +20,7 @@ export function FinanceReserve({ company }: { company?: string } = {}) {
   const selected = (offers.data ?? []).filter((offer) => !offerId || offer.id === offerId);
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap gap-4 rounded-xl border border-border bg-card p-4">
+      <div className="glass-card flex flex-wrap gap-4 rounded-xl border border-border bg-card p-4">
         <label className="grid gap-2 text-sm">
           Oferta
           <select
@@ -50,18 +50,22 @@ export function FinanceReserve({ company }: { company?: string } = {}) {
           </select>
         </label>
       </div>
-      {offers.isError ? (
-        <p role="alert">Não foi possível carregar as ofertas. Tente novamente.</p>
-      ) : offers.isPending ? (
-        <output className="block">Carregando ofertas…</output>
-      ) : !selected.length ? (
-        <p>Nenhuma oferta disponível neste filtro.</p>
-      ) : (
-        <ReserveReleaseProjection
-          offerIds={selected.map((offer) => offer.id)}
-          salesView={salesView}
-        />
-      )}
+      <div data-motion-panel>
+        {offers.isError ? (
+          <p role="alert" className="glass-card p-5">
+            Não foi possível carregar as ofertas. Tente novamente.
+          </p>
+        ) : offers.isPending ? (
+          <output className="glass-card block p-5">Carregando ofertas…</output>
+        ) : !selected.length ? (
+          <p className="glass-card p-5">Nenhuma oferta disponível neste filtro.</p>
+        ) : (
+          <ReserveReleaseProjection
+            offerIds={selected.map((offer) => offer.id)}
+            salesView={salesView}
+          />
+        )}
+      </div>
     </div>
   );
 }

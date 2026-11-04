@@ -33,9 +33,9 @@ export function renderFunnelView({
       <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="hud-label">Funil total · dados first-party + backend</p>
-          <h3 className="mt-2 text-xl font-semibold text-white">Da visita à compra</h3>
+          <h3 className="mt-2 text-xl font-semibold text-foreground">Da visita à compra</h3>
         </div>
-        <div className="flex flex-wrap gap-1 rounded-lg border border-white/[0.07] bg-black/10 p-1">
+        <div className="flex flex-wrap gap-1 rounded-lg border border-border bg-accent p-1">
           {[
             ['overview', 'Visão geral'],
             ['pages', 'Saída por página'],
@@ -47,8 +47,8 @@ export function renderFunnelView({
               variant="ghost"
               onClick={() => setFunnelDetail(id as typeof funnelDetail)}
               className={cn(
-                'text-white/45',
-                funnelDetail === id && 'bg-cyan-300/[0.09] text-cyan-100',
+                'text-muted-foreground',
+                funnelDetail === id && 'bg-accent text-primary',
               )}
             >
               {label}
@@ -58,7 +58,7 @@ export function renderFunnelView({
       </div>
       {funnelDetail === 'overview' ? (
         <>
-          <div className="overflow-x-auto rounded-xl border border-white/[0.08] bg-black/15 p-4 md:p-6">
+          <div className="glass-card overflow-x-auto rounded-xl border border-border bg-accent p-4 md:p-6">
             <div className="grid min-w-[640px] grid-cols-4 text-center">
               {['VISITA', 'CHECKOUT', 'PEDIDO', 'COMPRADOR'].map((label) => (
                 <p key={label} className="hud-label">
@@ -116,10 +116,10 @@ export function renderFunnelView({
                 },
               ].map((stage) => (
                 <div key={stage.label}>
-                  <p className="font-mono text-xl font-semibold text-white md:text-3xl">
+                  <p className="font-mono text-xl font-semibold text-foreground md:text-3xl">
                     {stage.value.toLocaleString('pt-BR')}
                   </p>
-                  <p className="mt-1 text-xs text-cyan-100/60">{stage.rate} do topo</p>
+                  <p className="mt-1 text-xs text-primary">{stage.rate} do topo</p>
                 </div>
               ))}
             </div>
@@ -146,16 +146,13 @@ export function renderFunnelView({
                 rate: percentage(buyers, s?.visitors ?? 0),
               },
             ].map(({ label, value, icon: Icon, rate }, index) => (
-              <div
-                key={label}
-                className="relative rounded-md border border-white/[0.07] bg-black/10 p-4"
-              >
-                <Icon className="h-4 w-4 text-cyan-300/70" />
+              <div key={label} className="relative rounded-md border border-border bg-accent p-4">
+                <Icon className="h-4 w-4 text-primary" />
                 <p className="mt-4 hud-label">{label}</p>
-                <p className="mt-1 font-mono text-2xl text-white">{value}</p>
-                <p className="mt-1 text-xs text-cyan-200/65">{rate} do topo</p>
+                <p className="mt-1 font-mono text-2xl text-foreground">{value}</p>
+                <p className="mt-1 text-xs text-primary">{rate} do topo</p>
                 {index < 3 && (
-                  <span className="absolute -right-2.5 top-1/2 hidden text-white/20 xl:block">
+                  <span className="absolute -right-2.5 top-1/2 hidden text-muted-foreground xl:block">
                     →
                   </span>
                 )}
@@ -163,21 +160,19 @@ export function renderFunnelView({
             ))}
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-md border border-white/[0.07] p-4">
+            <div className="rounded-md border border-border p-4">
               <p className="hud-label">Faturamento aprovado</p>
-              <p className="mt-2 font-mono text-lg text-emerald-300">
-                {money(s?.paid_revenue_minor)}
-              </p>
+              <p className="mt-2 font-mono text-lg text-success">{money(s?.paid_revenue_minor)}</p>
             </div>
-            <div className="rounded-md border border-white/[0.07] p-4">
+            <div className="rounded-md border border-border p-4">
               <p className="hud-label">Atribuição</p>
-              <p className="mt-2 font-mono text-lg text-cyan-300">
+              <p className="mt-2 font-mono text-lg text-primary">
                 {percentage((s?.paid_orders ?? 0) - (s?.orphan_orders ?? 0), s?.paid_orders ?? 0)}
               </p>
             </div>
-            <div className="rounded-md border border-white/[0.07] p-4">
+            <div className="rounded-md border border-border p-4">
               <p className="hud-label">Vendas órfãs</p>
-              <p className="mt-2 font-mono text-lg text-amber-300">{s?.orphan_orders ?? 0}</p>
+              <p className="mt-2 font-mono text-lg text-warning">{s?.orphan_orders ?? 0}</p>
             </div>
           </div>
         </>
@@ -188,25 +183,25 @@ export function renderFunnelView({
             return (
               <div
                 key={page.page_url}
-                className="grid gap-3 rounded-xl border border-white/[0.07] bg-black/10 p-4 md:grid-cols-[minmax(0,1fr)_100px_100px_140px]"
+                className="glass-card grid gap-3 rounded-xl border border-border bg-accent p-4 md:grid-cols-[minmax(0,1fr)_100px_100px_140px]"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-white/80">{page.page_title}</p>
-                  <p className="mt-1 truncate font-mono text-[10px] text-white/35">
+                  <p className="truncate text-sm font-medium text-foreground">{page.page_title}</p>
+                  <p className="mt-1 truncate font-mono text-[10px] text-muted-foreground">
                     {page.page_url}
                   </p>
                 </div>
                 <div>
                   <p className="hud-label">Visitantes</p>
-                  <p className="mt-1 font-mono text-white">{page.visitors}</p>
+                  <p className="mt-1 font-mono text-foreground">{page.visitors}</p>
                 </div>
                 <div>
                   <p className="hud-label">Views</p>
-                  <p className="mt-1 font-mono text-white">{page.views}</p>
+                  <p className="mt-1 font-mono text-foreground">{page.views}</p>
                 </div>
                 <div>
                   <p className="hud-label">Última página</p>
-                  <p className="mt-1 font-mono text-amber-200">
+                  <p className="mt-1 font-mono text-warning">
                     {page.exits} · {exitRate}
                   </p>
                 </div>
@@ -214,7 +209,7 @@ export function renderFunnelView({
             );
           })}
           {!pageFunnel.data?.pages.length && (
-            <p className="rounded-xl border border-dashed border-white/[0.08] p-8 text-center text-sm text-white/35">
+            <p className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
               As páginas aparecerão depois dos primeiros PageViews.
             </p>
           )}
@@ -224,47 +219,45 @@ export function renderFunnelView({
           {(journeys.data?.journeys ?? []).map((journey) => (
             <details
               key={`${journey.visitor_id}-${journey.journey_id}`}
-              className="group rounded-xl border border-white/[0.07] bg-black/10"
+              className="group rounded-xl border border-border bg-accent"
             >
               <summary className="cursor-pointer list-none p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <p className="font-mono text-xs text-cyan-100/75">
-                      {shortId(journey.visitor_id)}
-                    </p>
-                    <p className="mt-1 text-xs text-white/35">
+                    <p className="font-mono text-xs text-primary">{shortId(journey.visitor_id)}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
                       {journey.pages.length} página(s) ·{' '}
                       {new Date(journey.last_seen_at).toLocaleString('pt-BR')}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {journey.events.includes('InitiateCheckout') && (
-                      <span className="rounded-full bg-cyan-300/[0.08] px-2 py-1 text-[10px] text-cyan-200">
+                      <span className="rounded-full bg-accent px-2 py-1 text-[10px] text-primary">
                         checkout
                       </span>
                     )}
                     {journey.order_status && (
-                      <span className="rounded-full bg-emerald-300/[0.08] px-2 py-1 text-[10px] text-emerald-200">
+                      <span className="rounded-full bg-success/10 px-2 py-1 text-[10px] text-success">
                         pedido {journey.order_status}
                       </span>
                     )}
                   </div>
                 </div>
               </summary>
-              <div className="border-t border-white/[0.06] p-4">
+              <div className="border-t border-border p-4">
                 <ol className="space-y-0">
                   {journey.pages.map((page, index) => (
                     <li key={page.id} className="relative flex gap-3 pb-5 last:pb-0">
                       {index < journey.pages.length - 1 && (
-                        <span className="absolute left-[7px] top-4 h-full w-px bg-cyan-300/15" />
+                        <span className="absolute left-[7px] top-4 h-full w-px bg-accent" />
                       )}
-                      <span className="relative mt-1.5 h-3.5 w-3.5 shrink-0 rounded-full border border-cyan-300/35 bg-[#07151e]" />
+                      <span className="relative mt-1.5 h-3.5 w-3.5 shrink-0 rounded-full border border-border bg-background" />
                       <div className="min-w-0">
-                        <p className="truncate text-sm text-white/75">{page.title}</p>
-                        <p className="mt-1 truncate font-mono text-[10px] text-white/30">
+                        <p className="truncate text-sm text-foreground">{page.title}</p>
+                        <p className="mt-1 truncate font-mono text-[10px] text-muted-foreground">
                           {page.url}
                         </p>
-                        <p className="mt-1 text-[10px] text-white/25">
+                        <p className="mt-1 text-[10px] text-muted-foreground">
                           {new Date(page.visited_at).toLocaleString('pt-BR')}
                         </p>
                       </div>
@@ -275,7 +268,7 @@ export function renderFunnelView({
             </details>
           ))}
           {!journeys.data?.journeys.length && (
-            <p className="rounded-xl border border-dashed border-white/[0.08] p-8 text-center text-sm text-white/35">
+            <p className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
               As jornadas aparecerão depois dos primeiros visitantes.
             </p>
           )}

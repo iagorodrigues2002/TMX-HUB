@@ -70,7 +70,7 @@ type FinanceData = {
   isolated: boolean;
 };
 const names = { wise: 'Wise', lootrush: 'LootRush' };
-const panel = 'rounded-2xl border border-border bg-card/95 p-5 sm:p-6';
+const panel = 'glass-card rounded-2xl border border-border bg-card/95 p-5 sm:p-6';
 const control =
   'min-h-11 min-w-0 rounded-lg border border-input bg-bg-elevated px-3 py-2 text-sm text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50';
 const time = (s: string | null) =>
@@ -289,7 +289,7 @@ function FinanceAccountView({ company }: { company: string }) {
           <FinanceReserve company={company} />
         ) : (
           <>
-            <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card p-4">
+            <div className="glass-card flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card p-4">
               <label className="grid min-w-0 w-full gap-2 text-sm sm:max-w-xs sm:flex-1">
                 Provedor
                 <select
@@ -361,7 +361,7 @@ function FinanceAccountView({ company }: { company: string }) {
                           {states[c.status] ?? c.status} · Última consulta: {time(c.last_sync_at)}
                         </p>
                         {c.error_code && (
-                          <p role="alert" className="text-amber-500">
+                          <p role="alert" className="text-warning">
                             Consulta não concluída ({c.error_code}). Os dados da última leitura
                             foram preservados.
                           </p>
@@ -517,7 +517,7 @@ function FinanceAccountView({ company }: { company: string }) {
             {tab === 'Integrações' && (
               <>
                 {data.data?.isolated && (
-                  <p role="note" className="rounded-lg border border-amber-500/30 p-3 text-sm">
+                  <p role="note" className="rounded-lg border border-warning/30 p-3 text-sm">
                     Homologação isolada: esta prévia bloqueia consultas externas. Não cadastre
                     chaves reais aqui. O fluxo é validado com dados sintéticos; a conexão real será
                     conferida no ambiente autorizado.

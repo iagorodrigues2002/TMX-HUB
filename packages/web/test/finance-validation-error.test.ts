@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ApiError } from '../src/lib/query-client';
 import { financeValidationError } from '../src/lib/finance-validation-error';
+import { ApiError } from '../src/lib/query-client';
 
 test('distinguishes provider parsing failures from account conflicts without echoing secrets', () => {
   assert.match(

@@ -20,12 +20,16 @@ export function renderTrackingDates(context: TrackingContentContext) {
     reconcileInitiateCheckouts,
   } = context;
   return (
-    <div className="mb-3 flex flex-wrap items-end justify-between gap-3 rounded-lg border border-white/[0.08] bg-black/15 p-3">
+    <div
+      data-motion-panel
+      data-glass-surface
+      className="mb-3 flex flex-wrap items-end justify-between gap-3 rounded-lg border border-border bg-accent p-3"
+    >
       <div>
         <p className="hud-label">
           {section === 'ab' ? 'Período dos resultados A/B' : 'Período do trackeamento'}
         </p>
-        <p className="mt-1 text-xs text-white/40">
+        <p className="mt-1 text-xs text-muted-foreground">
           Dados históricos separados por dia · horário de São Paulo
         </p>
       </div>

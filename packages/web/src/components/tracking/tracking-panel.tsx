@@ -46,14 +46,14 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
   };
 
   return (
-    <section className="mb-6 rounded-lg border border-cyan-300/15 bg-cyan-300/[0.035] p-5">
+    <section className="glass-card mb-6 rounded-lg border border-border bg-accent p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <Radio className="h-4 w-4 text-cyan-300" />
+            <Radio className="h-4 w-4 text-primary" />
             <p className="hud-label">Captura first-party</p>
           </div>
-          <p className="mt-2 text-sm text-white/55">
+          <p className="mt-2 text-sm text-muted-foreground">
             Instale o código uma vez para receber eventos diretamente no TMX.
           </p>
         </div>
@@ -84,9 +84,9 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
               ['Pagas', summary.data?.paid_orders ?? 0],
               ['Órfãs', summary.data?.orphan_orders ?? 0],
             ].map(([label, value]) => (
-              <div key={label} className="rounded-md border border-white/[0.07] bg-black/10 p-3">
+              <div key={label} className="rounded-md border border-border bg-accent p-3">
                 <p className="hud-label">{label}</p>
-                <p className="mt-1 font-mono text-xl text-white">{value}</p>
+                <p className="mt-1 font-mono text-xl text-foreground">{value}</p>
               </div>
             ))}
           </div>
@@ -94,7 +94,7 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
             <div>
               <p className="hud-label">Código de instalação</p>
               <div className="mt-1 flex gap-2">
-                <code className="min-w-0 flex-1 overflow-x-auto rounded-md bg-black/30 p-3 text-[11px] text-cyan-100">
+                <code className="min-w-0 flex-1 overflow-x-auto rounded-md bg-accent p-3 text-[11px] text-primary">
                   {config.data.project?.install_code}
                 </code>
                 <Button
@@ -109,12 +109,12 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
             </div>
             <div>
               <p className="hud-label">Parâmetros da URL · Meta Ads</p>
-              <p className="mt-1 text-xs leading-5 text-white/45">
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
                 Cole em “Parâmetros da URL” no anúncio. O Meta substituirá as macros e o TMX
                 preservará os valores até a Vendepay.
               </p>
               <div className="mt-2 flex gap-2">
-                <code className="min-w-0 flex-1 overflow-x-auto rounded-md bg-black/30 p-3 text-[11px] text-cyan-100">
+                <code className="min-w-0 flex-1 overflow-x-auto rounded-md bg-accent p-3 text-[11px] text-primary">
                   {META_URL_PARAMETERS}
                 </code>
                 <Button
@@ -127,8 +127,8 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
                 </Button>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-3 text-xs text-white/45">
-              <span className="flex items-center gap-1 text-emerald-200">
+            <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1 text-success">
                 <CheckCircle2 className="h-3.5 w-3.5" /> Captura configurada
               </span>
               <span className="flex items-center gap-1">

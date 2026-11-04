@@ -1,3 +1,4 @@
+import { PublicSurface } from '@/components/hub/public-surface';
 import { Loader2 } from 'lucide-react';
 import { Suspense } from 'react';
 import { RegisterForm } from './register-form';
@@ -12,9 +13,11 @@ export default function RegisterPage() {
   return (
     <Suspense
       fallback={
-        <main className="grid min-h-screen place-items-center bg-[#04101A] text-white/40">
-          <Loader2 className="h-6 w-6 animate-spin" />
-        </main>
+        <PublicSurface>
+          <main className="grid min-h-screen place-items-center bg-background text-muted-foreground">
+            <Loader2 className="h-6 w-6 animate-spin" />
+          </main>
+        </PublicSurface>
       }
     >
       <RegisterForm />

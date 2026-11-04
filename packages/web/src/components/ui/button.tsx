@@ -109,6 +109,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       : style;
     return (
       <Comp
+        data-tmx-variant={variant ?? 'default'}
         aria-busy={!asChild && loading ? true : undefined}
         className={cn(
           buttonVariants({ variant, size, className }),

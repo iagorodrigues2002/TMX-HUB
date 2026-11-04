@@ -40,7 +40,7 @@ export function renderTroubleshooting() {
         />
       </div>
 
-      <div className="mt-6 overflow-hidden rounded-md border border-white/[0.07]">
+      <div className="mt-6 overflow-hidden rounded-md border border-border">
         {[
           [
             'Nenhum PageView',
@@ -74,11 +74,11 @@ export function renderTroubleshooting() {
           <div
             key={problem}
             className={`grid gap-1 p-4 md:grid-cols-[180px_1fr] md:gap-5 ${
-              index ? 'border-t border-white/[0.06]' : ''
+              index ? 'border-t border-border' : ''
             }`}
           >
-            <p className="text-xs font-medium text-white/75">{problem}</p>
-            <p className="text-xs leading-5 text-white/40">{action}</p>
+            <p className="text-xs font-medium text-foreground">{problem}</p>
+            <p className="text-xs leading-5 text-muted-foreground">{action}</p>
           </div>
         ))}
       </div>

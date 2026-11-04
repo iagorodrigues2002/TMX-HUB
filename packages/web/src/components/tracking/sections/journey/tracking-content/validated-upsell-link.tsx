@@ -119,7 +119,7 @@ export function ValidatedUpsellLink({
   );
   const withManualResult = (openLink: React.ReactNode) =>
     withLastOpening(
-      <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-cyan-300/15 bg-cyan-300/[0.04] p-1.5">
+      <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-border bg-accent p-1.5">
         {openLink}
         <output className="sr-only">{isOpening ? 'Registrando abertura…' : ''}</output>
         <button
@@ -129,8 +129,8 @@ export function ValidatedUpsellLink({
           className={cn(
             'rounded px-2 py-1 text-[10px] transition',
             link.manual_result === 'worked'
-              ? 'bg-emerald-300/20 text-emerald-100'
-              : 'bg-white/[0.05] text-white/45 hover:text-emerald-200',
+              ? 'bg-success/10 text-success'
+              : 'bg-accent text-muted-foreground hover:text-success',
           )}
         >
           ✓ funcionou
@@ -142,14 +142,14 @@ export function ValidatedUpsellLink({
           className={cn(
             'rounded px-2 py-1 text-[10px] transition',
             link.manual_result === 'failed'
-              ? 'bg-rose-300/20 text-rose-100'
-              : 'bg-white/[0.05] text-white/45 hover:text-rose-200',
+              ? 'bg-danger/10 text-danger'
+              : 'bg-accent text-muted-foreground hover:text-danger',
           )}
         >
           × não funcionou
         </button>
         {link.manual_checked_at && (
-          <span className="text-[9px] text-white/30">
+          <span className="text-[9px] text-muted-foreground">
             {new Date(link.manual_checked_at).toLocaleString('pt-BR', {
               timeZone: 'America/Sao_Paulo',
             })}
@@ -178,7 +178,7 @@ export function ValidatedUpsellLink({
       | undefined;
     if (!syzeValidation?.compatible || !syzeValidation.url)
       return withLastOpening(
-        <span className="text-xs text-amber-100/60">
+        <span className="text-xs text-warning">
           {validation.isFetching
             ? 'Validando sessão SyzePay…'
             : (syzeValidation?.reason ?? 'Sessão SyzePay indisponível')}
@@ -191,7 +191,7 @@ export function ValidatedUpsellLink({
         onClick={(event) => void openAudited(event)}
         aria-busy={isOpening}
         title="Sessão e página confirmadas na SyzePay. A cobrança exige aceitar a oferta na página."
-        className="rounded-md border border-cyan-300/25 px-2.5 py-1.5 text-cyan-100"
+        className="rounded-md border border-border px-2.5 py-1.5 text-primary"
       >
         {link.name} · SyzePay · abrir
       </button>,
@@ -205,7 +205,7 @@ export function ValidatedUpsellLink({
         onClick={(event) => void openAudited(event)}
         aria-busy={isOpening}
         title="Abre a página mesmo sem a validação prévia da VendePay"
-        className="rounded-md border border-cyan-300/25 bg-cyan-300/[0.08] px-2.5 py-1.5 text-cyan-100 transition hover:bg-cyan-300/[0.16]"
+        className="rounded-md border border-border bg-accent px-2.5 py-1.5 text-primary transition hover:bg-accent"
       >
         {link.name} · abrir teste
       </button>,
@@ -213,7 +213,7 @@ export function ValidatedUpsellLink({
   }
   if (validation.isLoading) {
     return withLastOpening(
-      <span className="rounded-md border border-white/10 px-2.5 py-1.5 text-white/40">
+      <span className="rounded-md border border-border px-2.5 py-1.5 text-muted-foreground">
         {link.name} · verificando
       </span>,
     );
@@ -231,7 +231,7 @@ export function ValidatedUpsellLink({
             ? 'Cadastre a URL desta etapa para a conta VendePay do comprador'
             : 'Abrir para testar novamente na VendePay'
         }
-        className="rounded-md border border-rose-300/20 bg-rose-300/[0.06] px-2.5 py-1.5 text-rose-200/70 transition hover:bg-rose-300/[0.12]"
+        className="rounded-md border border-danger/30 bg-danger/10 px-2.5 py-1.5 text-danger transition hover:bg-danger/10"
       >
         {link.name} · {accountMissing ? 'conta sem URL' : 'indisponível'}
       </button>,
@@ -244,7 +244,7 @@ export function ValidatedUpsellLink({
       onClick={(event) => void openAudited(event)}
       aria-busy={isOpening}
       title="Elegibilidade confirmada; o TMX validará novamente ao abrir"
-      className="rounded-md border border-emerald-300/25 bg-emerald-300/[0.08] px-2.5 py-1.5 text-emerald-100 transition hover:bg-emerald-300/[0.16]"
+      className="rounded-md border border-success/30 bg-success/10 px-2.5 py-1.5 text-success transition hover:bg-success/10"
     >
       {link.name} · elegível
     </button>,

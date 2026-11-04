@@ -27,7 +27,7 @@ export function TrackingHelp({ offerId = '' }: { offerId?: string }) {
           <a
             key={id}
             href={`#${id}`}
-            className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2.5 text-xs font-medium text-white/65 transition hover:bg-cyan-100/[0.07] hover:text-cyan-100"
+            className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2.5 text-xs font-medium text-muted-foreground transition hover:bg-accent hover:text-primary"
           >
             <Icon className="h-3.5 w-3.5" />
             {label}
@@ -37,14 +37,14 @@ export function TrackingHelp({ offerId = '' }: { offerId?: string }) {
 
       <div className="min-w-0 space-y-5">
         <TestCenter offerId={offerId} />
-        <div className="rounded-2xl border border-cyan-300/25 bg-cyan-300/[0.07] p-5 shadow-[0_16px_40px_rgba(0,0,0,.16)]">
+        <div className="glass-card rounded-2xl border border-border bg-accent p-5 shadow-[0_16px_40px_rgba(0,0,0,.16)]">
           <div className="flex gap-3">
-            <Radio className="mt-0.5 h-5 w-5 shrink-0 text-cyan-300" />
+            <Radio className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
             <div>
-              <p className="text-sm font-medium text-cyan-100">O que estará funcionando no final</p>
-              <p className="mt-1 text-sm leading-6 text-white/75">
+              <p className="text-sm font-medium text-primary">O que estará funcionando no final</p>
+              <p className="mt-1 text-sm leading-6 text-foreground">
                 O TMXHUB identificará o visitante, registrará a entrada na página e no checkout,
-                anexará o identificador ao parâmetro <code className="text-cyan-200">src</code> da
+                anexará o identificador ao parâmetro <code className="text-primary">src</code> da
                 Vendepay e associará a venda recebida pelo webhook à jornada correta.
               </p>
             </div>
@@ -66,7 +66,7 @@ export function TrackingHelp({ offerId = '' }: { offerId?: string }) {
                 id: 'open-offer',
                 content: (
                   <>
-                    Abra <strong className="text-white/80">Ofertas</strong> e entre na oferta que
+                    Abra <strong className="text-foreground">Ofertas</strong> e entre na oferta que
                     receberá o tracking.
                   </>
                 ),
@@ -75,8 +75,8 @@ export function TrackingHelp({ offerId = '' }: { offerId?: string }) {
                 id: 'create-tracking',
                 content: (
                   <>
-                    Na área <strong className="text-white/80">Tracking Vendepay</strong>, clique em{' '}
-                    <strong className="text-white/80">Criar configuração</strong>.
+                    Na área <strong className="text-foreground">Tracking Vendepay</strong>, clique
+                    em <strong className="text-foreground">Criar configuração</strong>.
                   </>
                 ),
               },
@@ -87,11 +87,11 @@ export function TrackingHelp({ offerId = '' }: { offerId?: string }) {
               },
             ]}
           />
-          <div className="mt-5 rounded-md border border-amber-300/15 bg-amber-300/[0.04] p-4">
-            <p className="flex items-center gap-2 text-sm font-medium text-amber-200">
+          <div className="mt-5 rounded-md border border-warning/30 bg-warning/10 p-4">
+            <p className="flex items-center gap-2 text-sm font-medium text-warning">
               <AlertTriangle className="h-4 w-4" /> Uma configuração por oferta
             </p>
-            <p className="mt-1 text-xs leading-5 text-white/45">
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
               Não reutilize o script ou o webhook entre ofertas. Isso faria visitas e vendas
               entrarem no funil errado.
             </p>
@@ -115,11 +115,12 @@ export function TrackingHelp({ offerId = '' }: { offerId?: string }) {
               }
             </CopyBlock>
           </div>
-          <p className="mt-3 text-xs leading-5 text-white/50">
-            Cole a linha acima no campo <strong className="text-white/75">Parâmetros da URL</strong>{' '}
-            do anúncio, sem adicionar <code className="text-cyan-200">?</code> no início. O{' '}
-            <code className="text-cyan-200">fbclid</code> é acrescentado automaticamente pelo Meta;
-            o TMX captura esse valor, cria o <code className="text-cyan-200">_fbc</code> e preserva
+          <p className="mt-3 text-xs leading-5 text-muted-foreground">
+            Cole a linha acima no campo{' '}
+            <strong className="text-foreground">Parâmetros da URL</strong> do anúncio, sem adicionar{' '}
+            <code className="text-primary">?</code> no início. O{' '}
+            <code className="text-primary">fbclid</code> é acrescentado automaticamente pelo Meta; o
+            TMX captura esse valor, cria o <code className="text-primary">_fbc</code> e preserva
             todos os parâmetros no checkout.
           </p>
           <div className="mt-5 grid gap-3 md:grid-cols-2">
@@ -132,7 +133,7 @@ export function TrackingHelp({ offerId = '' }: { offerId?: string }) {
               detail="É enviado ao clicar em um link de checkout. O script adiciona src=IDENTIFICADOR à URL da Vendepay."
             />
           </div>
-          <p className="mt-5 text-xs leading-5 text-white/40">
+          <p className="mt-5 text-xs leading-5 text-muted-foreground">
             Se usar o Page Cloner, confira o HTML publicado depois da clonagem: scripts de terceiros
             podem ser removidos durante a limpeza. O código do TMXHUB deve existir na versão final
             da página.
@@ -146,17 +147,17 @@ export function TrackingHelp({ offerId = '' }: { offerId?: string }) {
           subtitle="A Vendepay avisará o TMXHUB quando o estado de uma transação mudar."
           icon={<Webhook className="h-5 w-5" />}
         >
-          <ol className="space-y-4 text-sm leading-6 text-white/65">
+          <ol className="space-y-4 text-sm leading-6 text-muted-foreground">
             <li className="flex gap-3">
-              <span className="font-mono text-cyan-300/60">01</span>
+              <span className="font-mono text-primary">01</span>
               Copie a URL de webhook gerada na configuração da oferta.
             </li>
             <li className="flex gap-3">
-              <span className="font-mono text-cyan-300/60">02</span>
+              <span className="font-mono text-primary">02</span>
               No painel da Vendepay, abra a integração de webhooks e crie um endpoint com essa URL.
             </li>
             <li className="flex gap-3">
-              <span className="font-mono text-cyan-300/60">03</span>
+              <span className="font-mono text-primary">03</span>
               Habilite todos os eventos de pagamento disponíveis, especialmente aprovado, pendente,
               recusado, reembolso, cancelamento e chargeback.
             </li>
@@ -166,8 +167,8 @@ export function TrackingHelp({ offerId = '' }: { offerId?: string }) {
               {'https://theminex.com/v1/webhooks/vendepay?token=SEU_TOKEN_SECRETO'}
             </CopyBlock>
           </div>
-          <p className="mt-4 flex gap-2 text-xs leading-5 text-white/40">
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-300/70" />
+          <p className="mt-4 flex gap-2 text-xs leading-5 text-muted-foreground">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
             Nunca publique essa URL em páginas ou documentos públicos. Quem tiver o token poderá
             tentar enviar eventos para a integração.
           </p>
@@ -180,17 +181,17 @@ export function TrackingHelp({ offerId = '' }: { offerId?: string }) {
           subtitle="Cada oferta pode enviar Purchase server-side para um ou mais pixels."
           icon={<Send className="h-5 w-5" />}
         >
-          <ol className="space-y-4 text-sm leading-6 text-white/65">
+          <ol className="space-y-4 text-sm leading-6 text-muted-foreground">
             <li className="flex gap-3">
-              <span className="font-mono text-cyan-300/60">01</span>
+              <span className="font-mono text-primary">01</span>
               No Events Manager, abra o pixel e gere um token da Conversions API.
             </li>
             <li className="flex gap-3">
-              <span className="font-mono text-cyan-300/60">02</span>
+              <span className="font-mono text-primary">02</span>
               Em Test Events, copie também o Test Event Code durante a homologação.
             </li>
             <li className="flex gap-3">
-              <span className="font-mono text-cyan-300/60">03</span>
+              <span className="font-mono text-primary">03</span>
               Cadastre Pixel ID, token e código de teste na oferta. O token é validado no Meta e
               armazenado criptografado.
             </li>
@@ -205,7 +206,7 @@ export function TrackingHelp({ offerId = '' }: { offerId?: string }) {
               detail="Falhas temporárias entram em fila com backoff e permanecem auditáveis."
             />
           </div>
-          <p className="mt-4 text-xs leading-5 text-white/40">
+          <p className="mt-4 text-xs leading-5 text-muted-foreground">
             Depois que o teste aparecer no Events Manager, remova o Test Event Code para que os
             próximos eventos sejam tratados como produção.
           </p>
@@ -218,30 +219,29 @@ export function TrackingHelp({ offerId = '' }: { offerId?: string }) {
           subtitle="Distribua visitantes entre dois destinos e compare checkouts, compras, conversão e receita."
           icon={<FlaskConical className="h-5 w-5" />}
         >
-          <ol className="space-y-4 text-sm leading-6 text-white/75">
+          <ol className="space-y-4 text-sm leading-6 text-foreground">
             <li className="flex gap-3">
-              <span className="font-mono text-cyan-300">01</span>
-              Abra <strong className="text-white">Testes A/B</strong>, dê um nome claro ao
+              <span className="font-mono text-primary">01</span>
+              Abra <strong className="text-foreground">Testes A/B</strong>, dê um nome claro ao
               experimento e informe as URLs completas das variantes A e B.
             </li>
             <li className="flex gap-3">
-              <span className="font-mono text-cyan-300">02</span>
+              <span className="font-mono text-primary">02</span>
               Escolha a divisão de tráfego. Comece com 50/50; use uma distribuição diferente apenas
               quando uma variante representar risco operacional.
             </li>
             <li className="flex gap-3">
-              <span className="font-mono text-cyan-300">03</span>
+              <span className="font-mono text-primary">03</span>
               Abra a landing em duas janelas anônimas diferentes e clique no checkout. Confirme que
               cada janela mantém o mesmo destino ao recarregar.
             </li>
             <li className="flex gap-3">
-              <span className="font-mono text-cyan-300">04</span>
-              Verifique se as URLs finais preservam UTMs e{' '}
-              <code className="text-cyan-200">src</code>. As métricas começam a aparecer no cartão
-              do experimento.
+              <span className="font-mono text-primary">04</span>
+              Verifique se as URLs finais preservam UTMs e <code className="text-primary">src</code>
+              . As métricas começam a aparecer no cartão do experimento.
             </li>
             <li className="flex gap-3">
-              <span className="font-mono text-cyan-300">05</span>
+              <span className="font-mono text-primary">05</span>
               Não escolha uma vencedora apenas por cliques. Aguarde compras suficientes, compare
               conversão e receita por visitante e então fixe a variante vencedora.
             </li>
@@ -288,14 +288,11 @@ export function TrackingHelp({ offerId = '' }: { offerId?: string }) {
                 text: 'Quando possível, reembolse o teste e confirme que o mesmo pedido mudou de status, sem criar uma duplicata.',
               },
             ].map(({ icon: Icon, title, text }) => (
-              <div
-                key={title}
-                className="flex gap-4 rounded-md border border-white/[0.06] bg-black/10 p-4"
-              >
-                <Icon className="mt-0.5 h-5 w-5 shrink-0 text-cyan-300/70" />
+              <div key={title} className="flex gap-4 rounded-md border border-border bg-accent p-4">
+                <Icon className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
                 <div>
-                  <p className="text-sm font-medium text-white/80">{title}</p>
-                  <p className="mt-1 text-xs leading-5 text-white/45">{text}</p>
+                  <p className="text-sm font-medium text-foreground">{title}</p>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">{text}</p>
                 </div>
               </div>
             ))}
@@ -304,22 +301,22 @@ export function TrackingHelp({ offerId = '' }: { offerId?: string }) {
 
         {renderTroubleshooting()}
 
-        <div className="flex flex-col items-start justify-between gap-3 rounded-lg border border-white/[0.07] bg-white/[0.02] p-5 sm:flex-row sm:items-center">
+        <div className="glass-card flex flex-col items-start justify-between gap-3 rounded-lg border border-border bg-muted p-5 sm:flex-row sm:items-center">
           <div>
-            <p className="text-sm font-medium text-white/75">Ainda não encontrou a causa?</p>
-            <p className="mt-1 text-xs text-white/40">
+            <p className="text-sm font-medium text-foreground">Ainda não encontrou a causa?</p>
+            <p className="mt-1 text-xs text-muted-foreground">
               Registre o horário do teste, oferta, ID da transação e status retornado pela Vendepay.
             </p>
           </div>
           <a
             href="/logs"
-            className="flex shrink-0 items-center gap-2 text-xs font-medium text-cyan-200/75 hover:text-cyan-200"
+            className="flex shrink-0 items-center gap-2 text-xs font-medium text-primary hover:text-primary"
           >
             Abrir logs <ChevronRight className="h-4 w-4" />
           </a>
         </div>
 
-        <p className="flex items-center justify-center gap-2 py-4 text-[10px] uppercase tracking-[0.18em] text-white/25">
+        <p className="flex items-center justify-center gap-2 py-4 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
           <ExternalLink className="h-3 w-3" />
           Tracking first-party · Vendepay · TMXHUB
         </p>

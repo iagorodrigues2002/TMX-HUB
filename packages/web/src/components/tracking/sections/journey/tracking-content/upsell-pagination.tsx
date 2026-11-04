@@ -20,14 +20,14 @@ export function UpsellPagination({
     .filter((page) => page > 0 && page <= pages)
     .sort((a, b) => a - b);
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.08] px-4 py-3 text-xs text-white/60">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3 text-xs text-muted-foreground">
       <span>
         {total ? offset + 1 : 0}–{Math.min(offset + pageSize, total)} de {total} compradores
       </span>
       <label className="flex items-center gap-2">
         Compradores por página
         <select
-          className="rounded border border-white/20 bg-slate-950 px-2 py-2"
+          className="rounded border border-border bg-background px-2 py-2"
           value={pageSize}
           onChange={(event) => {
             onPageSizeChange(Number(event.target.value));

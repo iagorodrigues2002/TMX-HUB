@@ -38,7 +38,7 @@ export function WebhookTester() {
       <section className="glass-card space-y-4 p-6">
         <header>
           <p className="hud-label">1 · Plataforma + evento</p>
-          <h2 className="mt-1 text-[16px] font-semibold text-white">
+          <h2 className="mt-1 text-[16px] font-semibold text-foreground">
             Escolha a plataforma e o template
           </h2>
         </header>
@@ -78,7 +78,7 @@ export function WebhookTester() {
       <section className="glass-card space-y-4 p-6">
         <header>
           <p className="hud-label">2 · Destino</p>
-          <h2 className="mt-1 text-[16px] font-semibold text-white">
+          <h2 className="mt-1 text-[16px] font-semibold text-foreground">
             URL do seu webhook + secret (se houver)
           </h2>
         </header>
@@ -95,7 +95,7 @@ export function WebhookTester() {
           <div className="space-y-2">
             <Label className="hud-label">
               Secret · usado para assinar como{' '}
-              <span className="text-cyan-300/80">
+              <span className="text-primary">
                 {hmacInfo.header} ({hmacInfo.algorithm})
               </span>
             </Label>
@@ -113,7 +113,7 @@ export function WebhookTester() {
       <section className="glass-card space-y-4 p-6">
         <header>
           <p className="hud-label">3 · Payload</p>
-          <h2 className="mt-1 text-[16px] font-semibold text-white">
+          <h2 className="mt-1 text-[16px] font-semibold text-foreground">
             Edite headers e body antes de disparar
           </h2>
         </header>
@@ -147,35 +147,35 @@ export function WebhookTester() {
       {result && (
         <section
           className={`glass-card space-y-4 p-6 ${
-            result.ok ? 'ring-1 ring-emerald-400/30' : 'ring-1 ring-red-400/30'
+            result.ok ? 'ring-1 ring-success' : 'ring-1 ring-danger'
           }`}
         >
           <header className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               {result.ok ? (
-                <CheckCircle2 className="h-6 w-6 text-emerald-400" />
+                <CheckCircle2 className="h-6 w-6 text-success" />
               ) : (
-                <XCircle className="h-6 w-6 text-red-400" />
+                <XCircle className="h-6 w-6 text-danger" />
               )}
               <div>
                 <p className="hud-label">4 · Resultado</p>
-                <p className="text-[15px] font-semibold text-white">
+                <p className="text-[15px] font-semibold text-foreground">
                   HTTP {result.status} · {result.duration_ms}ms
                 </p>
               </div>
             </div>
           </header>
           {result.error && (
-            <div className="rounded-md border border-red-400/30 bg-red-950/20 p-3 text-[12px] text-red-200">
+            <div className="rounded-md border border-danger/30 bg-danger/10 p-3 text-[12px] text-danger">
               {result.error}
             </div>
           )}
           {result.response_headers && Object.keys(result.response_headers).length > 0 && (
-            <details className="rounded-md border border-white/[0.06] bg-black/20">
-              <summary className="cursor-pointer px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/55">
+            <details className="rounded-md border border-border bg-accent">
+              <summary className="cursor-pointer px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                 Response headers ({Object.keys(result.response_headers).length})
               </summary>
-              <pre className="overflow-x-auto px-3 pb-3 font-mono text-[11px] text-white/65">
+              <pre className="overflow-x-auto px-3 pb-3 font-mono text-[11px] text-muted-foreground">
                 {Object.entries(result.response_headers)
                   .map(([k, v]) => `${k}: ${v}`)
                   .join('\n')}
@@ -183,20 +183,20 @@ export function WebhookTester() {
             </details>
           )}
           {result.response_body && result.response_body.length > 0 && (
-            <details open className="rounded-md border border-white/[0.06] bg-black/20">
-              <summary className="cursor-pointer px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/55">
+            <details open className="rounded-md border border-border bg-accent">
+              <summary className="cursor-pointer px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                 Response body ({result.response_body.length} bytes)
               </summary>
-              <pre className="max-h-80 overflow-auto px-3 pb-3 font-mono text-[11px] text-white/75">
+              <pre className="max-h-80 overflow-auto px-3 pb-3 font-mono text-[11px] text-foreground">
                 {result.response_body}
               </pre>
             </details>
           )}
-          <details className="rounded-md border border-white/[0.06] bg-black/20">
-            <summary className="cursor-pointer px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/55">
+          <details className="rounded-md border border-border bg-accent">
+            <summary className="cursor-pointer px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
               Request enviado
             </summary>
-            <pre className="overflow-x-auto px-3 pb-3 font-mono text-[11px] text-white/65">
+            <pre className="overflow-x-auto px-3 pb-3 font-mono text-[11px] text-muted-foreground">
               {result.sent.method} {result.sent.url}
               {'\n\n'}
               {Object.entries(result.sent.headers)
@@ -214,7 +214,7 @@ export function WebhookTester() {
         <header className="flex items-baseline justify-between">
           <div>
             <p className="hud-label">Histórico</p>
-            <h2 className="mt-1 text-[14px] font-semibold text-white">
+            <h2 className="mt-1 text-[14px] font-semibold text-foreground">
               Últimas {history.length} chamadas (no seu navegador)
             </h2>
           </div>
@@ -233,23 +233,23 @@ export function WebhookTester() {
           )}
         </header>
         {history.length === 0 ? (
-          <p className="text-[12px] text-white/40">Nenhuma chamada registrada ainda.</p>
+          <p className="text-[12px] text-muted-foreground">Nenhuma chamada registrada ainda.</p>
         ) : (
           <ul className="space-y-1.5">
             {history.map((h) => (
               <li
                 key={h.id}
-                className="flex items-center justify-between rounded border border-white/[0.05] bg-white/[0.02] px-3 py-1.5 text-[12px]"
+                className="flex items-center justify-between rounded border border-border bg-muted px-3 py-1.5 text-[12px]"
               >
                 <span className="flex items-center gap-2 truncate">
                   {h.ok ? (
-                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" />
                   ) : (
-                    <XCircle className="h-3.5 w-3.5 shrink-0 text-red-400" />
+                    <XCircle className="h-3.5 w-3.5 shrink-0 text-danger" />
                   )}
-                  <span className="truncate font-mono text-white/70">{h.url}</span>
+                  <span className="truncate font-mono text-muted-foreground">{h.url}</span>
                 </span>
-                <span className="shrink-0 text-[11px] text-white/45">
+                <span className="shrink-0 text-[11px] text-muted-foreground">
                   HTTP {h.status} · {h.durationMs}ms · {new Date(h.at).toLocaleTimeString('pt-BR')}
                 </span>
               </li>

@@ -53,8 +53,10 @@ export function renderRefundFilters({
     <section className={`${panel} refund-filters`} aria-label="Filtros do relatório">
       <div className="flex flex-wrap justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-white">Período e filtros</h2>
-          <p className="mt-1 text-xs text-slate-400">Reembolsos e chargebacks sempre unificados.</p>
+          <h2 className="text-base font-semibold text-foreground">Período e filtros</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Reembolsos e chargebacks sempre unificados.
+          </p>
         </div>
         <span className="refund-scope">
           {offerId
@@ -128,7 +130,7 @@ export function renderRefundFilters({
           />
         </Field>
       </div>
-      <div className="mt-5 grid gap-3 border-t border-white/10 pt-5 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="mt-5 grid gap-3 border-t border-border pt-5 sm:grid-cols-2 xl:grid-cols-5">
         <Field label="Empresa">
           <select
             aria-label="Empresa"
@@ -227,13 +229,13 @@ export function renderRefundFilters({
         </Field>
       </div>
       {!offerId && (
-        <p className="mt-3 text-sm text-white/60">
+        <p className="mt-3 text-sm text-muted-foreground">
           Receita, devoluções e multas somente das ofertas autorizadas da empresa selecionada.
           Outras empresas não entram neste consolidado.
         </p>
       )}
       {companies.isError && (
-        <p role="alert" className="mt-3 text-sm text-amber-200">
+        <p role="alert" className="mt-3 text-sm text-warning">
           Não foi possível carregar as empresas.{' '}
           <button type="button" className="underline" onClick={() => void companies.refetch()}>
             Tentar novamente
@@ -241,7 +243,7 @@ export function renderRefundFilters({
         </p>
       )}
       {offers.isError && (
-        <p role="alert" className="mt-3 text-sm text-amber-200">
+        <p role="alert" className="mt-3 text-sm text-warning">
           Não foi possível carregar as ofertas.{' '}
           <button type="button" className="underline" onClick={() => void offers.refetch()}>
             Tentar novamente

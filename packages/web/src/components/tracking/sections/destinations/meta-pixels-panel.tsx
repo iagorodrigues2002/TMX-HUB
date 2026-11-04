@@ -47,7 +47,7 @@ export function MetaPixelsPanel({ offerId, canManage }: MetaPixelsPanelProps) {
       countLabel="pixels"
     >
       <NetworkTrackingCard className="mb-4" network="meta" />
-      <p className="max-w-3xl text-xs leading-5 text-white/45">
+      <p className="max-w-3xl text-xs leading-5 text-muted-foreground">
         Cada IC e venda elegível é enviado via CAPI para todos os pixels ativos desta oferta. Ao
         adicionar outro pixel, o TMX também envia automaticamente as conversões dos últimos sete
         dias, com deduplicação independente por pixel.
@@ -64,11 +64,11 @@ export function MetaPixelsPanel({ offerId, canManage }: MetaPixelsPanelProps) {
         isRetrying={pixels.isFetching}
       >
         {pixels.data?.pixels.map((pixel) => (
-          <article key={pixel.id} className="rounded border border-white/[0.06] px-3 py-3 text-xs">
+          <article key={pixel.id} className="rounded border border-border px-3 py-3 text-xs">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-white/70">{pixel.name}</span>
+              <span className="text-muted-foreground">{pixel.name}</span>
               <div className="flex items-center gap-2">
-                <code className="text-cyan-200/70">{pixel.pixel_id}</code>
+                <code className="text-primary">{pixel.pixel_id}</code>
                 {canManage && (
                   <Button
                     size="sm"
@@ -89,11 +89,11 @@ export function MetaPixelsPanel({ offerId, canManage }: MetaPixelsPanelProps) {
             </div>
             {canManage && (
               <div className="mt-3 space-y-2">
-                <div className="rounded border border-white/[0.07] bg-black/10 p-3">
-                  <p className="text-xs font-medium text-white/75">
+                <div className="rounded border border-border bg-accent p-3">
+                  <p className="text-xs font-medium text-foreground">
                     Produtos que enviam Purchase para este pixel
                   </p>
-                  <p className="mt-1 text-[11px] text-white/40">
+                  <p className="mt-1 text-[11px] text-muted-foreground">
                     Sem seleção: todo produto classificado como front. Com seleção: somente os
                     marcados.
                   </p>
@@ -105,7 +105,7 @@ export function MetaPixelsPanel({ offerId, canManage }: MetaPixelsPanelProps) {
                         return (
                           <label
                             key={product.product_id}
-                            className="flex items-center gap-1.5 text-xs text-white/65"
+                            className="flex items-center gap-1.5 text-xs text-muted-foreground"
                           >
                             <input
                               type="checkbox"
@@ -209,7 +209,7 @@ export function MetaPixelsPanel({ offerId, canManage }: MetaPixelsPanelProps) {
                     Testar venda
                   </Button>
                   {!pixel.test_event_code && (
-                    <span className="text-amber-200/65">
+                    <span className="text-warning">
                       Cole e salve o código acima para habilitar os testes.
                     </span>
                   )}
@@ -230,7 +230,7 @@ export function MetaPixelsPanel({ offerId, canManage }: MetaPixelsPanelProps) {
           }}
           notice={
             editingPixelId ? (
-              <div className="md:col-span-2 flex items-center justify-between rounded-md border border-cyan-300/20 bg-cyan-300/[0.05] px-3 py-2 text-xs text-cyan-100">
+              <div className="md:col-span-2 flex items-center justify-between rounded-md border border-border bg-accent px-3 py-2 text-xs text-primary">
                 <span>Editando pixel existente · deixe o token vazio para manter o atual.</span>
                 <Button
                   size="sm"

@@ -1,11 +1,11 @@
-import { Boxes, ChartNoAxesCombined, CircleGauge, RefreshCcw, Target } from 'lucide-react';
+import { Boxes, ChartNoAxesCombined, CircleGauge, RefreshCcw, Tag } from 'lucide-react';
 import type { NavItem } from './nav-config-nav-item';
 
 export const nav_items_offers: NavItem = {
   id: 'offers',
   label: 'Ofertas',
   href: '/ofertas',
-  icon: Target,
+  icon: Tag,
   group: 'Ofertas',
   requiresTool: 'ofertas',
   keywords: ['produtos', 'campanhas'],

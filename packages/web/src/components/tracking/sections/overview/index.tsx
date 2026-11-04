@@ -61,23 +61,23 @@ export function OverviewSection({ offerId, section }: OverviewSectionProps) {
   ];
 
   return (
-    <section className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-5">
-      <h2 className="text-base font-semibold text-white">Saúde e alertas</h2>
-      <p className="mt-1 text-sm text-white/50">
+    <section className="glass-card rounded-lg border border-border bg-muted p-5">
+      <h2 className="text-base font-semibold text-foreground">Saúde e alertas</h2>
+      <p className="mt-1 text-sm text-muted-foreground">
         Prontidão essencial da oferta, sem repetir o console de diagnóstico.
       </p>
       <div className="mt-5 grid gap-3 md:grid-cols-2">
         {checks.map(({ label, ready, detail, icon: Icon }) => (
-          <div key={label} className="rounded-lg border border-white/[0.08] bg-black/10 p-4">
+          <div key={label} className="glass-card rounded-lg border border-border bg-accent p-4">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-medium text-white/80">{label}</p>
+              <p className="text-sm font-medium text-foreground">{label}</p>
               {ready ? (
-                <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+                <CheckCircle2 className="h-4 w-4 text-success" />
               ) : (
-                <CircleAlert className="h-4 w-4 text-amber-200" />
+                <CircleAlert className="h-4 w-4 text-warning" />
               )}
             </div>
-            <div className="mt-3 flex items-center gap-2 text-xs text-white/50">
+            <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
               <Icon className="h-4 w-4" /> {detail}
             </div>
           </div>

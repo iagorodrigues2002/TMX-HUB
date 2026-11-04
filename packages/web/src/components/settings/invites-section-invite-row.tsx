@@ -17,24 +17,24 @@ export function InviteRow({
   const expiringSoon = remaining <= 1;
 
   return (
-    <li className="rounded-md border border-white/[0.06] bg-black/15 p-3">
+    <li className="rounded-md border border-border bg-accent p-3">
       <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="min-w-0 flex-1 truncate text-[13px] font-semibold text-white">
+            <p className="min-w-0 flex-1 truncate text-[13px] font-semibold text-foreground">
               {invite.email || invite.name || 'Convite sem destinatário'}
             </p>
             <span
               className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
                 expiringSoon
-                  ? 'border-amber-300/40 bg-amber-300/10 text-amber-200'
-                  : 'border-white/[0.10] bg-white/[0.04] text-white/55'
+                  ? 'border-warning/30 bg-warning/10 text-warning'
+                  : 'border-border bg-muted text-muted-foreground'
               }`}
             >
               expira em {remaining}d
             </span>
             {invite.allowedTools && invite.allowedTools.length > 0 && (
-              <span className="rounded-full border border-cyan-300/30 bg-cyan-300/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-200">
+              <span className="rounded-full border border-border bg-accent px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
                 {invite.allowedTools.length === 1
                   ? invite.allowedTools[0]
                   : `${invite.allowedTools.length} tools`}
@@ -42,12 +42,12 @@ export function InviteRow({
             )}
           </div>
           {invite.name && invite.email && (
-            <p className="text-[11px] text-white/55">{invite.name}</p>
+            <p className="text-[11px] text-muted-foreground">{invite.name}</p>
           )}
-          <p className="break-all font-mono text-[11px] text-white/65" title={url}>
+          <p className="break-all font-mono text-[11px] text-muted-foreground" title={url}>
             {url}
           </p>
-          <p className="text-[10px] text-white/40">
+          <p className="text-[10px] text-muted-foreground">
             criado em {formatDate(invite.createdAt)}
             {invite.invitedBy && <> · por {invite.invitedBy}</>}
           </p>

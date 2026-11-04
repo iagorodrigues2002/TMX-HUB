@@ -41,3 +41,10 @@ test('empty chart does not manufacture revenue bars', () => {
   assert.match(html, /Sem série/);
   assert.doesNotMatch(html, /data-revenue-bar/);
 });
+
+test('private chart masks monetary readings in controls and the accessible table', () => {
+  const html = renderToStaticMarkup(<RevenueChart {...props} points={points} privateMode />);
+  assert.doesNotMatch(html, /100,00/);
+  assert.match(html, /aria-label="27\/10: ••••, 2 vendas"/);
+  assert.match(html, /<td>••••<\/td>/);
+});

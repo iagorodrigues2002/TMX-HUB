@@ -56,16 +56,16 @@ export function renderGoogleDestinationList({
         const connection = connections.data?.connections.find((c) => c.destination_id === d.id);
         const reusableConnection = connections.data?.oauth_connections[0];
         return (
-          <article key={d.id} className="rounded-xl border border-white/10 p-4">
+          <article key={d.id} className="glass-card rounded-xl border border-border p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h3 className="font-medium">{d.name}</h3>
-              <span className="text-xs text-amber-200">
+              <span className="text-xs text-warning">
                 {connection
                   ? `Conexão: ${connection.connection_name} · conta ainda não validada`
                   : 'Rascunho · não conectado'}
               </span>
             </div>
-            <p className="mt-2 break-all text-sm text-white/60">
+            <p className="mt-2 break-all text-sm text-muted-foreground">
               Conta {d.customer_id} · Ação {d.conversion_action_id}
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -146,9 +146,9 @@ export function renderGoogleDestinationList({
               </div>
             )}
             {accountsFor === d.id && accounts.data && (
-              <div className="mt-4 rounded-lg border border-cyan-300/20 bg-cyan-300/5 p-3">
+              <div className="mt-4 rounded-lg border border-border bg-accent p-3">
                 <p className="text-sm font-medium">Contas encontradas</p>
-                <p className="mt-1 text-xs text-white/60">
+                <p className="mt-1 text-xs text-muted-foreground">
                   Ao selecionar uma conta, o TMX preenche o destino abaixo, mas não salva
                   automaticamente. Confirme o ID da ação e clique em “Salvar rascunho”.
                 </p>
@@ -162,9 +162,7 @@ export function renderGoogleDestinationList({
                         key={account.customer_id}
                         type="button"
                         className={
-                          isSelected
-                            ? 'border border-emerald-300 bg-emerald-300/15 text-emerald-50'
-                            : ''
+                          isSelected ? 'border border-success/30 bg-success/10 text-success' : ''
                         }
                         onClick={() => {
                           setSelectedAccount({
@@ -191,14 +189,14 @@ export function renderGoogleDestinationList({
                   })}
                 </div>
                 {selectedAccount?.destinationId === d.id && (
-                  <output className="mt-3 block rounded-md border border-emerald-300/25 bg-emerald-300/10 px-3 py-2 text-sm text-emerald-100">
+                  <output className="mt-3 block rounded-md border border-success/30 bg-success/10 px-3 py-2 text-sm text-success">
                     <span className="font-medium">Conta selecionada:</span> {selectedAccount.name} ·{' '}
                     {selectedAccount.customerId}. Revise a ação de conversão no formulário e salve
                     para confirmar.
                   </output>
                 )}
                 {!accounts.data.accounts.length && (
-                  <p className="mt-3 text-sm text-amber-200">
+                  <p className="mt-3 text-sm text-warning">
                     Nenhuma conta ativa retornou. Confirme que o usuário Google tem acesso direto ou
                     via conta administradora.
                   </p>
@@ -208,22 +206,22 @@ export function renderGoogleDestinationList({
             {accounts.isError && accounts.variables === d.id && (
               <div
                 role="alert"
-                className="mt-4 rounded-lg border border-amber-300/25 bg-amber-300/5 p-3 text-sm text-amber-100"
+                className="mt-4 rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-warning"
               >
                 <p className="font-medium">Não foi possível carregar as contas vinculadas</p>
-                <p className="mt-1 text-white/70">
+                <p className="mt-1 text-muted-foreground">
                   {String(accounts.error.message || 'Verifique a conexão Google.')}
                 </p>
-                <p className="mt-2 text-xs text-white/55">
+                <p className="mt-2 text-xs text-muted-foreground">
                   O seletor usa apenas a autorização OAuth desta conexão. Reconecte o Google se a
                   permissão de listar contas ainda não tiver sido concedida.
                 </p>
               </div>
             )}
             {validate.data && validate.variables === d.id && (
-              <output className="mt-4 block rounded-lg border border-emerald-300/20 bg-emerald-300/5 p-3 text-sm text-emerald-100">
+              <output className="mt-4 block rounded-lg border border-success/30 bg-success/10 p-3 text-sm text-success">
                 <p className="font-medium">Validação do envio aprovada</p>
-                <p className="mt-1 text-white/70">
+                <p className="mt-1 text-muted-foreground">
                   {validate.data.detail} Pedido usado: {validate.data.order_id}. Avisos:{' '}
                   {validate.data.warnings}
                   {validate.data.request_id
@@ -231,7 +229,7 @@ export function renderGoogleDestinationList({
                     : ''}
                   .
                 </p>
-                <p className="mt-2 text-xs text-white/55">
+                <p className="mt-2 text-xs text-muted-foreground">
                   Este teste usa uma venda real com identificador Google capturado, mas é executado
                   em modo de validação: ele prova que o Google aceita a autorização, conta, ação e
                   payload sem criar uma conversão duplicada.
@@ -239,16 +237,16 @@ export function renderGoogleDestinationList({
               </output>
             )}
             {validateSynthetic.data && validateSynthetic.variables === d.id && (
-              <output className="mt-4 block rounded-lg border border-cyan-300/20 bg-cyan-300/5 p-3 text-sm text-cyan-100">
+              <output className="mt-4 block rounded-lg border border-border bg-accent p-3 text-sm text-primary">
                 <p className="font-medium">Teste sem venda aprovado</p>
-                <p className="mt-1 text-white/70">
+                <p className="mt-1 text-muted-foreground">
                   {validateSynthetic.data.detail} Avisos: {validateSynthetic.data.warnings}
                   {validateSynthetic.data.request_id
                     ? ` · Protocolo Google: ${validateSynthetic.data.request_id}`
                     : ''}
                   .
                 </p>
-                <p className="mt-2 text-xs text-white/55">
+                <p className="mt-2 text-xs text-muted-foreground">
                   Este teste não exige pedido, clique ou cliente real. Ele é uma validação técnica:
                   não aparece como conversão no Google Ads e não altera métricas.
                 </p>
@@ -257,13 +255,13 @@ export function renderGoogleDestinationList({
             {validate.isError && validate.variables === d.id && (
               <div
                 role="alert"
-                className="mt-4 rounded-lg border border-rose-300/25 bg-rose-300/5 p-3 text-sm text-rose-100"
+                className="mt-4 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger"
               >
                 <p className="font-medium">Teste não aprovado</p>
-                <p className="mt-1 text-white/70">
+                <p className="mt-1 text-muted-foreground">
                   {String(validate.error.message || 'Não foi possível validar o tracking.')}
                 </p>
-                <p className="mt-2 text-xs text-white/55">
+                <p className="mt-2 text-xs text-muted-foreground">
                   O teste não envia uma conversão. Ele precisa de uma venda front aprovada desta
                   oferta que tenha GCLID, GBRAID ou WBRAID capturado.
                 </p>
@@ -272,10 +270,10 @@ export function renderGoogleDestinationList({
             {validateSynthetic.isError && validateSynthetic.variables === d.id && (
               <div
                 role="alert"
-                className="mt-4 rounded-lg border border-rose-300/25 bg-rose-300/5 p-3 text-sm text-rose-100"
+                className="mt-4 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger"
               >
                 <p className="font-medium">Teste sem venda não aprovado</p>
-                <p className="mt-1 text-white/70">
+                <p className="mt-1 text-muted-foreground">
                   {String(
                     validateSynthetic.error.message || 'Não foi possível validar a configuração.',
                   )}
@@ -286,7 +284,9 @@ export function renderGoogleDestinationList({
         );
       })}
       {!destinationData.destinations.length && (
-        <p className="text-sm text-white/60">Nenhum destino Google cadastrado nesta oferta.</p>
+        <p className="text-sm text-muted-foreground">
+          Nenhum destino Google cadastrado nesta oferta.
+        </p>
       )}
     </div>
   );

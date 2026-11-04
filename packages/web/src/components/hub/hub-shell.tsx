@@ -1,7 +1,7 @@
 'use client';
 
 import { AuthGate } from '@/components/auth/auth-gate';
-import { type ReactNode, Suspense, useEffect, useRef, useState } from 'react';
+import { type ReactNode, Suspense, useEffect, useState } from 'react';
 import { AmbientBackground } from './ambient-background';
 import { CommandPalette } from './command-palette';
 import { FinancialPrivacyMask } from './financial-privacy-mask';
@@ -9,7 +9,6 @@ import { MicroFooter } from './micro-footer';
 import { NavigationAccessGate } from './navigation-access-gate';
 import { NotificationCenter } from './notification-center';
 import { OfferContextProvider } from './offer-context-switcher';
-import { RouteMotion } from './route-motion';
 import motionStyles from './route-motion.module.css';
 import { Sidebar } from './sidebar';
 import { Topbar } from './topbar';
@@ -33,21 +32,28 @@ export function HubShell({
   onOpenNotifications,
   fullBleed,
 }: HubShellProps) {
-  const content = useRef<HTMLDivElement>(null);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [notificationCenterOpen, setNotificationCenterOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
-    setSidebarCollapsed(window.localStorage.getItem('tmx-ui.sidebar.collapsed') === 'true');
+    try {
+      setSidebarCollapsed(window.localStorage.getItem('tmx-ui.sidebar.collapsed') !== 'false');
+    } catch {
+      /* Keep the rail usable without storage. */
+    }
   }, []);
 
   const toggleSidebar = () => {
     setSidebarCollapsed((current) => {
       const next = !current;
-      window.localStorage.setItem('tmx-ui.sidebar.collapsed', String(next));
+      try {
+        window.localStorage.setItem('tmx-ui.sidebar.collapsed', String(next));
+      } catch {
+        /* Optional preference. */
+      }
       return next;
     });
   };
@@ -63,9 +69,6 @@ export function HubShell({
   return (
     <AuthGate>
       <OfferContextProvider>
-        <Suspense fallback={null}>
-          <RouteMotion content={content} fullBleed={fullBleed} />
-        </Suspense>
         <a
           href="#conteudo-principal"
           className="fixed left-4 top-3 z-[100] -translate-y-20 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition focus:translate-y-0"
@@ -76,7 +79,7 @@ export function HubShell({
           data-signal-shell={process.env.NEXT_PUBLIC_TMX_SIGNAL_PREVIEW === '1' ? '' : undefined}
           className="relative isolate flex h-dvh flex-col overflow-hidden"
         >
-          {process.env.NEXT_PUBLIC_TMX_SIGNAL_PREVIEW === '1' && <AmbientBackground />}
+          <AmbientBackground />
           <Topbar
             breadcrumb={breadcrumb}
             right={right}
@@ -87,15 +90,15 @@ export function HubShell({
             notificationCount={notificationCount ?? unreadCount}
             onOpenNotifications={onOpenNotifications ?? (() => setNotificationCenterOpen(true))}
           />
-          <div className="flex min-h-0 flex-1 overflow-hidden">
+          <div className="tmx-workspace relative flex min-h-0 flex-1 overflow-hidden">
             <Sidebar
               collapsed={sidebarCollapsed}
               mobileOpen={mobileNavOpen}
               onMobileOpenChange={setMobileNavOpen}
             />
+            <div className="tmx-nav-scrim" aria-hidden="true" />
             {fullBleed ? (
               <div
-                ref={content}
                 id="conteudo-principal"
                 tabIndex={-1}
                 data-motion-coordinated="true"
@@ -127,7 +130,6 @@ export function HubShell({
                     </div>
                   )}
                 <div
-                  ref={content}
                   data-motion-coordinated="true"
                   className={`tmx-route-content mx-auto w-full max-w-[1440px] ${motionStyles.coordinated}`}
                 >

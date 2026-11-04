@@ -47,10 +47,10 @@ export function DestinationList({
 
   if (empty) {
     return (
-      <div className="rounded border border-dashed border-white/[0.08] p-4">
-        <p className="text-sm text-white/55">{emptyTitle}</p>
+      <div className="rounded border border-dashed border-border p-4">
+        <p className="text-sm text-muted-foreground">{emptyTitle}</p>
         {emptyDescription && (
-          <p className="mt-1 text-xs leading-5 text-white/35">{emptyDescription}</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">{emptyDescription}</p>
         )}
       </div>
     );

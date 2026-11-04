@@ -14,10 +14,10 @@ export const statusCopy: Record<MetaControlAccount['operational_state'], string>
 };
 
 export const statusTone: Record<MetaControlAccount['operational_state'], string> = {
-  delivering: 'border-emerald-300/20 bg-emerald-300/[0.07] text-emerald-200',
-  idle: 'border-cyan-300/20 bg-cyan-300/[0.06] text-cyan-100',
+  delivering: 'border-success/30 bg-success/10 text-success',
+  idle: 'border-border bg-accent text-primary',
   disabled: 'border-danger/20 bg-danger/[0.06] text-danger',
-  unsettled: 'border-amber-300/20 bg-amber-300/[0.07] text-amber-100',
+  unsettled: 'border-warning/30 bg-warning/10 text-warning',
   attention: 'border-orange-300/20 bg-orange-300/[0.07] text-orange-100',
 };
 
@@ -37,17 +37,13 @@ export function dateTime(value?: string | null): string {
 }
 
 export function HealthRing({ score }: { score: number }) {
-  const color = score >= 80 ? 'text-emerald-300' : score >= 50 ? 'text-amber-300' : 'text-danger';
+  const color = score >= 80 ? 'text-success' : score >= 50 ? 'text-warning' : 'text-danger';
   return (
     <div
       className={cn(
-        'grid h-12 w-12 shrink-0 place-items-center rounded-full border bg-black/20 font-mono text-sm',
+        'grid h-12 w-12 shrink-0 place-items-center rounded-full border bg-accent font-mono text-sm',
         color,
-        score >= 80
-          ? 'border-emerald-300/20'
-          : score >= 50
-            ? 'border-amber-300/20'
-            : 'border-danger/20',
+        score >= 80 ? 'border-success/30' : score >= 50 ? 'border-warning/30' : 'border-danger/20',
       )}
     >
       {score}

@@ -61,7 +61,7 @@ export const ManagedTaskSchema = z
     source: z.enum(['tmx', 'discord', 'clickup']),
     receivedAt: z.string().datetime({ offset: true }),
     assignedAt: z.string().datetime({ offset: true }).nullable(),
-    assignmentReceivedAt: z.record(z.string().datetime({ offset: true })).default({}),
+    assignmentReceivedAt: z.record(z.string(), z.string().datetime({ offset: true })).default({}),
     startedAt: z.string().datetime({ offset: true }).nullable(),
     completedAt: z.string().datetime({ offset: true }).nullable(),
     dueAt: z.string().datetime({ offset: true }).nullable(),

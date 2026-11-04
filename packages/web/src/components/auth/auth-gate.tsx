@@ -1,8 +1,9 @@
 'use client';
 
 import { useAuth } from '@/lib/auth-context';
+import { useRouter } from '@/lib/motion-router';
 import { Loader2 } from 'lucide-react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { type ReactNode, useEffect } from 'react';
 
 /**
@@ -24,7 +25,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   if (loading || !user) {
     return (
-      <div className="grid min-h-screen place-items-center bg-[#04101A] text-white/40">
+      <div className="grid min-h-screen place-items-center bg-background text-muted-foreground">
         <Loader2 className="h-6 w-6 animate-spin" />
       </div>
     );

@@ -141,10 +141,10 @@ export function OfferEditDialog({ offer, open, onOpenChange }: Props) {
             />
           )}
 
-          <section className="space-y-3 rounded-md border border-white/[0.08] bg-white/[0.02] p-4">
+          <section className="space-y-3 rounded-md border border-border bg-muted p-4">
             <div>
               <p className="hud-label">Conexão UTMify</p>
-              <p className="mt-1 text-[11px] text-white/45">
+              <p className="mt-1 text-[11px] text-muted-foreground">
                 {offer.utmifyConfigured
                   ? `Conectada como ${offer.utmifyLoginHint ?? 'usuário protegido'}. Você pode alterar somente o login ou somente a senha; o outro dado protegido será preservado.`
                   : 'Informe a conta que possui acesso à dashboard.'}
@@ -180,7 +180,7 @@ export function OfferEditDialog({ offer, open, onOpenChange }: Props) {
               </Field>
             </div>
             {(offer.syncStatus === 'error' || offer.syncStatus === 'partial') && (
-              <p className="rounded-md border border-red-300/20 bg-red-300/[0.04] p-3 text-[12px] text-red-200">
+              <p className="rounded-md border border-danger/30 bg-danger/10 p-3 text-[12px] text-danger">
                 {offer.lastSyncError}
               </p>
             )}

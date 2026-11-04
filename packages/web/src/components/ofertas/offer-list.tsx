@@ -61,7 +61,7 @@ export function OfferList() {
           status={
             <>
               <p className="hud-label">Atualização automática</p>
-              <p className="mt-1 text-[12px] text-emerald-300">UTMify · a cada 30 minutos</p>
+              <p className="mt-1 text-[12px] text-success">UTMify · a cada 30 minutos</p>
             </>
           }
         />
@@ -89,16 +89,16 @@ export function OfferList() {
               {summary.accounts.map((account) => (
                 <section
                   key={account.ownerId}
-                  className="space-y-3 rounded-xl border border-cyan-300/[0.14] bg-cyan-300/[0.025] p-3"
+                  className="glass-card space-y-3 rounded-xl border border-border bg-accent p-3"
                 >
-                  <div className="flex items-center justify-between border-b border-cyan-300/[0.1] pb-2">
+                  <div className="flex items-center justify-between border-b border-border pb-2">
                     <div>
                       <p className="hud-label">Resumo da conta</p>
-                      <h2 className="mt-1 text-[15px] font-semibold text-white">
+                      <h2 className="mt-1 text-[15px] font-semibold text-foreground">
                         {account.ownerName}
                       </h2>
                     </div>
-                    <span className="text-[11px] text-cyan-100/65">
+                    <span className="text-[11px] text-primary">
                       {account.offers.length} ofertas
                     </span>
                   </div>
@@ -133,7 +133,7 @@ export function OfferList() {
             <div className="space-y-6">
               {summary.accounts.map((account) => (
                 <section key={account.ownerId} className="space-y-3">
-                  <p className="px-1 text-[12px] font-medium text-cyan-100/75">
+                  <p className="px-1 text-[12px] font-medium text-primary">
                     Ofertas · {account.ownerName}
                   </p>
                   <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -141,41 +141,41 @@ export function OfferList() {
                       <Link
                         key={entry.offer.id}
                         href={`/ofertas/${entry.offer.id}`}
-                        className={`glass-card group space-y-4 p-4 transition-[transform,box-shadow,border-color,opacity] duration-[180ms] ease-out hover:-translate-y-0.5 hover:border-cyan-300/35 hover:shadow-[0_12px_30px_rgba(34,211,238,0.12)] motion-reduce:transition-none motion-reduce:hover:translate-y-0 ${animateSummaryContainer ? '' : filterMotionClass}`}
+                        className={`glass-card group space-y-4 p-4 transition-[transform,box-shadow,border-color,opacity] duration-[180ms] ease-out hover:-translate-y-0.5 hover:border-border hover:shadow-[0_12px_30px_rgba(34,211,238,0.12)] motion-reduce:transition-none motion-reduce:hover:translate-y-0 ${animateSummaryContainer ? '' : filterMotionClass}`}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <p className="flex items-center gap-1.5 text-[11px] text-white/45">
+                            <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                               <Building2 className="h-3.5 w-3.5" />
                               {entry.offer.companyName ?? 'Operação'}
                             </p>
-                            <h3 className="mt-1 truncate text-[16px] font-semibold text-white">
+                            <h3 className="mt-1 truncate text-[16px] font-semibold text-foreground">
                               {entry.offer.name}
                             </h3>
                           </div>
-                          <ArrowRight className="h-4 w-4 text-cyan-300 transition group-hover:translate-x-0.5" />
+                          <ArrowRight className="h-4 w-4 text-primary transition group-hover:translate-x-0.5" />
                         </div>
                         <dl className="grid gap-2 min-[380px]:grid-cols-3">
                           <div>
                             <dt className="hud-label">Investido</dt>
-                            <dd className="mt-1 font-mono text-[12px] text-amber-300">
+                            <dd className="mt-1 font-mono text-[12px] text-warning">
                               {formatCurrency(entry.totals.spend, entry.offer.currency)}
                             </dd>
                           </div>
                           <div>
                             <dt className="hud-label">Faturamento</dt>
-                            <dd className="mt-1 font-mono text-[12px] text-emerald-300">
+                            <dd className="mt-1 font-mono text-[12px] text-success">
                               {formatCurrency(entry.totals.revenue, entry.offer.currency)}
                             </dd>
                           </div>
                           <div>
                             <dt className="hud-label">ROAS</dt>
-                            <dd className="mt-1 font-mono text-[12px] text-cyan-300">
+                            <dd className="mt-1 font-mono text-[12px] text-primary">
                               {formatRoas(entry.totals.roas)}
                             </dd>
                           </div>
                         </dl>
-                        <p className="text-[10px] uppercase tracking-[0.13em] text-white/35">
+                        <p className="text-[10px] uppercase tracking-[0.13em] text-muted-foreground">
                           Clique para abrir os ads e seus dados
                         </p>
                       </Link>
@@ -192,7 +192,7 @@ export function OfferList() {
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <div>
             <p className="hud-label">Conexões</p>
-            <h2 className="mt-1 text-[16px] font-semibold text-white">
+            <h2 className="mt-1 text-[16px] font-semibold text-foreground">
               {offers.length} ofertas cadastradas
             </h2>
           </div>
@@ -272,7 +272,7 @@ export function OfferList() {
                         }
                       : {})}
                   />
-                  <div className="flex items-center justify-between px-1 text-[11px] text-white/45">
+                  <div className="flex items-center justify-between px-1 text-[11px] text-muted-foreground">
                     <span>{syncLabel(offer)}</span>
                     {offer.canManage && (
                       <Button

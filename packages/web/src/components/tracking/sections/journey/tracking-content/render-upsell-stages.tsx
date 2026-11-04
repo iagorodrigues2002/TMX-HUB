@@ -29,15 +29,15 @@ export function renderUpsellStages(context: TrackingContentContext) {
         return (
           <article
             key={stage.id}
-            className="min-w-0 rounded-xl border border-emerald-300/15 bg-black/15 p-4"
+            className="glass-card min-w-0 rounded-xl border border-success/30 bg-accent p-4"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 break-words">
-                <p className="hud-label text-emerald-200">{stage.stage_key}</p>
-                <h3 className="mt-1 font-semibold text-white/90">{stage.name}</h3>
+                <p className="hud-label text-success">{stage.stage_key}</p>
+                <h3 className="mt-1 font-semibold text-foreground">{stage.name}</h3>
               </div>
               <span
-                className={stage.enabled ? 'text-xs text-emerald-300' : 'text-xs text-white/35'}
+                className={stage.enabled ? 'text-xs text-success' : 'text-xs text-muted-foreground'}
               >
                 {stage.enabled ? 'ativo' : 'pausado'}
               </span>
@@ -87,23 +87,23 @@ export function renderUpsellStages(context: TrackingContentContext) {
                     }
                   }}
                 >
-                  <Trash2 className="h-3.5 w-3.5 text-red-300" />
+                  <Trash2 className="h-3.5 w-3.5 text-danger" />
                 </Button>
               </div>
             )}
-            <div className="mt-3 space-y-1.5 rounded-lg border border-white/[0.07] bg-black/20 p-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-white/35">
+            <div className="mt-3 space-y-1.5 rounded-lg border border-border bg-accent p-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Destinos configurados
               </p>
               {vendepayConnections
                 .filter((connection) => stage.connection_destinations?.[connection.id])
                 .map((connection) => (
                   <div key={connection.id} className="flex min-w-0 items-center gap-2 text-[11px]">
-                    <span className="max-w-[50%] shrink-0 break-words rounded-full border border-emerald-300/20 bg-emerald-300/[0.06] px-2 py-0.5 text-emerald-100/75">
+                    <span className="max-w-[50%] shrink-0 break-words rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-success">
                       {connection.name}
                     </span>
                     <span
-                      className="truncate text-cyan-100/55"
+                      className="truncate text-primary"
                       title={stage.connection_destinations[connection.id]}
                     >
                       {stage.connection_destinations[connection.id]}
@@ -113,7 +113,7 @@ export function renderUpsellStages(context: TrackingContentContext) {
               {(['vendepay', 'syzepay', 'paysight', 'explodely'] as const)
                 .filter((gateway) => stage.connection_destinations?.[`gateway:${gateway}`])
                 .map((gateway) => (
-                  <div key={gateway} className="mt-2 text-xs text-white/60">
+                  <div key={gateway} className="mt-2 text-xs text-muted-foreground">
                     <strong>
                       {
                         {
@@ -130,15 +130,15 @@ export function renderUpsellStages(context: TrackingContentContext) {
                   </div>
                 ))}
               {!Object.keys(stage.connection_destinations ?? {}).length && (
-                <p className="text-[11px] text-amber-100/55">
+                <p className="text-[11px] text-warning">
                   Nenhuma conta VendePay configurada nesta etapa.
                 </p>
               )}
             </div>
-            <p className="mt-4 text-[11px] text-white/40">
+            <p className="mt-4 text-[11px] text-muted-foreground">
               Link TMX opcional — não é necessário trocar na Vendepay
             </p>
-            <code className="mt-1 block overflow-x-auto whitespace-nowrap rounded bg-black/25 p-2 text-[11px] text-cyan-100">
+            <code className="mt-1 block overflow-x-auto whitespace-nowrap rounded bg-accent p-2 text-[11px] text-primary">
               {stage.secure_url}
             </code>
             <Button
@@ -148,8 +148,8 @@ export function renderUpsellStages(context: TrackingContentContext) {
             >
               <Copy className="mr-2 h-3.5 w-3.5" /> Copiar link opcional
             </Button>
-            <p className="mt-4 text-[11px] text-white/40">Script desta página</p>
-            <code className="mt-1 block max-h-24 overflow-auto rounded bg-black/25 p-2 text-[10px] leading-4 text-cyan-100/75">
+            <p className="mt-4 text-[11px] text-muted-foreground">Script desta página</p>
+            <code className="mt-1 block max-h-24 overflow-auto rounded bg-accent p-2 text-[10px] leading-4 text-primary">
               {stage.install_code}
             </code>
             <Button

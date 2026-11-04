@@ -13,7 +13,7 @@ export function RefundTrend({
   if (!points.length) return <Empty />;
   if (isPrivate)
     return (
-      <div className="grid min-h-64 place-items-center text-white/60">
+      <div className="grid min-h-64 place-items-center text-muted-foreground">
         **** · gráfico financeiro oculto pelo modo de privacidade
       </div>
     );
@@ -30,7 +30,7 @@ export function RefundTrend({
   return (
     <figure className="mt-6">
       <section
-        className="overflow-x-auto rounded-xl border border-white/5 bg-white/[0.015] px-2 pt-4"
+        className="glass-card overflow-x-auto rounded-xl border border-border bg-muted px-2 pt-4"
         // biome-ignore lint/a11y/noNoninteractiveTabindex: The horizontal chart scroll region must be keyboard-focusable.
         tabIndex={0}
         aria-label="Gráfico de devoluções, dados detalhados disponíveis na tabela abaixo"
@@ -114,17 +114,17 @@ export function RefundTrend({
             ))}
         </svg>
       </section>
-      <figcaption className="mt-2 flex flex-wrap gap-4 text-xs text-white/60">
+      <figcaption className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
         <span className="inline-flex items-center gap-2">
-          <span aria-hidden="true" className="inline-block h-2.5 w-2.5 rounded-sm bg-rose-400" />{' '}
+          <span aria-hidden="true" className="inline-block h-2.5 w-2.5 rounded-sm bg-danger/10" />{' '}
           Reembolsos e chargebacks
         </span>
         <span>
-          <span className="text-cyan-200">━</span> Média móvel (
+          <span className="text-primary">━</span> Média móvel (
           {interval === 'day' ? '7 dias' : interval === 'week' ? '7 semanas' : '7 meses'})
         </span>
       </figcaption>
-      <details className="mt-5 border-t border-white/10 pt-2 text-xs text-white/70">
+      <details className="mt-5 border-t border-border pt-2 text-xs text-muted-foreground">
         <summary className="cursor-pointer rounded-lg py-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300">
           Ver valores do gráfico em tabela
         </summary>

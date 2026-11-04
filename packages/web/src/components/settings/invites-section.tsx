@@ -81,7 +81,7 @@ export function InvitesSection() {
     <section className="glass-card space-y-5 p-5">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <UserPlus className="h-4 w-4 text-cyan-300" />
+          <UserPlus className="h-4 w-4 text-primary" />
           <p className="hud-label">Convites</p>
         </div>
         <Button
@@ -94,7 +94,7 @@ export function InvitesSection() {
         </Button>
       </div>
 
-      <p className="text-[12px] text-white/55">
+      <p className="text-[12px] text-muted-foreground">
         Gere um link único de registro pra adicionar um membro. O link expira após o prazo escolhido
         e é destruído quando usado.
       </p>
@@ -105,7 +105,7 @@ export function InvitesSection() {
             e.preventDefault();
             createMut.mutate();
           }}
-          className="space-y-3 rounded-md border border-white/[0.08] bg-white/[0.02] p-4"
+          className="space-y-3 rounded-md border border-border bg-muted p-4"
         >
           <div className="grid gap-3 md:grid-cols-2">
             <div className="space-y-1">
@@ -134,7 +134,7 @@ export function InvitesSection() {
               value={scope}
               onChange={(e) => setScope(e.target.value as AccessScope)}
               disabled={createMut.isPending}
-              className="h-10 w-full rounded-md border border-white/[0.10] bg-black/30 px-3 text-[13px] text-white focus:border-cyan-300/40 focus:outline-none"
+              className="h-10 w-full rounded-md border border-border bg-accent px-3 text-[13px] text-foreground focus:border-border focus:outline-none"
             >
               {(Object.keys(SCOPE_LABEL) as AccessScope[]).map((k) => (
                 <option key={k} value={k}>
@@ -143,13 +143,13 @@ export function InvitesSection() {
               ))}
             </select>
             {scope === 'video-shield' && (
-              <p className="text-[10px] text-cyan-300/65">
+              <p className="text-[10px] text-primary">
                 Membro verá e usará Video Shield + Creative Studio. O restante do hub fica oculto.
               </p>
             )}
             {scope === 'custom' && (
-              <div className="mt-2 rounded-md border border-white/[0.06] bg-black/15 p-3">
-                <p className="mb-2 text-[10px] uppercase tracking-[0.14em] text-white/45">
+              <div className="mt-2 rounded-md border border-border bg-accent p-3">
+                <p className="mb-2 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
                   Selecione as ferramentas liberadas
                 </p>
                 <div className="grid grid-cols-2 gap-1.5">
@@ -158,7 +158,7 @@ export function InvitesSection() {
                     return (
                       <label
                         key={t.key}
-                        className="flex items-center gap-1.5 rounded px-1.5 py-1 text-[12px] text-white/80 hover:bg-white/[0.04]"
+                        className="flex items-center gap-1.5 rounded px-1.5 py-1 text-[12px] text-foreground hover:bg-muted"
                       >
                         <input
                           type="checkbox"
@@ -212,7 +212,7 @@ export function InvitesSection() {
               Gerar link
             </Button>
           </div>
-          <p className="text-[10px] text-white/40">
+          <p className="text-[10px] text-muted-foreground">
             Email/Nome só pré-preenchem o formulário do convidado — o link funciona pra qualquer
             pessoa que receber. Acesso é aplicado ao registrar.
           </p>
@@ -221,10 +221,10 @@ export function InvitesSection() {
 
       {isLoading ? (
         <div className="flex items-center justify-center p-6">
-          <Loader2 className="h-4 w-4 animate-spin text-cyan-300" />
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
         </div>
       ) : invites.length === 0 ? (
-        <p className="rounded-md border border-dashed border-white/[0.08] bg-white/[0.01] p-4 text-center text-[12px] text-white/45">
+        <p className="rounded-md border border-dashed border-border bg-muted p-4 text-center text-[12px] text-muted-foreground">
           Nenhum convite ativo.
         </p>
       ) : (

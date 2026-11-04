@@ -2,10 +2,11 @@
 
 import { taskApi } from '@/lib/api-client/endpoints-tasks';
 import { useAuth } from '@/lib/auth-context';
+import { useRouter } from '@/lib/motion-router';
 import { taskManagementHref } from '@/lib/task-dashboard';
 import { useQuery } from '@tanstack/react-query';
 import { Building2, CalendarDays, ListTodo } from 'lucide-react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { CallsDashboard } from './calls-dashboard';
 import { TaskDashboard } from './task-dashboard';

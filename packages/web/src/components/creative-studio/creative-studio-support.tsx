@@ -62,14 +62,14 @@ export function OptionField({
   children,
 }: { icon: typeof Gauge; label: string; description?: string; children: React.ReactNode }) {
   return (
-    <div className="group rounded-xl border border-white/[0.08] bg-white/[0.025] p-3.5 transition-all hover:border-cyan-300/20 hover:bg-cyan-300/[0.025] focus-within:border-cyan-300/30 focus-within:ring-2 focus-within:ring-cyan-300/[0.08]">
+    <div className="glass-card group rounded-xl border border-border bg-muted p-3.5 transition-all hover:border-border hover:bg-accent focus-within:border-border focus-within:ring-2 focus-within:ring-ring">
       <div className="mb-3 flex items-center gap-2.5">
-        <span className="grid h-8 w-8 place-items-center rounded-lg border border-cyan-300/10 bg-cyan-300/[0.06] text-cyan-300">
+        <span className="grid h-8 w-8 place-items-center rounded-lg border border-border bg-accent text-primary">
           <Icon className="h-4 w-4" />
         </span>
         <div className="min-w-0">
           <span className="hud-label block">{label}</span>
-          <p className="truncate text-[11px] text-white/40">{description}</p>
+          <p className="truncate text-[11px] text-muted-foreground">{description}</p>
         </div>
       </div>
       {children}
@@ -94,14 +94,14 @@ export function ToggleCard({
   return (
     <label
       htmlFor={id}
-      className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.025] p-3.5 transition-all hover:border-cyan-300/20 hover:bg-cyan-300/[0.035]"
+      className="flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-muted p-3.5 transition-all hover:border-border hover:bg-accent"
     >
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white/[0.04] text-white/55">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
         <Icon className="h-4 w-4" />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-sm font-medium text-white/85">{title}</span>
-        <span className="block text-xs text-white/40">{description}</span>
+        <span className="block text-sm font-medium text-foreground">{title}</span>
+        <span className="block text-xs text-muted-foreground">{description}</span>
       </span>
       <Checkbox id={id} checked={checked} onChange={(event) => onChange(event.target.checked)} />
     </label>

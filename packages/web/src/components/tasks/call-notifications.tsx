@@ -84,7 +84,7 @@ export function CallNotifications() {
             </DialogDescription>
           </DialogHeader>
           {(query.error || error) && (
-            <p role="alert" className="text-sm text-red-500">
+            <p role="alert" className="text-sm text-danger">
               {error ||
                 'Não foi possível consultar seus lembretes. Atualize para tentar novamente.'}
             </p>
@@ -97,7 +97,10 @@ export function CallNotifications() {
           )}
           <div className="space-y-3">
             {items.map((item) => (
-              <article key={item.id} className="rounded-xl border border-border bg-card p-4">
+              <article
+                key={item.id}
+                className="glass-card rounded-xl border border-border bg-card p-4"
+              >
                 <p className="text-xs text-primary">{reminderLabel(item.minutes)}</p>
                 <h2 className="mt-1 font-semibold">{item.title}</h2>
                 <p className="mt-2 text-sm">{callDate(item.startsAt)}</p>

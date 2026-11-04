@@ -41,8 +41,8 @@ export function TrackingRefundsSummary({
     <section className={panel}>
       <div className="flex flex-wrap justify-between gap-3">
         <div>
-          <h2 className="font-semibold text-white">Reembolsos e chargebacks</h2>
-          <p className="mt-1 text-xs text-white/50">
+          <h2 className="font-semibold text-foreground">Reembolsos e chargebacks</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
             {from} a {to} · valores em BRL
           </p>
         </div>
@@ -68,7 +68,7 @@ export function TrackingRefundsSummary({
         />
       </dl>
       {(t.missing_brl_orders > 0 || t.missing_fee_orders > 0) && (
-        <p className="mt-3 text-sm text-amber-200">
+        <p className="mt-3 text-sm text-warning">
           Total parcial: há conversões ou multas pendentes de configuração.
         </p>
       )}

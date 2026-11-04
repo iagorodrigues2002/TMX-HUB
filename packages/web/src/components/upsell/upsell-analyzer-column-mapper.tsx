@@ -16,7 +16,7 @@ export function ColumnMapper(props: {
   const options = useMemo(() => props.sheet?.columns ?? [], [props.sheet]);
   if (!props.sheet) {
     return (
-      <div className="rounded-md border border-white/[0.06] bg-black/20 p-4 text-[12px] text-white/40">
+      <div className="rounded-md border border-border bg-accent p-4 text-[12px] text-muted-foreground">
         {props.title}: faça upload do arquivo.
       </div>
     );
@@ -35,13 +35,13 @@ export function ColumnMapper(props: {
         .filter((f) => f.show)
         .map((f) => (
           <div key={f.key} className="grid grid-cols-[120px_1fr] items-center gap-2">
-            <Label className="text-[11px] uppercase tracking-[0.12em] text-white/55">
+            <Label className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
               {f.label}
             </Label>
             <select
               value={props.cols[f.key] ?? ''}
               onChange={(e) => props.onChange({ ...props.cols, [f.key]: e.target.value })}
-              className="flex h-11 w-full rounded-md border border-white/[0.10] bg-white/[0.04] px-4 text-[14px] text-white focus-visible:outline-none focus-visible:border-cyan-300/40"
+              className="flex h-11 w-full rounded-md border border-border bg-muted px-4 text-[14px] text-foreground focus-visible:outline-none focus-visible:border-border"
             >
               <option value="">— escolha —</option>
               {options.map((opt) => (

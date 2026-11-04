@@ -11,7 +11,7 @@ export function RefundRankingTable({
 }) {
   return (
     <section
-      className="mt-5 overflow-x-auto rounded-xl border border-white/10"
+      className="glass-card mt-5 overflow-x-auto rounded-xl border border-border"
       // biome-ignore lint/a11y/noNoninteractiveTabindex: The horizontal table scroll region must be keyboard-focusable.
       tabIndex={0}
       aria-label="Ranking de devoluções, role horizontalmente para ver todas as colunas"
@@ -19,7 +19,7 @@ export function RefundRankingTable({
       <table className="w-full min-w-[820px] text-sm tabular-nums [&_td:not(:first-child)]:text-right">
         <caption className="sr-only">Ranking por valor devolvido no período selecionado</caption>
         <thead>
-          <tr className="border-b border-white/10 text-left text-xs text-white/50">
+          <tr className="border-b border-border text-left text-xs text-muted-foreground">
             {[
               'Nome',
               'Vendas',
@@ -33,7 +33,7 @@ export function RefundRankingTable({
               <th
                 key={h}
                 scope="col"
-                className={`bg-white/[0.025] px-4 py-4 font-medium text-white/70 ${index ? 'text-right' : 'text-left'}`}
+                className={`bg-muted px-4 py-4 font-medium text-muted-foreground ${index ? 'text-right' : 'text-left'}`}
               >
                 {h}
               </th>
@@ -42,11 +42,8 @@ export function RefundRankingTable({
         </thead>
         <tbody>
           {rows.map((r) => (
-            <tr
-              key={r.key}
-              className="border-b border-white/5 transition-colors hover:bg-white/[0.035]"
-            >
-              <td className="max-w-72 break-words px-3 py-3 text-white">{r.label}</td>
+            <tr key={r.key} className="border-b border-border transition-colors hover:bg-muted">
+              <td className="max-w-72 break-words px-3 py-3 text-foreground">{r.label}</td>
               <td className="px-3 py-3">{r.sales}</td>
               <td className="whitespace-nowrap px-3 py-3">
                 {refundMoney(r.gross_brl_minor, isPrivate)}

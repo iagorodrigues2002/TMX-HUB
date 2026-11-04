@@ -44,6 +44,7 @@ function deriveBreadcrumbs(
   canManageTasks = false,
 ): BreadcrumbItem[] {
   const plainRoot = ROOT_PATHS.has(pathname) && search.size === 0;
+  if (pathname === '/' && plainRoot) return [{ label: 'Workspace' }, { label: 'Visão geral' }];
   if (plainRoot) return [];
 
   const trail =
@@ -171,7 +172,7 @@ export function Topbar({
         size="icon"
         onClick={onToggleSidebar}
         aria-label={sidebarCollapsed ? 'Expandir barra lateral' : 'Recolher barra lateral'}
-        className="hidden xl:inline-flex"
+        className="tmx-sidebar-toggle hidden xl:inline-flex"
       >
         {sidebarCollapsed ? (
           <PanelLeftOpen className="h-4 w-4" />
@@ -183,7 +184,7 @@ export function Topbar({
       <Link
         href="/"
         aria-label="Ir para a visão geral"
-        className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="tmx-topbar-brand flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <span
           aria-hidden
@@ -208,7 +209,7 @@ export function Topbar({
       </Link>
 
       <div className="hidden h-5 w-px bg-border/60 md:block" aria-hidden />
-      <div className="min-w-0 flex-1">
+      <div className="tmx-topbar-trail min-w-0 flex-1">
         <Breadcrumbs key={`${pathname}?${searchParams.toString()}`} items={breadcrumbs} />
       </div>
 
@@ -220,7 +221,7 @@ export function Topbar({
           variant="outline"
           onClick={onOpenCommandPalette}
           aria-label="Abrir busca e comandos"
-          className="h-11 w-11 shrink-0 justify-center border-border/60 bg-muted/60 px-0 font-normal text-muted-foreground xl:h-9 xl:w-auto xl:min-w-[180px] xl:justify-between xl:px-3"
+          className="tmx-command-trigger h-11 w-11 shrink-0 justify-center border-border/60 bg-muted/60 px-0 font-normal text-muted-foreground xl:h-9 xl:w-auto xl:min-w-[180px] xl:justify-between xl:px-3"
         >
           <span className="flex items-center gap-2">
             <Search className="h-3.5 w-3.5" aria-hidden />
@@ -243,7 +244,7 @@ export function Topbar({
               ? `${notificationCount} ${notificationCount === 1 ? 'notificação nova' : 'notificações novas'}`
               : 'Notificações'
           }
-          className="relative h-11 w-11 shrink-0 xl:h-9 xl:w-9"
+          className="tmx-topbar-round relative h-11 w-11 shrink-0 xl:h-9 xl:w-9"
         >
           <Bell className="h-4 w-4" aria-hidden />
           {notificationCount > 0 && (

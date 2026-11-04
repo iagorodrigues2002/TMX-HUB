@@ -44,7 +44,7 @@ export function CallCard({
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="break-words text-lg font-semibold">{call.title}</h2>
         <span
-          className={`rounded-full border px-2 py-1 text-xs ${state === 'elapsed' ? 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400' : call.status === 'cancelled' ? 'text-muted-foreground' : call.status === 'completed' ? 'text-emerald-600 dark:text-emerald-400' : 'text-primary'}`}
+          className={`rounded-full border px-2 py-1 text-xs ${state === 'elapsed' ? 'border-warning/30 bg-warning/10 text-warning dark:text-warning' : call.status === 'cancelled' ? 'text-muted-foreground' : call.status === 'completed' ? 'text-success dark:text-success' : 'text-primary'}`}
         >
           {labels[state]}
         </span>
@@ -53,8 +53,8 @@ export function CallCard({
         {callDate(call.startsAt)} · {call.durationMinutes} minutos
       </p>
       {state === 'elapsed' && (
-        <p className="mt-3 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
-          <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" aria-hidden />
+        <p className="mt-3 flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm">
+          <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
           Horário encerrado. Confirme se a call aconteceu, reagende ou cancele. O horário sozinho
           não confirma a realização.
         </p>

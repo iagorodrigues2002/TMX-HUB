@@ -41,10 +41,15 @@ export function DateRangeFilter({
   };
 
   return (
-    <div className={cn('glass-card flex flex-wrap items-end gap-3 p-3 sm:p-4', className)}>
+    <div
+      className={cn(
+        'tmx-date-range glass-card flex flex-wrap items-end gap-3 p-3 sm:p-4',
+        className,
+      )}
+    >
       {presets.length > 0 && (
         <div
-          className="flex max-w-full gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="tmx-date-presets flex max-w-full gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           aria-label="Períodos rápidos"
         >
           {presets.map((preset) => {
@@ -67,7 +72,7 @@ export function DateRangeFilter({
         </div>
       )}
 
-      <div className="flex w-full flex-wrap items-end gap-2 xl:w-auto">
+      <div className="tmx-date-fields flex w-full flex-wrap items-end gap-2 xl:w-auto">
         <div className="min-w-[140px] flex-1 space-y-1 sm:flex-none">
           <Label htmlFor={`${id}-from`} className="hud-label">
             De
@@ -98,7 +103,7 @@ export function DateRangeFilter({
         {onRefresh && (
           <Button
             type="button"
-            variant="outline"
+            variant="default"
             size="sm"
             className="h-11 flex-1 gap-2 sm:h-9 sm:flex-none"
             disabled={isRefreshing}

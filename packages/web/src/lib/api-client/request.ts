@@ -153,7 +153,7 @@ export async function request<T>(path: string, opts: RequestOptions = {}): Promi
       `\n  API base: ${baseUrl || pageOrigin}`;
 
     if (typeof console !== 'undefined') {
-      console.error('[api-client] request failed', {
+      console.warn('[api-client] request failed', {
         method: opts.method ?? 'GET',
         url,
         baseUrl,

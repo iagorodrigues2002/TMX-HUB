@@ -72,7 +72,7 @@ export function AdsIntelligenceCenter() {
       </header>
       <section
         aria-label="Filtros dos anúncios"
-        className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card p-4"
+        className="glass-card flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card p-4"
       >
         <label className="flex w-full min-w-0 flex-col gap-1 text-xs text-muted-foreground sm:w-44">
           Empresa
@@ -121,7 +121,7 @@ export function AdsIntelligenceCenter() {
       </section>
       {(!data?.connection || editing) && (
         <form
-          className="space-y-4 rounded-xl border border-border bg-card p-5"
+          className="glass-card space-y-4 rounded-xl border border-border bg-card p-5"
           onSubmit={(e) => {
             e.preventDefault();
             save.mutate();
@@ -241,7 +241,7 @@ export function AdsIntelligenceCenter() {
             }
           />
         ) : (
-          <div className="relative overflow-x-auto rounded-xl border border-border bg-card">
+          <div className="glass-card relative overflow-x-auto rounded-xl border border-border bg-card">
             <table
               className="relative table-fixed text-sm"
               style={{ width: tableWidth, minWidth: tableWidth }}

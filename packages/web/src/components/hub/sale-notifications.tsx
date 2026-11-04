@@ -238,10 +238,10 @@ export function SaleNotifications() {
           key={first.id}
           data-leaving={leaving}
           aria-live="polite"
-          className="tmx-sale-notice w-80 max-w-full rounded-xl border border-emerald-300/40 bg-[#071c24] p-4 text-white shadow-xl"
+          className="tmx-sale-notice w-80 max-w-full rounded-xl border border-success/30 bg-background p-4 text-foreground shadow-xl"
         >
           <div className="flex items-center justify-between gap-3">
-            <strong className="flex items-center gap-2 text-emerald-300">
+            <strong className="flex items-center gap-2 text-success">
               <span className="tmx-sale-confirm" aria-hidden="true">
                 ✓
               </span>
@@ -272,22 +272,22 @@ export function SaleNotifications() {
                 ))}
           </div>
           {!isPrivate && totals.unknown > 0 && (
-            <p className="text-xs text-white/60">
+            <p className="text-xs text-muted-foreground">
               {totals.unknown} venda(s) com valor indisponível
             </p>
           )}
-          <p className="mt-1 text-xs text-white/60">
+          <p className="mt-1 text-xs text-muted-foreground">
             {active.length === 1 ? first.provider : 'Vendas agrupadas · um único aviso sonoro'}
           </p>
           {queue[1] && (
-            <p className="mt-2 text-xs text-emerald-200">
+            <p className="mt-2 text-xs text-success">
               +{queue[1].length} venda(s) no próximo aviso
             </p>
           )}
         </output>
       )}
       {failed && (
-        <output className="rounded bg-[#06131b] p-2 text-xs text-amber-200">
+        <output className="rounded bg-background p-2 text-xs text-warning">
           Avisos temporariamente indisponíveis.
         </output>
       )}

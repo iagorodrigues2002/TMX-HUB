@@ -3,6 +3,7 @@
 import { apiClient } from '@/lib/api-client';
 import { companyApi } from '@/lib/api-client/endpoints-companies';
 import { useAuth } from '@/lib/auth-context';
+import { useRouter } from '@/lib/motion-router';
 import { usePrivacy } from '@/lib/privacy-context';
 import {
   refundCompanyHref,
@@ -11,7 +12,7 @@ import {
   refundRouteFilters,
 } from '@/lib/refunds-navigation';
 import { useQuery } from '@tanstack/react-query';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { ago, today } from './refunds-dashboard-support';
 import './refunds-dashboard.css';

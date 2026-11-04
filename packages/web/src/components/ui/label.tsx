@@ -14,7 +14,7 @@ const Label = React.forwardRef<HTMLLabelElement, React.LabelHTMLAttributes<HTMLL
       ref={ref}
       htmlFor={htmlFor}
       className={cn(
-        'text-[11px] font-semibold uppercase tracking-[0.12em] text-white/55 leading-none',
+        'text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground leading-none',
         'peer-disabled:cursor-not-allowed peer-disabled:opacity-70',
         className,
       )}

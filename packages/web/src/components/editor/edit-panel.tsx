@@ -18,11 +18,11 @@ export function EditPanel({ jobId, forms, links }: EditPanelProps) {
   if (!selected) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 bg-background/40 p-6 text-center">
-        <MousePointer className="h-8 w-8 text-white/25" />
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+        <MousePointer className="h-8 w-8 text-muted-foreground" />
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           Selecione um forma ou link
         </p>
-        <p className="max-w-[220px] text-[12px] text-white/40">
+        <p className="max-w-[220px] text-[12px] text-muted-foreground">
           Use a árvore à esquerda para navegar e editar elementos da página clonada.
         </p>
       </div>
@@ -33,7 +33,7 @@ export function EditPanel({ jobId, forms, links }: EditPanelProps) {
     const form = forms.find((f) => f.id === selected.id);
     if (!form) {
       return (
-        <div className="flex h-full items-center justify-center bg-background/40 p-6 text-[12px] text-white/45">
+        <div className="flex h-full items-center justify-center bg-background/40 p-6 text-[12px] text-muted-foreground">
           Formulário não encontrado.
         </div>
       );
@@ -48,7 +48,7 @@ export function EditPanel({ jobId, forms, links }: EditPanelProps) {
   const link = links.find((l) => l.id === selected.id);
   if (!link) {
     return (
-      <div className="flex h-full items-center justify-center bg-background/40 p-6 text-[12px] text-white/45">
+      <div className="flex h-full items-center justify-center bg-background/40 p-6 text-[12px] text-muted-foreground">
         Link não encontrado.
       </div>
     );

@@ -10,18 +10,18 @@ export default function VslPage() {
         <div className="mx-auto max-w-2xl">
           <header className="mb-8 space-y-3 text-center">
             <div
-              className="mx-auto grid h-14 w-14 place-items-center rounded-md border border-cyan-300/30"
+              className="mx-auto grid h-14 w-14 place-items-center rounded-md border border-border"
               style={{
                 background: 'linear-gradient(135deg, rgba(20,184,166,0.18), rgba(34,211,238,0.05))',
               }}
             >
-              <Video className="h-6 w-6 text-cyan-300" />
+              <Video className="h-6 w-6 text-primary" />
             </div>
             <p className="hud-label">Module 002 — VSL Downloader</p>
-            <h1 className="text-3xl font-bold tracking-tight text-white">
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">
               Baixe vídeos de qualquer player
             </h1>
-            <p className="text-[14px] text-white/55">
+            <p className="text-[14px] text-muted-foreground">
               Cole a URL da página, o sistema detecta o manifest do vídeo, contorna filtros comuns
               de tráfego e remuxa pra MP4.
             </p>
@@ -31,7 +31,7 @@ export default function VslPage() {
             <VslInputForm />
           </div>
 
-          <p className="mt-6 text-center text-[10px] uppercase tracking-[0.18em] text-white/30">
+          <p className="mt-6 text-center text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
             v0.5 ACTIVE · USE APENAS EM CONTEÚDO QUE VOCÊ POSSUI · SEM PROXY
           </p>
         </div>

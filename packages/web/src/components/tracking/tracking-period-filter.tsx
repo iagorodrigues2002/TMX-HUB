@@ -51,10 +51,10 @@ export function TrackingPeriodFilter({
   ];
 
   return (
-    <section className="flex flex-wrap items-end justify-between gap-3 rounded-lg border border-white/[0.08] bg-black/15 p-3">
+    <section className="flex flex-wrap items-end justify-between gap-3 rounded-lg border border-border bg-accent p-3">
       <div className="min-w-48">
-        <p className="text-sm font-semibold text-white/85">{title}</p>
-        <p className="mt-1 text-xs text-white/45">Horário de São Paulo</p>
+        <p className="text-sm font-semibold text-foreground">{title}</p>
+        <p className="mt-1 text-xs text-muted-foreground">Horário de São Paulo</p>
       </div>
       <div className="flex w-full flex-wrap items-end gap-2 xl:w-auto">
         <div className="flex max-w-full gap-1.5 overflow-x-auto pb-1" aria-label="Datas rápidas">

@@ -36,7 +36,7 @@ function FinancePayeeCard({
     );
   if (compensation.isError)
     return (
-      <div role="alert" className="rounded-lg border border-border p-4">
+      <div role="alert" className="glass-card rounded-lg border border-border p-4">
         <p>Não foi possível carregar os dados de {payee.name}.</p>
         <Button
           type="button"
@@ -110,7 +110,7 @@ export function FinancePayees({ company: fixedCompany }: { company?: string } = 
   return (
     <section
       aria-label="Colaboradores e Pix"
-      className="space-y-4 rounded-xl border border-border bg-card p-5"
+      className="glass-card space-y-4 rounded-xl border border-border bg-card p-5"
     >
       <h2 className="text-lg font-semibold">Colaboradores e Pix</h2>
       <p className="text-sm text-muted-foreground">

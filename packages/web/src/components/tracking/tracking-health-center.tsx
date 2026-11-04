@@ -30,21 +30,21 @@ export function TrackingHealthCenter({
   if (query.isLoading) {
     return (
       <div className="glass-card grid min-h-64 place-items-center">
-        <RefreshCw className="h-5 w-5 animate-spin text-cyan-300" />
+        <RefreshCw className="h-5 w-5 animate-spin text-primary" />
       </div>
     );
   }
   if (query.isError || !data) {
     return (
       <div className="glass-card flex min-h-64 flex-col items-center justify-center gap-4 p-6 text-center">
-        <span className="grid h-12 w-12 place-items-center rounded-xl border border-red-300/20 bg-red-300/[0.05]">
-          <AlertTriangle className="h-5 w-5 text-red-300" />
+        <span className="grid h-12 w-12 place-items-center rounded-xl border border-danger/30 bg-danger/10">
+          <AlertTriangle className="h-5 w-5 text-danger" />
         </span>
         <div>
-          <h2 className="text-base font-semibold text-white">
+          <h2 className="text-base font-semibold text-foreground">
             Não foi possível calcular a saúde agora
           </h2>
-          <p className="mt-2 max-w-lg text-xs leading-5 text-white/45">
+          <p className="mt-2 max-w-lg text-xs leading-5 text-muted-foreground">
             {query.error instanceof Error
               ? query.error.message
               : 'A API de monitoramento não respondeu.'}
@@ -68,9 +68,9 @@ export function TrackingHealthCenter({
               background: `conic-gradient(${data.score >= 75 ? '#34d399' : data.score >= 55 ? '#fbbf24' : '#fb7185'} ${data.score * 3.6}deg, rgba(255,255,255,.055) 0)`,
             }}
           >
-            <div className="absolute inset-[7px] rounded-full bg-[#071720]" />
+            <div className="absolute inset-[7px] rounded-full bg-background" />
             <div className="relative">
-              <p className="mono-num text-4xl font-semibold tracking-[-0.06em] text-white">
+              <p className="mono-num text-4xl font-semibold tracking-[-0.06em] text-foreground">
                 {data.score}
               </p>
               <p className="hud-label mt-1 text-[8px]">de 100</p>
@@ -78,7 +78,7 @@ export function TrackingHealthCenter({
           </div>
           <div>
             <p className="hud-label">Health Score</p>
-            <h2 className="mt-2 text-xl font-semibold text-white">
+            <h2 className="mt-2 text-xl font-semibold text-foreground">
               {data.status === 'excellent'
                 ? 'Excelente'
                 : data.status === 'good'
@@ -87,7 +87,7 @@ export function TrackingHealthCenter({
                     ? 'Precisa de atenção'
                     : 'Crítico'}
             </h2>
-            <p className="mt-2 text-xs leading-5 text-white/45">
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">
               Calculado com configuração, captura, atribuição, entregas e gateway.
             </p>
           </div>
@@ -96,7 +96,9 @@ export function TrackingHealthCenter({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="hud-label">Cobertura por camada</p>
-              <p className="mt-1 text-xs text-white/40">Atualização automática a cada minuto</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Atualização automática a cada minuto
+              </p>
             </div>
             <Button
               size="sm"
@@ -114,32 +116,28 @@ export function TrackingHealthCenter({
               return (
                 <div
                   key={item.key}
-                  className="rounded-xl border border-white/[0.07] bg-black/15 p-3"
+                  className="glass-card rounded-xl border border-border bg-accent p-3"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs text-white/55">{item.label}</span>
+                    <span className="text-xs text-muted-foreground">{item.label}</span>
                     <span
                       className={cn(
                         'mono-num text-xs',
-                        rate >= 0.9
-                          ? 'text-emerald-300'
-                          : rate >= 0.7
-                            ? 'text-amber-300'
-                            : 'text-red-300',
+                        rate >= 0.9 ? 'text-success' : rate >= 0.7 ? 'text-warning' : 'text-danger',
                       )}
                     >
                       {item.score}/{item.weight}
                     </span>
                   </div>
-                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-accent">
                     <div
                       className={cn(
                         'h-full rounded-full',
                         rate >= 0.9
-                          ? 'bg-emerald-300'
+                          ? 'bg-success/10'
                           : rate >= 0.7
-                            ? 'bg-amber-300'
-                            : 'bg-red-300',
+                            ? 'bg-warning/10'
+                            : 'bg-danger/10',
                       )}
                       style={{ width: `${rate * 100}%` }}
                     />
@@ -156,12 +154,9 @@ export function TrackingHealthCenter({
               ['Webhooks', percent(data.metrics.webhook_success)],
               ['Pedidos ligados', percent(data.metrics.order_match)],
             ].map(([label, value]) => (
-              <div
-                key={label}
-                className="rounded-lg border border-cyan-300/10 bg-cyan-300/[0.025] p-3"
-              >
+              <div key={label} className="rounded-lg border border-border bg-accent p-3">
                 <p className="hud-label text-[8px]">{label}</p>
-                <p className="mono-num mt-1 text-lg text-white">{value}</p>
+                <p className="mono-num mt-1 text-lg text-foreground">{value}</p>
               </div>
             ))}
           </div>
@@ -171,12 +166,12 @@ export function TrackingHealthCenter({
       <section className="glass-card p-5 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center rounded-xl border border-cyan-300/15 bg-cyan-300/[0.06]">
-              <BellRing className="h-4 w-4 text-cyan-300" />
+            <span className="grid h-10 w-10 place-items-center rounded-xl border border-border bg-accent">
+              <BellRing className="h-4 w-4 text-primary" />
             </span>
             <div>
               <p className="hud-label">Alertas e automações</p>
-              <p className="mt-1 text-sm text-white/55">
+              <p className="mt-1 text-sm text-muted-foreground">
                 {active.length
                   ? `${active.length} incidente(s) exigindo atenção`
                   : 'Nenhum incidente ativo'}
@@ -184,7 +179,7 @@ export function TrackingHealthCenter({
             </div>
           </div>
           {!active.length && (
-            <span className="flex items-center gap-2 text-xs text-emerald-300">
+            <span className="flex items-center gap-2 text-xs text-success">
               <CheckCircle2 className="h-4 w-4" />
               Operação saudável
             </span>
@@ -197,18 +192,18 @@ export function TrackingHealthCenter({
               className={cn(
                 'flex flex-col gap-4 rounded-xl border p-4 sm:flex-row sm:items-center',
                 alert.state === 'resolved'
-                  ? 'border-white/[0.06] opacity-45'
+                  ? 'border-border opacity-45'
                   : alert.severity === 'critical'
-                    ? 'border-red-300/20 bg-red-300/[0.035]'
-                    : 'border-amber-300/20 bg-amber-300/[0.03]',
+                    ? 'border-danger/30 bg-danger/10'
+                    : 'border-warning/30 bg-warning/10',
               )}
             >
               <span
                 className={cn(
                   'grid h-10 w-10 shrink-0 place-items-center rounded-lg border',
                   alert.severity === 'critical'
-                    ? 'border-red-300/20 text-red-300'
-                    : 'border-amber-300/20 text-amber-300',
+                    ? 'border-danger/30 text-danger'
+                    : 'border-warning/30 text-warning',
                 )}
               >
                 {alert.state === 'resolved' ? (
@@ -219,13 +214,13 @@ export function TrackingHealthCenter({
               </span>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-sm font-semibold text-white/85">{alert.title}</h3>
-                  <span className="rounded border border-white/[0.08] px-2 py-0.5 font-mono text-[8px] uppercase tracking-wider text-white/40">
+                  <h3 className="text-sm font-semibold text-foreground">{alert.title}</h3>
+                  <span className="rounded border border-border px-2 py-0.5 font-mono text-[8px] uppercase tracking-wider text-muted-foreground">
                     {alert.state}
                   </span>
                 </div>
-                <p className="mt-1 text-xs leading-5 text-white/45">{alert.detail}</p>
-                <p className="mt-1 font-mono text-[9px] text-white/25">
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">{alert.detail}</p>
+                <p className="mt-1 font-mono text-[9px] text-muted-foreground">
                   Detectado{' '}
                   {new Date(alert.first_seen_at).toLocaleString('pt-BR', {
                     timeZone: 'America/Sao_Paulo',
@@ -256,7 +251,7 @@ export function TrackingHealthCenter({
             </article>
           ))}
           {!data.alerts.length && (
-            <div className="rounded-xl border border-dashed border-emerald-300/15 p-8 text-center text-sm text-white/40">
+            <div className="glass-card rounded-xl border border-dashed border-success/30 p-8 text-center text-sm text-muted-foreground">
               O monitor não encontrou falhas na configuração ou nas entregas.
             </div>
           )}

@@ -107,16 +107,16 @@ export function TrackingCountryMap({ rows }: { rows: CountryRow[] }) {
   }, []);
 
   return (
-    <section className="rounded-xl border border-white/[0.08] bg-black/10 p-4 md:p-5">
+    <section className="glass-card rounded-xl border border-border bg-accent p-4 md:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-base font-semibold text-white">Origem por país</h3>
-          <p className="mt-1 text-xs text-white/40">
+          <h3 className="text-base font-semibold text-foreground">Origem por país</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
             {formatMetric(total, metric)} · {metricLabels[metric].toLowerCase()}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <div className="flex rounded-lg border border-white/[0.08] bg-black/20 p-1">
+          <div className="flex rounded-lg border border-border bg-accent p-1">
             {(Object.keys(metricLabels) as Metric[]).map((key) => (
               <Button
                 key={key}
@@ -126,15 +126,15 @@ export function TrackingCountryMap({ rows }: { rows: CountryRow[] }) {
                 aria-pressed={metric === key}
                 onClick={() => setMetric(key)}
                 className={cn(
-                  'text-white/45',
-                  metric === key && 'bg-emerald-300 text-[#04140f] hover:bg-emerald-200',
+                  'text-muted-foreground',
+                  metric === key && 'bg-success/10 text-[#04140f] hover:bg-success/10',
                 )}
               >
                 {metricLabels[key]}
               </Button>
             ))}
           </div>
-          <div className="flex rounded-lg border border-white/[0.08] bg-black/20 p-1">
+          <div className="flex rounded-lg border border-border bg-accent p-1">
             <Button
               type="button"
               size="icon"
@@ -142,7 +142,7 @@ export function TrackingCountryMap({ rows }: { rows: CountryRow[] }) {
               aria-label="Ver lista de países"
               aria-pressed={display === 'list'}
               onClick={() => setDisplay('list')}
-              className={cn(display === 'list' && 'bg-white/[0.08] text-white')}
+              className={cn(display === 'list' && 'bg-accent text-foreground')}
             >
               <List className="h-4 w-4" />
             </Button>
@@ -153,7 +153,7 @@ export function TrackingCountryMap({ rows }: { rows: CountryRow[] }) {
               aria-label="Ver mapa de países"
               aria-pressed={display === 'map'}
               onClick={() => setDisplay('map')}
-              className={cn(display === 'map' && 'bg-emerald-300 text-[#04140f]')}
+              className={cn(display === 'map' && 'bg-success/10 text-[#04140f]')}
             >
               <MapIcon className="h-4 w-4" />
             </Button>
@@ -162,7 +162,7 @@ export function TrackingCountryMap({ rows }: { rows: CountryRow[] }) {
       </div>
 
       {display === 'map' ? (
-        <div className="mt-4 overflow-hidden rounded-xl border border-white/[0.08] bg-[#061116]">
+        <div className="glass-card mt-4 overflow-hidden rounded-xl border border-border bg-background">
           <svg
             viewBox="0 0 960 430"
             className="block h-auto w-full"
@@ -184,9 +184,9 @@ export function TrackingCountryMap({ rows }: { rows: CountryRow[] }) {
                   stroke={lowConversion ? 'rgba(251,113,133,.95)' : 'rgba(6,17,22,.9)'}
                   strokeWidth={active || lowConversion ? 1.8 : 0.65}
                   className={cn(
-                    'text-white transition hover:text-cyan-200',
-                    value > 0 ? 'text-cyan-300' : 'text-white',
-                    active && 'text-emerald-300',
+                    'text-foreground transition hover:text-primary',
+                    value > 0 ? 'text-primary' : 'text-foreground',
+                    active && 'text-success',
                   )}
                   style={{ opacity: active ? 1 : intensity }}
                 >
@@ -209,8 +209,8 @@ export function TrackingCountryMap({ rows }: { rows: CountryRow[] }) {
           </svg>
         </div>
       ) : (
-        <div className="mt-4 divide-y divide-white/[0.06] overflow-hidden rounded-xl border border-white/[0.08]">
-          <div className="grid grid-cols-[minmax(0,1fr)_90px_110px] gap-3 bg-white/[0.025] px-4 py-2 text-[10px] uppercase tracking-wider text-white/30">
+        <div className="glass-card mt-4 divide-y divide-border overflow-hidden rounded-xl border border-border">
+          <div className="grid grid-cols-[minmax(0,1fr)_90px_110px] gap-3 bg-muted px-4 py-2 text-[10px] uppercase tracking-wider text-muted-foreground">
             <span>País</span>
             <span className="text-right">{metricLabels[metric]}</span>
             <span className="text-right">Conversão</span>
@@ -220,26 +220,26 @@ export function TrackingCountryMap({ rows }: { rows: CountryRow[] }) {
               key={row.country}
               type="button"
               onClick={() => setSelected(countries.alpha2ToAlpha3(row.country) ?? row.country)}
-              className="grid w-full grid-cols-[minmax(0,1fr)_90px_110px] items-center gap-3 px-4 py-3 text-left hover:bg-white/[0.03]"
+              className="grid w-full grid-cols-[minmax(0,1fr)_90px_110px] items-center gap-3 px-4 py-3 text-left hover:bg-muted"
             >
               <span className="min-w-0">
-                <span className="flex items-center gap-2 text-sm text-white/70">
+                <span className="flex items-center gap-2 text-sm text-muted-foreground">
                   {hasLowConversion(row) && (
                     <AlertTriangle
-                      className="h-4 w-4 shrink-0 text-rose-400"
+                      className="h-4 w-4 shrink-0 text-danger"
                       aria-label="Alerta de conversão baixa"
                     />
                   )}
                   {countryName(row.country)}
                 </span>
-                <span className="mt-1 block truncate font-mono text-[10px] text-amber-100/60">
+                <span className="mt-1 block truncate font-mono text-[10px] text-warning">
                   AOV do funil {formatBrl(row.aov_brl_minor)}
                 </span>
               </span>
-              <span className="text-right font-mono text-sm text-cyan-200">
+              <span className="text-right font-mono text-sm text-primary">
                 {formatMetric(metricValue(row, metric), metric)}
               </span>
-              <span className="text-right font-mono text-xs text-emerald-200">
+              <span className="text-right font-mono text-xs text-success">
                 {formatMetric(conversionRate(row), 'conversion_rate')}
               </span>
             </button>
@@ -248,36 +248,36 @@ export function TrackingCountryMap({ rows }: { rows: CountryRow[] }) {
       )}
 
       {selectedRow && (
-        <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg bg-white/[0.03] px-4 py-3 text-xs">
-          <strong className="text-white/80">{countryName(selectedRow.country)}</strong>
-          <span className="text-white/45">
+        <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg bg-muted px-4 py-3 text-xs">
+          <strong className="text-foreground">{countryName(selectedRow.country)}</strong>
+          <span className="text-muted-foreground">
             {selectedRow.page_views.toLocaleString('pt-BR')} pageviews
           </span>
-          <span className="text-white/45">
+          <span className="text-muted-foreground">
             {selectedRow.checkouts.toLocaleString('pt-BR')} checkouts
           </span>
-          <span className="text-emerald-200">
+          <span className="text-success">
             {selectedRow.paid_orders.toLocaleString('pt-BR')} vendas
           </span>
-          <span className="rounded-full border border-emerald-300/20 bg-emerald-300/[0.07] px-2.5 py-1 font-mono text-emerald-200">
+          <span className="rounded-full border border-success/30 bg-success/10 px-2.5 py-1 font-mono text-success">
             {formatMetric(conversionRate(selectedRow), 'conversion_rate')} de conversão
           </span>
-          <span className="rounded-full border border-amber-300/20 bg-amber-300/[0.07] px-2.5 py-1 font-mono text-amber-100">
+          <span className="rounded-full border border-warning/30 bg-warning/10 px-2.5 py-1 font-mono text-warning">
             AOV do funil {formatBrl(selectedRow.aov_brl_minor)}
           </span>
           {hasLowConversion(selectedRow) && (
-            <span className="flex items-center gap-1.5 rounded-full border border-rose-300/25 bg-rose-300/[0.08] px-2.5 py-1 font-medium text-rose-200">
+            <span className="flex items-center gap-1.5 rounded-full border border-danger/30 bg-danger/10 px-2.5 py-1 font-medium text-danger">
               <AlertTriangle className="h-3.5 w-3.5" /> Conversão baixa
             </span>
           )}
         </div>
       )}
 
-      <div className="mt-3 flex items-center gap-3 text-[10px] uppercase tracking-wider text-white/30">
+      <div className="mt-3 flex items-center gap-3 text-[10px] uppercase tracking-wider text-muted-foreground">
         <span>menos</span>
-        <span className="h-2 w-36 rounded-full bg-gradient-to-r from-cyan-900 via-cyan-500 to-emerald-300" />
+        <span className="h-2 w-36 rounded-full bg-gradient-to-r from-primary via-primary to-success" />
         <span>mais</span>
-        <span className="flex items-center gap-1 text-rose-300/70">
+        <span className="flex items-center gap-1 text-danger">
           <AlertTriangle className="h-3 w-3" /> alerta abaixo de 1% após 20 pageviews
         </span>
         {rows.some((row) => row.country === 'ZZ') && (

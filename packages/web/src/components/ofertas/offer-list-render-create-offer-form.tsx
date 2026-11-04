@@ -59,7 +59,7 @@ export function renderCreateOfferForm({
     >
       <div>
         <p className="hud-label">Nova oferta da empresa</p>
-        <p className="mt-1 text-[12px] text-white/45">
+        <p className="mt-1 text-[12px] text-muted-foreground">
           A oferta ficará vinculada à empresa selecionada e respeitará as permissões dos seus
           membros.
         </p>
@@ -115,7 +115,7 @@ export function renderCreateOfferForm({
             placeholder="Ex: PFL Brasil"
           />
         </FormField>
-        <label className="col-span-full flex items-start gap-3 rounded-lg border border-white/10 p-3 text-sm">
+        <label className="col-span-full flex items-start gap-3 rounded-lg border border-border p-3 text-sm">
           <input
             type="checkbox"
             aria-label="Permitir acesso à dashboard UTMify"
@@ -125,7 +125,7 @@ export function renderCreateOfferForm({
           />
           <span>
             Permitir acesso à dashboard UTMify
-            <span className="mt-1 block text-xs text-white/50">
+            <span className="mt-1 block text-xs text-muted-foreground">
               Opcional. Desmarcado: sem login ou importação da dashboard. O envio de vendas por API
               é configurado separadamente no Tracking.
             </span>

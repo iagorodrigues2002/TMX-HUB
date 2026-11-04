@@ -59,7 +59,7 @@ export function OfferList() {
       <div className="flex items-baseline justify-between">
         <div>
           <p className="hud-label">Suas dashboards</p>
-          <h2 className="mt-1 text-[16px] font-semibold text-white">
+          <h2 className="mt-1 text-[16px] font-semibold text-foreground">
             {offers.length} ofertas conectadas
           </h2>
         </div>
@@ -105,9 +105,9 @@ export function OfferList() {
               />
             </div>
           </div>
-          <p className="text-[11px] text-white/40">
-            O <code className="text-white/65">dashboardId</code> é só uma referência usada no
-            workflow do n8n. Você consegue trocar depois — não trava nada se ficar vazio.
+          <p className="text-[11px] text-muted-foreground">
+            O <code className="text-muted-foreground">dashboardId</code> é só uma referência usada
+            no workflow do n8n. Você consegue trocar depois — não trava nada se ficar vazio.
           </p>
           <div className="flex justify-end">
             <Button type="submit" disabled={createMut.isPending}>
@@ -120,11 +120,11 @@ export function OfferList() {
 
       {isLoading ? (
         <div className="glass-card flex items-center justify-center p-12">
-          <Loader2 className="h-5 w-5 animate-spin text-cyan-300" />
+          <Loader2 className="h-5 w-5 animate-spin text-primary" />
         </div>
       ) : offers.length === 0 ? (
         <div className="glass-card p-12 text-center">
-          <p className="text-[13px] text-white/55">
+          <p className="text-[13px] text-muted-foreground">
             Você ainda não tem nenhuma dashboard. Crie a primeira para começar a receber métricas do
             n8n.
           </p>
@@ -168,12 +168,12 @@ function OfferCard({ offer, onDelete }: { offer: OfferView; onDelete: () => void
         <div className="min-w-0">
           <Link
             href={`/dashboards/${offer.id}`}
-            className="text-[15px] font-semibold text-white hover:text-cyan-200"
+            className="text-[15px] font-semibold text-foreground hover:text-primary"
           >
             {offer.name}
           </Link>
           {offer.dashboardId && (
-            <p className="mt-0.5 truncate font-mono text-[10px] text-white/40">
+            <p className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">
               utmify: {offer.dashboardId}
             </p>
           )}
@@ -191,9 +191,9 @@ function OfferCard({ offer, onDelete }: { offer: OfferView; onDelete: () => void
         </Button>
       </div>
 
-      <div className="rounded-md border border-white/[0.06] bg-black/20 p-2 text-[10px]">
+      <div className="rounded-md border border-border bg-accent p-2 text-[10px]">
         <p className="hud-label">Ingest URL (para o n8n)</p>
-        <p className="mt-1 break-all font-mono text-white/65">{ingestUrl}</p>
+        <p className="mt-1 break-all font-mono text-muted-foreground">{ingestUrl}</p>
         <div className="mt-2 flex gap-2">
           <Button size="sm" variant="ghost" onClick={copyUrl}>
             <Copy className="h-3 w-3" />

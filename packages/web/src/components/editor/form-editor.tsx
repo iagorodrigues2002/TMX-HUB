@@ -72,8 +72,8 @@ export function FormEditor({ jobId, form }: FormEditorProps) {
     >
       <header className="space-y-1">
         <p className="hud-label">Form Editor</p>
-        <h3 className="text-[14px] font-semibold text-white">Formulário</h3>
-        <p className="break-all font-mono text-[10px] text-white/45">{form.selector}</p>
+        <h3 className="text-[14px] font-semibold text-foreground">Formulário</h3>
+        <p className="break-all font-mono text-[10px] text-muted-foreground">{form.selector}</p>
       </header>
 
       <div className="space-y-2">
@@ -132,17 +132,17 @@ export function FormEditor({ jobId, form }: FormEditorProps) {
 
       <section className="space-y-2">
         <p className="hud-label">Campos ({form.fields.length})</p>
-        <ul className="space-y-1 rounded-md border border-white/[0.08] bg-white/[0.02] p-3 text-[12px]">
+        <ul className="space-y-1 rounded-md border border-border bg-muted p-3 text-[12px]">
           {form.fields.length === 0 ? (
-            <li className="text-white/45">Nenhum campo detectado.</li>
+            <li className="text-muted-foreground">Nenhum campo detectado.</li>
           ) : (
             form.fields.map((f) => (
               <li
                 key={`${f.name}-${f.type}`}
                 className="flex items-center justify-between gap-2 font-mono"
               >
-                <span className="truncate text-white/80">{f.name || '(sem nome)'}</span>
-                <span className="text-[10px] uppercase tracking-[0.12em] text-white/45">
+                <span className="truncate text-foreground">{f.name || '(sem nome)'}</span>
+                <span className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
                   {f.type}
                   {f.required && ' *'}
                   {f.hidden && ' (oculto)'}

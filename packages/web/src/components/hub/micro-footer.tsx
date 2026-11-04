@@ -12,11 +12,11 @@ export function MicroFooter({ floating = false }: { floating?: boolean }) {
     >
       <span aria-hidden className="status-dot" />
       <span>STATUS: ONLINE</span>
-      <span aria-hidden className="hidden text-white/20 sm:inline">
+      <span aria-hidden className="hidden text-muted-foreground sm:inline">
         ·
       </span>
       <span className="hidden sm:inline">NEURAL-LOCK ENCRYPTION ACTIVE</span>
-      <span aria-hidden className="text-white/20">
+      <span aria-hidden className="text-muted-foreground">
         ·
       </span>
       <span>TMX HUB v0.10</span>

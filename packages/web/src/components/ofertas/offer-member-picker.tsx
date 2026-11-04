@@ -17,14 +17,14 @@ export function OfferMemberPicker({ members, selected, onChange, loading }: Prop
   const eligible = members.filter((member) => member.role === 'user');
 
   return (
-    <section className="space-y-3 rounded-md border border-white/[0.08] bg-white/[0.02] p-4">
+    <section className="space-y-3 rounded-md border border-border bg-muted p-4">
       <div className="flex items-start gap-3">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-cyan-300/[0.08] text-cyan-300">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent text-primary">
           <Users className="h-4 w-4" />
         </span>
         <div>
           <p className="hud-label">Acesso dos membros</p>
-          <p className="mt-1 text-[11px] text-white/45">
+          <p className="mt-1 text-[11px] text-muted-foreground">
             Selecione quais usuários já cadastrados poderão visualizar esta oferta, seus anúncios e
             métricas.
           </p>
@@ -32,9 +32,9 @@ export function OfferMemberPicker({ members, selected, onChange, loading }: Prop
       </div>
 
       {loading ? (
-        <p className="text-[12px] text-white/45">Carregando membros…</p>
+        <p className="text-[12px] text-muted-foreground">Carregando membros…</p>
       ) : eligible.length === 0 ? (
-        <p className="rounded-md border border-white/[0.06] p-3 text-[12px] text-white/45">
+        <p className="rounded-md border border-border p-3 text-[12px] text-muted-foreground">
           Nenhum membro disponível. Cadastre usuários em Administração para liberá-los aqui.
         </p>
       ) : (
@@ -45,7 +45,7 @@ export function OfferMemberPicker({ members, selected, onChange, loading }: Prop
               <label
                 key={member.id}
                 htmlFor={`${id}-${member.id}`}
-                className="flex cursor-pointer items-center gap-3 rounded-md border border-white/[0.06] bg-black/10 px-3 py-3 hover:border-cyan-300/20"
+                className="flex cursor-pointer items-center gap-3 rounded-md border border-border bg-accent px-3 py-3 hover:border-border"
               >
                 <Checkbox
                   id={`${id}-${member.id}`}
@@ -59,10 +59,12 @@ export function OfferMemberPicker({ members, selected, onChange, loading }: Prop
                   }
                 />
                 <span className="min-w-0">
-                  <span className="block truncate text-[13px] font-medium text-white/80">
+                  <span className="block truncate text-[13px] font-medium text-foreground">
                     {member.name}
                   </span>
-                  <span className="block truncate text-[11px] text-white/40">{member.email}</span>
+                  <span className="block truncate text-[11px] text-muted-foreground">
+                    {member.email}
+                  </span>
                 </span>
               </label>
             );
@@ -70,7 +72,7 @@ export function OfferMemberPicker({ members, selected, onChange, loading }: Prop
         </div>
       )}
 
-      <p className="text-[10px] uppercase tracking-[0.13em] text-white/35">
+      <p className="text-[10px] uppercase tracking-[0.13em] text-muted-foreground">
         {selected.length === 0
           ? 'Somente administradores e o responsável pela oferta'
           : `${selected.length} membro(s) com acesso`}

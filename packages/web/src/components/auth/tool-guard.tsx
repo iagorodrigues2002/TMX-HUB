@@ -2,8 +2,8 @@
 
 import { type ToolKey, canAccessTool } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
+import { useRouter } from '@/lib/motion-router';
 import { Loader2, Lock } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { type ReactNode, useEffect } from 'react';
 
 /**
@@ -31,7 +31,7 @@ export function ToolGuard({
 
   if (loading || !user) {
     return (
-      <div className="grid min-h-[40vh] place-items-center text-white/45">
+      <div className="grid min-h-[40vh] place-items-center text-muted-foreground">
         <Loader2 className="h-6 w-6 animate-spin" />
       </div>
     );
@@ -40,15 +40,15 @@ export function ToolGuard({
   if (!allowed) {
     return (
       <div className="mx-auto max-w-md py-16 text-center">
-        <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-md border border-rose-300/30 bg-rose-300/[0.06]">
-          <Lock className="h-6 w-6 text-rose-300" />
+        <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-md border border-danger/30 bg-danger/10">
+          <Lock className="h-6 w-6 text-danger" />
         </div>
-        <h1 className="text-[20px] font-semibold text-white">Acesso restrito</h1>
-        <p className="mt-2 text-[13px] text-white/55">
+        <h1 className="text-[20px] font-semibold text-foreground">Acesso restrito</h1>
+        <p className="mt-2 text-[13px] text-muted-foreground">
           Sua conta não tem acesso à ferramenta <strong>{tool}</strong>. Solicite um novo convite a
           um administrador.
         </p>
-        <p className="mt-3 text-[11px] uppercase tracking-[0.14em] text-white/35">
+        <p className="mt-3 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
           Redirecionando para Tools…
         </p>
       </div>

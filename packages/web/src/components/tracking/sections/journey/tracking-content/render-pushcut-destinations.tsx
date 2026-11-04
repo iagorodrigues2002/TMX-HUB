@@ -11,7 +11,7 @@ export function renderPushcutDestinations(context: TrackingContentContext) {
     removePushcutDestination,
   } = context;
   return (
-    <div className="mt-7 border-t border-white/[0.07] pt-6">
+    <div className="mt-7 border-t border-border pt-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="hud-label">Destinos configurados</p>
         {canManage && (pushcutDestinations.data?.destinations?.length ?? 0) > 0 && (
@@ -27,14 +27,11 @@ export function renderPushcutDestinations(context: TrackingContentContext) {
       </div>
       <div className="mt-3 space-y-2">
         {(pushcutDestinations.data?.destinations ?? []).map((destination) => (
-          <div
-            key={destination.id}
-            className="rounded border border-white/[0.07] bg-black/10 p-3 text-xs"
-          >
+          <div key={destination.id} className="rounded border border-border bg-accent p-3 text-xs">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="font-medium text-white/85">{destination.name}</p>
-                <p className="mt-1 text-white/40">
+                <p className="font-medium text-foreground">{destination.name}</p>
+                <p className="mt-1 text-muted-foreground">
                   Front: <span className="font-mono">{destination.front_notification_name}</span>
                   {destination.upsell_notification_name && (
                     <>
@@ -45,13 +42,13 @@ export function renderPushcutDestinations(context: TrackingContentContext) {
                   )}
                 </p>
                 {Array.isArray(destination.devices) && destination.devices.length > 0 && (
-                  <p className="mt-1 text-white/30">
+                  <p className="mt-1 text-muted-foreground">
                     Dispositivos: {destination.devices.join(', ')}
                   </p>
                 )}
               </div>
               <div className="flex items-center gap-2">
-                <span className={destination.enabled ? 'text-emerald-300' : 'text-white/30'}>
+                <span className={destination.enabled ? 'text-success' : 'text-muted-foreground'}>
                   {destination.enabled ? 'ativo' : 'desativado'}
                 </span>
                 {canManage && (
@@ -92,7 +89,7 @@ export function renderPushcutDestinations(context: TrackingContentContext) {
           </div>
         ))}
         {!pushcutDestinations.data?.destinations?.length && (
-          <p className="rounded border border-dashed border-white/[0.08] p-4 text-sm text-white/35">
+          <p className="rounded border border-dashed border-border p-4 text-sm text-muted-foreground">
             Nenhum destino Pushcut configurado ainda.
           </p>
         )}

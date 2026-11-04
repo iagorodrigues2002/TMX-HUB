@@ -39,7 +39,7 @@ export function renderDashboardSettings({
 }) {
   return (
     <form
-      className="rounded-2xl border border-cyan-300/15 bg-bg-elevated/90 p-5 sm:p-6"
+      className="glass-card rounded-2xl border border-border bg-bg-elevated/90 p-5 sm:p-6"
       onSubmit={(event) => {
         event.preventDefault();
         handleSave();
@@ -47,12 +47,12 @@ export function renderDashboardSettings({
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="font-semibold text-white">Destino agregador</h2>
-          <p className="mt-1 text-xs leading-5 text-white/40">
+          <h2 className="font-semibold text-foreground">Destino agregador</h2>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
             Use o token e o Pixel ID pertencentes à dashboard geral da UTMify.
           </p>
         </div>
-        <label className="flex min-h-11 cursor-pointer items-center gap-2 text-xs text-white/60">
+        <label className="flex min-h-11 cursor-pointer items-center gap-2 text-xs text-muted-foreground">
           <input
             type="checkbox"
             checked={form.enabled}
@@ -140,7 +140,7 @@ export function renderDashboardSettings({
           variant="outline"
           onClick={() => replay.mutate()}
           disabled={!dashboardConfig.configured || replay.isPending}
-          className="gap-2 border-white/10"
+          className="gap-2 border-border"
         >
           {replay.isPending ? (
             <Loader2 className="animate-spin" />
@@ -154,7 +154,7 @@ export function renderDashboardSettings({
           variant="outline"
           onClick={() => test.mutate()}
           disabled={!dashboardConfig.configured || test.isPending}
-          className="gap-2 border-white/10"
+          className="gap-2 border-border"
         >
           {test.isPending ? <Loader2 className="animate-spin" /> : <Send className="h-4 w-4" />}
           {test.isPending ? 'Enviando…' : 'Enviar pedido teste'}

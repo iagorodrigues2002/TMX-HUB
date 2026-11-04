@@ -4,23 +4,23 @@ import { cn } from '@/lib/utils';
 const STATUS_META: Record<OfferStatus, { label: string; className: string }> = {
   testando: {
     label: 'Testando',
-    className: 'border-amber-300/30 bg-amber-300/10 text-amber-200',
+    className: 'border-warning/30 bg-warning/10 text-warning',
   },
   validando: {
     label: 'Validando',
-    className: 'border-cyan-300/30 bg-cyan-300/10 text-cyan-200',
+    className: 'border-border bg-accent text-primary',
   },
   escala: {
     label: 'Escala',
-    className: 'border-emerald-300/30 bg-emerald-300/10 text-emerald-200',
+    className: 'border-success/30 bg-success/10 text-success',
   },
   pausado: {
     label: 'Pausado',
-    className: 'border-white/15 bg-white/[0.04] text-white/55',
+    className: 'border-border bg-muted text-muted-foreground',
   },
   morrendo: {
     label: 'Morrendo',
-    className: 'border-rose-300/30 bg-rose-300/10 text-rose-200',
+    className: 'border-danger/30 bg-danger/10 text-danger',
   },
 };
 

@@ -1,15 +1,16 @@
 'use client';
+import { useDataPending } from '@/lib/data-pending';
 
 import { request } from '@/lib/api-client/request';
 import { useAuth } from '@/lib/auth-context';
 import type { DateRange } from '@/lib/date-range';
 import world from '@d3-maps/atlas/world/countries/countries-110m';
 import { useQueries } from '@tanstack/react-query';
-import { geoNaturalEarth1, geoPath } from 'd3-geo';
+import { geoGraticule10, geoNaturalEarth1, geoPath } from 'd3-geo';
 import type { FeatureCollection, Geometry } from 'geojson';
 import countries from 'i18n-iso-countries';
 import pt from 'i18n-iso-countries/langs/pt.json';
-import { Globe2 } from 'lucide-react';
+import { CircleDot, Pause, Play } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { feature } from 'topojson-client';
 import styles from './country-activity-map.module.css';
@@ -39,10 +40,11 @@ export function CountryActivityMap({
   salesView?: 'general' | 'natural';
 }) {
   const { user } = useAuth();
+  const identity = `${user?.id}:${user?.role}`;
   const scope = `${user?.id}:${user?.role}:${[...new Set(offerIds)].sort().join(',')}:${period.from}:${period.to}:${salesView}`;
   return (
     <Activity
-      key={scope}
+      key={identity}
       offerIds={[...new Set(offerIds)]}
       period={period}
       animated={animated}
@@ -65,9 +67,12 @@ function Activity({
   scope: string;
   salesView: 'general' | 'natural';
 }) {
+  const pending = useDataPending();
   const [selected, setSelected] = useState<string | null>(null);
+  const [paused, setPaused] = useState(false);
   const [pulses, setPulses] = useState<string[]>([]);
   const previous = useRef<Map<string, Row> | null>(null);
+  const previousScope = useRef(scope);
   const queries = useQueries({
     queries: offerIds.map((id) => ({
       queryKey: ['country-activity', scope, id],
@@ -85,7 +90,7 @@ function Activity({
   const failed = queries.some((q) => q.isError || (q.data && q.data.version !== 'pre-purchase-v1'));
   const loading = queries.some((q) => q.isPending);
   const rows = new Map<string, Row>();
-  if (!failed && !loading)
+  if (!failed && !loading && !pending)
     for (const query of queries)
       for (const row of query.data?.rows ?? []) {
         const code = countries.isValid(row.country) ? row.country : 'ZZ';
@@ -111,6 +116,11 @@ function Activity({
       }
   const signature = JSON.stringify([...rows.values()]);
   useEffect(() => {
+    if (previousScope.current !== scope) {
+      previousScope.current = scope;
+      previous.current = null;
+      setSelected(null);
+    }
     if (failed || loading) {
       previous.current = null;
       setPulses([]);
@@ -130,39 +140,73 @@ function Activity({
     setPulses(changed);
     const timer = setTimeout(() => setPulses([]), 1400);
     return () => clearTimeout(timer);
-  }, [signature, failed, loading]);
+  }, [signature, failed, loading, scope]);
   const geometry = useMemo(() => {
     const collection = feature(world, world.objects.features!) as FeatureCollection<Geometry>;
-    const path = geoPath(geoNaturalEarth1().fitSize([960, 430], collection));
-    return collection.features.map((item) => ({
-      id: String(item.properties?.id ?? ''),
-      path: path(item) ?? '',
-      center: path.centroid(item),
-    }));
+    const path = geoPath(
+      geoNaturalEarth1().fitExtent(
+        [
+          [12, 10],
+          [888, 420],
+        ],
+        { type: 'Sphere' },
+      ),
+    );
+    return {
+      grid: path(geoGraticule10()) ?? '',
+      countries: collection.features.map((item) => ({
+        id: String(item.properties?.id ?? ''),
+        path: path(item) ?? '',
+        center: path.centroid(item),
+      })),
+    };
   }, []);
   const picked = selected ? rows.get(selected) : null;
   return (
-    <section className={styles.panel} aria-label="Atividade global real">
+    <section
+      className={styles.panel}
+      data-motion-panel
+      data-glass-surface
+      aria-label="Atividade global real"
+      data-paused={paused || !animated || pending}
+    >
       <header className={styles.header}>
         <h3>
-          <Globe2 size={16} aria-hidden /> Atividade global
+          <CircleDot size={16} aria-hidden /> Atividade global
         </h3>
-        <span>Atualiza a cada 30 s</span>
+        <div className={styles.actions}>
+          <span>Atualiza a cada 30 s</span>
+          <button
+            type="button"
+            aria-label={paused ? 'Retomar animação do mapa' : 'Pausar animação do mapa'}
+            aria-pressed={paused}
+            onClick={() => setPaused(!paused)}
+          >
+            {paused ? <Play size={12} aria-hidden /> : <Pause size={12} aria-hidden />}
+          </button>
+        </div>
       </header>
       <p className={styles.legend}>
         <span className={styles.purchase}>● Compras aprovadas</span>
         <span className={styles.checkout}>● Checkouts</span>
       </p>
-      <div className={styles.map}>
-        <svg viewBox="0 0 960 430" aria-label="Mapa com compras e checkouts por país">
+      <div
+        className={styles.map}
+        onMouseLeave={() => setSelected(null)}
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) setSelected(null);
+        }}
+      >
+        <svg viewBox="0 0 900 430" aria-label="Mapa com compras e checkouts por país">
           <title>Mapa com compras e checkouts por país</title>
-          {geometry.map((item) => {
+          <path d={geometry.grid} className={styles.grid} />
+          {geometry.countries.map((item) => {
             const code = countries.alpha3ToAlpha2(item.id) ?? item.id;
             const row = rows.get(code);
             const [x, y] = item.center;
             return (
               <g key={item.id}>
-                <path d={item.path} fill="#10313c" stroke="#22606b" strokeWidth=".6" />
+                <path d={item.path} className={styles.country} data-selected={selected === code} />
                 {row &&
                 (row.paid_orders || row.checkouts) &&
                 Number.isFinite(x) &&
@@ -239,9 +283,19 @@ function Activity({
             {picked.checkouts} checkouts
           </>
         ) : (
-          'Passe o mouse, toque ou use Tab nos pontos para ver o país.'
+          <>
+            <strong>Explore a atividade por país</strong>
+            <small>
+              {pending
+                ? 'Atualizando dados…'
+                : rows.has('ZZ') && rows.size === 1
+                  ? 'Há atividade sem país informado; nenhum ponto é estimado.'
+                  : `${[...rows.keys()].filter((code) => code !== 'ZZ').length} países identificados · passe o mouse, toque ou use Tab`}
+            </small>
+          </>
         )}
       </div>
+      <p className={styles.footer}>Passe o mouse, toque ou use Tab nos pontos para ver o país.</p>
     </section>
   );
 }

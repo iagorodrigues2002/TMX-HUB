@@ -80,15 +80,15 @@ export function TrackingOverviewDashboard() {
 
   return (
     <div className="space-y-5">
-      <section className="rounded-lg border border-white/[0.08] bg-white/[0.025] p-5">
+      <section className="glass-card rounded-lg border border-border bg-muted p-5">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="grid h-10 w-10 place-items-center rounded-lg border border-cyan-300/25 bg-cyan-300/[0.08]">
-              <LayoutDashboard className="h-4.5 w-4.5 text-cyan-300" />
+            <div className="grid h-10 w-10 place-items-center rounded-lg border border-border bg-accent">
+              <LayoutDashboard className="h-4.5 w-4.5 text-primary" />
             </div>
             <div>
               <p className="hud-label">Visão geral · separada por conta</p>
-              <p className="mt-1 text-sm text-white/50">
+              <p className="mt-1 text-sm text-muted-foreground">
                 Cada conta tem seus próprios totais. Dados financeiros nunca são misturados.
               </p>
             </div>
@@ -144,14 +144,16 @@ export function TrackingOverviewDashboard() {
           return (
             <section
               key={account.owner_id}
-              className="space-y-4 rounded-xl border border-cyan-300/[0.16] bg-cyan-300/[0.025] p-3 sm:p-4"
+              className="glass-card space-y-4 rounded-xl border border-border bg-accent p-3 sm:p-4"
             >
-              <header className="flex flex-wrap items-center justify-between gap-2 border-b border-cyan-300/[0.12] px-1 pb-3">
+              <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-1 pb-3">
                 <div>
                   <p className="hud-label">Conta</p>
-                  <h2 className="mt-1 text-base font-semibold text-white">{account.owner_name}</h2>
+                  <h2 className="mt-1 text-base font-semibold text-foreground">
+                    {account.owner_name}
+                  </h2>
                 </div>
-                <p className="rounded-full border border-cyan-300/20 bg-cyan-300/[0.06] px-3 py-1 text-[11px] text-cyan-100/75">
+                <p className="rounded-full border border-border bg-accent px-3 py-1 text-[11px] text-primary">
                   {integer(account.offers.length)}{' '}
                   {account.offers.length === 1 ? 'oferta' : 'ofertas'}
                 </p>
@@ -171,7 +173,7 @@ export function TrackingOverviewDashboard() {
                     <div className="tmx-kpi-strip-head">
                       <span className="tmx-kpi-strip-label">Vendas com erro</span>
                     </div>
-                    <p className="mono-num tmx-kpi-strip-value text-amber-200">
+                    <p className="mono-num tmx-kpi-strip-value text-warning">
                       {pick(totals?.failed_revenue_brl_minor, totals?.failed_revenue_usd_minor)}
                     </p>
                     <p className="tmx-kpi-strip-detail">
@@ -253,15 +255,15 @@ export function TrackingOverviewDashboard() {
                 </div>
               </div>
 
-              <p className="text-xs text-white/45">
+              <p className="text-xs text-muted-foreground">
                 Devoluções pela data da ocorrência; podem ser de compras anteriores. Percentuais
                 sobre o faturamento bruto do período, não sobre uma coorte de compras.
               </p>
 
-              <div className="overflow-x-auto rounded-lg border border-white/[0.08]">
+              <div className="glass-card overflow-x-auto rounded-lg border border-border">
                 <table className="w-full min-w-[820px] border-collapse text-sm">
                   <thead>
-                    <tr className="border-b border-white/[0.08] text-left text-[10px] uppercase tracking-wider text-white/40">
+                    <tr className="border-b border-border text-left text-[10px] uppercase tracking-wider text-muted-foreground">
                       <th className="p-3 font-medium">Oferta</th>
                       <th className="p-3 text-right font-medium tabular-nums">Pedidos</th>
                       <th className="p-3 text-right font-medium tabular-nums">Bruto</th>
@@ -284,30 +286,30 @@ export function TrackingOverviewDashboard() {
                       return (
                         <tr
                           key={offer.offer_id}
-                          className="border-b border-white/[0.05] text-white/75 last:border-0"
+                          className="border-b border-border text-foreground last:border-0"
                         >
-                          <td className="p-3 font-medium text-white/90">{offer.offer_name}</td>
+                          <td className="p-3 font-medium text-foreground">{offer.offer_name}</td>
                           <td className="mono-num p-3 text-right tabular-nums">
                             {integer(offer.paid_orders)}
                           </td>
                           <td className="mono-num p-3 text-right tabular-nums">
                             {pick(offer.gross_revenue_brl_minor, offer.gross_revenue_usd_minor)}
                           </td>
-                          <td className="mono-num p-3 text-right tabular-nums text-amber-200/80">
+                          <td className="mono-num p-3 text-right tabular-nums text-warning">
                             <span className="block">
                               {pick(offer.failed_revenue_brl_minor, offer.failed_revenue_usd_minor)}
                             </span>
-                            <span className="mt-1 block text-[10px] text-white/35">
+                            <span className="mt-1 block text-[10px] text-muted-foreground">
                               {integer(offer.failed_orders)} pedidos
                             </span>
                           </td>
-                          <td className="mono-num p-3 text-right tabular-nums text-amber-200/80">
+                          <td className="mono-num p-3 text-right tabular-nums text-warning">
                             {pick(offerReversed.brl, offerReversed.usd)}
-                            <span className="mt-1 block text-[10px] text-white/50">
+                            <span className="mt-1 block text-[10px] text-muted-foreground">
                               {percentage(offerReversed.percentage)} do bruto
                             </span>
                           </td>
-                          <td className="mono-num p-3 text-right tabular-nums text-white/50">
+                          <td className="mono-num p-3 text-right tabular-nums text-muted-foreground">
                             {pick(offer.fees_brl_minor, offer.fees_usd_minor)}
                           </td>
                           <td className="mono-num p-3 text-right tabular-nums text-danger/80">
@@ -316,19 +318,19 @@ export function TrackingOverviewDashboard() {
                                 ? '—'
                                 : pick(offerReversed.impactBrl, offerReversed.impactUsd)}
                             </span>
-                            <span className="mt-1 block text-[10px] text-white/35">
+                            <span className="mt-1 block text-[10px] text-muted-foreground">
                               {(offer.fees_missing_operations ?? 0) > 0
                                 ? 'Taxas não configuradas'
                                 : `${percentage(offerReversed.impactPercentage)} do bruto`}
                             </span>
                           </td>
-                          <td className="mono-num p-3 text-right tabular-nums text-white/50">
+                          <td className="mono-num p-3 text-right tabular-nums text-muted-foreground">
                             {pick(offer.reserve_brl_minor, offer.reserve_usd_minor)}
                           </td>
-                          <td className="mono-num p-3 text-right font-medium tabular-nums text-cyan-200">
+                          <td className="mono-num p-3 text-right font-medium tabular-nums text-primary">
                             {pick(offer.net_available_brl_minor, offer.net_available_usd_minor)}
                           </td>
-                          <td className="mono-num p-3 text-right font-medium tabular-nums text-emerald-200">
+                          <td className="mono-num p-3 text-right font-medium tabular-nums text-success">
                             {pick(offer.net_revenue_brl_minor, offer.net_revenue_usd_minor)}
                           </td>
                         </tr>

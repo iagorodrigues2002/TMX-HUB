@@ -42,7 +42,7 @@ export function InspectionPanel({ result, onClone, onCancel, submitting }: Inspe
         <button
           type="button"
           onClick={onCancel}
-          className="rounded p-1 text-white/40 transition hover:text-white/70"
+          className="rounded p-1 text-muted-foreground transition hover:text-muted-foreground"
         >
           <X className="h-4 w-4" />
         </button>
@@ -51,27 +51,31 @@ export function InspectionPanel({ result, onClone, onCancel, submitting }: Inspe
       {/* Checkout links */}
       <section className="space-y-3">
         <div className="flex items-center gap-2">
-          <ShoppingCart className="h-4 w-4 text-cyan-300/70" />
-          <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">
+          <ShoppingCart className="h-4 w-4 text-primary" />
+          <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             Links de checkout detectados ({result.checkoutLinks.length})
           </span>
         </div>
 
         {result.checkoutLinks.length === 0 ? (
-          <p className="pl-6 text-[12px] text-white/35">Nenhum link de checkout encontrado.</p>
+          <p className="pl-6 text-[12px] text-muted-foreground">
+            Nenhum link de checkout encontrado.
+          </p>
         ) : (
           <div className="space-y-2 pl-2">
             {result.checkoutLinks.map((link) => (
               <div
                 key={link.href}
-                className="space-y-1 rounded-md border border-white/[0.07] bg-white/[0.02] p-3"
+                className="space-y-1 rounded-md border border-border bg-muted p-3"
               >
                 <div className="flex items-start gap-2">
-                  <ExternalLink className="mt-0.5 h-3 w-3 shrink-0 text-white/30" />
+                  <ExternalLink className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-mono text-[11px] text-white/60">{link.href}</p>
+                    <p className="truncate font-mono text-[11px] text-muted-foreground">
+                      {link.href}
+                    </p>
                     {link.text && (
-                      <p className="text-[11px] text-white/35">
+                      <p className="text-[11px] text-muted-foreground">
                         {link.text} · {link.occurrences}×
                       </p>
                     )}
@@ -96,20 +100,20 @@ export function InspectionPanel({ result, onClone, onCancel, submitting }: Inspe
       {result.headScripts.length > 0 && (
         <section className="space-y-3">
           <div className="flex items-center gap-2">
-            <FileCode2 className="h-4 w-4 text-cyan-300/70" />
-            <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">
+            <FileCode2 className="h-4 w-4 text-primary" />
+            <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               Scripts no HEAD ({result.headScripts.length} externos
               {result.inlineScriptCount > 0 && `, ${result.inlineScriptCount} inline`})
             </span>
           </div>
-          <p className="pl-6 text-[11px] text-white/35">
+          <p className="pl-6 text-[11px] text-muted-foreground">
             Todos os scripts são removidos por padrão. Marque os que deseja preservar.
           </p>
           <div className="space-y-1.5 pl-2">
             {result.headScripts.map((script) => (
               <label
                 key={script.src}
-                className="flex cursor-pointer items-start gap-3 rounded-md border border-white/[0.06] bg-white/[0.015] p-2.5 transition hover:bg-white/[0.04]"
+                className="flex cursor-pointer items-start gap-3 rounded-md border border-border bg-muted p-2.5 transition hover:bg-muted"
               >
                 <input
                   type="checkbox"
@@ -117,7 +121,7 @@ export function InspectionPanel({ result, onClone, onCancel, submitting }: Inspe
                   onChange={() => toggleScript(script.src)}
                   className="mt-0.5 h-3.5 w-3.5 accent-cyan-400"
                 />
-                <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-white/55">
+                <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
                   {script.src}
                 </span>
               </label>

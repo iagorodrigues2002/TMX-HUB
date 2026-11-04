@@ -16,14 +16,14 @@ export function FunnelRow(props: {
   return (
     <div
       className={`grid items-end gap-3 rounded-md border p-3 md:grid-cols-[80px_1fr_1fr_auto] ${
-        isFront ? 'border-cyan-300/30 bg-cyan-300/[0.03]' : 'border-white/[0.06] bg-white/[0.02]'
+        isFront ? 'border-border bg-accent' : 'border-border bg-muted'
       }`}
     >
       <div>
         <Label className="hud-label">Etapa</Label>
         <p
           className={`mt-1 text-[13px] font-semibold uppercase tracking-[0.14em] ${
-            isFront ? 'text-cyan-300' : 'text-white/85'
+            isFront ? 'text-primary' : 'text-foreground'
           }`}
         >
           {props.step.name}

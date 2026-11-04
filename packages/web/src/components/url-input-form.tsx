@@ -5,9 +5,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { apiClient } from '@/lib/api-client';
+import { useRouter } from '@/lib/motion-router';
 import type { InspectResult, LinkReplacement } from '@page-cloner/shared';
 import { Box, Globe, Loader2, Search, Sparkles, Zap } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { InspectionPanel } from './inspection-panel';
@@ -119,7 +119,7 @@ export function UrlInputForm() {
       <div className="space-y-2">
         <Label htmlFor="url">URL da página</Label>
         <div className="relative">
-          <Globe className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-300/70" />
+          <Globe className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" />
           <Input
             id="url"
             type="url"
@@ -136,28 +136,28 @@ export function UrlInputForm() {
           />
         </div>
         {urlError && (
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-rose-300">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-danger">
             {urlError}
           </p>
         )}
       </div>
 
       <fieldset className="space-y-3">
-        <legend className="px-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45">
+        <legend className="px-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           Opções
         </legend>
         <label
           htmlFor="render-js"
-          className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.025] p-3.5 transition hover:border-cyan-300/20 hover:bg-cyan-300/[0.025]"
+          className="flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-muted p-3.5 transition hover:border-border hover:bg-accent"
         >
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-cyan-300/[0.07] text-cyan-300">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent text-primary">
             <Sparkles className="h-4 w-4" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-sm font-medium text-white/85">
+            <span className="block text-sm font-medium text-foreground">
               Renderização inteligente
             </span>
-            <span className="block text-xs text-white/40">
+            <span className="block text-xs text-muted-foreground">
               Executa JavaScript para capturar SPAs e conteúdo dinâmico
             </span>
           </span>
@@ -170,14 +170,14 @@ export function UrlInputForm() {
         </label>
         <label
           htmlFor="inline-assets"
-          className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.025] p-3.5 transition hover:border-cyan-300/20 hover:bg-cyan-300/[0.025]"
+          className="flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-muted p-3.5 transition hover:border-border hover:bg-accent"
         >
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white/[0.04] text-white/60">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
             <Box className="h-4 w-4" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-sm font-medium text-white/85">Pacote independente</span>
-            <span className="block text-xs text-white/40">
+            <span className="block text-sm font-medium text-foreground">Pacote independente</span>
+            <span className="block text-xs text-muted-foreground">
               Incorpora imagens, estilos e fontes diretamente no clone
             </span>
           </span>
@@ -215,7 +215,7 @@ export function UrlInputForm() {
           type="button"
           onClick={() => void handleCloneDirect()}
           disabled={busy || !url}
-          className="w-full text-center text-[11px] text-white/35 transition hover:text-white/60 disabled:cursor-not-allowed disabled:opacity-40"
+          className="w-full text-center text-[11px] text-muted-foreground transition hover:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-40"
         >
           {step === 'cloning' ? (
             <span className="flex items-center justify-center gap-1.5">

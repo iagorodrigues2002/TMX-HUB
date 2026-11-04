@@ -70,13 +70,15 @@ export function EditorShell({ jobId, job, left, center, right }: EditorShellProp
     >
       <div className="flex h-full flex-col">
         {/* Sub-header: source URL */}
-        <div className="flex h-10 shrink-0 items-center gap-3 border-b border-white/[0.06] bg-white/[0.02] px-4 text-[11px] text-white/55">
-          <span className="font-semibold uppercase tracking-[0.18em] text-white/40">Source</span>
-          <span className="min-w-0 flex-1 truncate font-mono text-white/70">
+        <div className="flex h-10 shrink-0 items-center gap-3 border-b border-border bg-muted px-4 text-[11px] text-muted-foreground">
+          <span className="font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            Source
+          </span>
+          <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground">
             {truncate(job?.url ?? jobId, 110)}
           </span>
           {job?.finalUrl && job.finalUrl !== job.url && (
-            <span className="hidden truncate font-mono text-white/45 md:inline">
+            <span className="hidden truncate font-mono text-muted-foreground md:inline">
               → {truncate(job.finalUrl, 80)}
             </span>
           )}
@@ -84,13 +86,17 @@ export function EditorShell({ jobId, job, left, center, right }: EditorShellProp
 
         {isDesktop ? (
           <main className="grid flex-1 grid-cols-[280px_1fr_360px] overflow-hidden">
-            <section className="overflow-hidden border-r border-white/[0.06]">{left}</section>
+            <section data-tmx-editor-pane className="overflow-hidden border-r border-border">
+              {left}
+            </section>
             <EditorCanvas job={job}>{center}</EditorCanvas>
-            <section className="overflow-hidden border-l border-white/[0.06]">{right}</section>
+            <section data-tmx-editor-pane className="overflow-hidden border-l border-border">
+              {right}
+            </section>
           </main>
         ) : (
           <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <div className="flex shrink-0 gap-2 border-b border-white/[0.06] bg-white/[0.02] p-2">
+            <div className="flex shrink-0 gap-2 border-b border-border bg-muted p-2">
               <MobilePanelDialog
                 triggerLabel="Estrutura"
                 title="Estrutura da página"
@@ -118,10 +124,10 @@ export function EditorShell({ jobId, job, left, center, right }: EditorShellProp
 
 function EditorCanvas({ job, children }: { job: CloneJob | undefined; children: ReactNode }) {
   return (
-    <section className="relative min-h-0 overflow-hidden bg-white/[0.02]">
+    <section className="relative min-h-0 overflow-hidden bg-muted">
       {children}
       {job?.counts && job.status === 'ready' && (
-        <div className="pointer-events-none absolute bottom-3 left-3 rounded-sm border border-white/10 bg-background/80 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/65 backdrop-blur">
+        <div className="pointer-events-none absolute bottom-3 left-3 rounded-sm border border-border bg-background/80 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground backdrop-blur">
           {job.counts.forms ?? 0} formulários · {job.counts.links ?? 0} links ·{' '}
           {job.counts.assets ?? 0} assets
         </div>
@@ -154,7 +160,7 @@ function MobilePanelDialog({
         </Button>
       </DialogTrigger>
       <DialogContent className="flex h-[min(82dvh,720px)] flex-col gap-0 overflow-hidden p-0">
-        <DialogHeader className="shrink-0 border-b border-white/[0.06] p-4 pr-14">
+        <DialogHeader className="shrink-0 border-b border-border p-4 pr-14">
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>

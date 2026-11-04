@@ -21,7 +21,7 @@ export type FinanceBalance = {
   at: string;
   stale: boolean;
 };
-const record = z.record(z.unknown());
+const record = z.record(z.string(), z.unknown());
 const identifier = z
   .union([z.string().min(1).max(200), z.number().int().nonnegative()])
   .transform(String);

@@ -3,6 +3,7 @@ import Script from 'next/script';
 import type { ReactNode } from 'react';
 import { Providers } from './providers';
 import './globals.css';
+import './design-system.css';
 
 export const metadata: Metadata = {
   title: 'TMX HUB · TERMINAL DE CONTROLE',
@@ -13,7 +14,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="pt-BR" suppressHydrationWarning>
+    <html lang="pt-BR" data-tmx-design="glass" suppressHydrationWarning>
       <head>
         {/* Apply the persisted theme before paint to avoid a dark flash in light mode. */}
         <Script id="theme-init" strategy="beforeInteractive">

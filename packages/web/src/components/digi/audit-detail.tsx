@@ -88,7 +88,7 @@ export function AuditDetail({ id }: { id: string }) {
   if (isLoading || !data) {
     return (
       <div className="glass-card flex items-center justify-center p-12">
-        <Loader2 className="h-5 w-5 animate-spin text-cyan-300" />
+        <Loader2 className="h-5 w-5 animate-spin text-primary" />
       </div>
     );
   }
@@ -123,7 +123,9 @@ export function AuditDetail({ id }: { id: string }) {
             </Link>
           </Button>
           <div className="flex flex-wrap items-baseline justify-between gap-3">
-            <h1 className="text-2xl font-bold tracking-tight text-white">{data.productName}</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              {data.productName}
+            </h1>
             <div className="flex items-center gap-2">
               <Label className="hud-label">Status</Label>
               <Select
@@ -161,7 +163,7 @@ export function AuditDetail({ id }: { id: string }) {
             />
           </div>
           {overall.critDone < overall.critTotal && (
-            <p className="flex items-start gap-1.5 text-[11px] text-amber-300/85">
+            <p className="flex items-start gap-1.5 text-[11px] text-warning">
               <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
               {overall.critTotal - overall.critDone} item(ns) crítico(s) ainda pendente(s) —
               bloqueiam aprovação segura.
@@ -180,30 +182,32 @@ export function AuditDetail({ id }: { id: string }) {
                 <button
                   type="button"
                   onClick={() => setOpenSection(open ? null : section.id)}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-white/[0.02]"
+                  className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted"
                 >
                   <span className="text-[18px]">{section.emoji}</span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline gap-2">
-                      <h3 className="text-[14px] font-semibold text-white">{section.title}</h3>
-                      <span className="font-mono text-[10px] text-white/45">
+                      <h3 className="text-[14px] font-semibold text-foreground">{section.title}</h3>
+                      <span className="font-mono text-[10px] text-muted-foreground">
                         {done}/{total}
                       </span>
                     </div>
-                    <div className="mt-1 h-0.5 overflow-hidden rounded-full bg-white/[0.06]">
-                      <div className="h-full bg-cyan-300/70" style={{ width: `${pct}%` }} />
+                    <div className="mt-1 h-0.5 overflow-hidden rounded-full bg-accent">
+                      <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
                     </div>
                   </div>
                   {open ? (
-                    <ChevronUp className="h-4 w-4 text-white/45" />
+                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
                   ) : (
-                    <ChevronDown className="h-4 w-4 text-white/45" />
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
                   )}
                 </button>
                 {open && (
-                  <div className="space-y-2 border-t border-white/[0.06] bg-black/15 p-4">
+                  <div className="space-y-2 border-t border-border bg-accent p-4">
                     {section.context && (
-                      <p className="mb-2 text-[12px] italic text-white/45">{section.context}</p>
+                      <p className="mb-2 text-[12px] italic text-muted-foreground">
+                        {section.context}
+                      </p>
                     )}
                     {section.items.map((item) => (
                       <ItemRow
@@ -229,37 +233,39 @@ export function AuditDetail({ id }: { id: string }) {
             onBlur={flushNotes}
             placeholder="Decisões, contexto, links externos…"
             rows={5}
-            className="w-full rounded-md border border-white/[0.10] bg-white/[0.04] px-3 py-2 text-[13px] text-white/85 placeholder:text-white/30 focus:border-cyan-300/40 focus:outline-none"
+            className="w-full rounded-md border border-border bg-muted px-3 py-2 text-[13px] text-foreground placeholder:text-muted-foreground focus:border-border focus:outline-none"
           />
-          <p className="text-[10px] text-white/35">Salva ao sair do campo.</p>
+          <p className="text-[10px] text-muted-foreground">Salva ao sair do campo.</p>
         </div>
       </div>
 
       {/* Sidebar — Red flags */}
       <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start">
-        <div className="glass-card space-y-3 border-rose-300/20 bg-rose-300/[0.03] p-4">
+        <div className="glass-card space-y-3 border-danger/30 bg-danger/10 p-4">
           <div className="flex items-center gap-2">
-            <ShieldAlert className="h-4 w-4 text-rose-300" />
-            <p className="hud-label text-rose-200">Bandeiras vermelhas</p>
+            <ShieldAlert className="h-4 w-4 text-danger" />
+            <p className="hud-label text-danger">Bandeiras vermelhas</p>
           </div>
-          <p className="text-[11px] text-white/55">Se qualquer um disso acionar, pause tudo:</p>
+          <p className="text-[11px] text-muted-foreground">
+            Se qualquer um disso acionar, pause tudo:
+          </p>
           <ul className="space-y-1.5">
             {RED_FLAGS.map((rf) => (
-              <li key={rf.id} className="flex items-start gap-1.5 text-[11px] text-rose-100/80">
-                <span className="mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-rose-300/70" />
+              <li key={rf.id} className="flex items-start gap-1.5 text-[11px] text-danger">
+                <span className="mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-danger/10" />
                 <span>{rf.label}</span>
               </li>
             ))}
           </ul>
-          <div className="rounded-md border border-rose-300/15 bg-rose-300/[0.05] p-2 text-[10px] text-rose-100/75">
+          <div className="rounded-md border border-danger/30 bg-danger/10 p-2 text-[10px] text-danger">
             <strong>Ação:</strong> {RED_FLAG_ACTION}
           </div>
         </div>
 
-        <div className="glass-card p-4 text-[11px] text-white/55">
+        <div className="glass-card p-4 text-[11px] text-muted-foreground">
           <div className="mb-2 flex items-center gap-2">
-            <ClipboardCheck className="h-3.5 w-3.5 text-cyan-300/70" />
-            <p className="hud-label text-white/65">Resumo 1-página</p>
+            <ClipboardCheck className="h-3.5 w-3.5 text-primary" />
+            <p className="hud-label text-muted-foreground">Resumo 1-página</p>
           </div>
           <ul className="space-y-1 font-mono text-[10px]">
             <li>matriz: 5% | afiliados: 95% (cap 50k)</li>
@@ -271,12 +277,12 @@ export function AuditDetail({ id }: { id: string }) {
           </ul>
         </div>
 
-        <div className="rounded-md border border-cyan-300/15 bg-cyan-300/[0.04] p-3 text-[11px] text-white/65">
+        <div className="rounded-md border border-border bg-accent p-3 text-[11px] text-muted-foreground">
           <a
             href="https://help.digistore24.com/hc/en-us"
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-1 font-semibold text-cyan-200 hover:text-cyan-100"
+            className="flex items-center gap-1 font-semibold text-primary hover:text-primary"
           >
             Help Center Digi <ExternalLink className="h-3 w-3" />
           </a>
@@ -284,7 +290,7 @@ export function AuditDetail({ id }: { id: string }) {
             href="https://www.digistore24.com/extern/calculator/iframe/en"
             target="_blank"
             rel="noreferrer"
-            className="mt-1 flex items-center gap-1 font-semibold text-cyan-200 hover:text-cyan-100"
+            className="mt-1 flex items-center gap-1 font-semibold text-primary hover:text-primary"
           >
             Calculadora de fees <ExternalLink className="h-3 w-3" />
           </a>

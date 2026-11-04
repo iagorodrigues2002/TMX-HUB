@@ -21,8 +21,8 @@ export function JobStatus({ job, isLoading, error }: JobStatusProps) {
   if (isLoading && !job) {
     return (
       <Card>
-        <CardContent className="flex items-center gap-3 p-6 text-[13px] text-white/60">
-          <Loader2 className="h-4 w-4 animate-spin text-cyan-300" />
+        <CardContent className="flex items-center gap-3 p-6 text-[13px] text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
           Carregando job…
         </CardContent>
       </Card>
@@ -31,14 +31,14 @@ export function JobStatus({ job, isLoading, error }: JobStatusProps) {
 
   if (error) {
     return (
-      <Card className="border-rose-400/40 bg-rose-500/[0.06]">
+      <Card className="border-danger/30 bg-danger/10">
         <CardContent className="flex items-start gap-3 p-6 text-[13px]">
-          <AlertCircle className="mt-0.5 h-4 w-4 text-rose-300" />
+          <AlertCircle className="mt-0.5 h-4 w-4 text-danger" />
           <div className="space-y-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-rose-200">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-danger">
               Falha ao carregar job
             </p>
-            <p className="text-white/60">{error.message}</p>
+            <p className="text-muted-foreground">{error.message}</p>
           </div>
         </CardContent>
       </Card>
@@ -49,15 +49,15 @@ export function JobStatus({ job, isLoading, error }: JobStatusProps) {
 
   if (job.status === 'failed' && job.error) {
     return (
-      <Card className="border-rose-400/40 bg-rose-500/[0.06]">
+      <Card className="border-danger/30 bg-danger/10">
         <CardContent className="flex items-start gap-3 p-6 text-[13px]">
-          <AlertCircle className="mt-0.5 h-4 w-4 text-rose-300" />
+          <AlertCircle className="mt-0.5 h-4 w-4 text-danger" />
           <div className="space-y-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-rose-200">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-danger">
               Clone falhou
             </p>
-            <p className="text-white/65">{job.error.message}</p>
-            <p className="font-mono text-[11px] text-white/40">código: {job.error.code}</p>
+            <p className="text-muted-foreground">{job.error.message}</p>
+            <p className="font-mono text-[11px] text-muted-foreground">código: {job.error.code}</p>
           </div>
         </CardContent>
       </Card>
@@ -70,11 +70,11 @@ export function JobStatus({ job, isLoading, error }: JobStatusProps) {
   return (
     <Card>
       <CardContent className="flex items-center gap-3 p-6 text-[13px]">
-        <Loader2 className="h-4 w-4 animate-spin text-cyan-300" />
+        <Loader2 className="h-4 w-4 animate-spin text-primary" />
         <div className="flex-1 space-y-2">
-          <p className="text-white/75">{text}</p>
+          <p className="text-foreground">{text}</p>
           {typeof job.progress === 'number' && (
-            <div className="h-1 w-full overflow-hidden rounded-full bg-white/[0.06]">
+            <div className="h-1 w-full overflow-hidden rounded-full bg-accent">
               <div
                 className="h-full transition-all"
                 style={{

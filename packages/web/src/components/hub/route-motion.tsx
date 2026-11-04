@@ -1,65 +1,52 @@
 'use client';
 
 import { useInterfaceEffects } from '@/lib/interface-effects';
+import { motionScreenKey } from '@/lib/motion-session';
 import {
-  PANEL_ENTRANCE,
-  ROUTE_TRANSITION,
-  ROUTE_TRANSITION_FRAMES,
-  claimMotionEntrance,
-  motionScreenKey,
-  panelEntranceFrames,
-  visitMotionScreen,
-} from '@/lib/motion-session';
+  isActiveMotionTab,
+  isVisible,
+  routeAddedPanels,
+  routeEntrancePanels,
+  routeEntranceScreens,
+} from '@/lib/route-motion-selection';
+import {
+  captureRouteSnapshot,
+  clearRouteSnapshot,
+  playRouteSnapshot,
+  prepareRouteTransition,
+  registerRouteCapture,
+} from '@/lib/route-snapshot';
+import {
+  SCREEN_TRANSITION,
+  animateScreenPanels,
+  cancelScreenAnimations,
+  setRouteEntranceDelay,
+} from '@/lib/screen-transition';
 import { getSessionGeneration } from '@/lib/session-data';
-import { usePathname, useSearchParams } from 'next/navigation';
-import { type RefObject, useLayoutEffect, useRef } from 'react';
+import { usePathname } from 'next/navigation';
+import { type ReactNode, useLayoutEffect, useRef } from 'react';
+import motionStyles from './route-motion.module.css';
 
-function isVisible(element: HTMLElement) {
-  return !element.closest('[hidden], [aria-hidden="true"], [data-state="inactive"]');
-}
-
-function visibleSiblings(candidates: HTMLElement[]) {
-  const visible = candidates.filter(isVisible);
-  return visible.filter(
-    (element) => !visible.some((other) => other !== element && other.contains(element)),
+function routeSurface(root: HTMLElement) {
+  return (
+    root.querySelector<HTMLElement>('[data-motion-coordinated="true"][data-motion-screen]') ??
+    root.querySelector<HTMLElement>('[data-motion-coordinated="true"]') ??
+    root.querySelector<HTMLElement>('main') ??
+    root.querySelector<HTMLElement>('.tmx-public-surface > div:last-child') ??
+    (root.firstElementChild as HTMLElement | null)
   );
 }
 
-/** Choose siblings, never both a surface and one of its descendants. */
-export function routeEntrancePanels(scope: HTMLElement): HTMLElement[] {
-  const explicit = Array.from(scope.querySelectorAll<HTMLElement>('[data-motion-panel]'));
-  const candidates = explicit.length
-    ? explicit
-    : Array.from(scope.querySelectorAll<HTMLElement>('section, .tmx-kpi-card'));
-  const topLevel = visibleSiblings(candidates);
-  return (topLevel.length ? topLevel : [scope]).slice(0, PANEL_ENTRANCE.maxPanels);
-}
-
-export function routeEntranceScreens(scope: HTMLElement): HTMLElement[] {
-  return visibleSiblings(
-    scope.matches('[data-motion-screen]')
-      ? [scope]
-      : Array.from(scope.querySelectorAll<HTMLElement>('[data-motion-screen]')),
-  );
-}
-
-export function isActiveMotionTab(scope: Pick<HTMLElement, 'getAttribute'>): boolean {
-  return scope.getAttribute('role') === 'tabpanel' && scope.getAttribute('data-state') === 'active';
-}
-
-export function RouteMotion({
-  content,
-  fullBleed,
-}: { content: RefObject<HTMLDivElement | null>; fullBleed?: boolean }) {
+export function RouteMotion({ children }: { children: ReactNode }) {
+  const content = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
-  const search = useSearchParams();
   const { visual } = useInterfaceEffects();
-  const screenKey = `${getSessionGeneration()}:${motionScreenKey(pathname ?? '/', search)}`;
-  const screenVisit = useRef<({ key: string } & ReturnType<typeof visitMotionScreen>) | null>(null);
+  const generation = getSessionGeneration();
 
   useLayoutEffect(() => {
     const root = document.documentElement;
-    root.dataset.tmxMotion = visual ? 'on' : 'off';
+    const preference = visual ? 'on' : 'off';
+    if (root.dataset.tmxMotion !== preference) root.dataset.tmxMotion = preference;
     const updateVisibility = () => {
       root.dataset.tmxMotionPaused = document.hidden ? 'true' : 'false';
     };
@@ -69,128 +56,186 @@ export function RouteMotion({
   }, [visual]);
 
   useLayoutEffect(() => {
-    const element = content.current;
-    if (!element) return;
+    const root = content.current;
+    if (!root) return;
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
-    if (screenVisit.current?.key !== screenKey) {
-      screenVisit.current = { key: screenKey, ...visitMotionScreen(screenKey) };
-    }
-    const visit = screenVisit.current;
+    const unavailable = () => !visual || reduced.matches || document.hidden;
+    const currentScreenKey = () =>
+      `${generation}:${motionScreenKey(pathname ?? '/', new URLSearchParams(window.location.search))}`;
+    let displayedKey = currentScreenKey();
+    let surface = routeSurface(root);
     const running = new Set<Animation>();
-    const scheduled = new Map<string, number>();
-    let rootEntrance = false;
+    const scheduled = new Map<HTMLElement, number>();
+    const played = new WeakSet<HTMLElement>();
+    const animatedPanels = new WeakSet<HTMLElement>();
+    const identities = new Set<string>();
+    let fallback = false;
+    if (unavailable()) clearRouteSnapshot();
+    const outgoing = !unavailable() && playRouteSnapshot(currentScreenKey(), generation, surface);
+    root.dataset.routeTransitionOverlap = String(outgoing);
+    let entranceDelay = outgoing ? SCREEN_TRANSITION.overlap : 0;
+    setRouteEntranceDelay(entranceDelay);
     const cancelAnimations = () => {
       for (const frame of scheduled.values()) cancelAnimationFrame(frame);
       scheduled.clear();
-      for (const animation of running) animation.cancel();
-      running.clear();
+      cancelScreenAnimations(running);
     };
-    // New screens arrive in sequence. Revisits dissolve quickly without replaying that entrance.
-    const revisiting = visit.navigating && !visit.firstVisit;
-    if (revisiting) {
-      if (visual && !reduced.matches && !document.hidden && typeof element.animate === 'function') {
-        const animation = element.animate(ROUTE_TRANSITION_FRAMES, ROUTE_TRANSITION);
-        running.add(animation);
-        animation.addEventListener(
-          'finish',
-          () => {
-            visit.navigating = false;
-            running.delete(animation);
-            animation.cancel();
-          },
-          { once: true },
-        );
-      }
-    }
-    const play = (scope: HTMLElement, key: string, reactivated = false) => {
-      if (!isVisible(scope) || scheduled.has(key)) return;
-      if (!visual || reduced.matches || document.hidden || typeof scope.animate !== 'function') {
-        claimMotionEntrance(key);
+    const unregisterCapture = registerRouteCapture(() => {
+      if (!surface?.isConnected || unavailable() || generation !== getSessionGeneration()) return;
+      cancelAnimations();
+      captureRouteSnapshot(surface, routeEntrancePanels(surface), displayedKey, generation);
+    });
+    const beforeLink = (event: MouseEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      )
+        return;
+      const link = event.target instanceof Element ? event.target.closest('a[href]') : null;
+      if (
+        !(link instanceof HTMLAnchorElement) ||
+        link.hasAttribute('download') ||
+        (link.target && link.target !== '_self')
+      )
+        return;
+      prepareRouteTransition(link.href);
+    };
+    const beforeHistory = () => prepareRouteTransition();
+    document.addEventListener('click', beforeLink, true);
+    window.addEventListener('popstate', beforeHistory, true);
+    const play = (scope: HTMLElement, reactivated = false, addedPanels?: HTMLElement[]) => {
+      const identity = scope.dataset.motionScreen;
+      if (
+        !isVisible(scope) ||
+        scheduled.has(scope) ||
+        (!reactivated &&
+          !addedPanels &&
+          (played.has(scope) || (identity && identities.has(identity))))
+      )
+        return;
+      if (unavailable()) {
+        played.add(scope);
         return;
       }
-      // Schedule only the finite entrance. Polling never starts another sequence.
       scheduled.set(
-        key,
+        scope,
         requestAnimationFrame(() => {
-          scheduled.delete(key);
-          if (!scope.isConnected || !isVisible(scope)) return;
-          const firstEntrance = claimMotionEntrance(key);
-          if (!firstEntrance && !reactivated) return;
-          const panels = firstEntrance ? routeEntrancePanels(scope) : [scope];
-          panels.forEach((panel, index) => {
-            const animation = panel.animate(
-              firstEntrance
-                ? panelEntranceFrames(fullBleed || panel === element)
-                : ROUTE_TRANSITION_FRAMES,
-              {
-                duration: firstEntrance ? PANEL_ENTRANCE.duration : ROUTE_TRANSITION.duration,
-                delay: firstEntrance ? index * PANEL_ENTRANCE.stagger : 0,
-                easing: PANEL_ENTRANCE.easing,
-                fill: 'backwards',
-              },
-            );
-            running.add(animation);
-            animation.addEventListener(
-              'finish',
-              () => {
-                running.delete(animation);
+          scheduled.delete(scope);
+          if (!scope.isConnected || !isVisible(scope) || unavailable()) return;
+          played.add(scope);
+          if (identity) identities.add(identity);
+          const panels = (addedPanels ?? routeEntrancePanels(scope)).filter(
+            (panel) => reactivated || !animatedPanels.has(panel),
+          );
+          if (!panels.length) return;
+          for (const panel of panels) animatedPanels.add(panel);
+          scope.dataset.routeTransition = 'entering';
+          void animateScreenPanels(scope, panels, true, running, entranceDelay).then(() => {
+            scope.dataset.routeTransition = 'entered';
+            for (const animation of running) {
+              if (animation.playState === 'finished') {
                 animation.cancel();
-              },
-              { once: true },
-            );
+                running.delete(animation);
+              }
+            }
           });
         }),
       );
     };
     const playScreen = (scope: HTMLElement, reactivated = false) => {
-      const name = scope.dataset.motionScreen;
-      if (!name || !isVisible(scope)) return;
-      // A lazily loaded screen replaces the fallback entrance, never layers over it.
-      if (rootEntrance) {
+      if (!scope.dataset.motionScreen || !isVisible(scope)) return;
+      const parentScreen = scope.parentElement?.closest<HTMLElement>('[data-motion-screen]');
+      if (
+        parentScreen?.dataset.routeTransition === 'entering' ||
+        [...scheduled.keys()].some((parent) => parent !== scope && parent.contains(scope))
+      )
+        return;
+      if (reactivated) {
         cancelAnimations();
-        rootEntrance = false;
+        const leaving =
+          !unavailable() && playRouteSnapshot(currentScreenKey(), generation, surface);
+        displayedKey = currentScreenKey();
+        entranceDelay = leaving ? SCREEN_TRANSITION.overlap : 0;
+        root.dataset.routeTransitionOverlap = String(leaving);
+        setRouteEntranceDelay(entranceDelay);
       }
-      play(scope, `${screenKey}:${name}`, reactivated);
+      if (fallback) {
+        cancelAnimations();
+        fallback = false;
+      }
+      play(scope, reactivated);
     };
-    const screens = routeEntranceScreens(element);
-    if (!revisiting && screens.length) {
-      for (const screen of screens) playScreen(screen);
-    } else if (!revisiting) {
-      rootEntrance = true;
-      play(element, screenKey);
-    }
-
-    // Watch explicit screen identity only, not text/values or the whole application.
+    const enter = () => {
+      if (!surface) return;
+      const screens = routeEntranceScreens(surface);
+      if (screens.length) for (const screen of screens) playScreen(screen);
+      else {
+        fallback = true;
+        play(surface);
+      }
+    };
+    enter();
+    // Only explicit identities enter again. Polling and metric text changes stay still.
     const observer = new MutationObserver((records) => {
+      const nextSurface = routeSurface(root);
+      if (nextSurface !== surface) {
+        cancelAnimations();
+        surface = nextSurface;
+        enter();
+      }
       for (const record of records) {
-        if (record.type === 'attributes' && record.target instanceof HTMLElement) {
-          playScreen(record.target, isActiveMotionTab(record.target));
-        }
+        if (record.type === 'attributes' && record.target instanceof HTMLElement)
+          playScreen(
+            record.target,
+            record.attributeName === 'data-motion-screen' || isActiveMotionTab(record.target),
+          );
         for (const node of record.addedNodes) {
           if (!(node instanceof HTMLElement)) continue;
-          for (const screen of routeEntranceScreens(node)) {
+          for (const screen of routeEntranceScreens(node))
             playScreen(screen, isActiveMotionTab(screen));
-          }
         }
       }
+      if (surface) {
+        const added = records
+          .flatMap((record) => [...record.addedNodes])
+          .filter((node): node is HTMLElement => node instanceof HTMLElement);
+        const panels = routeAddedPanels(surface, added, animatedPanels, scheduled.keys());
+        if (panels.length) play(surface, false, panels);
+      }
     });
-    observer.observe(element, {
+    observer.observe(root, {
       childList: true,
       subtree: true,
       attributes: true,
       attributeFilter: ['data-motion-screen', 'data-state', 'hidden'],
     });
     const stopWhenUnavailable = () => {
-      if (reduced.matches || document.hidden) cancelAnimations();
+      if (unavailable()) {
+        cancelAnimations();
+        clearRouteSnapshot();
+      }
     };
     reduced.addEventListener('change', stopWhenUnavailable);
     document.addEventListener('visibilitychange', stopWhenUnavailable);
     return () => {
       cancelAnimations();
+      unregisterCapture();
+      document.removeEventListener('click', beforeLink, true);
+      window.removeEventListener('popstate', beforeHistory, true);
       observer.disconnect();
       reduced.removeEventListener('change', stopWhenUnavailable);
       document.removeEventListener('visibilitychange', stopWhenUnavailable);
+      // StrictMode rehearses cleanup while the route stays mounted; capture only navigation intent.
+      if (unavailable() || generation !== getSessionGeneration()) clearRouteSnapshot();
     };
-  }, [content, fullBleed, screenKey, visual]);
-  return null;
+  }, [generation, pathname, visual]);
+  return (
+    <div ref={content} className={`${motionStyles.coordinated} min-h-dvh`}>
+      {children}
+    </div>
+  );
 }

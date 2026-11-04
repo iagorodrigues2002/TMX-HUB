@@ -67,12 +67,12 @@ export function AccountSecurity() {
   return (
     <section className="glass-card space-y-5 p-5 sm:p-6" aria-labelledby="account-security-title">
       <div className="flex items-center gap-2">
-        <KeyRound className="h-4 w-4 text-cyan-300" aria-hidden />
-        <h2 id="account-security-title" className="text-base font-semibold text-white">
+        <KeyRound className="h-4 w-4 text-primary" aria-hidden />
+        <h2 id="account-security-title" className="text-base font-semibold text-foreground">
           Alterar senha
         </h2>
       </div>
-      <p className="max-w-2xl text-[13px] text-white/55">
+      <p className="max-w-2xl text-[13px] text-muted-foreground">
         A mesma senha funciona em qualquer navegador. Sua sessão atual permanece ativa depois da
         alteração.
       </p>
@@ -124,7 +124,7 @@ export function AccountSecurity() {
             Definir senha sem a atual
           </Button>
         </div>
-        <p className="text-xs text-amber-200/80 md:col-span-3">
+        <p className="text-xs text-warning md:col-span-3">
           A redefinição sem a senha atual está disponível apenas para o administrador autenticado.
         </p>
       </form>

@@ -10,18 +10,18 @@ export default function UpsellAnalyzerPage() {
         <div className="mx-auto max-w-4xl">
           <header className="mb-8 space-y-3 text-center">
             <div
-              className="mx-auto grid h-14 w-14 place-items-center rounded-md border border-cyan-300/30"
+              className="mx-auto grid h-14 w-14 place-items-center rounded-md border border-border"
               style={{
                 background: 'linear-gradient(135deg, rgba(20,184,166,0.18), rgba(34,211,238,0.05))',
               }}
             >
-              <BarChart3 className="h-6 w-6 text-cyan-300" />
+              <BarChart3 className="h-6 w-6 text-primary" />
             </div>
             <p className="hud-label">Module 003 — Upsell Analyzer</p>
-            <h1 className="text-3xl font-bold tracking-tight text-white">
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">
               Analise as taxas de aceite, rejeição e não-vista
             </h1>
-            <p className="mx-auto max-w-2xl text-[14px] text-white/55">
+            <p className="mx-auto max-w-2xl text-[14px] text-muted-foreground">
               Suba os relatórios de Front e Upsell de qualquer plataforma de checkout. O cálculo
               roda 100% no seu navegador — nenhum dado sai daqui.
             </p>
@@ -29,7 +29,7 @@ export default function UpsellAnalyzerPage() {
 
           <UpsellAnalyzer />
 
-          <p className="mt-8 text-center text-[10px] uppercase tracking-[0.18em] text-white/30">
+          <p className="mt-8 text-center text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
             v0.7 ACTIVE · CLIENT-SIDE ONLY · NO BACKEND
           </p>
         </div>

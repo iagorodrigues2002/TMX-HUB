@@ -11,7 +11,7 @@ export function refundPercent(v: number | null | undefined, hidden: boolean) {
 }
 
 export const panel =
-  'refund-panel min-w-0 rounded-2xl border border-white/10 bg-bg-elevated/70 p-5 sm:p-7';
+  'refund-panel min-w-0 rounded-2xl border border-border bg-bg-elevated/70 p-5 sm:p-7';
 
 export function Metric({
   label,
@@ -26,13 +26,13 @@ export function Metric({
 }) {
   return (
     <div className={`refund-metric min-w-0 ${label === 'Impacto total' ? 'refund-impact' : ''}`}>
-      <dt className="text-sm font-medium text-white/65">{label}</dt>
+      <dt className="text-sm font-medium text-muted-foreground">{label}</dt>
       <dd
-        className={`mt-3 break-words text-[clamp(1.4rem,2vw,2rem)] font-semibold leading-tight tracking-tight tabular-nums ${danger ? 'text-rose-300' : 'text-white'}`}
+        className={`mt-3 break-words text-[clamp(1.4rem,2vw,2rem)] font-semibold leading-tight tracking-tight tabular-nums ${danger ? 'text-danger' : 'text-foreground'}`}
       >
         {value}
       </dd>
-      <p className="mt-2 text-xs leading-5 text-white/65">{detail}</p>
+      <p className="mt-2 text-xs leading-5 text-muted-foreground">{detail}</p>
     </div>
   );
 }
@@ -50,9 +50,9 @@ export function Change({
 }) {
   return (
     <div>
-      <p className="text-sm text-white/60">{label}</p>
+      <p className="text-sm text-muted-foreground">{label}</p>
       <p
-        className={`mt-2 text-2xl font-semibold tracking-tight tabular-nums ${hidden ? 'text-white/60' : value != null && value < 0 ? 'text-emerald-300' : value != null && value > 0 ? 'text-rose-300' : 'text-white/60'}`}
+        className={`mt-2 text-2xl font-semibold tracking-tight tabular-nums ${hidden ? 'text-muted-foreground' : value != null && value < 0 ? 'text-success' : value != null && value > 0 ? 'text-danger' : 'text-muted-foreground'}`}
       >
         {hidden
           ? '****'
@@ -60,7 +60,7 @@ export function Change({
             ? '—'
             : `${value > 0 ? '+' : ''}${value.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ${suffix}`}
       </p>
-      <p className="mt-1 text-xs text-white/50">
+      <p className="mt-1 text-xs text-muted-foreground">
         {value == null
           ? 'Sem base anterior comparável'
           : hidden
@@ -94,6 +94,8 @@ export type Delay = {
 
 export function Empty() {
   return (
-    <p className="py-8 text-center text-sm text-white/50">Nenhum dado disponível neste filtro.</p>
+    <p className="py-8 text-center text-sm text-muted-foreground">
+      Nenhum dado disponível neste filtro.
+    </p>
   );
 }

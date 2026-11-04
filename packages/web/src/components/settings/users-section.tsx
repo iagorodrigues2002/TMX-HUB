@@ -91,23 +91,23 @@ export function UsersSection() {
     <section className="glass-card space-y-5 p-5">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <UsersIcon className="h-4 w-4 text-cyan-300" />
+          <UsersIcon className="h-4 w-4 text-primary" />
           <p className="hud-label">Usuários</p>
         </div>
-        <span className="text-[11px] text-white/40">{users.length} cadastrado(s)</span>
+        <span className="text-[11px] text-muted-foreground">{users.length} cadastrado(s)</span>
       </div>
 
-      <p className="text-[12px] text-white/55">
+      <p className="text-[12px] text-muted-foreground">
         Gerencie quem tem acesso ao hub e a quais ferramentas. Admins enxergam tudo; users restritos
         só veem o que estiver liberado.
       </p>
 
       {isLoading ? (
         <div className="flex items-center justify-center p-6">
-          <Loader2 className="h-4 w-4 animate-spin text-cyan-300" />
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
         </div>
       ) : users.length === 0 ? (
-        <p className="rounded-md border border-dashed border-white/[0.08] bg-white/[0.01] p-4 text-center text-[12px] text-white/45">
+        <p className="rounded-md border border-dashed border-border bg-muted p-4 text-center text-[12px] text-muted-foreground">
           Nenhum usuário ainda.
         </p>
       ) : (
@@ -117,28 +117,28 @@ export function UsersSection() {
             const isEditing = editingId === u.id;
             const currentScope = detectScope(u);
             return (
-              <li key={u.id} className="rounded-md border border-white/[0.06] bg-black/15 p-3">
+              <li key={u.id} className="rounded-md border border-border bg-accent p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1 space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-[13px] font-semibold text-white">{u.name}</p>
+                      <p className="text-[13px] font-semibold text-foreground">{u.name}</p>
                       {isMe && (
-                        <span className="rounded-full border border-white/[0.10] bg-white/[0.04] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/55">
+                        <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                           você
                         </span>
                       )}
                       {u.role === 'admin' ? (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/30 bg-amber-300/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-200">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-warning">
                           <Crown className="h-3 w-3" />
                           admin
                         </span>
                       ) : (
-                        <span className="rounded-full border border-white/[0.10] bg-white/[0.04] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/55">
+                        <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                           user
                         </span>
                       )}
                       {!isEditing && u.role === 'user' && (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-cyan-300/30 bg-cyan-300/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-200">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-border bg-accent px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
                           <Shield className="h-3 w-3" />
                           {currentScope === 'full'
                             ? 'acesso completo'
@@ -148,10 +148,10 @@ export function UsersSection() {
                         </span>
                       )}
                     </div>
-                    <p className="truncate text-[11px] text-white/55" title={u.email}>
+                    <p className="truncate text-[11px] text-muted-foreground" title={u.email}>
                       {u.email}
                     </p>
-                    <p className="text-[10px] text-white/40">
+                    <p className="text-[10px] text-muted-foreground">
                       registrado em {formatDate(u.createdAt)}
                     </p>
                   </div>
@@ -179,12 +179,12 @@ export function UsersSection() {
                 </div>
 
                 {isEditing && (
-                  <div className="mt-3 space-y-3 rounded-md border border-cyan-300/20 bg-cyan-300/[0.03] p-3">
+                  <div className="mt-3 space-y-3 rounded-md border border-border bg-accent p-3">
                     {/* Role */}
                     <div>
                       <p className="hud-label mb-1">Papel</p>
                       <div className="flex gap-2">
-                        <label className="flex items-center gap-1.5 text-[12px] text-white/80">
+                        <label className="flex items-center gap-1.5 text-[12px] text-foreground">
                           <input
                             type="radio"
                             name={`role-${u.id}`}
@@ -196,7 +196,7 @@ export function UsersSection() {
                         </label>
                         <label
                           className={`flex items-center gap-1.5 text-[12px] ${
-                            isMe ? 'text-white/40' : 'text-white/80'
+                            isMe ? 'text-muted-foreground' : 'text-foreground'
                           }`}
                           title={isMe ? 'Você não pode rebaixar a si mesmo' : ''}
                         >
@@ -220,7 +220,7 @@ export function UsersSection() {
                           value={editScope}
                           onChange={(e) => setEditScope(e.target.value as AccessScope)}
                           disabled={updateMut.isPending}
-                          className="h-9 w-full rounded-md border border-white/[0.10] bg-black/30 px-3 text-[12px] text-white focus:border-cyan-300/40 focus:outline-none"
+                          className="h-9 w-full rounded-md border border-border bg-accent px-3 text-[12px] text-foreground focus:border-border focus:outline-none"
                         >
                           {(Object.keys(SCOPE_LABEL) as AccessScope[]).map((k) => (
                             <option key={k} value={k}>
@@ -230,8 +230,8 @@ export function UsersSection() {
                         </select>
 
                         {editScope === 'custom' && (
-                          <div className="mt-2 rounded-md border border-white/[0.06] bg-black/30 p-3">
-                            <p className="mb-2 text-[10px] uppercase tracking-[0.14em] text-white/45">
+                          <div className="mt-2 rounded-md border border-border bg-accent p-3">
+                            <p className="mb-2 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
                               Selecione as ferramentas liberadas
                             </p>
                             <div className="grid grid-cols-2 gap-1.5">
@@ -240,7 +240,7 @@ export function UsersSection() {
                                 return (
                                   <label
                                     key={t.key}
-                                    className="flex items-center gap-1.5 rounded px-1.5 py-1 text-[12px] text-white/80 hover:bg-white/[0.04]"
+                                    className="flex items-center gap-1.5 rounded px-1.5 py-1 text-[12px] text-foreground hover:bg-muted"
                                   >
                                     <input
                                       type="checkbox"
@@ -278,7 +278,7 @@ export function UsersSection() {
                     )}
 
                     {editRole === 'admin' && (
-                      <p className="text-[11px] text-amber-200/85">
+                      <p className="text-[11px] text-warning">
                         Admins têm acesso completo automaticamente — escopo é ignorado.
                       </p>
                     )}

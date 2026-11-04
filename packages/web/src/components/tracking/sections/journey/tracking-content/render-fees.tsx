@@ -31,7 +31,7 @@ export function renderFees(context: TrackingContentContext) {
     >
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label htmlFor="fee-vendepay-pct" className="block text-xs text-white/45">
+          <label htmlFor="fee-vendepay-pct" className="block text-xs text-muted-foreground">
             Taxa Vendepay (%)
           </label>
           <Input
@@ -45,7 +45,7 @@ export function renderFees(context: TrackingContentContext) {
         </div>
         <div className="grid grid-cols-[1fr_90px] gap-2">
           <div>
-            <label htmlFor="fee-extra-amount" className="block text-xs text-white/45">
+            <label htmlFor="fee-extra-amount" className="block text-xs text-muted-foreground">
               Taxa extra (por venda)
             </label>
             <Input
@@ -58,7 +58,7 @@ export function renderFees(context: TrackingContentContext) {
             />
           </div>
           <div>
-            <label htmlFor="fee-extra-currency" className="block text-xs text-white/45">
+            <label htmlFor="fee-extra-currency" className="block text-xs text-muted-foreground">
               Moeda
             </label>
             <Input
@@ -72,7 +72,7 @@ export function renderFees(context: TrackingContentContext) {
           </div>
         </div>
         <div>
-          <label htmlFor="fee-reserve-pct" className="block text-xs text-white/45">
+          <label htmlFor="fee-reserve-pct" className="block text-xs text-muted-foreground">
             Reserva (%)
           </label>
           <Input
@@ -85,7 +85,7 @@ export function renderFees(context: TrackingContentContext) {
           />
         </div>
         <div>
-          <label htmlFor="fee-reserve-days" className="block text-xs text-white/45">
+          <label htmlFor="fee-reserve-days" className="block text-xs text-muted-foreground">
             Tempo de reserva (dias)
           </label>
           <Input
@@ -98,7 +98,7 @@ export function renderFees(context: TrackingContentContext) {
           />
         </div>
         <div>
-          <label htmlFor="fee-payout-days" className="block text-xs text-white/45">
+          <label htmlFor="fee-payout-days" className="block text-xs text-muted-foreground">
             Recebe em (dias)
           </label>
           <Input
@@ -121,7 +121,7 @@ export function renderFees(context: TrackingContentContext) {
         </Button>
       )}
       {feeSettings.data && !feeSettings.data.configured && (
-        <p className="mt-4 rounded border border-dashed border-white/[0.08] p-3 text-xs text-white/40">
+        <p className="mt-4 rounded border border-dashed border-border p-3 text-xs text-muted-foreground">
           Ainda usando os valores padrão do Mercado Global. Salve pra fixar essa configuração nesta
           oferta.
         </p>
@@ -130,7 +130,7 @@ export function renderFees(context: TrackingContentContext) {
         (config.data?.gateways ?? [])
           .filter((g) => g.provider !== 'vendepay')
           .map((g) => (
-            <div key={`fee-${g.id}`} className="mt-6 border-t border-white/10 pt-4">
+            <div key={`fee-${g.id}`} className="mt-6 border-t border-border pt-4">
               <h3>{g.name}</h3>
               <SyzepayFeeForm
                 id={g.id}

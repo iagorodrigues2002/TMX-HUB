@@ -124,12 +124,14 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
       <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex items-center gap-2">
-            <Target className="h-5 w-5 text-cyan-300" />
+            <Target className="h-5 w-5 text-primary" />
             <p className="hud-label">Oferta</p>
           </div>
-          <h1 className="break-words text-3xl font-bold tracking-tight text-white">{offerName}</h1>
+          <h1 className="break-words text-3xl font-bold tracking-tight text-foreground">
+            {offerName}
+          </h1>
           {offer?.dashboardId && canManage && (
-            <p className="break-all font-mono text-xs text-white/40">
+            <p className="break-all font-mono text-xs text-muted-foreground">
               utmify dashboardId: {offer.dashboardId} · moeda: {currency}
             </p>
           )}
@@ -154,39 +156,39 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 [&::-webkit-details-marker]:hidden">
             <div>
               <p className="hud-label">Conta de anúncios via UTMify</p>
-              <p className="mt-1 text-xs text-white/55">
+              <p className="mt-1 text-xs text-muted-foreground">
                 {capabilitiesQuery.data?.accountFields.length ?? 0} conta(s) identificada(s) ·
                 clique para abrir
               </p>
             </div>
             {capabilitiesQuery.isFetching ? (
-              <Loader2 className="h-4 w-4 animate-spin text-cyan-300" />
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
             ) : (
-              <ChevronDown className="h-4 w-4 text-white/45 transition-transform group-open:rotate-180" />
+              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
             )}
           </summary>
-          <div className="border-t border-white/[0.06] px-4 pb-4">
+          <div className="border-t border-border px-4 pb-4">
             {capabilitiesQuery.data?.accountFields.length ? (
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 {capabilitiesQuery.data.accountFields.map((account, index) => (
                   <div
                     key={JSON.stringify(account)}
-                    className="rounded-lg border border-white/[0.06] bg-black/10 px-3 py-3"
+                    className="rounded-lg border border-border bg-accent px-3 py-3"
                   >
-                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-300/70">
+                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
                       Conta {index + 1}
                     </p>
                     <div className="space-y-2">
                       {Object.entries(account).map(([key, value]) => (
                         <div key={key}>
-                          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35">
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                             {key === 'accountId'
                               ? 'ID da conta'
                               : key === 'accountStatus'
                                 ? 'Status da conta'
                                 : key}
                           </p>
-                          <p className="mt-1 truncate font-mono text-xs text-white/80">
+                          <p className="mt-1 truncate font-mono text-xs text-foreground">
                             {String(value)}
                           </p>
                         </div>
@@ -196,7 +198,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
                 ))}
               </div>
             ) : capabilitiesQuery.isSuccess ? (
-              <p className="mt-3 text-xs text-amber-200/75">
+              <p className="mt-3 text-xs text-warning">
                 O endpoint de anúncios não retornou nome nem status da conta neste período.
               </p>
             ) : capabilitiesQuery.isError ? (
@@ -208,7 +210,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
         </details>
       )}
 
-      <h2 className="mb-3 text-[16px] font-semibold text-white">Métricas</h2>
+      <h2 className="mb-3 text-[16px] font-semibold text-foreground">Métricas</h2>
 
       {/* Filter */}
       <DateRangeFilter
@@ -219,7 +221,7 @@ export default function OfertaDetailPage({ params }: { params: Promise<{ id: str
         className="mb-4"
         status={
           snapshotsQuery.isFetching ? (
-            <span className="inline-flex items-center gap-2 pb-2 text-xs text-cyan-200/70">
+            <span className="inline-flex items-center gap-2 pb-2 text-xs text-primary">
               <Loader2 className="h-4 w-4 animate-spin" /> Atualizando
             </span>
           ) : null

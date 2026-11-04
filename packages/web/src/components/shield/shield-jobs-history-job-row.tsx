@@ -20,11 +20,11 @@ export function JobRow({
   const status = job.status;
   const isReady = status === 'ready';
   const statusIcon = isReady ? (
-    <CheckCircle2 className="h-3 w-3 text-emerald-300" />
+    <CheckCircle2 className="h-3 w-3 text-success" />
   ) : status === 'failed' ? (
-    <XCircle className="h-3 w-3 text-rose-300" />
+    <XCircle className="h-3 w-3 text-danger" />
   ) : (
-    <Loader2 className="h-3 w-3 animate-spin text-cyan-300" />
+    <Loader2 className="h-3 w-3 animate-spin text-primary" />
   );
   const statusText = {
     queued: 'Fila',
@@ -35,7 +35,7 @@ export function JobRow({
   }[status];
 
   return (
-    <tr className="border-t border-white/[0.04]">
+    <tr className="border-t border-border">
       <td className="px-3 py-2">
         <Checkbox
           checked={selected}
@@ -49,26 +49,26 @@ export function JobRow({
           {statusIcon}
           <span
             className={
-              isReady ? 'text-emerald-300' : status === 'failed' ? 'text-rose-300' : 'text-cyan-300'
+              isReady ? 'text-success' : status === 'failed' ? 'text-danger' : 'text-primary'
             }
           >
             {statusText}
           </span>
         </span>
       </td>
-      <td className="max-w-[260px] truncate px-3 py-2 text-white/85" title={job.input.filename}>
+      <td className="max-w-[260px] truncate px-3 py-2 text-foreground" title={job.input.filename}>
         {job.input.filename}
       </td>
-      <td className="px-3 py-2 text-white/65">
+      <td className="px-3 py-2 text-muted-foreground">
         {job.niche.name}
-        <span className="text-white/35"> · </span>
-        <span className="text-white/55">{job.white.label}</span>
+        <span className="text-muted-foreground"> · </span>
+        <span className="text-muted-foreground">{job.white.label}</span>
       </td>
-      <td className="px-3 py-2 font-mono text-[11px] text-white/55">{job.compression}</td>
-      <td className="px-3 py-2 text-right font-mono text-[11px] text-white/55">
+      <td className="px-3 py-2 font-mono text-[11px] text-muted-foreground">{job.compression}</td>
+      <td className="px-3 py-2 text-right font-mono text-[11px] text-muted-foreground">
         {formatBytes(job.output?.bytes ?? job.input.bytes)}
       </td>
-      <td className="px-3 py-2 text-white/45">{formatDate(job.createdAt)}</td>
+      <td className="px-3 py-2 text-muted-foreground">{formatDate(job.createdAt)}</td>
       <td className="px-3 py-2 text-right">
         <div className="flex items-center justify-end gap-1">
           {isReady && job.output?.downloadUrl && (

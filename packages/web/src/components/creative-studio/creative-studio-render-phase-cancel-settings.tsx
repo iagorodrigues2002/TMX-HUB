@@ -40,22 +40,22 @@ export function renderPhaseCancelSettings({
 >) {
   return (
     <div
-      className={`rounded-xl border p-4 transition-all ${phaseCancel ? 'border-cyan-300/30 bg-cyan-300/[0.045] shadow-[0_0_28px_rgba(34,211,238,0.06)]' : 'border-white/[0.08] bg-white/[0.025]'}`}
+      className={`rounded-xl border p-4 transition-all ${phaseCancel ? 'border-border bg-accent shadow-[0_0_28px_rgba(34,211,238,0.06)]' : 'border-border bg-muted'}`}
     >
       <label htmlFor="phase-cancel" className="flex cursor-pointer items-center gap-3">
         <span
-          className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${phaseCancel ? 'bg-cyan-300/15 text-cyan-200' : 'bg-white/[0.04] text-white/50'}`}
+          className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${phaseCancel ? 'bg-accent text-primary' : 'bg-muted text-muted-foreground'}`}
         >
           <Shield className="h-5 w-5" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-2 text-sm font-semibold text-white">
+          <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
             Ativar Phase Cancel{' '}
-            <span className="rounded-full border border-cyan-300/20 bg-cyan-300/[0.06] px-2 py-0.5 text-[9px] uppercase tracking-wider text-cyan-200">
+            <span className="rounded-full border border-border bg-accent px-2 py-0.5 text-[9px] uppercase tracking-wider text-primary">
               Video Shield
             </span>
           </span>
-          <span className="mt-0.5 block text-xs text-white/45">
+          <span className="mt-0.5 block text-xs text-muted-foreground">
             Cancela a voz original em mono e mistura um White Audio que permanece audível para bots.
           </span>
         </span>
@@ -67,7 +67,7 @@ export function renderPhaseCancelSettings({
       </label>
 
       {phaseCancel && (
-        <div className="mt-4 grid gap-4 border-t border-cyan-300/10 pt-4 md:grid-cols-2">
+        <div className="mt-4 grid gap-4 border-t border-border pt-4 md:grid-cols-2">
           <div className="md:col-span-2">
             <Field label="Modo do áudio">
               <Select
@@ -84,7 +84,7 @@ export function renderPhaseCancelSettings({
               </Select>
             </Field>
             {!useWhiteAudio && (
-              <p className="mt-2 text-xs text-cyan-200/70">
+              <p className="mt-2 text-xs text-primary">
                 Nenhuma faixa adicional será adicionada. O vídeo manterá somente a inversão de fase.
               </p>
             )}
@@ -131,7 +131,7 @@ export function renderPhaseCancelSettings({
             />
           </div>
           {useWhiteAudio && niches.filter((niche) => niche.whites.length > 0).length === 0 && (
-            <p className="md:col-span-2 text-xs text-amber-200">
+            <p className="md:col-span-2 text-xs text-warning">
               Cadastre um nicho com pelo menos um White Audio na seção abaixo.
             </p>
           )}

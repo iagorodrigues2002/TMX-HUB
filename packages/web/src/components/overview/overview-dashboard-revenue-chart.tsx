@@ -1,6 +1,10 @@
 'use client';
+
 import { formatCurrency, formatInt } from '@/components/dashboard/kpi-cards';
-import { type ReactNode, useId, useState } from 'react';
+import { formatRevenueTick, hourlyCeiling, hourlyGeometry } from '@/components/ui/revenue-geometry';
+import { useDataPending } from '@/lib/data-pending';
+import { interpolateCount } from '@/lib/motion-session';
+import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import type { ChartPoint } from './overview-dashboard-support';
 import styles from './revenue-chart.module.css';
 
@@ -12,6 +16,7 @@ export function RevenueChart({
   currency,
   animated = false,
   controls,
+  privateMode = false,
 }: {
   title: string;
   description: string;
@@ -20,116 +25,222 @@ export function RevenueChart({
   currency: string;
   animated?: boolean;
   controls?: ReactNode;
+  privateMode?: boolean;
 }) {
   const id = useId();
+  const pending = useDataPending();
+  const plotRef = useRef<HTMLDivElement>(null);
+  const targets = useRef<(HTMLButtonElement | null)[]>([]);
+  const [width, setWidth] = useState(600);
   const [active, setActive] = useState<number | null>(null);
-  const maximum = Math.max(...points.map((point) => point.value), 1);
-  const x = (index: number) => 68 + (index * 628) / Math.max(points.length - 1, 1);
-  const y = (value: number) => 230 - (value / maximum) * 190;
-  const line = points.map((p, i) => `${i ? 'L' : 'M'}${x(i)},${y(p.value)}`).join(' ');
-  const selected = active === null ? undefined : points[active];
+  const signature = JSON.stringify(points.map((point) => point.value));
+  const [plot, setPlot] = useState(() => ({
+    values: points.map((point) => point.value),
+    ceiling: hourlyCeiling(points.map((point) => point.value)),
+  }));
+  const current = useRef(plot);
+
+  useEffect(() => {
+    if (!points.length || !plotRef.current) return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setWidth(Math.max(260, Math.round(entry.contentRect.width)));
+    });
+    observer.observe(plotRef.current);
+    return () => observer.disconnect();
+  }, [points.length]);
+
+  useEffect(() => {
+    const values = JSON.parse(signature) as number[];
+    const target = { values, ceiling: hourlyCeiling(values) };
+    const from = current.current;
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let frame = 0;
+    let start: number | undefined;
+    const update = (next: typeof target) => {
+      current.current = next;
+      setPlot(next);
+    };
+    const finish = () => {
+      cancelAnimationFrame(frame);
+      update(target);
+    };
+    const canAnimate = () =>
+      animated &&
+      !privateMode &&
+      !media.matches &&
+      !document.hidden &&
+      document.documentElement.dataset.tmxMotion !== 'off';
+    const tick = (time: number) => {
+      if (!canAnimate()) return finish();
+      start ??= time;
+      const progress = Math.min(1, (time - start) / 950);
+      update({
+        values: values.map((value, index) =>
+          interpolateCount(from.values[index] ?? value, value, progress),
+        ),
+        ceiling: interpolateCount(from.ceiling, target.ceiling, progress),
+      });
+      if (progress < 1) frame = requestAnimationFrame(tick);
+    };
+    const preference = () => {
+      if (!canAnimate()) finish();
+    };
+    if (!canAnimate() || from.values.length !== values.length) finish();
+    else frame = requestAnimationFrame(tick);
+    media.addEventListener('change', preference);
+    document.addEventListener('visibilitychange', preference);
+    const observer = new MutationObserver(preference);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-tmx-motion'],
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      media.removeEventListener('change', preference);
+      document.removeEventListener('visibilitychange', preference);
+      observer.disconnect();
+    };
+  }, [signature, animated, privateMode]);
+
+  const height = width < 400 ? 245 : 285;
+  const chart = hourlyGeometry(plot.values, width, height, plot.ceiling);
+  const focus = active === null ? undefined : chart.points[active];
+  const peak = chart.points.reduce<(typeof chart.points)[number] | undefined>(
+    (best, point) => (!best || point.value > best.value ? point : best),
+    undefined,
+  );
+  const money = (value: number) =>
+    pending ? '—' : privateMode ? '••••' : formatCurrency(value, currency);
+  const step = Math.max(1, Math.ceil(Math.max(1, points.length - 1) / (width < 400 ? 4 : 8)));
   return (
-    <section className={`glass-card overflow-hidden p-0 ${styles.chart}`} data-animated={animated}>
-      <header className="border-b border-border px-4 py-3">
-        <h4 className="text-sm font-semibold text-foreground">{title}</h4>
-        <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
+    <section className={`glass-card ${styles.chart}`} data-revenue-chart data-animated={animated}>
+      <header className={styles.header}>
+        <h4>{title}</h4>
+        <p>{description}</p>
         {controls}
       </header>
       {points.length === 0 ? (
-        <p className="px-4 py-10 text-center text-sm text-muted-foreground">{emptyMessage}</p>
+        <p className={styles.empty}>{emptyMessage}</p>
       ) : (
         <>
-          <div className={styles.summary} aria-live="polite">
-            <span>{selected ? selected.label : 'Total no período'}</span>
-            <strong>
-              {formatCurrency(
-                selected ? selected.value : points.reduce((sum, p) => sum + p.value, 0),
-                currency,
-              )}
-            </strong>
+          <div className={styles.summary}>
+            <span>Total no período</span>
+            <strong>{money(plot.values.reduce((sum, value) => sum + value, 0))}</strong>
             <span>
-              {formatInt(
-                selected ? selected.secondary : points.reduce((sum, p) => sum + p.secondary, 0),
-              )}{' '}
+              {pending ? '—' : formatInt(points.reduce((sum, point) => sum + point.secondary, 0))}{' '}
               vendas
             </span>
           </div>
-          <svg
+          <div
+            ref={plotRef}
+            style={{ visibility: pending ? 'hidden' : undefined }}
+            aria-hidden={pending || undefined}
             className={styles.plot}
-            viewBox="0 0 720 270"
-            // biome-ignore lint/a11y/useSemanticElements: SVG groups interactive chart marks, not form controls.
-            role="group"
-            aria-label={`${title}: receita e vendas por horário`}
+            onPointerLeave={() => setActive(null)}
+            onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) setActive(null);
+            }}
           >
-            <defs>
-              <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="currentColor" stopOpacity=".3" />
-                <stop offset="100%" stopColor="currentColor" stopOpacity=".01" />
-              </linearGradient>
-            </defs>
-            {[0, 0.25, 0.5, 0.75, 1].map((fraction) => (
-              <g key={fraction} className={styles.grid}>
-                <line x1="68" x2="696" y1={y(maximum * fraction)} y2={y(maximum * fraction)} />
-                <text x="60" y={y(maximum * fraction) + 4} textAnchor="end">
-                  {new Intl.NumberFormat('pt-BR', {
-                    notation: 'compact',
-                    maximumFractionDigits: 1,
-                  }).format(maximum * fraction)}
-                </text>
-              </g>
-            ))}
-            <g className={styles.series} key={points.map((p) => p.value).join(':')}>
-              <path d={`${line} L${x(points.length - 1)},230 L68,230 Z`} fill={`url(#${id})`} />
-              <path d={line} className={styles.glow} />
-              <path d={line} className={styles.line} />
-            </g>
-            {points.map((p, i) => (
-              <g key={p.key}>
-                {(i % Math.max(1, Math.ceil(points.length / 8)) === 0 ||
-                  i === points.length - 1) && (
-                  <text className={styles.label} x={x(i)} y="252" textAnchor="middle">
-                    {p.label}
-                  </text>
-                )}
-                <circle
-                  className={styles.dot}
-                  cx={x(i)}
-                  cy={y(p.value)}
-                  r={active === i ? 5 : 2.5}
+            <svg viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
+              <defs>
+                <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+                  <stop stopColor="currentColor" stopOpacity=".23" />
+                  <stop offset="1" stopColor="currentColor" stopOpacity=".01" />
+                </linearGradient>
+              </defs>
+              {[0, 1, 2, 3, 4].map((index) => (
+                <path
+                  key={index}
+                  d={`M64 ${30 + ((height - 68) * index) / 4}H${width - 18}`}
+                  className={styles.grid}
                 />
-                <rect
-                  x={x(i) - 12}
-                  y="25"
-                  width="24"
-                  height="210"
-                  fill="transparent"
+              ))}
+              <path d={chart.area} fill={`url(#${id})`} />
+              <path d={chart.line} className={styles.line} />
+              {chart.points.map((point) => (
+                <circle
+                  key={point.hour}
+                  cx={point.x}
+                  cy={point.y}
+                  r={point.hour === active ? 5 : 2.5}
+                  className={styles.dot}
+                />
+              ))}
+              {chart.points
+                .filter((point) => point.hour % step === 0 || point.hour === points.length - 1)
+                .map((point) => (
+                  <text key={point.hour} x={point.x} y={height - 13} textAnchor="middle">
+                    {points[point.hour]?.label}
+                  </text>
+                ))}
+              {peak && peak.value > 0 && (
+                <text x={Math.min(width - 90, peak.x + 10)} y={Math.max(16, peak.y - 12)}>
+                  Pico · {points[peak.hour]?.label}
+                </text>
+              )}
+              {focus && <path d={`M${focus.x} 30V${height - 38}`} className={styles.guide} />}
+            </svg>
+            <div className={styles.yAxis} aria-hidden="true">
+              {[0, 1, 2, 3, 4].map((index) => (
+                <span
+                  key={index}
+                  style={{ top: `${((30 + ((height - 68) * index) / 4) / height) * 100}%` }}
+                >
+                  {privateMode ? '••••' : formatRevenueTick(plot.ceiling * (1 - index / 4))}
+                </span>
+              ))}
+            </div>
+            <div aria-label={`${title}: explore os pontos do gráfico`}>
+              {chart.points.map((point) => (
+                <button
+                  type="button"
                   tabIndex={0}
-                  // biome-ignore lint/a11y/useSemanticElements: SVG mark implements focus, touch and Enter/Space activation.
-                  role="button"
-                  aria-label={`${p.label}: ${formatCurrency(p.value, currency)}, ${formatInt(p.secondary)} vendas`}
-                  onMouseEnter={() => setActive(i)}
-                  onMouseLeave={() => setActive(null)}
-                  onFocus={() => setActive(i)}
-                  onBlur={() => setActive(null)}
-                  onClick={() => setActive(i)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      setActive(i);
+                  key={points[point.hour]?.key ?? point.hour}
+                  ref={(element) => {
+                    targets.current[point.hour] = element;
+                  }}
+                  className={styles.hit}
+                  style={{
+                    left: `${(Math.max(64, point.x - (width - 82) / Math.max(1, points.length - 1) / 2) / width) * 100}%`,
+                    top: `${(30 / height) * 100}%`,
+                    width: `${((width - 82) / Math.max(1, points.length - 1) / width) * 100}%`,
+                    height: `${((height - 68) / height) * 100}%`,
+                  }}
+                  aria-label={`${points[point.hour]?.label}: ${money(point.value)}, ${formatInt(points[point.hour]?.secondary ?? 0)} vendas`}
+                  aria-pressed={active === point.hour}
+                  onPointerEnter={() => setActive(point.hour)}
+                  onFocus={() => setActive(point.hour)}
+                  onClick={() => setActive(point.hour)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') setActive(null);
+                    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+                      event.preventDefault();
+                      targets.current[
+                        (point.hour + (event.key === 'ArrowRight' ? 1 : points.length - 1)) %
+                          points.length
+                      ]?.focus();
                     }
                   }}
-                >
-                  <title>
-                    {p.label}: {formatCurrency(p.value, currency)} · {formatInt(p.secondary)} vendas
-                  </title>
-                </rect>
-              </g>
-            ))}
-          </svg>
-          <p className="px-4 pb-4 text-xs text-muted-foreground">
+                />
+              ))}
+            </div>
+            {focus && (
+              <output
+                className={styles.tooltip}
+                style={{
+                  left: `clamp(0px, calc(${(focus.x / width) * 100}% - 56px), calc(100% - 112px))`,
+                  top: `max(0px, calc(${(focus.y / height) * 100}% - 65px))`,
+                }}
+              >
+                {points[focus.hour]?.label}
+                <strong>{money(focus.value)}</strong>
+              </output>
+            )}
+          </div>
+          <p className={styles.caption}>
             Receita ({currency}) · Passe o mouse, toque ou use Tab nos horários.
           </p>
-          <table className="sr-only">
+          <table className="sr-only" aria-hidden={pending || undefined}>
             <caption>{title}</caption>
             <thead>
               <tr>
@@ -139,11 +250,11 @@ export function RevenueChart({
               </tr>
             </thead>
             <tbody>
-              {points.map((p) => (
-                <tr key={p.key}>
-                  <td>{p.label}</td>
-                  <td>{formatCurrency(p.value, currency)}</td>
-                  <td>{p.secondary}</td>
+              {points.map((point) => (
+                <tr key={point.key}>
+                  <td>{point.label}</td>
+                  <td>{money(point.value)}</td>
+                  <td>{point.secondary}</td>
                 </tr>
               ))}
             </tbody>

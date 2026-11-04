@@ -7,13 +7,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/lib/auth-context';
 import { useTaskManagementAccess } from '@/lib/hooks/use-task-management-access';
 import { cn } from '@/lib/utils';
@@ -32,7 +25,7 @@ interface SidebarProps {
   onMobileOpenChange: (open: boolean) => void;
 }
 
-function NavigationItem({
+export function NavigationItem({
   item,
   collapsed = false,
   expanded,
@@ -62,7 +55,6 @@ function NavigationItem({
   const submenuOpen = expanded && !collapsed;
   const itemClass = cn(
     'nav-item relative min-h-11 w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-    collapsed && 'justify-center px-0',
   );
 
   if (children.length === 0) {
@@ -77,44 +69,10 @@ function NavigationItem({
         className={itemClass}
       >
         <Icon className="h-4 w-4 shrink-0" aria-hidden />
-        <span className={collapsed ? 'sr-only' : 'tmx-sidebar-label truncate'}>{item.label}</span>
+        <span className="tmx-sidebar-label" aria-hidden={collapsed || undefined}>
+          {item.label}
+        </span>
       </Link>
-    );
-  }
-
-  if (collapsed) {
-    return (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            aria-label={`Abrir ${item.label}`}
-            title={item.label}
-            data-active-group={active}
-            className={cn(itemClass, active && 'bg-accent text-foreground')}
-          >
-            <Icon className="h-4 w-4 shrink-0" aria-hidden />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent side="right" align="start" sideOffset={10} className="w-64">
-          <DropdownMenuLabel>{item.label}</DropdownMenuLabel>
-          {children.map((child) => {
-            const ChildIcon = child.icon;
-            return (
-              <DropdownMenuItem key={child.id} asChild>
-                <Link
-                  href={navigationHref(child, pathname, search)}
-                  aria-current={child.id === activeLeafId ? 'page' : undefined}
-                  className="min-h-11"
-                >
-                  <ChildIcon className="h-4 w-4 shrink-0" aria-hidden />
-                  {child.label}
-                </Link>
-              </DropdownMenuItem>
-            );
-          })}
-        </DropdownMenuContent>
-      </DropdownMenu>
     );
   }
 
@@ -124,15 +82,18 @@ function NavigationItem({
         type="button"
         aria-expanded={submenuOpen}
         aria-controls={submenuId}
+        aria-label={collapsed ? item.label : undefined}
         data-active-group={active}
         onClick={onExpandedChange}
         className={cn(itemClass, active && 'bg-accent/50 text-foreground')}
       >
         <Icon className="h-4 w-4 shrink-0" aria-hidden />
-        <span className="tmx-sidebar-label min-w-0 flex-1 truncate">{item.label}</span>
+        <span className="tmx-sidebar-label" aria-hidden={collapsed || undefined}>
+          {item.label}
+        </span>
         <ChevronDown
           className={cn(
-            'h-3.5 w-3.5 shrink-0 transition-transform motion-reduce:transition-none',
+            'tmx-sidebar-chevron h-3.5 w-3.5 shrink-0 transition-transform motion-reduce:transition-none',
             submenuOpen && 'rotate-180',
           )}
           aria-hidden
@@ -169,6 +130,8 @@ function NavigationItem({
 }
 
 export function Sidebar({ collapsed, mobileOpen, onMobileOpenChange }: SidebarProps) {
+  const [hovered, setHovered] = useState(false);
+  const desktopCollapsed = collapsed && !hovered;
   const pathname = usePathname();
   const search = useSearchParams().toString();
   const { user } = useAuth();
@@ -213,7 +176,7 @@ export function Sidebar({ collapsed, mobileOpen, onMobileOpenChange }: SidebarPr
       <NavigationItem
         key={item.id}
         item={item}
-        collapsed={!mobile && collapsed}
+        collapsed={!mobile && desktopCollapsed}
         mobile={mobile}
         expanded={expandedId === item.id}
         onExpandedChange={() => changeExpanded(item.id)}
@@ -229,20 +192,43 @@ export function Sidebar({ collapsed, mobileOpen, onMobileOpenChange }: SidebarPr
     <>
       <aside
         aria-label="Navegação principal"
-        data-collapsed={collapsed}
+        data-collapsed={desktopCollapsed}
+        onMouseEnter={() => setHovered(true)}
+        onFocus={() => setHovered(true)}
+        onMouseLeave={(event) => {
+          const focus = document.activeElement;
+          if (!focus || !event.currentTarget.contains(focus) || !focus.matches(':focus-visible')) {
+            setHovered(false);
+          }
+        }}
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) setHovered(false);
+        }}
         className="tmx-sidebar hidden shrink-0 flex-col border-r border-border/60 bg-background/88 px-2 py-3 backdrop-blur-xl xl:flex"
       >
-        {!collapsed && (
-          <p className="px-2 pb-2 text-[11px] font-medium text-muted-foreground">Navegação</p>
-        )}
+        <p
+          className="tmx-sidebar-heading text-[11px] font-medium text-muted-foreground"
+          aria-hidden={desktopCollapsed}
+        >
+          Navegação
+        </p>
         <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overflow-x-visible">
           {renderItems(false)}
         </nav>
-        {!collapsed && (
-          <div className="mt-3 border-t border-border/60 px-2 pt-3">
-            <p className="text-[11px] text-muted-foreground">TMX HUB · v0.10.0</p>
+        <div className="tmx-sidebar-foot">
+          <span className="tmx-sidebar-avatar" aria-hidden>
+            {user?.name
+              .split(/\s+/)
+              .map((part) => part[0])
+              .slice(0, 2)
+              .join('')
+              .toUpperCase()}
+          </span>
+          <div className="tmx-sidebar-user" aria-hidden={desktopCollapsed}>
+            <p>{user?.name}</p>
+            <small>TMX HUB · v0.10.0</small>
           </div>
-        )}
+        </div>
       </aside>
       <Dialog open={mobileOpen} onOpenChange={onMobileOpenChange}>
         <DialogContent

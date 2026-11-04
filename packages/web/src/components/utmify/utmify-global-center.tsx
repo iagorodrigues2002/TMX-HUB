@@ -42,20 +42,20 @@ export function UtmifyGlobalCenter() {
 
   return (
     <div className="signal-reveal space-y-6">
-      <header className="tmx-command-hero rounded-2xl border border-cyan-300/15 bg-gradient-to-br from-cyan-300/[0.09] via-white/[0.025] to-transparent p-5 sm:p-7">
+      <header className="glass-card tmx-command-hero rounded-2xl border border-border bg-gradient-to-br from-primary via-primary to-transparent p-5 sm:p-7">
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div>
             <div className="mb-4 flex items-center gap-3">
-              <div className="grid h-11 w-11 place-items-center rounded-xl border border-cyan-300/25 bg-cyan-300/[0.08]">
-                <Cable className="h-5 w-5 text-cyan-300" />
+              <div className="glass-card grid h-11 w-11 place-items-center rounded-xl border border-border bg-accent">
+                <Cable className="h-5 w-5 text-primary" />
               </div>
               <div>
                 <p className="hud-label">TMX · UTMify Hub</p>
-                <p className="mt-1 text-xs text-emerald-200/70">Camada agregadora multi-oferta</p>
+                <p className="mt-1 text-xs text-success">Camada agregadora multi-oferta</p>
               </div>
             </div>
-            <h1 className="text-3xl font-bold text-white md:text-4xl">UTMify Geral</h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-white/50">
+            <h1 className="text-3xl font-bold text-foreground md:text-4xl">UTMify Geral</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
               Uma segunda camada recebe pedidos e InitiateCheckout de todas as ofertas, sem
               substituir ou misturar as integrações individuais.
             </p>
@@ -64,7 +64,7 @@ export function UtmifyGlobalCenter() {
             variant="outline"
             disabled={config.isFetching}
             onClick={() => void config.refetch()}
-            className="gap-2 border-white/10"
+            className="gap-2 border-border"
           >
             <RefreshCw className={config.isFetching ? 'animate-spin' : ''} />
             {config.isFetching ? 'Atualizando' : 'Atualizar'}
@@ -132,21 +132,23 @@ export function UtmifyGlobalCenter() {
             handleSave,
           })}
 
-          <section className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-5 sm:p-6">
+          <section className="glass-card rounded-2xl border border-border bg-muted p-5 sm:p-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <h2 className="font-semibold text-white">Ofertas enviadas à dashboard geral</h2>
-                <p className="mt-1 max-w-2xl text-xs leading-5 text-white/45">
+                <h2 className="font-semibold text-foreground">
+                  Ofertas enviadas à dashboard geral
+                </h2>
+                <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">
                   Escolha quais ofertas podem enviar pedidos e eventos de checkout para esta UTMify
                   Geral. As integrações individuais de cada oferta continuam independentes.
                 </p>
               </div>
-              <p className="rounded-full border border-cyan-300/20 bg-cyan-300/[0.07] px-3 py-1 font-mono text-xs text-cyan-100">
+              <p className="rounded-full border border-border bg-accent px-3 py-1 font-mono text-xs text-primary">
                 {selectedOfferIds.length} de {config.data.offers.length} selecionadas
               </p>
             </div>
             {!config.data.offers.length ? (
-              <p className="mt-5 text-sm text-white/40">
+              <p className="mt-5 text-sm text-muted-foreground">
                 Nenhuma oferta com tracking ativo foi encontrada.
               </p>
             ) : (
@@ -156,7 +158,7 @@ export function UtmifyGlobalCenter() {
                   return (
                     <label
                       key={offer.id}
-                      className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition ${checked ? 'border-cyan-300/35 bg-cyan-300/[0.07]' : 'border-white/[0.08] bg-black/10 hover:border-white/20'}`}
+                      className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition ${checked ? 'border-border bg-accent' : 'border-border bg-accent hover:border-border'}`}
                     >
                       <input
                         type="checkbox"
@@ -172,13 +174,13 @@ export function UtmifyGlobalCenter() {
                         className="h-4 w-4 accent-cyan-300"
                       />
                       <span className="min-w-0">
-                        <span className="block truncate text-sm font-medium text-white">
+                        <span className="block truncate text-sm font-medium text-foreground">
                           {offer.company_name || 'Empresa não cadastrada'}
                         </span>
-                        <span className="block truncate text-[11px] text-white/50">
+                        <span className="block truncate text-[11px] text-muted-foreground">
                           {offer.name}
                         </span>
-                        <span className="block truncate font-mono text-[10px] text-white/30">
+                        <span className="block truncate font-mono text-[10px] text-muted-foreground">
                           {offer.id}
                         </span>
                       </span>
@@ -199,15 +201,15 @@ export function UtmifyGlobalCenter() {
             </div>
           </section>
 
-          <section className="rounded-2xl border border-emerald-300/15 bg-emerald-300/[0.035] p-5 text-sm leading-6 text-white/55">
-            <p className="flex items-center gap-2 font-medium text-emerald-200">
+          <section className="rounded-2xl border border-success/30 bg-success/10 p-5 text-sm leading-6 text-muted-foreground">
+            <p className="flex items-center gap-2 font-medium text-success">
               <ShieldCheck className="h-4 w-4" /> Roteamento em paralelo e com filtro
             </p>
             <p className="mt-2">
               Oferta selecionada → UTMify individual da oferta{' '}
-              <span className="text-white/25">+</span> UTMify Geral. Ofertas desmarcadas continuam
-              no TMX e em seus destinos individuais, mas deixam de enviar dados novos à dashboard
-              geral.
+              <span className="text-muted-foreground">+</span> UTMify Geral. Ofertas desmarcadas
+              continuam no TMX e em seus destinos individuais, mas deixam de enviar dados novos à
+              dashboard geral.
             </p>
           </section>
         </>

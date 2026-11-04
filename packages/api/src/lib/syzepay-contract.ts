@@ -46,7 +46,7 @@ export const syzepayEventSchema = z.object({
       customer_name: z.string().max(200).nullish(),
       checkout_session_id: z.string().max(256).nullish(),
       created_at: z.string().datetime({ offset: true }),
-      utm: z.record(z.string().max(4096).nullable()).optional(),
+      utm: z.record(z.string(), z.string().max(4096).nullable()).optional(),
     }),
   }),
 });

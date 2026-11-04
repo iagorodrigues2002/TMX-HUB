@@ -26,7 +26,7 @@ export function renderPushcut(context: TrackingContentContext) {
       title="Notificações Pushcut"
       description="Receba uma notificação push no iPhone/iPad sempre que uma venda front ou upsell for aprovada. Cada destino é uma conta Pushcut (app) diferente — configure quantas precisar."
     >
-      <div className="rounded border border-white/[0.07] bg-black/10 p-4 text-xs leading-5 text-white/50">
+      <div className="rounded border border-border bg-accent p-4 text-xs leading-5 text-muted-foreground">
         No app Pushcut, crie uma notificação em <span className="font-mono">Notifications</span>{' '}
         (ex.: "Venda Aprovada") e outra pra upsell se quiser sons diferentes. Copie o{' '}
         <span className="font-mono">secret</span> da sua conta (aparece na URL do webhook,{' '}
@@ -36,7 +36,7 @@ export function renderPushcut(context: TrackingContentContext) {
 
       <div className="mt-6 grid gap-3 sm:grid-cols-2">
         <div>
-          <label htmlFor="pushcut-name" className="block text-xs text-white/45">
+          <label htmlFor="pushcut-name" className="block text-xs text-muted-foreground">
             Nome do destino (ex.: iPhone do Iago)
           </label>
           <Input
@@ -47,7 +47,7 @@ export function renderPushcut(context: TrackingContentContext) {
           />
         </div>
         <div>
-          <label htmlFor="pushcut-secret" className="block text-xs text-white/45">
+          <label htmlFor="pushcut-secret" className="block text-xs text-muted-foreground">
             Secret da conta Pushcut
           </label>
           <Input
@@ -59,7 +59,7 @@ export function renderPushcut(context: TrackingContentContext) {
           />
         </div>
         <div>
-          <label htmlFor="pushcut-front" className="block text-xs text-white/45">
+          <label htmlFor="pushcut-front" className="block text-xs text-muted-foreground">
             Nome da notificação · venda front
           </label>
           <Input
@@ -71,7 +71,7 @@ export function renderPushcut(context: TrackingContentContext) {
           />
         </div>
         <div>
-          <label htmlFor="pushcut-upsell" className="block text-xs text-white/45">
+          <label htmlFor="pushcut-upsell" className="block text-xs text-muted-foreground">
             Nome da notificação · upsell (opcional)
           </label>
           <Input
@@ -83,7 +83,7 @@ export function renderPushcut(context: TrackingContentContext) {
           />
         </div>
         <div className="sm:col-span-2">
-          <label htmlFor="pushcut-devices" className="block text-xs text-white/45">
+          <label htmlFor="pushcut-devices" className="block text-xs text-muted-foreground">
             Dispositivos específicos (opcional, separados por vírgula)
           </label>
           <Input
@@ -112,37 +112,35 @@ export function renderPushcut(context: TrackingContentContext) {
 
       {renderPushcutDestinations(context)}
 
-      <div className="mt-7 border-t border-white/[0.07] pt-6">
+      <div className="mt-7 border-t border-border pt-6">
         <p className="hud-label">Últimas entregas</p>
         <div className="mt-3 space-y-2">
           {(pushcutDeliveries.data?.deliveries ?? []).slice(0, 30).map((delivery) => (
             <div
               key={delivery.id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded border border-white/[0.07] p-3 text-xs"
+              className="flex flex-wrap items-center justify-between gap-3 rounded border border-border p-3 text-xs"
             >
               <div>
-                <p className="font-mono text-white/70">{delivery.transaction_id}</p>
-                <p className="mt-1 text-white/35">
+                <p className="font-mono text-muted-foreground">{delivery.transaction_id}</p>
+                <p className="mt-1 text-muted-foreground">
                   {delivery.destination_name ?? 'destino removido'} · {delivery.order_kind} ·{' '}
                   {delivery.attempts} tentativa(s)
                   {delivery.response_status ? ` · HTTP ${delivery.response_status}` : ''}
                 </p>
                 {delivery.last_error && (
-                  <p className="mt-1 max-w-2xl break-words text-red-200/70">
-                    {delivery.last_error}
-                  </p>
+                  <p className="mt-1 max-w-2xl break-words text-danger">{delivery.last_error}</p>
                 )}
               </div>
               <div className="flex items-center gap-3">
                 <span
                   className={
                     delivery.state === 'delivered'
-                      ? 'text-emerald-300'
+                      ? 'text-success'
                       : delivery.state === 'failed' || delivery.state === 'dead'
-                        ? 'text-red-300'
+                        ? 'text-danger'
                         : delivery.state === 'skipped'
-                          ? 'text-white/30'
-                          : 'text-amber-300'
+                          ? 'text-muted-foreground'
+                          : 'text-warning'
                   }
                 >
                   {delivery.state}
@@ -160,7 +158,7 @@ export function renderPushcut(context: TrackingContentContext) {
             </div>
           ))}
           {!pushcutDeliveries.data?.deliveries?.length && (
-            <p className="rounded border border-dashed border-white/[0.08] p-4 text-sm text-white/35">
+            <p className="rounded border border-dashed border-border p-4 text-sm text-muted-foreground">
               As entregas aparecerão aqui quando o primeiro pedido pago chegar.
             </p>
           )}

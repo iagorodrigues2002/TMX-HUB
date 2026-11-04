@@ -219,7 +219,8 @@ test('both navigation surfaces use the same resolver and only leaf links declare
   for (const source of [sidebar, topbar]) assert.match(source, /resolveNavigation\(/);
   for (const source of [sidebar, topbar, palette]) assert.match(source, /visibleNavigation\(/);
   assert.match(sidebar, /aria-expanded=\{submenuOpen\}/);
-  assert.match(sidebar, /DropdownMenuTrigger asChild/);
+  assert.doesNotMatch(sidebar, /DropdownMenuTrigger|if \(collapsed\)/);
+  assert.match(sidebar, /onFocus=\{\(\) => setHovered\(true\)\}/);
   assert.doesNotMatch(sidebar, /aria-current=\{active \?/);
   assert.doesNotMatch(sidebar, /href=\{item\.href\}/);
   assert.match(sidebar, /if \(active\)\s*\{\s*setExpandedId\(active.root.id\)/);

@@ -20,8 +20,8 @@ export function ShieldJobStatus({ jobId }: { jobId: string }) {
 
   if (!data) {
     return (
-      <div className="glass-card flex items-center gap-3 p-4 text-[13px] text-white/55">
-        <Loader2 className="h-4 w-4 animate-spin text-cyan-300" />
+      <div className="glass-card flex items-center gap-3 p-4 text-[13px] text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin text-primary" />
         Carregando job…
       </div>
     );
@@ -41,19 +41,19 @@ export function ShieldJobStatus({ jobId }: { jobId: string }) {
   return (
     <div
       className={`glass-card space-y-4 p-5 ${
-        status === 'failed' ? 'border-rose-300/30' : status === 'ready' ? 'border-cyan-300/30' : ''
+        status === 'failed' ? 'border-danger/30' : status === 'ready' ? 'border-border' : ''
       }`}
     >
       <div className="flex items-baseline justify-between">
         <div className="space-y-1">
           <p className="hud-label flex items-center gap-2">
-            {isWorking && <Loader2 className="h-3 w-3 animate-spin text-cyan-300" />}
-            {status === 'ready' && <CheckCircle2 className="h-3 w-3 text-emerald-300" />}
-            {status === 'failed' && <XCircle className="h-3 w-3 text-rose-300" />}
+            {isWorking && <Loader2 className="h-3 w-3 animate-spin text-primary" />}
+            {status === 'ready' && <CheckCircle2 className="h-3 w-3 text-success" />}
+            {status === 'failed' && <XCircle className="h-3 w-3 text-danger" />}
             {statusText}
           </p>
-          <h3 className="text-[15px] font-semibold text-white">{data.input.filename}</h3>
-          <p className="text-[11px] text-white/45">
+          <h3 className="text-[15px] font-semibold text-foreground">{data.input.filename}</h3>
+          <p className="text-[11px] text-muted-foreground">
             Nicho: {data.niche.name} · White: {data.white.label} · Vol: {data.white.volumeDb}dB
             {' · '}
             Compressão: {data.compression}
@@ -65,19 +65,19 @@ export function ShieldJobStatus({ jobId }: { jobId: string }) {
       </div>
 
       {status === 'failed' && data.error && (
-        <div className="rounded-md border border-rose-300/30 bg-rose-300/[0.06] p-3 text-[12px] text-rose-100/85">
+        <div className="rounded-md border border-danger/30 bg-danger/10 p-3 text-[12px] text-danger">
           {data.error}
         </div>
       )}
 
       {status === 'ready' && data.output && (
-        <div className="space-y-3 rounded-md border border-cyan-300/20 bg-cyan-300/[0.04] p-3">
+        <div className="space-y-3 rounded-md border border-border bg-accent p-3">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="truncate text-[13px] font-semibold text-white">
+              <p className="truncate text-[13px] font-semibold text-foreground">
                 {data.output.filename}
               </p>
-              <p className="text-[11px] text-white/55">
+              <p className="text-[11px] text-muted-foreground">
                 {formatBytes(data.output.bytes)}
                 {data.input.bytes > 0 && (
                   <> · {Math.round((data.output.bytes / data.input.bytes) * 100)}% do original</>
@@ -102,32 +102,32 @@ export function ShieldJobStatus({ jobId }: { jobId: string }) {
       {data.transcriptStatus && (
         <div className="space-y-2">
           <p className="hud-label">Verificação AssemblyAI</p>
-          <p className="text-[11px] text-white/55">
+          <p className="text-[11px] text-muted-foreground">
             Status:{' '}
             <span
               className={
                 data.transcriptStatus === 'done'
-                  ? 'text-emerald-300'
+                  ? 'text-success'
                   : data.transcriptStatus === 'failed'
-                    ? 'text-rose-300'
-                    : 'text-amber-300'
+                    ? 'text-danger'
+                    : 'text-warning'
               }
             >
               {data.transcriptStatus}
             </span>
           </p>
           {data.transcriptStatus === 'failed' && data.transcriptError && (
-            <pre className="max-h-[160px] overflow-auto whitespace-pre-wrap rounded-md border border-rose-300/30 bg-rose-300/[0.06] p-3 text-[12px] text-rose-100/85">
+            <pre className="max-h-[160px] overflow-auto whitespace-pre-wrap rounded-md border border-danger/30 bg-danger/10 p-3 text-[12px] text-danger">
               {data.transcriptError}
             </pre>
           )}
           {data.transcriptStatus === 'skipped' && (
-            <p className="text-[11px] text-white/45">
+            <p className="text-[11px] text-muted-foreground">
               ASSEMBLYAI_API_KEY não está configurada no servidor — verificação ignorada.
             </p>
           )}
           {data.transcript !== undefined && (
-            <pre className="max-h-[260px] overflow-auto whitespace-pre-wrap rounded-md border border-white/[0.08] bg-black/30 p-3 text-[12px] text-white/75">
+            <pre className="max-h-[260px] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-accent p-3 text-[12px] text-foreground">
               {data.transcript || '(transcript vazio — ótimo sinal!)'}
             </pre>
           )}

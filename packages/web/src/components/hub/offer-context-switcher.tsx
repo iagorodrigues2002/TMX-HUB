@@ -10,11 +10,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { type OfferView, apiClient } from '@/lib/api-client';
+import { useRouter } from '@/lib/motion-router';
 import { resolveOfferContextId } from '@/lib/offer-context-selection';
 import { readPersonalStorage, writePersonalStorage } from '@/lib/personal-storage';
 import { useQuery } from '@tanstack/react-query';
 import { Store } from 'lucide-react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { type ReactNode, createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 const OFFER_STORAGE_KEY = 'tmx-ui.offer.current';
@@ -148,7 +149,7 @@ export function OfferContextSwitcher() {
   if (!isOfferContextPath(pathname)) return null;
 
   return (
-    <div className="min-w-0 shrink-0">
+    <div className="tmx-topbar-offer min-w-0 shrink-0">
       <Select
         open={open}
         onOpenChange={setOpen}

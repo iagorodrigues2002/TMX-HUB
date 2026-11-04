@@ -19,12 +19,12 @@ export function WhiteRow({
   onRemove: () => void;
 }) {
   return (
-    <li className="flex items-center gap-2 rounded-md border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-[12px]">
-      <Upload className="h-3 w-3 shrink-0 text-cyan-300/70" />
-      <span className="flex-1 truncate text-white/85" title={white.filename}>
+    <li className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2 text-[12px]">
+      <Upload className="h-3 w-3 shrink-0 text-primary" />
+      <span className="flex-1 truncate text-foreground" title={white.filename}>
         {white.label || white.filename}
       </span>
-      <span className="shrink-0 font-mono text-[10px] text-white/40">
+      <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
         {formatBytes(white.bytes)}
       </span>
       {canModify && (
@@ -33,7 +33,7 @@ export function WhiteRow({
           onClick={() => {
             if (confirm(`Remover áudio "${white.label || white.filename}"?`)) onRemove();
           }}
-          className="text-white/40 hover:text-rose-300"
+          className="text-muted-foreground hover:text-danger"
           title="Remover"
         >
           <Trash2 className="h-3 w-3" />

@@ -39,12 +39,12 @@ export function renderRecentJobs({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="hud-label">Histórico recente</p>
-          <p className="mt-1 text-xs text-white/40">
+          <p className="mt-1 text-xs text-muted-foreground">
             Selecione os resultados prontos para baixar tudo em um arquivo ZIP.
           </p>
         </div>
         {readyJobs.length > 0 && (
-          <div className="flex items-center gap-2 text-xs text-white/60">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Checkbox
               checked={readyJobs.every((job) => selectedJobs.has(job.id))}
               onChange={(event) =>
@@ -58,9 +58,9 @@ export function renderRecentJobs({
         )}
       </div>
       {selectedReadyJobs.length > 0 && (
-        <div className="glass-card flex flex-wrap items-center justify-between gap-3 border-cyan-300/25 p-3">
-          <p className="text-xs text-white/65">
-            <strong className="text-cyan-200">{selectedReadyJobs.length}</strong> selecionado(s) ·{' '}
+        <div className="glass-card flex flex-wrap items-center justify-between gap-3 border-border p-3">
+          <p className="text-xs text-muted-foreground">
+            <strong className="text-primary">{selectedReadyJobs.length}</strong> selecionado(s) ·{' '}
             {formatBytes(selectedBytes)}
           </p>
           <div className="flex items-center gap-2">
@@ -100,24 +100,24 @@ export function renderRecentJobs({
           )}
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <p className="truncate text-sm font-medium text-white">{job.input.filename}</p>
+              <p className="truncate text-sm font-medium text-foreground">{job.input.filename}</p>
               {job.options.phase_cancel && (
-                <span className="rounded-full bg-cyan-300/[0.10] px-2 py-0.5 text-[9px] uppercase tracking-wider text-cyan-200">
+                <span className="rounded-full bg-accent px-2 py-0.5 text-[9px] uppercase tracking-wider text-primary">
                   Phase Cancel
                 </span>
               )}
             </div>
-            <p className="text-xs uppercase tracking-wider text-white/40">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">
               {job.status}
               {job.options.niche?.name ? ` · ${job.options.niche.name}` : ''}
             </p>
             {job.transcript && (
-              <p className="mt-2 line-clamp-2 text-xs text-white/50">
+              <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
                 AssemblyAI: {job.transcript}
               </p>
             )}
             {job.transcript_error && (
-              <p className="mt-2 text-xs text-rose-300">AssemblyAI: {job.transcript_error}</p>
+              <p className="mt-2 text-xs text-danger">AssemblyAI: {job.transcript_error}</p>
             )}
           </div>
           {job.output?.download_url && (
@@ -148,7 +148,7 @@ export function renderRecentJobs({
         </div>
       ))}
       {!jobs.isLoading && (jobs.data?.length ?? 0) === 0 && (
-        <p className="text-sm text-white/40">Nenhum processamento ainda.</p>
+        <p className="text-sm text-muted-foreground">Nenhum processamento ainda.</p>
       )}
     </section>
   );

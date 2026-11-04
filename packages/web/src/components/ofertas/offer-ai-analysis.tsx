@@ -55,13 +55,13 @@ export function OfferAiAnalysis({ offerId }: { offerId: string }) {
 
   return (
     <section className="glass-card overflow-hidden">
-      <header className="flex flex-wrap items-center gap-3 border-b border-white/[0.06] px-5 py-4">
+      <header className="flex flex-wrap items-center gap-3 border-b border-border px-5 py-4">
         <span className="grid h-10 w-10 place-items-center rounded-xl bg-violet-300/10 text-violet-200">
           <Bot className="h-5 w-5" />
         </span>
         <div className="mr-auto">
-          <h2 className="text-[16px] font-semibold text-white">Análise de janelas com IA</h2>
-          <p className="mt-1 text-[11px] text-white/40">
+          <h2 className="text-[16px] font-semibold text-foreground">Análise de janelas com IA</h2>
+          <p className="mt-1 text-[11px] text-muted-foreground">
             Números calculados pelo TMX HUB; a IA escreve somente a leitura operacional.
           </p>
         </div>
@@ -79,7 +79,7 @@ export function OfferAiAnalysis({ offerId }: { offerId: string }) {
       </header>
 
       {!canGenerate && !configQuery.data?.canManage && (
-        <p className="m-5 rounded-md border border-amber-300/15 bg-amber-300/[0.04] p-3 text-[12px] text-amber-100/70">
+        <p className="m-5 rounded-md border border-warning/30 bg-warning/10 p-3 text-[12px] text-warning">
           O administrador ainda não configurou a IA para esta oferta.
         </p>
       )}
@@ -114,11 +114,11 @@ export function OfferAiAnalysis({ offerId }: { offerId: string }) {
         })}
 
       {configQuery.data?.canCustomize && !configQuery.data.canManage && (
-        <details className="border-b border-white/[0.06]">
-          <summary className="cursor-pointer px-5 py-4 text-[12px] font-semibold text-cyan-100">
+        <details className="border-b border-border">
+          <summary className="cursor-pointer px-5 py-4 text-[12px] font-semibold text-primary">
             Suas preferências de análise
           </summary>
-          <div className="grid gap-4 border-t border-white/[0.05] px-5 py-5 md:grid-cols-2">
+          <div className="grid gap-4 border-t border-border px-5 py-5 md:grid-cols-2">
             <Field label="Seu nome no relatório" htmlFor="member-ai-responsible">
               <Input
                 id="member-ai-responsible"
@@ -143,7 +143,7 @@ export function OfferAiAnalysis({ offerId }: { offerId: string }) {
               </Select>
             </Field>
             <div className="md:col-span-2">
-              <p className="mb-3 text-[10px] text-white/35">
+              <p className="mb-3 text-[10px] text-muted-foreground">
                 A chave API é administrada com segurança pelo responsável do hub e não fica
                 disponível para membros.
               </p>
@@ -173,10 +173,10 @@ export function OfferAiAnalysis({ offerId }: { offerId: string }) {
                 Copiar
               </Button>
             </div>
-            <pre className="whitespace-pre-wrap rounded-lg border border-violet-300/10 bg-black/20 p-4 font-sans text-[13px] leading-6 text-white/75">
+            <pre className="whitespace-pre-wrap rounded-lg border border-violet-300/10 bg-accent p-4 font-sans text-[13px] leading-6 text-foreground">
               {latest.text}
             </pre>
-            <p className="text-[10px] text-white/30">
+            <p className="text-[10px] text-muted-foreground">
               {new Date(latest.createdAt).toLocaleString('pt-BR')} · {latest.model}
             </p>
             {configQuery.data?.canManage && (
@@ -196,18 +196,18 @@ export function OfferAiAnalysis({ offerId }: { offerId: string }) {
               />
             )}
             {(historyQuery.data?.length ?? 0) > 1 && (
-              <details className="rounded-md border border-white/[0.06]">
-                <summary className="cursor-pointer px-4 py-3 text-[11px] font-semibold text-white/55">
+              <details className="rounded-md border border-border">
+                <summary className="cursor-pointer px-4 py-3 text-[11px] font-semibold text-muted-foreground">
                   Histórico de análises ({historyQuery.data?.length})
                 </summary>
-                <div className="space-y-3 border-t border-white/[0.05] p-3">
+                <div className="space-y-3 border-t border-border p-3">
                   {historyQuery.data?.slice(1, 10).map((analysis) => (
                     <div
                       key={analysis.id}
-                      className="rounded-md border border-white/[0.05] bg-black/10 p-3"
+                      className="rounded-md border border-border bg-accent p-3"
                     >
                       <div className="mb-2 flex items-center justify-between gap-3">
-                        <p className="text-[10px] text-white/35">
+                        <p className="text-[10px] text-muted-foreground">
                           {new Date(analysis.createdAt).toLocaleString('pt-BR')} · {analysis.model}
                         </p>
                         <Button
@@ -218,7 +218,7 @@ export function OfferAiAnalysis({ offerId }: { offerId: string }) {
                           <Clipboard className="h-3.5 w-3.5" />
                         </Button>
                       </div>
-                      <pre className="line-clamp-6 whitespace-pre-wrap font-sans text-[11px] leading-5 text-white/55">
+                      <pre className="line-clamp-6 whitespace-pre-wrap font-sans text-[11px] leading-5 text-muted-foreground">
                         {analysis.text}
                       </pre>
                       {configQuery.data?.canManage && (
@@ -247,7 +247,7 @@ export function OfferAiAnalysis({ offerId }: { offerId: string }) {
             )}
           </>
         ) : (
-          <p className="py-6 text-center text-[12px] text-white/35">
+          <p className="py-6 text-center text-[12px] text-muted-foreground">
             Configure a IA e gere a primeira análise desta oferta.
           </p>
         )}

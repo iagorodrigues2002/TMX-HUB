@@ -44,9 +44,9 @@ export function TrackingLiveConsole({
   } = useTrackingLiveConsoleState({ offerId, mode, from, to });
 
   return (
-    <section className="overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.02]">
+    <section className="glass-card overflow-hidden rounded-lg border border-border bg-muted">
       {!mode && (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.07] p-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-3">
           <div className="flex flex-wrap gap-1">
             {[
               { id: 'tracker' as const, label: 'Tracker', icon: RadioTower },
@@ -61,8 +61,8 @@ export function TrackingLiveConsole({
                 size="sm"
                 onClick={() => setView(id)}
                 className={cn(
-                  'gap-2 text-white/45',
-                  activeView === id && 'bg-emerald-300/[0.09] text-emerald-200',
+                  'gap-2 text-muted-foreground',
+                  activeView === id && 'bg-success/10 text-success',
                 )}
               >
                 <Icon className="h-3.5 w-3.5" />
@@ -70,24 +70,24 @@ export function TrackingLiveConsole({
               </Button>
             ))}
           </div>
-          <p className="flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-emerald-200/70">
+          <p className="flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-success">
             <span className="status-dot" aria-hidden /> atualização automática · 30s
           </p>
         </div>
       )}
 
       {summary.isLoading ? (
-        <div className="flex min-h-48 items-center justify-center gap-2 text-sm text-white/45">
+        <div className="flex min-h-48 items-center justify-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> Carregando sinais…
         </div>
       ) : activeView === 'infrastructure' ? (
         <div className="p-5 md:p-6">
           <div className="mb-5">
             <p className="hud-label">Infraestrutura gerenciada</p>
-            <h3 className="mt-2 text-xl font-semibold text-white">
+            <h3 className="mt-2 text-xl font-semibold text-foreground">
               Nenhum acesso ao Railway é necessário
             </h3>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/50">
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
               O TMXHUB monitora banco, migrations e criptografia e aplica atualizações antes de
               iniciar a API.
             </p>
@@ -104,25 +104,23 @@ export function TrackingLiveConsole({
                   key={label}
                   className={cn(
                     'rounded-md border p-4',
-                    ready
-                      ? 'border-emerald-300/15 bg-emerald-300/[0.035]'
-                      : 'border-amber-300/15 bg-amber-300/[0.035]',
+                    ready ? 'border-success/30 bg-success/10' : 'border-warning/30 bg-warning/10',
                   )}
                 >
                   {ready ? (
-                    <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+                    <CheckCircle2 className="h-4 w-4 text-success" />
                   ) : (
-                    <Loader2 className="h-4 w-4 animate-spin text-amber-300" />
+                    <Loader2 className="h-4 w-4 animate-spin text-warning" />
                   )}
-                  <p className="mt-3 text-sm font-medium text-white/75">{label}</p>
-                  <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-white/35">
+                  <p className="mt-3 text-sm font-medium text-foreground">{label}</p>
+                  <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
                     {ready ? 'operacional' : 'atualizando automaticamente'}
                   </p>
                 </div>
               );
             })}
           </div>
-          <div className="mt-4 rounded-md border border-white/[0.07] bg-black/10 p-4 text-xs leading-5 text-white/45">
+          <div className="mt-4 rounded-md border border-border bg-accent p-4 text-xs leading-5 text-muted-foreground">
             {diagnostics.data?.detail ??
               'O diagnóstico será exibido assim que o tracking da oferta for criado.'}
           </div>
@@ -141,19 +139,21 @@ export function TrackingLiveConsole({
                 ],
                 ['Entregues', diagnostics.data?.utmify.delivered ?? 0],
               ].map(([label, value]) => (
-                <div key={label} className="rounded-md border border-white/[0.07] bg-black/10 p-3">
-                  <p className="text-[10px] uppercase tracking-wider text-white/35">{label}</p>
-                  <p className="mt-1 font-mono text-sm text-white">{value}</p>
+                <div key={label} className="rounded-md border border-border bg-accent p-3">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    {label}
+                  </p>
+                  <p className="mt-1 font-mono text-sm text-foreground">{value}</p>
                 </div>
               ))}
             </div>
             {diagnostics.data?.utmify.hint && (
-              <div className="mt-3 rounded-md border border-amber-300/20 bg-amber-300/[0.04] p-4 text-xs leading-5 text-amber-100/80">
+              <div className="mt-3 rounded-md border border-warning/30 bg-warning/10 p-4 text-xs leading-5 text-warning">
                 {diagnostics.data.utmify.hint}
               </div>
             )}
             {diagnostics.data?.utmify.last_error && (
-              <div className="mt-2 rounded-md border border-red-300/20 bg-red-300/[0.04] p-4 text-xs leading-5 text-red-200/70">
+              <div className="mt-2 rounded-md border border-danger/30 bg-danger/10 p-4 text-xs leading-5 text-danger">
                 Último erro: {diagnostics.data.utmify.last_error}
               </div>
             )}

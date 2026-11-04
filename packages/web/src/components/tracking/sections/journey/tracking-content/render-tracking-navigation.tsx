@@ -15,9 +15,9 @@ export function renderTrackingNavigation(context: TrackingContentContext) {
             type="button"
             onClick={() => setSection(areaSections[0]!)}
             className={cn(
-              'flex min-h-11 w-auto shrink-0 items-center gap-2 rounded-md px-3 py-2.5 text-left text-xs text-white/45 transition hover:bg-white/[0.04] hover:text-white/70 2xl:mb-1 2xl:w-full 2xl:gap-3 2xl:text-sm',
+              'flex min-h-11 w-auto shrink-0 items-center gap-2 rounded-md px-3 py-2.5 text-left text-xs text-muted-foreground transition hover:bg-muted hover:text-muted-foreground 2xl:mb-1 2xl:w-full 2xl:gap-3 2xl:text-sm',
               activeArea.id === id &&
-                'border border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-200 shadow-[0_0_20px_rgba(52,211,153,.08)]',
+                'border border-success/30 bg-success/10 text-success shadow-[0_0_20px_rgba(52,211,153,.08)]',
             )}
           >
             <Icon className="h-4 w-4" /> {label}

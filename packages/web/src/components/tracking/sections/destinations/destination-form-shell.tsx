@@ -23,12 +23,14 @@ export function DestinationFormShell({
 }: DestinationFormShellProps) {
   return (
     <form
-      className={cn('rounded-md border border-white/[0.07] bg-black/10 p-4', className)}
+      className={cn('rounded-md border border-border bg-accent p-4', className)}
       onSubmit={onSubmit}
     >
       <div>
-        <h3 className="text-sm font-medium text-white/80">{title}</h3>
-        {description && <p className="mt-1 text-xs leading-5 text-white/40">{description}</p>}
+        <h3 className="text-sm font-medium text-foreground">{title}</h3>
+        {description && (
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
+        )}
       </div>
       {notice && <div className="mt-3">{notice}</div>}
       <div className="mt-4">{children}</div>

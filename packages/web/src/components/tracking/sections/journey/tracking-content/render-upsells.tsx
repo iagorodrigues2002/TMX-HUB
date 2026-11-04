@@ -31,21 +31,21 @@ export function renderUpsells(context: TrackingContentContext) {
       title="Upsell Intelligence"
       description="Monitore cada página pelo script e configure os destinos de recuperação por gateway."
     >
-      <div className="mb-4 rounded-xl border border-emerald-300/20 bg-emerald-300/[0.05] p-4 text-sm leading-6 text-emerald-50/75">
-        <p className="font-semibold text-emerald-200">Modo somente script</p>
+      <div className="mb-4 rounded-xl border border-success/30 bg-success/10 p-4 text-sm leading-6 text-success">
+        <p className="font-semibold text-success">Modo somente script</p>
         <p>
           Mantenha os links atuais do funil no gateway. Cadastre abaixo a URL que ele já abre e
           instale o script gerado nessa página. O TMX captura a visita, o identificador disponível e
           cruza tudo com os webhooks automaticamente.
         </p>
       </div>
-      <div className="min-w-0 rounded-xl border border-cyan-300/20 bg-cyan-300/[0.045] p-4 [&_input]:min-w-0 [&_input]:text-base sm:[&_input]:text-sm">
-        <p className="hud-label text-cyan-200">Configurar etapa</p>
+      <div className="glass-card min-w-0 rounded-xl border border-border bg-accent p-4 [&_input]:min-w-0 [&_input]:text-base sm:[&_input]:text-sm">
+        <p className="hud-label text-primary">Configurar etapa</p>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           <select
             aria-label="Etapa do upsell"
             disabled={Boolean(editingUpsellStageId)}
-            className="h-11 w-full min-w-0 rounded-md border border-white/[0.1] bg-black/30 px-3 text-base text-white outline-none focus:border-cyan-300/40 sm:text-sm"
+            className="h-11 w-full min-w-0 rounded-md border border-border bg-accent px-3 text-base text-foreground outline-none focus:border-border sm:text-sm"
             value={upsellStageKey}
             onChange={(event) => {
               const value = event.target.value as UpsellStageKey;
@@ -71,9 +71,9 @@ export function renderUpsells(context: TrackingContentContext) {
             placeholder="Nome da etapa"
           />
         </div>
-        <div className="mt-4 rounded-lg border border-white/10 p-3">
-          <p className="text-xs font-semibold text-white/75">URL desta etapa por gateway</p>
-          <p className="mt-1 text-xs text-white/45">
+        <div className="mt-4 rounded-lg border border-border p-3">
+          <p className="text-xs font-semibold text-foreground">URL desta etapa por gateway</p>
+          <p className="mt-1 text-xs text-muted-foreground">
             Cada compra usa somente a URL do seu gateway. Na SyzePay, o TMX confirma a sessão antes
             de liberar o link.
           </p>
@@ -82,7 +82,7 @@ export function renderUpsells(context: TrackingContentContext) {
               <label
                 key={gateway}
                 htmlFor={`${formId}-upsell-${gateway}`}
-                className="text-xs text-white/65"
+                className="text-xs text-muted-foreground"
               >
                 {
                   {
@@ -109,15 +109,15 @@ export function renderUpsells(context: TrackingContentContext) {
               </label>
             ))}
           </div>
-          <p className="mt-2 text-xs text-white/40">
+          <p className="mt-2 text-xs text-muted-foreground">
             Paysight e Explodely: cadastro de destino disponível; recuperação autenticada depende do
             contrato de cada gateway.
           </p>
         </div>
         {vendepayConnections.length > 0 && (
-          <div className="mt-4 rounded-lg border border-white/[0.08] bg-black/20 p-3">
-            <p className="text-xs font-semibold text-white/75">Links por conta VendePay</p>
-            <p className="mt-1 text-[11px] leading-5 text-white/40">
+          <div className="mt-4 rounded-lg border border-border bg-accent p-3">
+            <p className="text-xs font-semibold text-foreground">Links por conta VendePay</p>
+            <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
               O TMX identifica a conta da compra aprovada pelo vendaId e abre automaticamente o
               destino configurado para essa conta. Contas sem URL não serão consideradas elegíveis.
             </p>
@@ -128,7 +128,7 @@ export function renderUpsells(context: TrackingContentContext) {
                   className="block min-w-0 break-words"
                   htmlFor={`upsell-destination-${connection.id}`}
                 >
-                  <span className="mb-1.5 block text-xs text-cyan-100/70">{connection.name}</span>
+                  <span className="mb-1.5 block text-xs text-primary">{connection.name}</span>
                   <Input
                     id={`upsell-destination-${connection.id}`}
                     aria-label={`Link de upsell para ${connection.name}`}
@@ -184,16 +184,16 @@ export function renderUpsells(context: TrackingContentContext) {
 
       {renderUpsellStages(context)}
       {!upsellIntelligence.isLoading && !upsellIntelligence.data?.stages.length && (
-        <p className="mt-4 rounded-xl border border-dashed border-white/[0.1] p-5 text-sm text-white/45">
+        <p className="mt-4 rounded-xl border border-dashed border-border p-5 text-sm text-muted-foreground">
           Cadastre a URL que a Vendepay já abre para gerar o script de monitoramento.
         </p>
       )}
-      <div className="mt-5 rounded-xl border border-white/[0.08] p-4 text-xs leading-6 text-white/50">
-        <p className="font-semibold text-white/75">Marcação recomendada dos botões</p>
-        <code className="mt-2 block overflow-x-auto text-cyan-100/75">
+      <div className="glass-card mt-5 rounded-xl border border-border p-4 text-xs leading-6 text-muted-foreground">
+        <p className="font-semibold text-foreground">Marcação recomendada dos botões</p>
+        <code className="mt-2 block overflow-x-auto text-primary">
           {'<a data-tmx-upsell-accept href="...">Sim, quero adicionar</a>'}
         </code>
-        <code className="block overflow-x-auto text-cyan-100/75">
+        <code className="block overflow-x-auto text-primary">
           {'<a data-tmx-upsell-decline href="...">Não, obrigado</a>'}
         </code>
         <p className="mt-2">

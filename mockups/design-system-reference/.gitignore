@@ -1,0 +1,4 @@
+.next-reference/
+.next-reference-build/
+node_modules
+public

@@ -156,15 +156,15 @@ export function DataState({
           'h-5 w-5',
           variant === 'loading' && 'animate-spin text-primary',
           variant === 'error' && 'tmx-error-icon text-danger',
-          variant === 'empty' && 'text-white/45',
+          variant === 'empty' && 'text-muted-foreground',
         )}
       />
       <div className={cn('max-w-lg space-y-1', variant === 'error' && 'tmx-error-message')}>
-        <p className="text-sm font-semibold text-white">{title}</p>
-        {description && <p className="text-sm leading-6 text-white/55">{description}</p>}
+        <p className="text-sm font-semibold text-foreground">{title}</p>
+        {description && <p className="text-sm leading-6 text-muted-foreground">{description}</p>}
         {suggestion && (
-          <p className="pt-1 text-sm leading-6 text-white/70">
-            <span className="font-medium text-white/85">Próximo passo:</span> {suggestion}
+          <p className="pt-1 text-sm leading-6 text-muted-foreground">
+            <span className="font-medium text-foreground">Próximo passo:</span> {suggestion}
           </p>
         )}
       </div>
@@ -185,21 +185,25 @@ export function DataState({
       )}
       {action}
       {variant === 'error' && hasTechnicalDetails && (
-        <details className="max-w-lg text-left text-xs text-white/45">
-          <summary className="cursor-pointer rounded-sm px-1 py-1.5 outline-none transition-colors hover:text-white/65 focus-visible:ring-2 focus-visible:ring-primary">
+        <details className="max-w-lg text-left text-xs text-muted-foreground">
+          <summary className="cursor-pointer rounded-sm px-1 py-1.5 outline-none transition-colors hover:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary">
             Detalhes técnicos
           </summary>
-          <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-lg border border-white/[0.08] bg-black/15 px-3 py-2">
+          <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-lg border border-border bg-accent px-3 py-2">
             {technicalDetails?.statusCode && (
               <>
                 <dt>Status</dt>
-                <dd className="font-mono text-white/65">HTTP {technicalDetails.statusCode}</dd>
+                <dd className="font-mono text-muted-foreground">
+                  HTTP {technicalDetails.statusCode}
+                </dd>
               </>
             )}
             {technicalDetails?.requestId && (
               <>
                 <dt>Request ID</dt>
-                <dd className="break-all font-mono text-white/65">{technicalDetails.requestId}</dd>
+                <dd className="break-all font-mono text-muted-foreground">
+                  {technicalDetails.requestId}
+                </dd>
               </>
             )}
           </dl>

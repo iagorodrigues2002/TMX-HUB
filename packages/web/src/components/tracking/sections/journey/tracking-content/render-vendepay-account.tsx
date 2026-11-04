@@ -14,9 +14,9 @@ export function renderVendepayAccount(context: TrackingContentContext) {
     copyVendepayWebhook,
   } = context;
   return (
-    <div className="mt-5 rounded-md border border-amber-300/15 bg-amber-300/[0.04] p-4">
+    <div className="mt-5 rounded-md border border-warning/30 bg-warning/10 p-4">
       <div className="mb-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-200/70">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-warning">
           1. Identificação da conta
         </p>
         <div className="mt-2 flex flex-col gap-2 sm:flex-row">
@@ -43,10 +43,10 @@ export function renderVendepayAccount(context: TrackingContentContext) {
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="text-sm font-medium text-amber-100">
+          <p className="text-sm font-medium text-warning">
             Webhook · {selectedVendepayConnection?.name ?? 'selecione uma conta'}
           </p>
-          <p className="mt-1 text-xs leading-5 text-white/45">
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
             Cada conta possui uma URL exclusiva. Rotacionar afeta somente a selecionada.
           </p>
         </div>
@@ -61,7 +61,7 @@ export function renderVendepayAccount(context: TrackingContentContext) {
           </Button>
         )}
       </div>
-      <p className="mt-1 text-xs leading-5 text-white/45">
+      <p className="mt-1 text-xs leading-5 text-muted-foreground">
         Por segurança, o token só aparece ao criar ou gerar novamente a URL.
       </p>
       <Button
@@ -74,7 +74,7 @@ export function renderVendepayAccount(context: TrackingContentContext) {
       </Button>
       {vendepayWebhook && (
         <div className="mt-3 flex gap-2">
-          <code className="min-w-0 flex-1 overflow-x-auto rounded bg-black/25 p-3 text-xs text-cyan-100">
+          <code className="min-w-0 flex-1 overflow-x-auto rounded bg-accent p-3 text-xs text-primary">
             {vendepayWebhook}
           </code>
           <Button onClick={() => void copyVendepayWebhook()}>Copiar</Button>

@@ -148,20 +148,20 @@ export function OverviewLoadingSkeleton() {
     <section
       aria-label="Carregando indicadores da visão geral"
       aria-live="polite"
-      className="space-y-4 rounded-xl border border-cyan-300/[0.14] bg-cyan-300/[0.025] p-3 sm:p-4"
+      className="glass-card space-y-4 rounded-xl border border-border bg-accent p-3 sm:p-4"
     >
-      <div className="h-12 animate-pulse rounded-lg bg-white/[0.04] motion-reduce:animate-none" />
+      <div className="h-12 animate-pulse rounded-lg bg-muted motion-reduce:animate-none" />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {KPI_SKELETONS.map((skeleton) => (
           <div
             key={skeleton}
-            className="h-[116px] animate-pulse rounded-xl border border-white/[0.06] bg-white/[0.035] motion-reduce:animate-none"
+            className="glass-card h-[116px] animate-pulse rounded-xl border border-border bg-muted motion-reduce:animate-none"
           />
         ))}
       </div>
       <div className="grid gap-4 xl:grid-cols-2">
-        <div className="h-72 animate-pulse rounded-xl border border-white/[0.06] bg-white/[0.025] motion-reduce:animate-none" />
-        <div className="h-72 animate-pulse rounded-xl border border-white/[0.06] bg-white/[0.025] motion-reduce:animate-none" />
+        <div className="glass-card h-72 animate-pulse rounded-xl border border-border bg-muted motion-reduce:animate-none" />
+        <div className="glass-card h-72 animate-pulse rounded-xl border border-border bg-muted motion-reduce:animate-none" />
       </div>
     </section>
   );

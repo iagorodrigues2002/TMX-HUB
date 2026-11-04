@@ -69,22 +69,22 @@ export function MetaAccountsControl() {
 
   return (
     <div className="signal-reveal space-y-6">
-      <header className="tmx-command-hero overflow-hidden rounded-2xl border border-cyan-300/15 bg-gradient-to-br from-cyan-300/[0.09] via-white/[0.025] to-transparent p-5 sm:p-7">
+      <header className="glass-card tmx-command-hero overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-primary via-primary to-transparent p-5 sm:p-7">
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div className="max-w-3xl">
             <div className="mb-4 flex items-center gap-3">
-              <div className="grid h-11 w-11 place-items-center rounded-xl border border-cyan-300/25 bg-cyan-300/[0.08]">
-                <Orbit className="h-5 w-5 text-cyan-300" />
+              <div className="glass-card grid h-11 w-11 place-items-center rounded-xl border border-border bg-accent">
+                <Orbit className="h-5 w-5 text-primary" />
               </div>
               <div>
                 <p className="hud-label">TMX Meta Control</p>
-                <p className="mt-1 text-xs text-emerald-200/70">Marketing API · somente leitura</p>
+                <p className="mt-1 text-xs text-success">Marketing API · somente leitura</p>
               </div>
             </div>
-            <h1 className="text-3xl font-bold tracking-tight text-white md:text-4xl">
+            <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">
               Controle de contas
             </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-white/50">
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
               Status operacional, investimento, campanhas e ofertas conectados em uma única central.
             </p>
           </div>
@@ -92,7 +92,7 @@ export function MetaAccountsControl() {
             <Button
               variant="outline"
               onClick={() => setShowConnection((value) => !value)}
-              className="gap-2 border-white/10 bg-white/[0.03]"
+              className="gap-2 border-border bg-muted"
             >
               <Plus className="h-4 w-4" /> Novo dashboard
             </Button>
@@ -100,14 +100,14 @@ export function MetaAccountsControl() {
               variant="outline"
               onClick={() => setShowPushcut((value) => !value)}
               disabled={!selectedConnection}
-              className="gap-2 border-amber-300/15 bg-amber-300/[0.04] text-amber-100 hover:bg-amber-300/[0.08]"
+              className="gap-2 border-warning/30 bg-warning/10 text-warning hover:bg-warning/10"
             >
               <BellRing className="h-4 w-4" /> Alertas Pushcut
             </Button>
             <Button
               onClick={() => sync.mutate()}
               disabled={!selectedConnection || sync.isPending}
-              className="gap-2 bg-cyan-300 text-accent-on hover:bg-cyan-200"
+              className="gap-2 bg-primary text-accent-on hover:bg-primary"
             >
               {sync.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -135,10 +135,10 @@ export function MetaAccountsControl() {
         })}
 
       {!!connections.data?.length && (
-        <section className="rounded-2xl border border-cyan-300/15 bg-gradient-to-r from-cyan-300/[0.055] to-transparent p-4 sm:p-5">
+        <section className="glass-card rounded-2xl border border-border bg-gradient-to-r from-primary to-transparent p-4 sm:p-5">
           <div className="grid gap-4 lg:grid-cols-[minmax(240px,420px)_1fr] lg:items-center">
             <label>
-              <span className="mb-2 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-cyan-100/50">
+              <span className="mb-2 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-primary">
                 <LayoutDashboard className="h-3.5 w-3.5" /> Dashboard da empresa
               </span>
               <select
@@ -151,7 +151,7 @@ export function MetaAccountsControl() {
                   setFilter('all');
                   setSearch('');
                 }}
-                className="h-12 w-full rounded-xl border border-cyan-300/20 bg-bg-elevated px-4 text-sm font-medium text-white outline-none focus:border-cyan-300/50"
+                className="h-12 w-full rounded-xl border border-border bg-bg-elevated px-4 text-sm font-medium text-foreground outline-none focus:border-border"
               >
                 {connections.data.map((item) => (
                   <option key={item.id} value={item.id}>
@@ -161,15 +161,14 @@ export function MetaAccountsControl() {
               </select>
             </label>
             {selectedConnection && (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/[0.07] bg-black/10 px-4 py-3 text-xs text-white/40">
+              <div className="glass-card flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-accent px-4 py-3 text-xs text-muted-foreground">
                 <span className="flex items-center gap-2">
-                  <Signal className="h-3.5 w-3.5 text-emerald-300" /> App{' '}
-                  {selectedConnection.app_id}
+                  <Signal className="h-3.5 w-3.5 text-success" /> App {selectedConnection.app_id}
                 </span>
                 {selectedConnection.last_sync_at ? (
                   <span>Última sincronização: {dateTime(selectedConnection.last_sync_at)}</span>
                 ) : (
-                  <span className="flex items-center gap-2 text-cyan-100/70">
+                  <span className="flex items-center gap-2 text-primary">
                     <Loader2 className="h-3.5 w-3.5 animate-spin" /> Importando dados da Meta…
                   </span>
                 )}
@@ -184,9 +183,9 @@ export function MetaAccountsControl() {
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
         {[
-          { label: 'Contas', value: accounts.length, icon: WalletCards, tone: 'text-cyan-200' },
-          { label: 'Veiculando', value: counts.delivering, icon: Zap, tone: 'text-emerald-200' },
-          { label: 'Ativas sem mídia', value: counts.idle, icon: Activity, tone: 'text-cyan-100' },
+          { label: 'Contas', value: accounts.length, icon: WalletCards, tone: 'text-primary' },
+          { label: 'Veiculando', value: counts.delivering, icon: Zap, tone: 'text-success' },
+          { label: 'Ativas sem mídia', value: counts.idle, icon: Activity, tone: 'text-primary' },
           {
             label: 'Desativadas',
             value: counts.disabled,
@@ -197,7 +196,7 @@ export function MetaAccountsControl() {
             label: 'Pendência',
             value: counts.unsettled,
             icon: AlertTriangle,
-            tone: 'text-amber-200',
+            tone: 'text-warning',
           },
           {
             label: 'BMs sem conta utilizável',
@@ -212,10 +211,12 @@ export function MetaAccountsControl() {
             tone: 'text-orange-200',
           },
         ].map(({ label, value, icon: Icon, tone }) => (
-          <div key={label} className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-4">
+          <div key={label} className="glass-card rounded-xl border border-border bg-muted p-4">
             <Icon className={cn('h-4 w-4', tone)} />
-            <p className="mt-4 font-mono text-2xl text-white">{value}</p>
-            <p className="mt-1 text-[10px] uppercase tracking-[0.15em] text-white/35">{label}</p>
+            <p className="mt-4 font-mono text-2xl text-foreground">{value}</p>
+            <p className="mt-1 text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+              {label}
+            </p>
           </div>
         ))}
       </section>
@@ -224,27 +225,27 @@ export function MetaAccountsControl() {
         {Object.entries(totals).map(([code, total]) => (
           <div
             key={code}
-            className="rounded-xl border border-cyan-300/10 bg-gradient-to-r from-cyan-300/[0.05] to-transparent p-5"
+            className="glass-card rounded-xl border border-border bg-gradient-to-r from-primary to-transparent p-5"
           >
-            <div className="flex items-center gap-2 text-white/40">
-              <CircleDollarSign className="h-4 w-4 text-cyan-300" />
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <CircleDollarSign className="h-4 w-4 text-primary" />
               <span className="hud-label">Gasto histórico · {code}</span>
             </div>
-            <p className="mt-3 font-mono text-2xl text-white">{money(total, code)}</p>
+            <p className="mt-3 font-mono text-2xl text-foreground">{money(total, code)}</p>
           </div>
         ))}
       </section>
 
-      <section className="rounded-2xl border border-white/[0.08] bg-[#06131b]/75 p-3 sm:p-4">
+      <section className="glass-card rounded-2xl border border-border bg-background p-3 sm:p-4">
         <div className="grid gap-3 lg:grid-cols-[1fr_180px_150px]">
           <div className="relative">
-            <Search className="absolute left-3 top-3.5 h-4 w-4 text-white/25" />
+            <Search className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
             <input
               aria-label="Buscar conta, ID, BM ou oferta"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Buscar conta, ID, BM ou oferta"
-              className="h-11 w-full rounded-lg border border-white/10 bg-black/20 pl-10 pr-4 text-sm text-white outline-none focus:border-cyan-300/35"
+              className="h-11 w-full rounded-lg border border-border bg-accent pl-10 pr-4 text-sm text-foreground outline-none focus:border-border"
             />
           </div>
           <select
@@ -255,7 +256,7 @@ export function MetaAccountsControl() {
               setCurrency('all');
               setSearch('');
             }}
-            className="h-11 rounded-lg border border-white/10 bg-bg-elevated px-3 text-sm text-white"
+            className="h-11 rounded-lg border border-border bg-bg-elevated px-3 text-sm text-foreground"
           >
             <option value="all">Todos os BMs</option>
             {businesses.map((item) => (
@@ -267,7 +268,7 @@ export function MetaAccountsControl() {
           <select
             value={currency}
             onChange={(event) => setCurrency(event.target.value)}
-            className="h-11 rounded-lg border border-white/10 bg-bg-elevated px-3 text-sm text-white"
+            className="h-11 rounded-lg border border-border bg-bg-elevated px-3 text-sm text-foreground"
           >
             <option value="all">Todas moedas</option>
             <option value="BRL">BRL</option>
@@ -292,8 +293,8 @@ export function MetaAccountsControl() {
               className={cn(
                 'whitespace-nowrap rounded-full border px-3 py-2 text-xs transition',
                 filter === key
-                  ? 'border-cyan-300/30 bg-cyan-300/10 text-cyan-100'
-                  : 'border-white/[0.08] text-white/40 hover:text-white/70',
+                  ? 'border-border bg-accent text-primary'
+                  : 'border-border text-muted-foreground hover:text-muted-foreground',
               )}
             >
               {label}
@@ -303,7 +304,7 @@ export function MetaAccountsControl() {
       </section>
 
       {dashboard.isLoading ? (
-        <div className="grid min-h-64 place-items-center text-sm text-white/40">
+        <div className="grid min-h-64 place-items-center text-sm text-muted-foreground">
           <Loader2 className="mr-2 inline h-5 w-5 animate-spin" /> Carregando contas…
         </div>
       ) : (

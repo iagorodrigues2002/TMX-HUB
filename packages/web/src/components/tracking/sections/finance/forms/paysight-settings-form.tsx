@@ -34,9 +34,9 @@ export function PaysightSettingsForm({
   };
 
   return (
-    <div className="grid gap-4 border-t border-cyan-300/15 p-4 sm:grid-cols-2 sm:p-5">
+    <div className="grid gap-4 border-t border-border p-4 sm:grid-cols-2 sm:p-5">
       <label className="space-y-2" htmlFor={`paysight-name-${account?.id ?? 'new'}`}>
-        <span className="text-xs font-medium text-white/65">Nome da conexão</span>
+        <span className="text-xs font-medium text-muted-foreground">Nome da conexão</span>
         <Input
           id={`paysight-name-${account?.id ?? 'new'}`}
           value={name}
@@ -44,7 +44,7 @@ export function PaysightSettingsForm({
         />
       </label>
       <label className="space-y-2" htmlFor={`paysight-product-${account?.id ?? 'new'}`}>
-        <span className="text-xs font-medium text-white/65">Product ID</span>
+        <span className="text-xs font-medium text-muted-foreground">Product ID</span>
         <Input
           id={`paysight-product-${account?.id ?? 'new'}`}
           value={productId}
@@ -53,7 +53,7 @@ export function PaysightSettingsForm({
         />
       </label>
       <label className="space-y-2" htmlFor={`paysight-api-${account?.id ?? 'new'}`}>
-        <span className="text-xs font-medium text-white/65">API key</span>
+        <span className="text-xs font-medium text-muted-foreground">API key</span>
         <Input
           id={`paysight-api-${account?.id ?? 'new'}`}
           type="password"
@@ -66,7 +66,7 @@ export function PaysightSettingsForm({
         />
       </label>
       <label className="space-y-2" htmlFor={`paysight-secret-${account?.id ?? 'new'}`}>
-        <span className="text-xs font-medium text-white/65">Signing secret</span>
+        <span className="text-xs font-medium text-muted-foreground">Signing secret</span>
         <Input
           id={`paysight-secret-${account?.id ?? 'new'}`}
           type="password"
@@ -79,7 +79,7 @@ export function PaysightSettingsForm({
         />
       </label>
       <label className="space-y-2" htmlFor={`paysight-env-${account?.id ?? 'new'}`}>
-        <span className="text-xs font-medium text-white/65">Ambiente</span>
+        <span className="text-xs font-medium text-muted-foreground">Ambiente</span>
         <select
           id={`paysight-env-${account?.id ?? 'new'}`}
           value={environment}

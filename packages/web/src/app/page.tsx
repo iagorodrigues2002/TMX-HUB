@@ -23,14 +23,14 @@ export default function HubLandingPage() {
   return (
     <HubShell>
       {!SIGNAL_PREVIEW && (
-        <header className="tmx-command-hero animate-[tmx-reveal_240ms_cubic-bezier(0,0,0.2,1)_both] rounded-2xl border border-cyan-300/15 p-5 motion-reduce:animate-none sm:p-7 md:p-8">
+        <header className="glass-card tmx-command-hero animate-[tmx-reveal_240ms_cubic-bezier(0,0,0.2,1)_both] rounded-2xl border border-border p-5 motion-reduce:animate-none sm:p-7 md:p-8">
           <div className="mb-4 flex flex-wrap items-center gap-3">
             <p className="hud-label">Operator Console</p>
-            <span className="flex items-center gap-2 rounded-full border border-emerald-300/15 bg-emerald-300/[0.05] px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-emerald-200/70">
+            <span className="flex items-center gap-2 rounded-full border border-success/30 bg-success/10 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-success">
               <span className="status-dot" aria-hidden /> Sistema online
             </span>
           </div>
-          <h1 className="text-3xl font-bold leading-tight tracking-tight text-white md:text-4xl">
+          <h1 className="text-3xl font-bold leading-tight tracking-tight text-foreground md:text-4xl">
             Olá,{' '}
             <span
               className="bg-clip-text text-transparent"
@@ -42,7 +42,7 @@ export default function HubLandingPage() {
               {firstName}
             </span>
           </h1>
-          <p className="mt-3 max-w-xl text-sm leading-6 text-white/55">
+          <p className="mt-3 max-w-xl text-sm leading-6 text-muted-foreground">
             {hasOffers
               ? 'Acompanhe pedidos, receita e liquidação de todas as suas ofertas em um só lugar.'
               : 'Seu espaço de trabalho mostra somente as ferramentas liberadas pelo administrador.'}
@@ -59,12 +59,12 @@ export default function HubLandingPage() {
       {/* Tools */}
       <section className="mt-12">
         <div className="mb-4 flex items-baseline justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-white/55">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             Ferramentas
           </h2>
           <Link
             href="/tools"
-            className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300 hover:text-cyan-200"
+            className="text-xs font-semibold uppercase tracking-[0.18em] text-primary hover:text-primary"
           >
             Ver todas →
           </Link>

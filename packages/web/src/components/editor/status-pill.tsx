@@ -26,7 +26,7 @@ interface StatusPillProps {
 export function StatusPill({ status, progress }: StatusPillProps) {
   if (!status) {
     return (
-      <span className="inline-flex items-center gap-2 rounded-sm border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/55">
+      <span className="inline-flex items-center gap-2 rounded-sm border border-border bg-muted px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
         <Loader2 className="h-3 w-3 animate-spin" />
         Carregando
       </span>

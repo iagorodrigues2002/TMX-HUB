@@ -44,27 +44,27 @@ export function CopyBlock({
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-cyan-100/[0.12] bg-[#020b12]">
-      <div className="flex items-center justify-between border-b border-cyan-100/[0.09] bg-cyan-100/[0.025] px-3 py-2">
-        <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
+    <div className="glass-card overflow-hidden rounded-xl border border-border bg-background">
+      <div className="flex items-center justify-between border-b border-border bg-accent px-3 py-2">
+        <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
           {label}
         </span>
         {copyable ? (
           <button
             type="button"
             onClick={() => void copy()}
-            className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-cyan-200/70 transition hover:text-cyan-200"
+            className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-primary transition hover:text-primary"
           >
             {copied ? <Check className="h-3.5 w-3.5" /> : <Clipboard className="h-3.5 w-3.5" />}
             {copied ? 'Copiado' : 'Copiar'}
           </button>
         ) : (
-          <span className="text-[10px] uppercase tracking-[0.14em] text-amber-200/65">
+          <span className="text-[10px] uppercase tracking-[0.14em] text-warning">
             apenas exemplo
           </span>
         )}
       </div>
-      <pre className="overflow-x-auto p-4 font-mono text-xs leading-6 text-cyan-50/85">
+      <pre className="overflow-x-auto p-4 font-mono text-xs leading-6 text-primary">
         <code>{children}</code>
       </pre>
     </div>
@@ -89,13 +89,13 @@ export function Section({
   return (
     <section id={id} className="surface-panel scroll-mt-8 rounded-2xl p-5 md:p-7">
       <header className="mb-6 flex items-start gap-4">
-        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-md border border-cyan-300/20 bg-cyan-300/[0.06] text-cyan-300">
+        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-md border border-border bg-accent text-primary">
           {icon}
         </div>
         <div>
           <p className="hud-label">Etapa {number}</p>
-          <h2 className="mt-1 text-xl font-semibold text-white">{title}</h2>
-          <p className="mt-1 text-sm leading-6 text-white/65">{subtitle}</p>
+          <h2 className="mt-1 text-xl font-semibold text-foreground">{title}</h2>
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">{subtitle}</p>
         </div>
       </header>
       {children}
@@ -107,8 +107,8 @@ export function Checklist({ items }: { items: Array<{ id: string; content: React
   return (
     <ul className="space-y-3">
       {items.map((item) => (
-        <li key={item.id} className="flex gap-3 text-sm leading-6 text-white/75">
-          <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-emerald-300" />
+        <li key={item.id} className="flex gap-3 text-sm leading-6 text-foreground">
+          <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-success" />
           <span>{item.content}</span>
         </li>
       ))}
@@ -129,15 +129,11 @@ export function Result({
   return (
     <div
       className={`rounded-md border p-4 ${
-        warn
-          ? 'border-amber-300/15 bg-amber-300/[0.04]'
-          : 'border-emerald-300/15 bg-emerald-300/[0.04]'
+        warn ? 'border-warning/30 bg-warning/10' : 'border-success/30 bg-success/10'
       }`}
     >
-      <p className={`text-sm font-medium ${warn ? 'text-amber-200' : 'text-emerald-200'}`}>
-        {title}
-      </p>
-      <p className="mt-1 text-xs leading-5 text-white/65">{detail}</p>
+      <p className={`text-sm font-medium ${warn ? 'text-warning' : 'text-success'}`}>{title}</p>
+      <p className="mt-1 text-xs leading-5 text-muted-foreground">{detail}</p>
     </div>
   );
 }

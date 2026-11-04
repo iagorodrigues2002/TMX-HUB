@@ -101,7 +101,7 @@ export function PayeeRow({
   return (
     <article
       aria-label={`Dados de ${payee.name}`}
-      className="space-y-4 rounded-lg border border-border bg-background/40 p-4"
+      className="glass-card space-y-4 rounded-lg border border-border bg-background/40 p-4"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
@@ -271,7 +271,7 @@ export function PayeeRow({
       {message && (
         <p
           role={message.kind === 'error' ? 'alert' : 'status'}
-          className={`text-sm ${message.kind === 'error' ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-300'}`}
+          className={`text-sm ${message.kind === 'error' ? 'text-destructive' : 'text-success dark:text-success'}`}
         >
           {message.text}
         </p>

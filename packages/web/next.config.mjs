@@ -18,6 +18,19 @@ const nextConfig = {
   output: 'standalone',
   // Tell Next.js to trace deps from the monorepo root, not just packages/web.
   outputFileTracingRoot: path.join(__dirname, '../../'),
+  async redirects() {
+    // The isolated API permits localhost:3120; keep preview browser origins canonical.
+    return process.env.NEXT_PUBLIC_TMX_LOCAL_PREVIEW_KIND === 'synthetic'
+      ? [
+          {
+            source: '/:path*',
+            has: [{ type: 'host', value: '127\\.0\\.0\\.1' }],
+            destination: 'http://localhost:3120/:path*',
+            permanent: false,
+          },
+        ]
+      : [];
+  },
   async rewrites() {
     return [
       {

@@ -20,10 +20,10 @@ export function renderUpsellIdentityFilters(context: TrackingContentContext) {
     setUpsellIdentityPageSize,
   } = context;
   return (
-    <div className="mt-5 overflow-hidden rounded-xl border border-white/[0.08]">
-      <div className="border-b border-white/[0.08] bg-white/[0.025] px-4 py-3">
+    <div className="glass-card mt-5 overflow-hidden rounded-xl border border-border">
+      <div className="border-b border-border bg-muted px-4 py-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="font-semibold text-white/80">vendaId e jornadas</p>
+          <p className="font-semibold text-foreground">vendaId e jornadas</p>
           {canManage && (
             <div className="flex flex-wrap gap-2">
               <Button
@@ -49,11 +49,11 @@ export function renderUpsellIdentityFilters(context: TrackingContentContext) {
             </div>
           )}
         </div>
-        <p className="mt-1 text-xs text-white/40">
+        <p className="mt-1 text-xs text-muted-foreground">
           Histórico de compras de front aprovadas. VendePay usa vendaId validado; SyzePay usa a
           sessão do checkout e confirma a página no funil antes de liberar o link.
         </p>
-        <p className="mt-1 text-xs text-white/35">
+        <p className="mt-1 text-xs text-muted-foreground">
           As verificações de sessão são somente de leitura e não realizam cobranças. “Recuperar
           vendaId” é específico da VendePay. Cada compra abre somente os destinos do seu gateway.
         </p>
@@ -77,7 +77,7 @@ export function renderUpsellIdentityFilters(context: TrackingContentContext) {
           ))}
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="mr-1 text-[10px] uppercase tracking-[0.16em] text-white/30">
+          <span className="mr-1 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
             Resultado do teste
           </span>
           {(
@@ -102,7 +102,9 @@ export function renderUpsellIdentityFilters(context: TrackingContentContext) {
       </div>
       {renderUpsellIdentities(context)}
       {!upsellIdentities.isLoading && !filteredUpsellIdentities.length && (
-        <p className="px-4 py-5 text-sm text-white/40">Nenhum comprador encontrado neste filtro.</p>
+        <p className="px-4 py-5 text-sm text-muted-foreground">
+          Nenhum comprador encontrado neste filtro.
+        </p>
       )}
       <UpsellPagination
         total={upsellIdentities.data?.total ?? 0}

@@ -46,25 +46,28 @@ export function renderGateways(context: TrackingContentContext) {
             className={cn(
               'flex w-full items-center justify-between rounded border p-4 text-left transition-colors',
               selectedVendepayConnectionId === connection.id
-                ? 'border-cyan-300/35 bg-cyan-300/[0.06]'
-                : 'border-white/[0.07] hover:border-white/[0.14]',
+                ? 'border-border bg-accent'
+                : 'border-border hover:border-border',
             )}
           >
             <div>
-              <p className="text-sm font-medium text-white/80">{connection.name}</p>
-              <p className="mt-1 font-mono text-xs text-cyan-200/60">
+              <p className="text-sm font-medium text-foreground">{connection.name}</p>
+              <p className="mt-1 font-mono text-xs text-primary">
                 Vendepay · atribuição: {connection.propagation_param}
               </p>
             </div>
             <span
-              className={cn('text-xs', connection.enabled ? 'text-emerald-300' : 'text-white/35')}
+              className={cn(
+                'text-xs',
+                connection.enabled ? 'text-success' : 'text-muted-foreground',
+              )}
             >
               {connection.enabled ? 'ativo' : 'pausado'}
             </span>
           </button>
         ))}
         {canManage && config.data?.configured && (
-          <div className="flex flex-col gap-2 rounded border border-dashed border-cyan-300/20 p-3 sm:flex-row">
+          <div className="flex flex-col gap-2 rounded border border-dashed border-border p-3 sm:flex-row">
             <Input
               aria-label="Nome da nova conta Vendepay"
               placeholder="Ex.: Vendepay Brasil · Conta 02"
@@ -86,14 +89,14 @@ export function renderGateways(context: TrackingContentContext) {
       </div>
       {canManage && config.data?.configured && renderVendepayAccount(context)}
       {canManage && config.data?.configured && (
-        <div className="mt-5 rounded-md border border-cyan-300/30 bg-cyan-300/[0.06] p-4 shadow-[0_0_28px_rgba(34,211,238,0.06)]">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-200/70">
+        <div className="mt-5 rounded-md border border-border bg-accent p-4 shadow-[0_0_28px_rgba(34,211,238,0.06)]">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
             2. Secret de assinatura
           </p>
-          <p className="mt-2 text-sm font-medium text-cyan-100">
+          <p className="mt-2 text-sm font-medium text-primary">
             Cole o secret da {selectedVendepayConnection?.name ?? 'conta selecionada'}
           </p>
-          <p className="mt-1 text-xs leading-5 text-white/45">
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
             É a chave exibida pela Vendepay ao cadastrar o webhook. O TMX a salva criptografada e,
             depois disso, ela não volta ao navegador.
           </p>
@@ -126,20 +129,20 @@ export function renderGateways(context: TrackingContentContext) {
             </Button>
           </div>
           {selectedVendepayConnection?.signing_secret_configured && (
-            <p className="mt-2 text-xs text-emerald-300">✓ Secret configurado com segurança</p>
+            <p className="mt-2 text-xs text-success">✓ Secret configurado com segurança</p>
           )}
         </div>
       )}
       {canManage && config.data?.configured && (
-        <div className="mt-5 rounded-md border border-white/[0.08] p-4">
-          <p className="text-sm font-medium text-white/80">Homologar payload da Vendepay</p>
-          <p className="mt-1 text-xs leading-5 text-white/45">
+        <div className="mt-5 rounded-md border border-border p-4">
+          <p className="text-sm font-medium text-foreground">Homologar payload da Vendepay</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
             Cole um exemplo recebido da Vendepay. O teste apenas normaliza os campos: não cria
             pedido, não envia ao Meta e não envia à UTMify.
           </p>
           <textarea
             aria-label="Payload JSON da Vendepay"
-            className="mt-3 min-h-72 w-full rounded-md border border-white/[0.1] bg-black/25 p-3 font-mono text-xs leading-5 text-cyan-50 outline-none focus:border-cyan-300/40"
+            className="mt-3 min-h-72 w-full rounded-md border border-border bg-accent p-3 font-mono text-xs leading-5 text-primary outline-none focus:border-border"
             value={vendepayPayload}
             onChange={(event) => setVendepayPayload(event.target.value)}
             spellCheck={false}
@@ -157,8 +160,8 @@ export function renderGateways(context: TrackingContentContext) {
               className={cn(
                 'mt-3 rounded border p-3 text-xs',
                 previewVendepay.data.processable
-                  ? 'border-emerald-300/20 bg-emerald-300/[0.05] text-emerald-100'
-                  : 'border-red-300/20 bg-red-300/[0.05] text-red-100',
+                  ? 'border-success/30 bg-success/10 text-success'
+                  : 'border-danger/30 bg-danger/10 text-danger',
               )}
             >
               <p className="font-medium">
@@ -166,7 +169,7 @@ export function renderGateways(context: TrackingContentContext) {
                   ? 'Payload reconhecido'
                   : 'Payload precisa de ajuste'}
               </p>
-              <pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-white/55">
+              <pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-muted-foreground">
                 {JSON.stringify(
                   previewVendepay.data.normalized ??
                     previewVendepay.data.diagnostics ?? ['Formato não reconhecido'],
@@ -184,14 +187,14 @@ export function renderGateways(context: TrackingContentContext) {
           {(vendepayReceipts.data?.receipts ?? []).slice(0, 20).map((receipt) => (
             <div
               key={receipt.id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded border border-white/[0.07] p-3 text-xs"
+              className="flex flex-wrap items-center justify-between gap-3 rounded border border-border p-3 text-xs"
             >
               <div>
-                <p className="font-mono text-white/70">
+                <p className="font-mono text-muted-foreground">
                   {receipt.transaction_id ?? 'Sem transação reconhecida'}
                 </p>
-                <p className="mt-1 text-cyan-200/60">{receipt.connection_name}</p>
-                <p className="mt-1 text-white/35">
+                <p className="mt-1 text-primary">{receipt.connection_name}</p>
+                <p className="mt-1 text-muted-foreground">
                   {new Date(receipt.received_at).toLocaleString('pt-BR')}
                   {receipt.payment_method ? ` · ${receipt.payment_method}` : ''}
                 </p>
@@ -199,10 +202,10 @@ export function renderGateways(context: TrackingContentContext) {
               <span
                 className={
                   receipt.state === 'processed' || receipt.state === 'duplicate'
-                    ? 'text-emerald-300'
+                    ? 'text-success'
                     : receipt.state === 'quarantined'
-                      ? 'text-red-300'
-                      : 'text-amber-300'
+                      ? 'text-danger'
+                      : 'text-warning'
                 }
               >
                 {receipt.state}
@@ -210,7 +213,7 @@ export function renderGateways(context: TrackingContentContext) {
             </div>
           ))}
           {!vendepayReceipts.data?.receipts?.length && (
-            <p className="rounded border border-dashed border-white/[0.08] p-4 text-sm text-white/35">
+            <p className="rounded border border-dashed border-border p-4 text-sm text-muted-foreground">
               Nenhum webhook recebido ainda. Depois de configurar a URL na Vendepay, os recebimentos
               aparecerão aqui.
             </p>

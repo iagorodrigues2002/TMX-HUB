@@ -8,10 +8,10 @@ import {
   Link2,
   Megaphone,
   Sparkles,
-  Split,
   Target,
   Video,
   Webhook,
+  Workflow,
 } from 'lucide-react';
 import type { NavItem } from './nav-config-nav-item';
 import { trackingTool } from './nav-config-tracking-tool';
@@ -20,7 +20,7 @@ export const nav_items_integrations: NavItem = {
   id: 'integrations',
   label: 'Integrações',
   href: '/tracking?view=destinations',
-  icon: Split,
+  icon: Workflow,
   group: 'Integrações',
   ...trackingTool,
   keywords: ['destinos', 'conexões'],

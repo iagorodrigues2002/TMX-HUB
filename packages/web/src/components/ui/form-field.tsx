@@ -74,7 +74,7 @@ export function FormField({
       {error ? (
         <FieldError id={`${id}-error`}>{error}</FieldError>
       ) : help ? (
-        <p id={`${id}-help`} className="text-xs leading-5 text-white/45">
+        <p id={`${id}-help`} className="text-xs leading-5 text-muted-foreground">
           {help}
         </p>
       ) : null}

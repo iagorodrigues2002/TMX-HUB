@@ -49,7 +49,10 @@ export function ReserveProjectionView({
       </p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map(([label, value]) => (
-          <div key={label} className="rounded-xl border border-border bg-background/60 p-4">
+          <div
+            key={label}
+            className="glass-card rounded-xl border border-border bg-background/60 p-4"
+          >
             <p className="text-xs text-muted-foreground">{label}</p>
             <p className="mt-2 text-xl font-semibold tabular-nums text-foreground">
               {warnings || data.missing_dates ? '≥ ' : ''}
@@ -63,7 +66,7 @@ export function ReserveProjectionView({
         {money(data.today.reversed_reserve_brl_minor)} da reserva prevista está ligada a compras com
         reembolso ou chargeback. Essa parcela não reduz a previsão original de liberação.
       </p>
-      <div className="mt-3 rounded-xl border border-border bg-background/60 p-4">
+      <div className="glass-card mt-3 rounded-xl border border-border bg-background/60 p-4">
         <p className="text-xs text-muted-foreground">Reserva sem compras devolvidas · hoje</p>
         <p className="mt-2 text-xl font-semibold tabular-nums text-foreground">
           {data.today.missing_values || data.missing_dates ? '≥ ' : ''}
@@ -75,7 +78,7 @@ export function ReserveProjectionView({
         </p>
       </div>
       {(warnings > 0 || data.missing_dates > 0) && (
-        <output className="mt-2 block text-xs text-amber-500">
+        <output className="mt-2 block text-xs text-warning">
           Projeção parcial: {count(warnings)} compra(s) sem valor ou percentual válido e{' '}
           {count(data.missing_dates)} sem data de aprovação. Esses valores não foram tratados como
           zero.
@@ -87,7 +90,7 @@ export function ReserveProjectionView({
         </summary>
         <div className="max-h-80 overflow-auto">
           <table className="w-full min-w-[760px] border-separate border-spacing-0 text-left text-sm">
-            <thead className="sticky top-0 z-10 bg-[#071c24] text-xs leading-5 text-muted-foreground">
+            <thead className="sticky top-0 z-10 bg-background text-xs leading-5 text-muted-foreground">
               <tr>
                 <th scope="col" className="p-3">
                   Liberação prevista
@@ -170,11 +173,11 @@ export function ReserveReleaseProjection({
   if (!ids.length) return null;
   return (
     <section
-      className="rounded-xl border border-border bg-card/95 p-5"
+      className="glass-card rounded-xl border border-border bg-card/95 p-5"
       aria-label="Projeção de liberação da reserva"
     >
       <h3 className="flex items-center gap-2 text-sm font-semibold">
-        <CalendarClock aria-hidden className="h-4 w-4 text-cyan-400" />
+        <CalendarClock aria-hidden className="h-4 w-4 text-primary" />
         Projeção de liberação da reserva
       </h3>
       {query.data ? (

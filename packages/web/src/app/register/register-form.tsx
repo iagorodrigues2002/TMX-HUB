@@ -1,13 +1,15 @@
 'use client';
 
+import { PublicSurface } from '@/components/hub/public-surface';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
+import { useRouter } from '@/lib/motion-router';
 import { AlertTriangle, CheckCircle2, Loader2, UserPlus } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -94,145 +96,136 @@ export function RegisterForm() {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#04101A] p-6">
-      <div className="w-full max-w-sm space-y-6">
-        <div className="text-center">
-          <Link href="/" className="inline-flex items-center gap-3">
-            <span
-              aria-hidden
-              className="grid h-10 w-10 place-items-center rounded-md border border-cyan-300/30 shadow-glow"
-              style={{
-                background: 'linear-gradient(135deg, rgba(20,184,166,0.25), rgba(34,211,238,0.05))',
-              }}
-            >
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 24 24"
-                className="h-5 w-5 text-cyan-300"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M3 12h4l3-9 4 18 3-9h4" />
-              </svg>
-            </span>
-            <span className="text-[22px] font-bold tracking-tight text-white">
-              TMX{' '}
+    <PublicSurface>
+      <main className="flex min-h-screen items-center justify-center bg-background p-6">
+        <div className="w-full max-w-sm space-y-6">
+          <div className="text-center">
+            <Link href="/" className="inline-flex items-center gap-3">
               <span
-                className="bg-clip-text text-transparent"
-                style={{ backgroundImage: 'linear-gradient(90deg, #0E7C86 0%, #22D3EE 100%)' }}
+                aria-hidden
+                className="grid h-9 w-9 place-items-center rounded-xl border border-border bg-muted"
               >
-                HUB
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  className="h-5 w-5 text-primary"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M3 12h4l3-9 4 18 3-9h4" />
+                </svg>
               </span>
-            </span>
-          </Link>
-          <p className="mt-4 text-[12px] uppercase tracking-[0.18em] text-white/45">Criar conta</p>
-        </div>
-
-        {inviteState.kind === 'checking' && (
-          <div className="glass-card flex items-center gap-2 p-3 text-[12px] text-white/65">
-            <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-300" />
-            Validando convite…
-          </div>
-        )}
-        {inviteState.kind === 'valid' && (
-          <div className="glass-card flex items-start gap-2 border-cyan-300/30 p-3 text-[12px]">
-            <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-300" />
-            <div className="space-y-0.5">
-              <p className="font-semibold text-cyan-200">Convite válido</p>
-              {inviteState.invitedBy && (
-                <p className="text-white/65">Convidado por {inviteState.invitedBy}.</p>
-              )}
-              {inviteState.expiresAt && (
-                <p className="text-[10px] text-white/40">
-                  Expira em {new Date(inviteState.expiresAt).toLocaleString('pt-BR')}
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-        {inviteState.kind === 'invalid' && (
-          <div className="glass-card flex items-start gap-2 border-rose-300/30 p-3 text-[12px]">
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-300" />
-            <div className="space-y-0.5">
-              <p className="font-semibold text-rose-200">{inviteState.detail}</p>
-              <p className="text-white/55">Solicite um novo link a um administrador.</p>
-            </div>
-          </div>
-        )}
-
-        <form onSubmit={(event) => void onSubmit(event)} className="glass-card space-y-4 p-6">
-          <div className="space-y-2">
-            <Label htmlFor="email" className="hud-label">
-              Email
-            </Label>
-            <Input
-              id="email"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              disabled={submitting}
-              placeholder="voce@exemplo.com"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="name" className="hud-label">
-              Nome
-            </Label>
-            <Input
-              id="name"
-              type="text"
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              disabled={submitting}
-              placeholder="Seu nome"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="password" className="hud-label">
-              Senha (mín. 8)
-            </Label>
-            <Input
-              id="password"
-              type="password"
-              required
-              minLength={8}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              disabled={submitting}
-              placeholder="••••••••"
-            />
-          </div>
-          <Button
-            type="submit"
-            disabled={submitting || inviteState.kind === 'invalid'}
-            className="w-full"
-            size="lg"
-          >
-            {submitting ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <UserPlus className="h-4 w-4" />
-            )}
-            {submitting ? 'Criando…' : 'Criar conta'}
-          </Button>
-          <p className="text-center text-[12px] text-white/40">
-            Já tem conta?{' '}
-            <Link href="/login" className="text-cyan-300 hover:underline">
-              Entrar
+              <span className="text-sm font-bold tracking-tight text-foreground">TMX HUB</span>
             </Link>
-          </p>
-          <p className="text-center text-[10px] uppercase tracking-[0.18em] text-white/30">
-            {inviteToken
-              ? 'Registro habilitado por convite'
-              : 'Esta instância requer convite — peça a um administrador.'}
-          </p>
-        </form>
-      </div>
-    </main>
+            <h1 className="mt-6 text-2xl font-semibold text-foreground">Criar conta</h1>
+          </div>
+
+          {inviteState.kind === 'checking' && (
+            <div className="glass-card flex items-center gap-2 p-3 text-[12px] text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+              Validando convite…
+            </div>
+          )}
+          {inviteState.kind === 'valid' && (
+            <div className="glass-card flex items-start gap-2 border-border p-3 text-[12px]">
+              <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success" />
+              <div className="space-y-0.5">
+                <p className="font-semibold text-primary">Convite válido</p>
+                {inviteState.invitedBy && (
+                  <p className="text-muted-foreground">Convidado por {inviteState.invitedBy}.</p>
+                )}
+                {inviteState.expiresAt && (
+                  <p className="text-[10px] text-muted-foreground">
+                    Expira em {new Date(inviteState.expiresAt).toLocaleString('pt-BR')}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+          {inviteState.kind === 'invalid' && (
+            <div className="glass-card flex items-start gap-2 border-danger/30 p-3 text-[12px]">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-danger" />
+              <div className="space-y-0.5">
+                <p className="font-semibold text-danger">{inviteState.detail}</p>
+                <p className="text-muted-foreground">Solicite um novo link a um administrador.</p>
+              </div>
+            </div>
+          )}
+
+          <form onSubmit={(event) => void onSubmit(event)} className="glass-card space-y-4 p-6">
+            <div className="space-y-2">
+              <Label htmlFor="email" className="hud-label">
+                Email
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={submitting}
+                placeholder="voce@exemplo.com"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="name" className="hud-label">
+                Nome
+              </Label>
+              <Input
+                id="name"
+                type="text"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                disabled={submitting}
+                placeholder="Seu nome"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password" className="hud-label">
+                Senha (mín. 8)
+              </Label>
+              <Input
+                id="password"
+                type="password"
+                required
+                minLength={8}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={submitting}
+                placeholder="••••••••"
+              />
+            </div>
+            <Button
+              type="submit"
+              disabled={submitting || inviteState.kind === 'invalid'}
+              className="w-full"
+              size="lg"
+            >
+              {submitting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <UserPlus className="h-4 w-4" />
+              )}
+              {submitting ? 'Criando…' : 'Criar conta'}
+            </Button>
+            <p className="text-center text-[12px] text-muted-foreground">
+              Já tem conta?{' '}
+              <Link href="/login" className="text-primary hover:underline">
+                Entrar
+              </Link>
+            </p>
+            <p className="text-center text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+              {inviteToken
+                ? 'Registro habilitado por convite'
+                : 'Esta instância requer convite — peça a um administrador.'}
+            </p>
+          </form>
+        </div>
+      </main>
+    </PublicSurface>
   );
 }

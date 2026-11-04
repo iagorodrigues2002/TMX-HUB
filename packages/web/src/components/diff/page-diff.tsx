@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 
 const SELECT =
-  'flex h-11 w-full rounded-md border border-white/[0.10] bg-white/[0.04] px-4 text-[14px] text-white focus-visible:outline-none focus-visible:border-cyan-300/40';
+  'flex h-11 w-full rounded-md border border-border bg-muted px-4 text-[14px] text-foreground focus-visible:outline-none focus-visible:border-border';
 
 export function PageDiff() {
   const [urlA, setUrlA] = useState('');
@@ -65,7 +65,7 @@ export function PageDiff() {
       <form onSubmit={(event) => void handleSubmit(event)} className="glass-card space-y-4 p-6">
         <header>
           <p className="hud-label">1 · URLs para comparar</p>
-          <h2 className="mt-1 text-[16px] font-semibold text-white">
+          <h2 className="mt-1 text-[16px] font-semibold text-foreground">
             Cole duas URLs (versão antiga e nova, ou competidor A e B)
           </h2>
         </header>
@@ -127,12 +127,12 @@ export function PageDiff() {
           <header className="flex flex-wrap items-baseline justify-between gap-3">
             <div>
               <p className="hud-label">2 · Resultado</p>
-              <h2 className="mt-1 text-[16px] font-semibold text-white">
-                <span className="text-emerald-300">+{result.summary.added}</span> ·{' '}
-                <span className="text-red-300">-{result.summary.removed}</span> ·{' '}
-                <span className="text-white/45">{result.summary.unchanged} iguais</span>
+              <h2 className="mt-1 text-[16px] font-semibold text-foreground">
+                <span className="text-success">+{result.summary.added}</span> ·{' '}
+                <span className="text-danger">-{result.summary.removed}</span> ·{' '}
+                <span className="text-muted-foreground">{result.summary.unchanged} iguais</span>
               </h2>
-              <p className="mt-1 text-[12px] text-white/45">
+              <p className="mt-1 text-[12px] text-muted-foreground">
                 {result.duration_ms}ms · render {result.render_mode}
               </p>
             </div>
@@ -157,41 +157,41 @@ export function PageDiff() {
           </header>
 
           <div className="grid grid-cols-2 gap-3 text-[12px]">
-            <div className="rounded-md border border-white/[0.06] bg-black/20 p-3">
+            <div className="rounded-md border border-border bg-accent p-3">
               <p className="hud-label">URL A</p>
-              <p className="mt-1 break-all font-mono text-white/70">{result.url_a.final}</p>
-              <p className="mt-1 text-white/40">
+              <p className="mt-1 break-all font-mono text-muted-foreground">{result.url_a.final}</p>
+              <p className="mt-1 text-muted-foreground">
                 HTTP {result.url_a.status} · {result.url_a.lines} linhas
               </p>
             </div>
-            <div className="rounded-md border border-white/[0.06] bg-black/20 p-3">
+            <div className="rounded-md border border-border bg-accent p-3">
               <p className="hud-label">URL B</p>
-              <p className="mt-1 break-all font-mono text-white/70">{result.url_b.final}</p>
-              <p className="mt-1 text-white/40">
+              <p className="mt-1 break-all font-mono text-muted-foreground">{result.url_b.final}</p>
+              <p className="mt-1 text-muted-foreground">
                 HTTP {result.url_b.status} · {result.url_b.lines} linhas
               </p>
             </div>
           </div>
 
-          <div className="rounded-md border border-white/[0.06] bg-black/40">
+          <div className="rounded-md border border-border bg-accent">
             {visibleEntries.length === 0 ? (
-              <p className="p-6 text-center text-[12px] text-white/40">
+              <p className="p-6 text-center text-[12px] text-muted-foreground">
                 Nenhuma mudança detectada. As duas páginas têm exatamente o mesmo texto visível.
               </p>
             ) : (
-              <ul className="divide-y divide-white/[0.04] font-mono text-[12px] leading-5">
+              <ul className="divide-y divide-border font-mono text-[12px] leading-5">
                 {visibleEntries.map((e) => (
                   <li
                     key={e.id}
                     className={`flex gap-2 px-3 py-1.5 ${
                       e.op === 'add'
-                        ? 'bg-emerald-500/[0.08] text-emerald-200'
+                        ? 'bg-success/10 text-success'
                         : e.op === 'remove'
-                          ? 'bg-red-500/[0.08] text-red-200'
-                          : 'text-white/55'
+                          ? 'bg-danger/10 text-danger'
+                          : 'text-muted-foreground'
                     }`}
                   >
-                    <span className="shrink-0 select-none text-white/30">
+                    <span className="shrink-0 select-none text-muted-foreground">
                       {e.op === 'add' ? (
                         <Plus className="h-3 w-3" />
                       ) : e.op === 'remove' ? (

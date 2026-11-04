@@ -51,10 +51,10 @@ export function NicheWhitesList({ niche }: { niche: NicheView }) {
     <div className="space-y-3">
       {/* Upload form — só pra quem pode modificar */}
       {niche.canModify ? (
-        <div className="rounded-md border border-dashed border-white/[0.12] bg-white/[0.02] p-3">
+        <div className="rounded-md border border-dashed border-border bg-muted p-3">
           <div className="grid gap-2 md:grid-cols-[1fr_180px_auto] md:items-end">
             <div className="space-y-1">
-              <Label className="text-[10px] uppercase tracking-[0.14em] text-white/45">
+              <Label className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
                 Arquivo de áudio
               </Label>
               <input
@@ -66,11 +66,11 @@ export function NicheWhitesList({ niche }: { niche: NicheView }) {
                   const f = e.target.files?.[0];
                   if (f) uploadMut.mutate(f);
                 }}
-                className="block w-full text-[12px] text-white/75 file:mr-3 file:rounded file:border-0 file:bg-cyan-300/15 file:px-3 file:py-1 file:text-[11px] file:font-semibold file:uppercase file:tracking-[0.14em] file:text-cyan-200 hover:file:bg-cyan-300/25"
+                className="block w-full text-[12px] text-foreground file:mr-3 file:rounded file:border-0 file:bg-accent file:px-3 file:py-1 file:text-[11px] file:font-semibold file:uppercase file:tracking-[0.14em] file:text-primary hover:file:bg-accent"
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-[10px] uppercase tracking-[0.14em] text-white/45">
+              <Label className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
                 Label (opcional)
               </Label>
               <Input
@@ -81,22 +81,24 @@ export function NicheWhitesList({ niche }: { niche: NicheView }) {
                 disabled={uploadMut.isPending}
               />
             </div>
-            <p className="text-[10px] text-white/40 md:pb-2">Até 20MB · mp3, wav, m4a, ogg</p>
+            <p className="text-[10px] text-muted-foreground md:pb-2">
+              Até 20MB · mp3, wav, m4a, ogg
+            </p>
           </div>
           {progress !== null && (
             <div className="mt-2">
-              <div className="h-1 overflow-hidden rounded-full bg-white/[0.08]">
+              <div className="h-1 overflow-hidden rounded-full bg-accent">
                 <div
-                  className="h-full bg-cyan-300/70 transition-all"
+                  className="h-full bg-primary transition-all"
                   style={{ width: `${progress}%` }}
                 />
               </div>
-              <p className="mt-1 text-[10px] text-white/50">Enviando… {progress}%</p>
+              <p className="mt-1 text-[10px] text-muted-foreground">Enviando… {progress}%</p>
             </div>
           )}
         </div>
       ) : (
-        <p className="rounded-md border border-white/[0.06] bg-black/15 px-3 py-2 text-[11px] text-white/45">
+        <p className="rounded-md border border-border bg-accent px-3 py-2 text-[11px] text-muted-foreground">
           Esse nicho foi criado por outro membro. Você pode usá-lo no processamento, mas só o
           criador (ou um admin) pode adicionar/remover áudios.
         </p>
@@ -104,7 +106,7 @@ export function NicheWhitesList({ niche }: { niche: NicheView }) {
 
       {/* List of whites */}
       {niche.whites.length === 0 ? (
-        <p className="rounded-md border border-dashed border-white/[0.08] bg-white/[0.01] p-4 text-center text-[12px] text-white/40">
+        <p className="rounded-md border border-dashed border-border bg-muted p-4 text-center text-[12px] text-muted-foreground">
           Nenhum áudio white. Suba pelo menos 1 pra poder processar vídeos com esse nicho.
         </p>
       ) : (

@@ -1,69 +1,21 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
+import { PANEL_ENTRANCE, interpolateCount, motionScreenKey } from '../src/lib/motion-session';
 import {
   isActiveMotionTab,
+  routeAddedPanels,
   routeEntrancePanels,
   routeEntranceScreens,
-} from '../src/components/hub/route-motion';
-import {
-  PANEL_ENTRANCE,
-  ROUTE_TRANSITION,
-  ROUTE_TRANSITION_FRAMES,
-  claimMotionEntrance,
-  interpolateCount,
-  isRouteTransition,
-  motionScreenKey,
-  panelEntranceFrames,
-  visitMotionScreen,
-} from '../src/lib/motion-session';
+} from '../src/lib/route-motion-selection';
 
-test('route dissolve runs on navigation including revisits, never on focus or data refresh', () => {
-  assert.equal(isRouteTransition(null, '/'), false);
-  assert.equal(isRouteTransition('/', '/empresa/membros'), true);
-  assert.equal(isRouteTransition('/empresa/membros', '/'), true);
-  assert.equal(isRouteTransition('/', '/'), false);
-  assert.ok(ROUTE_TRANSITION.duration <= 250);
-  assert.ok(ROUTE_TRANSITION_FRAMES.every((frame) => Object.keys(frame).join() === 'opacity'));
-  assert.ok(Number(ROUTE_TRANSITION_FRAMES[0].opacity) >= 0.6);
-});
-
-test('route identity survives shell remounts but never retains page data', () => {
-  const session = { current: null as string | null, visited: new Set<string>() };
-  assert.deepEqual(visitMotionScreen('0:/', session), { navigating: false, firstVisit: true });
-  assert.deepEqual(visitMotionScreen('0:/tarefas', session), {
-    navigating: true,
-    firstVisit: true,
-  });
-  assert.deepEqual(visitMotionScreen('0:/', session), { navigating: true, firstVisit: false });
-  assert.deepEqual(visitMotionScreen('0:/', session), { navigating: false, firstVisit: false });
-  assert.deepEqual(visitMotionScreen('1:/', session), { navigating: true, firstVisit: true });
-  assert.deepEqual([...session.visited], ['0:/', '0:/tarefas', '1:/']);
-});
-
-test('each route and tab enters once; polling filters and focus are not new screens', () => {
-  const visited = new Set<string>();
-  const makeKey = (query: string) => motionScreenKey('/tracking', new URLSearchParams(query));
-  assert.equal(claimMotionEntrance(makeKey('view=overview&offer=one'), visited), true);
-  assert.equal(
-    claimMotionEntrance(makeKey('view=overview&offer=two&from=2026-11-01'), visited),
-    false,
-  );
-  assert.equal(claimMotionEntrance(makeKey('view=upsell'), visited), true);
-  assert.equal(claimMotionEntrance(makeKey('view=overview'), visited), false);
-  assert.notEqual(makeKey('tab=members'), makeKey('tab=finance'));
-});
-
-test('entrance budget is bounded and cannot hide the page or change layout dimensions', () => {
-  assert.equal(PANEL_ENTRANCE.maxPanels, 6);
-  assert.ok(
-    PANEL_ENTRANCE.duration + (PANEL_ENTRANCE.maxPanels - 1) * PANEL_ENTRANCE.stagger <= 750,
-  );
-  for (const frame of panelEntranceFrames()) {
-    assert.deepEqual(Object.keys(frame).sort(), ['opacity', 'transform']);
-    assert.ok(Number(frame.opacity) > 0);
-  }
-  assert.ok(panelEntranceFrames(true).every((frame) => frame.transform === 'none'));
+test('screen identity changes on navigation and tabs, but not on data filters', () => {
+  const key = (query: string) => motionScreenKey('/tracking', new URLSearchParams(query));
+  assert.equal(key('view=overview&offer=one'), key('view=overview&offer=two&from=2026-11-01'));
+  assert.notEqual(key('view=overview'), key('view=upsell'));
+  assert.notEqual(key('tab=members'), key('tab=finance'));
+  assert.equal(PANEL_ENTRANCE.duration, 480);
+  assert.equal(PANEL_ENTRANCE.stagger, 35);
 });
 
 test('panel selection excludes hidden surfaces and never animates both ancestor and child', () => {
@@ -78,7 +30,7 @@ test('panel selection excludes hidden surfaces and never animates both ancestor 
   const candidates = [parent, child, hidden, ...Array.from({ length: 10 }, () => makePanel())];
   const root = { querySelectorAll: () => candidates } as unknown as HTMLElement;
   const panels = routeEntrancePanels(root);
-  assert.equal(panels.length, 6);
+  assert.equal(panels.length, 11);
   assert.equal(panels[0], parent);
   assert.ok(!panels.includes(child as unknown as HTMLElement));
   assert.ok(!panels.includes(hidden as unknown as HTMLElement));
@@ -87,6 +39,63 @@ test('panel selection excludes hidden surfaces and never animates both ancestor 
 test('a plain or loading page remains visible even without explicit panel markers', () => {
   const root = { querySelectorAll: () => [] } as unknown as HTMLElement;
   assert.deepEqual(routeEntrancePanels(root), [root]);
+});
+
+test('a layout section never replaces individual material cards in the camera animation', () => {
+  const panel = () => ({ closest: () => null, contains: () => false });
+  const header = panel();
+  const metric = panel();
+  const map = panel();
+  const root = {
+    querySelectorAll: (selector: string) =>
+      selector === '[data-motion-panel]'
+        ? [header, map]
+        : selector.includes('.glass-card')
+          ? [header, metric]
+          : selector === 'section'
+            ? [root]
+            : [],
+  } as unknown as HTMLElement;
+  assert.deepEqual(routeEntrancePanels(root), [header, map, metric]);
+});
+
+test('tool headers and trailing copy join the transition without selecting text inside cards twice', () => {
+  const panel = () => ({ closest: () => null, contains: (_node: unknown) => false });
+  const header = panel();
+  const form = panel();
+  const nestedHeader = panel();
+  const footer = panel();
+  form.contains = (node) => node === nestedHeader;
+  const root = {
+    querySelectorAll: (selector: string) =>
+      selector.includes('.glass-card')
+        ? [form]
+        : selector === 'header, footer, header ~ p'
+          ? [header, nestedHeader, footer]
+          : [],
+  } as unknown as HTMLElement;
+  assert.deepEqual(routeEntrancePanels(root), [form, header, footer]);
+});
+
+test('cards arriving after the API response enter once; metric text updates and scheduled panels do not replay', () => {
+  const metric = { closest: () => null, contains: () => false } as unknown as HTMLElement;
+  const root = {
+    querySelectorAll: () => [metric],
+    contains: (node: HTMLElement) => node === metric,
+  } as unknown as HTMLElement;
+  const seen = new WeakSet<HTMLElement>();
+  assert.deepEqual(routeAddedPanels(root, [metric], seen, []), [metric]);
+  assert.deepEqual(routeAddedPanels(root, [metric], seen, [root]), []);
+  const text = { contains: () => false } as unknown as HTMLElement;
+  assert.deepEqual(routeAddedPanels(root, [text], seen, []), []);
+  seen.add(metric);
+  assert.deepEqual(routeAddedPanels(root, [metric], seen, []), []);
+  const pendingMetric = {
+    ...metric,
+    closest: (selector: string) => (selector.includes('data-overview-loading') ? {} : null),
+  } as unknown as HTMLElement;
+  const pendingRoot = { querySelectorAll: () => [pendingMetric] } as unknown as HTMLElement;
+  assert.deepEqual(routeAddedPanels(pendingRoot, [pendingMetric], new WeakSet(), []), []);
 });
 
 test('nested tab entrances animate only the outer active screen', () => {
@@ -110,9 +119,6 @@ test('only active tab panels can replay; reinserting a data screen after refetch
   assert.equal(isActiveMotionTab(screen({ 'data-state': 'active' })), false);
   assert.equal(isActiveMotionTab(screen({ role: 'tabpanel', 'data-state': 'inactive' })), false);
   assert.equal(isActiveMotionTab(screen({ role: 'tabpanel', 'data-state': 'active' })), true);
-  const visited = new Set<string>();
-  assert.equal(claimMotionEntrance('orders', visited), true);
-  assert.equal(claimMotionEntrance('orders', visited), false);
 });
 
 test('count updates interpolate from the existing reading, converge exactly and support decreases', () => {
@@ -176,4 +182,41 @@ test('refund legacy reveals defer to the shell without replaying or hiding panel
   );
   // Disclosure feedback remains interactive, not disabled globally with page entrances.
   assert.doesNotMatch(css, /details\[open\]/);
+});
+
+test('admin tab motion owns only the body; finance includes its ledger and reserve states', () => {
+  const admin = readFileSync(
+    new URL('../src/components/admin/admin-dashboard.tsx', import.meta.url),
+    'utf8',
+  );
+  const bodyStart = admin.indexOf('data-motion-coordinated="true"');
+  assert.ok(bodyStart > admin.indexOf('</nav>'));
+  assert.ok(!admin.slice(0, bodyStart).includes('data-motion-screen'));
+  assert.ok(admin.slice(bodyStart).includes('data-motion-screen={`admin:${activeView}`}'));
+  const route = readFileSync(
+    new URL('../src/components/hub/route-motion.tsx', import.meta.url),
+    'utf8',
+  );
+  assert.ok(
+    route.indexOf('[data-motion-coordinated="true"][data-motion-screen]') <
+      route.indexOf('\'[data-motion-coordinated="true"]\''),
+  );
+  const finance = readFileSync(
+    new URL('../src/components/overview/finance-dashboard-preview.tsx', import.meta.url),
+    'utf8',
+  );
+  assert.match(finance, /const panel = 'glass-card /);
+  assert.match(
+    finance,
+    /\['Movimentações', 'Saques', 'Despesas'\][\s\S]*?<section className=\{`\$\{panel\}/,
+  );
+  const reserve = readFileSync(
+    new URL('../src/components/overview/finance-reserve.tsx', import.meta.url),
+    'utf8',
+  );
+  const result = reserve.slice(reserve.indexOf('<div data-motion-panel>'));
+  assert.match(
+    result,
+    /offers\.isError[\s\S]*offers\.isPending[\s\S]*!selected\.length[\s\S]*ReserveReleaseProjection/,
+  );
 });

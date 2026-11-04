@@ -1,7 +1,7 @@
 'use client';
 
+import { useRouter } from '@/lib/motion-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
 import {
   type ReactNode,
   createContext,

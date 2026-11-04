@@ -52,7 +52,8 @@ export async function parseSpreadsheet(file: File): Promise<ParsedSheet> {
   const rows: Array<Record<string, string>> = [];
   for (let i = 1; i < aoa.length; i += 1) {
     const row = aoa[i] ?? [];
-    const obj: Record<string, string> = {};
+    // Imported column names must remain data, including __proto__ and constructor.
+    const obj: Record<string, string> = Object.create(null);
     for (let j = 0; j < columns.length; j += 1) {
       const col = columns[j] ?? `Coluna ${j + 1}`;
       const v = row[j];

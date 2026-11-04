@@ -73,21 +73,23 @@ export function renderEntryLinkEditor({
   removeEntryLink: ReturnType<typeof useEntryLinkActions>['removeEntryLink'];
 }) {
   return (
-    <div key={link.id} className="rounded-xl border border-white/[0.08] bg-black/10 p-4">
+    <div key={link.id} className="glass-card rounded-xl border border-border bg-accent p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="font-medium text-white/85">{link.name}</p>
-          <p className="mt-1 truncate text-xs text-white/40">Destino: {link.destination_url}</p>
-          <p className="mt-1 text-xs text-cyan-200/70">
+          <p className="font-medium text-foreground">{link.name}</p>
+          <p className="mt-1 truncate text-xs text-muted-foreground">
+            Destino: {link.destination_url}
+          </p>
+          <p className="mt-1 text-xs text-primary">
             Fonte: {link.traffic_source === 'unknown' ? 'não classificada' : link.traffic_source}
           </p>
         </div>
-        <span className="text-xs text-emerald-300">
+        <span className="text-xs text-success">
           {link.ab_test_id ? 'Teste A/B ativo' : 'Destino único'}
         </span>
       </div>
       {editingEntryLinkId === link.id && (
-        <div className="mt-3 grid gap-2 rounded-lg border border-cyan-300/15 bg-cyan-300/[0.03] p-3 md:grid-cols-2">
+        <div className="mt-3 grid gap-2 rounded-lg border border-border bg-accent p-3 md:grid-cols-2">
           <Input
             value={editingEntryLinkName}
             onChange={(event) => setEditingEntryLinkName(event.target.value)}
@@ -98,14 +100,14 @@ export function renderEntryLinkEditor({
             onChange={(event) => setEditingEntryDestination(event.target.value)}
             placeholder="Novo destino"
           />
-          <label className="text-xs text-white/60">
+          <label className="text-xs text-muted-foreground">
             Fonte de tráfego
             <select
               value={editingEntryTrafficSource}
               onChange={(event) =>
                 setEditingEntryTrafficSource(event.target.value as typeof editingEntryTrafficSource)
               }
-              className="mt-2 h-10 w-full rounded-md border border-white/[0.1] bg-[#06131d] px-3 text-sm text-white"
+              className="mt-2 h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground"
             >
               <option value="meta">Meta / Facebook</option>
               <option value="google">Google Ads</option>
@@ -153,7 +155,7 @@ export function renderEntryLinkEditor({
             onChange={(event) => setEntryAbDestinationB(event.target.value)}
             placeholder="Destino B"
           />
-          <label className="text-xs text-white/60 md:col-span-2">
+          <label className="text-xs text-muted-foreground md:col-span-2">
             Tráfego do destino A: {entryAbTrafficA}%
             <input
               className="mt-2 w-full accent-fuchsia-300"
@@ -184,7 +186,7 @@ export function renderEntryLinkEditor({
           </div>
         </div>
       )}
-      <code className="mt-3 block overflow-x-auto whitespace-nowrap rounded-lg bg-black/20 p-3 text-xs text-cyan-100/75">
+      <code className="mt-3 block overflow-x-auto whitespace-nowrap rounded-lg bg-accent p-3 text-xs text-primary">
         {link.tracking_url}
       </code>
       {renderEntryLinkActions({

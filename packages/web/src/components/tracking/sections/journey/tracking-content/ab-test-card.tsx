@@ -59,16 +59,16 @@ export function AbTestCard({
   } = state0;
 
   return (
-    <article className="rounded-2xl border border-cyan-100/[0.12] bg-black/10 p-4">
+    <article className="glass-card rounded-2xl border border-border bg-accent p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <span className="text-xs font-semibold uppercase tracking-wider text-cyan-300">
+          <span className="text-xs font-semibold uppercase tracking-wider text-primary">
             {test.kind} · {test.traffic_a}% / {100 - test.traffic_a}%
           </span>
-          <p className="mt-1 text-base font-semibold text-white/90">{test.name}</p>
+          <p className="mt-1 text-base font-semibold text-foreground">{test.name}</p>
         </div>
         <div className="flex items-center gap-2">
-          <span className={test.status === 'active' ? 'text-emerald-300' : 'text-white/55'}>
+          <span className={test.status === 'active' ? 'text-success' : 'text-muted-foreground'}>
             {test.status === 'active' ? 'Em execução' : 'Pausado'}
           </span>
           {canManage && (
@@ -84,8 +84,8 @@ export function AbTestCard({
         </div>
       </div>
       {editing && (
-        <div className="mt-4 rounded-xl border border-cyan-300/20 bg-cyan-300/[0.04] p-4">
-          <p className="text-xs leading-5 text-cyan-100/70">
+        <div className="glass-card mt-4 rounded-xl border border-border bg-accent p-4">
+          <p className="text-xs leading-5 text-primary">
             O link TMX e as métricas existentes não mudam. Novos visitantes usarão a nova divisão;
             visitantes já atribuídos permanecem na variante original.
           </p>
@@ -96,7 +96,7 @@ export function AbTestCard({
               onChange={(event) => setEditName(event.target.value)}
               placeholder="Nome do teste"
             />
-            <label className="text-xs text-white/55">
+            <label className="text-xs text-muted-foreground">
               Tráfego da variante A: {editTrafficA}%
               <input
                 aria-label="Tráfego da variante A"
@@ -109,7 +109,7 @@ export function AbTestCard({
               />
             </label>
             {test.variants.map((variant, index) => (
-              <div key={variant.id} className="space-y-2 rounded-lg border border-white/[0.07] p-3">
+              <div key={variant.id} className="space-y-2 rounded-lg border border-border p-3">
                 <Input
                   aria-label={`Nome da variante ${index + 1}`}
                   value={editLabels[index] ?? ''}
@@ -150,11 +150,11 @@ export function AbTestCard({
         </div>
       )}
       {renderAbTestMetrics({ test, metrics, canManage, control })}
-      <div className="mt-4 rounded-xl border border-cyan-300/15 bg-cyan-300/[0.04] p-4">
-        <p className="text-xs font-semibold uppercase tracking-wider text-cyan-200">
+      <div className="glass-card mt-4 rounded-xl border border-border bg-accent p-4">
+        <p className="text-xs font-semibold uppercase tracking-wider text-primary">
           Link do TMX para o botão de checkout
         </p>
-        <code className="mt-2 block overflow-x-auto whitespace-nowrap text-xs text-white/70">
+        <code className="mt-2 block overflow-x-auto whitespace-nowrap text-xs text-muted-foreground">
           {test.redirect_url}
         </code>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -176,9 +176,9 @@ export function AbTestCard({
             </Button>
           ))}
         </div>
-        <p className="mt-3 text-xs leading-5 text-white/50">
+        <p className="mt-3 text-xs leading-5 text-muted-foreground">
           Cole esse endereço no CTA. O TMX mantém a variante do visitante, registra o checkout,
-          preserva UTMs, adiciona o <code className="text-cyan-200">src</code> e redireciona para a
+          preserva UTMs, adiciona o <code className="text-primary">src</code> e redireciona para a
           Vendepay.
         </p>
       </div>

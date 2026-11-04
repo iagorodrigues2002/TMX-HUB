@@ -17,7 +17,7 @@ export function renderImportStatus({
   return (
     <section
       aria-label="Estado da importação"
-      className="rounded-xl border border-border bg-card p-5 text-sm"
+      className="glass-card rounded-xl border border-border bg-card p-5 text-sm"
     >
       <div className="flex flex-wrap gap-x-8 gap-y-3">
         <p>
@@ -77,7 +77,7 @@ export function renderImportStatus({
         <section
           aria-live="polite"
           aria-atomic="true"
-          className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4"
+          className="mt-4 rounded-lg border border-warning/30 bg-warning/10 p-4"
         >
           <h2 className="font-medium">
             Cobertura incompleta: {connection.account_failures.length} contas com falha

@@ -55,7 +55,7 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
     <div className="space-y-4">
       <div>
         <p className="hud-label">Processar vídeos</p>
-        <h2 className="mt-1 text-[16px] font-semibold text-white">
+        <h2 className="mt-1 text-[16px] font-semibold text-foreground">
           Phase Cancel {useWhiteAudio ? '+ White' : 'sem White'} (envio em massa)
         </h2>
       </div>
@@ -74,9 +74,7 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
           <label
             data-shield-dropzone
             className={`block cursor-pointer rounded-md border border-dashed p-6 text-center transition-colors ${
-              draggingOver
-                ? 'border-cyan-300/60 bg-cyan-300/[0.06]'
-                : 'border-white/[0.12] bg-white/[0.02] hover:bg-white/[0.04]'
+              draggingOver ? 'border-border bg-accent' : 'border-border bg-muted hover:bg-muted'
             }`}
             onDragEnter={(e) => {
               e.preventDefault();
@@ -105,21 +103,21 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
             }}
           >
             {extractingZips > 0 ? (
-              <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin text-cyan-300/70" />
+              <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin text-primary" />
             ) : (
-              <Upload className="mx-auto mb-2 h-5 w-5 text-cyan-300/70" />
+              <Upload className="mx-auto mb-2 h-5 w-5 text-primary" />
             )}
-            <p className="text-[13px] font-semibold text-white">
+            <p className="text-[13px] font-semibold text-foreground">
               {extractingZips > 0
                 ? `Extraindo ${extractingZips} ZIP(s)…`
                 : draggingOver
                   ? 'Solte aqui'
                   : 'Clique pra selecionar ou arraste arquivos'}
             </p>
-            <p className="mt-1 text-[11px] text-white/55">
+            <p className="mt-1 text-[11px] text-muted-foreground">
               Múltipla seleção · MP4/MOV/AVI/WEBM/MKV · até 500MB cada
             </p>
-            <p className="mt-0.5 text-[11px] text-cyan-300/70">
+            <p className="mt-0.5 text-[11px] text-primary">
               <FileArchive className="mr-1 inline h-3 w-3" />
               ZIPs com vídeos dentro são extraídos automaticamente
             </p>
@@ -137,7 +135,7 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
           {slots.length > 0 && (
             <div className="space-y-1">
               <div className="flex items-center justify-between pt-1">
-                <p className="text-[10px] uppercase tracking-[0.14em] text-white/40">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
                   {pendingCount} pendente · {uploadingCount} subindo · {doneCount} ok ·{' '}
                   {failedCount} falha
                 </p>
@@ -145,12 +143,12 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
                   type="button"
                   onClick={clearAll}
                   disabled={submitting}
-                  className="text-[10px] uppercase tracking-[0.14em] text-white/40 hover:text-rose-300 disabled:opacity-30"
+                  className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground hover:text-danger disabled:opacity-30"
                 >
                   Limpar tudo
                 </button>
               </div>
-              <ul className="max-h-[260px] space-y-1 overflow-y-auto rounded-md border border-white/[0.06] bg-black/15 p-2">
+              <ul className="max-h-[260px] space-y-1 overflow-y-auto rounded-md border border-border bg-accent p-2">
                 {slots.map((s) => (
                   <SlotRow key={s.id} slot={s} onRemove={() => removeSlot(s.id)} />
                 ))}
@@ -175,7 +173,7 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
             </SelectContent>
           </Select>
           {!useWhiteAudio && (
-            <p className="text-[11px] text-cyan-300/70">
+            <p className="text-[11px] text-primary">
               Nenhuma faixa adicional será criada ou misturada. O resultado terá apenas a inversão
               de fase.
             </p>
@@ -200,15 +198,15 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
                 </SelectContent>
               </Select>
               {selectedNiche && selectedNiche.whites.length === 0 && (
-                <p className="flex items-start gap-1.5 text-[11px] text-amber-300/85">
+                <p className="flex items-start gap-1.5 text-[11px] text-warning">
                   <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
                   Esse nicho ainda não tem áudios. Adicione pelo menos 1 na seção{' '}
                   <strong>Nichos</strong>.
                 </p>
               )}
               {selectedNiche && selectedNiche.whites.length > 0 && slots.length > 1 && (
-                <p className="text-[11px] text-white/40">
-                  <Shuffle className="mr-1 inline h-3 w-3 text-cyan-300/70" />
+                <p className="text-[11px] text-muted-foreground">
+                  <Shuffle className="mr-1 inline h-3 w-3 text-primary" />
                   Cada vídeo do batch sorteia 1 dos {selectedNiche.whites.length} áudios
                   independentemente.
                 </p>
@@ -219,7 +217,9 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
             <div className="space-y-2">
               <Label className="hud-label flex items-center justify-between">
                 <span>Volume do white (dB)</span>
-                <span className="font-mono text-[11px] text-white/65">{whiteVolumeDb} dB</span>
+                <span className="font-mono text-[11px] text-muted-foreground">
+                  {whiteVolumeDb} dB
+                </span>
               </Label>
               <input
                 type="range"
@@ -231,7 +231,7 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
                 disabled={submitting}
                 className="w-full accent-cyan-400"
               />
-              <p className="text-[10px] text-white/40">
+              <p className="text-[10px] text-muted-foreground">
                 Recomendado: -22 dB. Mais baixo = menos audível pra humano.
               </p>
             </div>
@@ -262,7 +262,7 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
         {/* Verify */}
         <label
           htmlFor="shield-verify-transcript"
-          className="flex items-start gap-3 text-[13px] text-white/75"
+          className="flex items-start gap-3 text-[13px] text-foreground"
         >
           <Checkbox
             id="shield-verify-transcript"
@@ -272,10 +272,10 @@ export function ShieldProcessor({ niches }: { niches: NicheView[] }) {
             className="mt-0.5"
           />
           <span>
-            <span className="block font-semibold text-white">
+            <span className="block font-semibold text-foreground">
               Verificar com AssemblyAI (~$0.04/min)
             </span>
-            <span className="block text-[11px] text-white/50">
+            <span className="block text-[11px] text-muted-foreground">
               Roda transcrição em cada vídeo final pra confirmar que IA só captura o white.
             </span>
           </span>

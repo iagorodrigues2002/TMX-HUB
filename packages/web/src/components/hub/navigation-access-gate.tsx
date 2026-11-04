@@ -23,7 +23,7 @@ export function NavigationAccessGate({ children }: { children: ReactNode }) {
         !hasNavigationAccess(user?.allowedTools, item.id)))
   ) {
     return (
-      <section role="alert" className="rounded-xl border border-border bg-card p-6">
+      <section role="alert" className="glass-card rounded-xl border border-border bg-card p-6">
         <h1 className="text-xl font-semibold">Acesso não autorizado</h1>
         <p className="mt-2 text-muted-foreground">
           Esta aba não está liberada para sua conta. Solicite acesso ao administrador da sua

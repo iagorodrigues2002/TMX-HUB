@@ -60,20 +60,20 @@ export function renderTrackingSections(context: TrackingContentContext) {
       {config.isSuccess &&
         config.data &&
         (!config.data?.configured || !config.data?.vendepay?.configured) && (
-          <section className="mb-4 rounded-lg border border-cyan-300/25 bg-cyan-300/[0.06] p-5 shadow-[0_0_32px_rgba(34,211,238,.08)]">
-            <p className="hud-label text-cyan-200">
+          <section className="glass-card mb-4 rounded-lg border border-border bg-accent p-5 shadow-[0_0_32px_rgba(34,211,238,.08)]">
+            <p className="hud-label text-primary">
               {config.data?.configured
                 ? 'Conexão Vendepay incompleta · reparo necessário'
                 : 'Oferta nova · configuração necessária'}
             </p>
             <div className="mt-2 flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
               <div>
-                <h2 className="text-lg font-semibold text-white">
+                <h2 className="text-lg font-semibold text-foreground">
                   {config.data?.configured
                     ? 'Gere a conexão e o webhook da Vendepay'
                     : 'Ative o tracking desta oferta'}
                 </h2>
-                <p className="mt-1 max-w-2xl text-sm leading-6 text-white/55">
+                <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
                   O TMX criará o identificador da oferta, o código de instalação e o webhook
                   exclusivo da Vendepay. Depois disso, Pixels, UTMify e testes A/B ficam
                   disponíveis.
@@ -116,21 +116,21 @@ export function renderTrackingSections(context: TrackingContentContext) {
           description="Pedidos com status reembolsado ou chargeback no período selecionado, pela data em que o status mudou — não pela data da compra original."
         >
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-lg border border-amber-300/15 bg-amber-300/[0.04] p-4">
-              <p className="hud-label text-amber-200/80">Reembolsos</p>
-              <p className="mono-num mt-2 text-2xl text-white">
+            <div className="rounded-lg border border-warning/30 bg-warning/10 p-4">
+              <p className="hud-label text-warning">Reembolsos</p>
+              <p className="mono-num mt-2 text-2xl text-foreground">
                 {formatMoney(refunds.data?.totals.refunded_revenue_brl_minor, 'BRL')}
               </p>
-              <p className="mt-1 text-xs text-white/45">
+              <p className="mt-1 text-xs text-muted-foreground">
                 {refunds.data?.totals.refunded_orders ?? 0} pedido(s)
               </p>
             </div>
-            <div className="rounded-lg border border-red-300/15 bg-red-300/[0.04] p-4">
-              <p className="hud-label text-red-200/80">Chargeback</p>
-              <p className="mono-num mt-2 text-2xl text-white">
+            <div className="rounded-lg border border-danger/30 bg-danger/10 p-4">
+              <p className="hud-label text-danger">Chargeback</p>
+              <p className="mono-num mt-2 text-2xl text-foreground">
                 {formatMoney(refunds.data?.totals.chargeback_revenue_brl_minor, 'BRL')}
               </p>
-              <p className="mt-1 text-xs text-white/45">
+              <p className="mt-1 text-xs text-muted-foreground">
                 {refunds.data?.totals.chargeback_orders ?? 0} pedido(s)
               </p>
             </div>
@@ -139,11 +139,11 @@ export function renderTrackingSections(context: TrackingContentContext) {
             {(refunds.data?.items ?? []).map((item) => (
               <div
                 key={item.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded border border-white/[0.07] p-3 text-xs"
+                className="flex flex-wrap items-center justify-between gap-3 rounded border border-border p-3 text-xs"
               >
                 <div>
-                  <p className="font-mono text-white/70">{item.external_id}</p>
-                  <p className="mt-1 text-white/40">
+                  <p className="font-mono text-muted-foreground">{item.external_id}</p>
+                  <p className="mt-1 text-muted-foreground">
                     {item.buyer?.name ?? item.buyer?.email ?? 'comprador não identificado'} ·{' '}
                     {item.order_kind} ·{' '}
                     {new Date(item.updated_at).toLocaleString('pt-BR', {
@@ -152,19 +152,17 @@ export function renderTrackingSections(context: TrackingContentContext) {
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span
-                    className={item.status === 'chargeback' ? 'text-red-300' : 'text-amber-300'}
-                  >
+                  <span className={item.status === 'chargeback' ? 'text-danger' : 'text-warning'}>
                     {item.status === 'chargeback' ? 'chargeback' : 'reembolsado'}
                   </span>
-                  <span className="mono-num text-white/80">
+                  <span className="mono-num text-foreground">
                     {formatMoney(item.amount_brl_minor ?? undefined, 'BRL')}
                   </span>
                 </div>
               </div>
             ))}
             {!refunds.data?.items?.length && (
-              <p className="rounded border border-dashed border-white/[0.08] p-4 text-sm text-white/35">
+              <p className="rounded border border-dashed border-border p-4 text-sm text-muted-foreground">
                 Nenhum reembolso ou chargeback neste dia.
               </p>
             )}

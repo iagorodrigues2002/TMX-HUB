@@ -29,7 +29,7 @@ export function renderDomains(context: TrackingContentContext) {
             aria-label="Tipo de domínio"
             value={domainKind}
             onChange={(event) => setDomainKind(event.target.value as typeof domainKind)}
-            className="h-11 rounded-lg border border-cyan-100/[0.14] bg-[#091a24] px-3 text-sm text-white"
+            className="h-11 rounded-lg border border-border bg-background px-3 text-sm text-foreground"
           >
             <option value="source">Domínio do funil</option>
             <option value="tracking">Tracking first-party</option>
@@ -48,28 +48,28 @@ export function renderDomains(context: TrackingContentContext) {
         </div>
       )}
       {domainKind === 'tracking' && (
-        <div className="mt-3 rounded-xl border border-cyan-300/15 bg-cyan-300/[0.04] p-4 text-xs leading-5 text-white/65">
-          <div className="mb-3 rounded-lg border border-emerald-300/15 bg-emerald-300/[0.05] px-3 py-2">
-            <span className="text-white/45">Domínio que será criado: </span>
-            <code className="font-medium text-emerald-200">
+        <div className="glass-card mt-3 rounded-xl border border-border bg-accent p-4 text-xs leading-5 text-muted-foreground">
+          <div className="mb-3 rounded-lg border border-success/30 bg-success/10 px-3 py-2">
+            <span className="text-muted-foreground">Domínio que será criado: </span>
+            <code className="font-medium text-success">
               {trackingDomainPreview(domain) ?? 'tmx.suaempresa.com'}
             </code>
           </div>
-          <p className="font-medium text-cyan-100">Configuração no Cloudflare</p>
+          <p className="font-medium text-primary">Configuração no Cloudflare</p>
           <ol className="mt-2 space-y-1.5">
             <li>1. Abra o domínio no Cloudflare e entre em DNS → Registros.</li>
             <li>2. Adicione cada registro exibido abaixo usando os botões de copiar.</li>
             <li>
-              3. No CNAME, deixe <strong className="text-white">Proxy desativado</strong> (nuvem
-              cinza / Somente DNS) e TTL em Automático.
+              3. No CNAME, deixe <strong className="text-foreground">Proxy desativado</strong>{' '}
+              (nuvem cinza / Somente DNS) e TTL em Automático.
             </li>
             <li>4. No TXT, use exatamente o Nome e o Conteúdo mostrados, com TTL Automático.</li>
             <li>
               5. Salve, aguarde a propagação e clique em{' '}
-              <strong className="text-white">Verificar</strong>.
+              <strong className="text-foreground">Verificar</strong>.
             </li>
           </ol>
-          <p className="mt-2 text-amber-100/70">
+          <p className="mt-2 text-warning">
             O TMX sempre usará o subdomínio tmx, como tmx.suaempresa.com. Não crie A/AAAA para ele e
             não altere o DNS da landing page ou do checkout.
           </p>
@@ -79,11 +79,11 @@ export function renderDomains(context: TrackingContentContext) {
         {advanced.data?.domains?.map((item) => (
           <div
             key={item.id}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/[0.07] p-3 text-sm"
+            className="glass-card flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border p-3 text-sm"
           >
             <div className="min-w-0">
-              <p className="truncate text-white/80">{item.hostname}</p>
-              <p className="mt-1 text-xs text-white/45">
+              <p className="truncate text-foreground">{item.hostname}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
                 {item.status === 'live'
                   ? 'O TMX recebeu eventos deste domínio.'
                   : item.last_error || 'Instale o script e abra a página para confirmar.'}
@@ -91,7 +91,7 @@ export function renderDomains(context: TrackingContentContext) {
               {item.kind === 'tracking' && item.dns_target && (
                 <div className="mt-3 space-y-2">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-[10px] uppercase tracking-wider text-white/35">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
                       Registros para criar
                     </p>
                     <button
@@ -112,7 +112,7 @@ export function renderDomains(context: TrackingContentContext) {
                           'Configuração completa',
                         );
                       }}
-                      className="flex items-center gap-1.5 rounded px-2 py-1 text-[10px] text-cyan-200/65 transition hover:bg-white/[0.05] hover:text-cyan-200"
+                      className="flex items-center gap-1.5 rounded px-2 py-1 text-[10px] text-primary transition hover:bg-accent hover:text-primary"
                     >
                       <Copy className="h-3.5 w-3.5" /> Copiar tudo
                     </button>
@@ -125,7 +125,7 @@ export function renderDomains(context: TrackingContentContext) {
                     return (
                       <div
                         key={`${record.hostlabel}-${record.requiredValue}`}
-                        className="rounded-lg border border-white/[0.07] bg-black/15 p-3"
+                        className="rounded-lg border border-border bg-accent p-3"
                       >
                         <div className="grid gap-2 lg:grid-cols-[90px_minmax(0,1fr)_minmax(0,1.4fr)]">
                           {[
@@ -137,18 +137,18 @@ export function renderDomains(context: TrackingContentContext) {
                             },
                           ].map((field) => (
                             <div key={field.label} className="min-w-0">
-                              <p className="font-mono text-[9px] uppercase tracking-wider text-white/35">
+                              <p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
                                 {field.label}
                               </p>
                               <div className="mt-1 flex items-center gap-1">
-                                <code className="min-w-0 flex-1 break-all font-mono text-[11px] text-cyan-100/75">
+                                <code className="min-w-0 flex-1 break-all font-mono text-[11px] text-primary">
                                   {field.value}
                                 </code>
                                 <button
                                   type="button"
                                   aria-label={`Copiar ${field.label}`}
                                   onClick={() => void copyDnsValue(field.value, field.label)}
-                                  className="rounded p-1.5 text-white/35 transition hover:bg-white/[0.06] hover:text-cyan-200"
+                                  className="rounded p-1.5 text-muted-foreground transition hover:bg-accent hover:text-primary"
                                 >
                                   <Copy className="h-3.5 w-3.5" />
                                 </button>
@@ -157,7 +157,7 @@ export function renderDomains(context: TrackingContentContext) {
                           ))}
                         </div>
                         {type === 'CNAME' && (
-                          <p className="mt-2 text-[10px] text-amber-100/60">
+                          <p className="mt-2 text-[10px] text-warning">
                             Cloudflare: Proxy desativado (Somente DNS) · TTL Automático
                           </p>
                         )}
@@ -168,7 +168,7 @@ export function renderDomains(context: TrackingContentContext) {
               )}
             </div>
             <div className="flex items-center gap-2">
-              <span className={item.status === 'live' ? 'text-emerald-300' : 'text-amber-300'}>
+              <span className={item.status === 'live' ? 'text-success' : 'text-warning'}>
                 {item.status === 'live'
                   ? 'ao vivo'
                   : item.status === 'dns_verified'
@@ -206,9 +206,9 @@ export function renderDomains(context: TrackingContentContext) {
           </div>
         ))}
         {!advanced.data?.domains?.length && (
-          <p className="rounded-xl border border-dashed border-white/[0.1] p-4 text-sm text-white/50">
+          <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
             Nenhum domínio cadastrado. Adicione o domínio sem protocolo ou caminho, por exemplo{' '}
-            <code className="text-cyan-200">checkout.suaempresa.com</code>.
+            <code className="text-primary">checkout.suaempresa.com</code>.
           </p>
         )}
       </div>

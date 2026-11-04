@@ -1,20 +1,28 @@
 'use client';
 
 import { useLayoutEffect, useRef, useState } from 'react';
-import { claimMotionEntrance, interpolateCount, motionScreenKey } from '../motion-session';
-import { getSessionGeneration } from '../session-data';
+import { useDataPending } from '../data-pending';
+import { interpolateCount } from '../motion-session';
+import { routeEntranceReadyAt } from '../screen-transition';
 
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 
 export function useCountUp(
   value: number | undefined,
-  duration = 800,
+  duration = 1650,
   identity?: string,
 ): number | undefined {
   const [displayValue, setDisplayValue] = useState<number | undefined>(value);
   const current = useRef<number | undefined>(undefined);
+  const metric = useRef(identity);
+  const pending = useDataPending();
 
   useLayoutEffect(() => {
+    if (pending) return;
+    if (metric.current !== identity) {
+      metric.current = identity;
+      current.current = undefined;
+    }
     if (value === undefined || !Number.isFinite(value)) {
       setDisplayValue(undefined);
       current.current = undefined;
@@ -24,14 +32,8 @@ export function useCountUp(
     const mediaQuery = window.matchMedia(REDUCED_MOTION_QUERY);
     let animationFrame = 0;
     let startTime: number | undefined;
-    const page = motionScreenKey(
-      window.location.pathname,
-      new URLSearchParams(window.location.search),
-    );
-    const firstVisit = identity
-      ? claimMotionEntrance(`${getSessionGeneration()}:${page}:count:${identity}`)
-      : current.current === undefined;
-    const from = current.current ?? (firstVisit ? 0 : value);
+    const from = current.current ?? 0;
+    const entering = current.current === undefined;
     const setValue = (next: number) => {
       current.current = next;
       setDisplayValue(next);
@@ -49,10 +51,8 @@ export function useCountUp(
 
     const tick = (time: number) => {
       if (!canAnimate()) return finishAnimation();
-      startTime ??= time;
-      // Initial reveal may be expressive; live updates remain short and never reset to zero.
-      const elapsed = firstVisit ? duration : Math.min(duration, 240);
-      const progress = Math.min((time - startTime) / Math.max(elapsed, 100), 1);
+      startTime ??= entering ? Math.max(time, routeEntranceReadyAt()) : time;
+      const progress = Math.max(0, Math.min((time - startTime) / Math.max(duration, 100), 1));
       setValue(interpolateCount(from, value, progress));
 
       if (progress < 1) {
@@ -84,7 +84,7 @@ export function useCountUp(
       mediaQuery.removeEventListener('change', handleMotionPreference);
       document.removeEventListener('visibilitychange', handleMotionPreference);
     };
-  }, [duration, identity, value]);
+  }, [duration, identity, value, pending]);
 
   // Disabling countUp must not leave the previous financial reading in the rendered output.
   return value === undefined || !Number.isFinite(value) ? undefined : displayValue;

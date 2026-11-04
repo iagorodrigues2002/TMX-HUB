@@ -66,7 +66,7 @@ export function NicheManager({
       <div className="flex items-baseline justify-between">
         <div>
           <p className="hud-label">Seus nichos</p>
-          <h2 className="mt-1 text-[16px] font-semibold text-white">
+          <h2 className="mt-1 text-[16px] font-semibold text-foreground">
             {niches.length} nicho(s) cadastrado(s)
           </h2>
         </div>
@@ -118,10 +118,10 @@ export function NicheManager({
 
       {isLoading ? (
         <div className="glass-card flex items-center justify-center p-8">
-          <Loader2 className="h-5 w-5 animate-spin text-cyan-300" />
+          <Loader2 className="h-5 w-5 animate-spin text-primary" />
         </div>
       ) : niches.length === 0 ? (
-        <div className="glass-card p-8 text-center text-[13px] text-white/55">
+        <div className="glass-card p-8 text-center text-[13px] text-muted-foreground">
           Nenhum nicho ainda. Crie um pra começar a cadastrar áudios white.
         </div>
       ) : (
@@ -137,9 +137,9 @@ export function NicheManager({
                     className="flex flex-1 items-center gap-2 text-left"
                   >
                     {open ? (
-                      <ChevronUp className="h-4 w-4 text-white/45" />
+                      <ChevronUp className="h-4 w-4 text-muted-foreground" />
                     ) : (
-                      <ChevronDown className="h-4 w-4 text-white/45" />
+                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
                     )}
                     {editingId === n.id ? (
                       <Input
@@ -149,9 +149,9 @@ export function NicheManager({
                         className="h-8 max-w-[260px]"
                       />
                     ) : (
-                      <span className="text-[15px] font-semibold text-white">{n.name}</span>
+                      <span className="text-[15px] font-semibold text-foreground">{n.name}</span>
                     )}
-                    <span className="rounded-full border border-white/[0.10] bg-white/[0.04] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/55">
+                    <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                       {n.whites.length} white(s)
                     </span>
                   </button>
@@ -203,7 +203,7 @@ export function NicheManager({
                     </>
                   ) : (
                     <span
-                      className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/30"
+                      className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground"
                       title="Apenas o criador ou admin podem modificar"
                     >
                       compartilhado
@@ -211,9 +211,9 @@ export function NicheManager({
                   )}
                 </div>
                 {open && (
-                  <div className="border-t border-white/[0.06] bg-black/15 p-4">
+                  <div className="border-t border-border bg-accent p-4">
                     {n.description && (
-                      <p className="mb-3 text-[12px] text-white/55">{n.description}</p>
+                      <p className="mb-3 text-[12px] text-muted-foreground">{n.description}</p>
                     )}
                     <NicheWhitesList niche={n} />
                   </div>

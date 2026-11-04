@@ -65,14 +65,14 @@ export function TestCenter({ offerId }: { offerId: string }) {
     },
   });
   return (
-    <section className="rounded-2xl border border-emerald-300/20 bg-emerald-300/[0.045] p-5">
+    <section className="rounded-2xl border border-success/30 bg-success/10 p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="hud-label text-emerald-200">Central de homologação</p>
-          <h3 className="mt-2 text-lg font-semibold text-white">
+          <p className="hud-label text-success">Central de homologação</p>
+          <h3 className="mt-2 text-lg font-semibold text-foreground">
             Testar a instalação automaticamente
           </h3>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-white/65">
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
             Verifica infraestrutura, tracker, Vendepay, domínios e fila do Meta sem criar uma venda
             real ou disparar conversões.
           </p>
@@ -86,22 +86,22 @@ export function TestCenter({ offerId }: { offerId: string }) {
           Executar diagnóstico
         </Button>
       </div>
-      {test.isError && <p className="mt-4 text-sm text-red-200">{test.error.message}</p>}
+      {test.isError && <p className="mt-4 text-sm text-danger">{test.error.message}</p>}
       {test.data && (
         <div className="mt-5 grid gap-3 md:grid-cols-2">
           {test.data.map((item) => (
             <div
               key={item.label}
-              className="flex gap-3 rounded-xl border border-white/[0.08] bg-black/15 p-3"
+              className="glass-card flex gap-3 rounded-xl border border-border bg-accent p-3"
             >
               {item.ok ? (
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
               ) : (
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
               )}
               <div>
-                <p className="text-sm font-medium text-white/85">{item.label}</p>
-                <p className="mt-1 text-xs leading-5 text-white/55">{item.detail}</p>
+                <p className="text-sm font-medium text-foreground">{item.label}</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">{item.detail}</p>
               </div>
             </div>
           ))}

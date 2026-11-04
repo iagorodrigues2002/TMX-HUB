@@ -27,9 +27,9 @@ export function VendepaySettingsForm({
   };
 
   return (
-    <div className="grid gap-4 border-t border-cyan-300/15 p-4 sm:p-5">
+    <div className="grid gap-4 border-t border-border p-4 sm:p-5">
       <label className="space-y-2" htmlFor={`vendepay-vendor-${account?.id ?? 'new'}`}>
-        <span className="text-xs font-medium text-white/65">Vendor ID</span>
+        <span className="text-xs font-medium text-muted-foreground">Vendor ID</span>
         <Input
           id={`vendepay-vendor-${account?.id ?? 'new'}`}
           value={vendorId}
@@ -39,7 +39,7 @@ export function VendepaySettingsForm({
         />
       </label>
       <label className="space-y-2" htmlFor={`vendepay-secret-${account?.id ?? 'new'}`}>
-        <span className="text-xs font-medium text-white/65">Secret</span>
+        <span className="text-xs font-medium text-muted-foreground">Secret</span>
         <textarea
           id={`vendepay-secret-${account?.id ?? 'new'}`}
           value={secret}

@@ -10,18 +10,18 @@ export default function ClonerPage() {
         <div className="mx-auto max-w-3xl">
           <header className="mb-8 space-y-3 text-center">
             <div
-              className="mx-auto grid h-14 w-14 place-items-center rounded-md border border-cyan-300/30"
+              className="mx-auto grid h-14 w-14 place-items-center rounded-md border border-border"
               style={{
                 background: 'linear-gradient(135deg, rgba(20,184,166,0.18), rgba(34,211,238,0.05))',
               }}
             >
-              <Layers className="h-6 w-6 text-cyan-300" />
+              <Layers className="h-6 w-6 text-primary" />
             </div>
             <p className="hud-label">Module 001 — Page Cloner</p>
-            <h1 className="text-3xl font-bold tracking-tight text-white">
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">
               Clone páginas com controle total
             </h1>
-            <p className="text-[14px] text-white/55">
+            <p className="text-[14px] text-muted-foreground">
               Inspecione links e scripts, escolha o que preservar e exporte um pacote pronto para
               editar ou publicar.
             </p>
@@ -31,7 +31,7 @@ export default function ClonerPage() {
             <UrlInputForm />
           </div>
 
-          <p className="mt-6 text-center text-[10px] uppercase tracking-[0.18em] text-white/30">
+          <p className="mt-6 text-center text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
             v0.1 ACTIVE · APENAS URLs PÚBLICAS · SCRIPTS REMOVIDOS AUTOMATICAMENTE
           </p>
         </div>

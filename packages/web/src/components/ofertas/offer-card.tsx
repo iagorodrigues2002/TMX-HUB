@@ -22,28 +22,28 @@ export function OfferCard({
           <div className="flex flex-wrap items-center gap-2">
             <Link
               href={`/ofertas/${offer.id}`}
-              className="truncate text-[15px] font-semibold text-white hover:text-cyan-200"
+              className="truncate text-[15px] font-semibold text-foreground hover:text-primary"
             >
               {offer.name}
             </Link>
             <StatusBadge status={offer.status} />
           </div>
           {offer.companyName && (
-            <p className="flex items-center gap-1.5 text-[11px] text-white/45">
+            <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
               <Building2 className="h-3.5 w-3.5" />
               {offer.companyName}
             </p>
           )}
           {offer.description && (
-            <p className="line-clamp-2 text-[12px] text-white/55">{offer.description}</p>
+            <p className="line-clamp-2 text-[12px] text-muted-foreground">{offer.description}</p>
           )}
           {offer.dashboardId && (onEdit || onDelete) && (
-            <p className="truncate font-mono text-[10px] text-white/35">
+            <p className="truncate font-mono text-[10px] text-muted-foreground">
               dashboard: {offer.dashboardId}
             </p>
           )}
           {offer.memberIds.length > 0 && (
-            <p className="flex items-center gap-1.5 text-[11px] text-cyan-200/55">
+            <p className="flex items-center gap-1.5 text-[11px] text-primary">
               <Users className="h-3.5 w-3.5" />
               {offer.memberIds.length} membro(s) com acesso
             </p>

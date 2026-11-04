@@ -23,7 +23,7 @@ export function renderMetaDelivery(context: TrackingContentContext) {
       title="Envio ao Meta"
       description="Audite cada IC e venda enviados pela Conversions API, incluindo a confirmação real da Meta e os sinais usados na atribuição."
     >
-      <label className="flex items-center gap-3 text-sm text-white/65">
+      <label className="flex items-center gap-3 text-sm text-muted-foreground">
         <input
           type="checkbox"
           checked={attributedOnly}
@@ -31,7 +31,7 @@ export function renderMetaDelivery(context: TrackingContentContext) {
         />{' '}
         Enviar somente vendas atribuídas ao funil
       </label>
-      <label htmlFor="tracking-meta-minimum" className="mt-4 block text-xs text-white/45">
+      <label htmlFor="tracking-meta-minimum" className="mt-4 block text-xs text-muted-foreground">
         Valor mínimo da compra (R$)
       </label>
       <Input
@@ -46,11 +46,11 @@ export function renderMetaDelivery(context: TrackingContentContext) {
           Salvar regras
         </Button>
       )}
-      <div className="mt-7 border-t border-white/[0.07] pt-6">
+      <div className="mt-7 border-t border-border pt-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="hud-label">Confirmações da Conversions API</p>
-            <p className="mt-2 max-w-3xl text-xs leading-5 text-white/40">
+            <p className="mt-2 max-w-3xl text-xs leading-5 text-muted-foreground">
               “Confirmado” exige <span className="font-mono">events_received ≥ 1</span>. Para
               atribuir o evento à campanha, o IC real deve carregar principalmente fbc ou fbclid,
               além do identificador do navegador fbp.
@@ -98,16 +98,13 @@ export function renderMetaDelivery(context: TrackingContentContext) {
           {(metaDeliveries.data?.deliveries ?? []).slice(0, 30).map((delivery) => {
             const confirmed = delivery.state === 'delivered' && delivery.provider_event_count > 0;
             return (
-              <div
-                key={delivery.id}
-                className="rounded border border-white/[0.07] bg-black/10 p-3 text-xs"
-              >
+              <div key={delivery.id} className="rounded border border-border bg-accent p-3 text-xs">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="font-mono text-white/70">
+                    <p className="font-mono text-muted-foreground">
                       {delivery.event_name} · {delivery.event_id}
                     </p>
-                    <p className="mt-1 text-white/35">
+                    <p className="mt-1 text-muted-foreground">
                       Pixel {delivery.pixel_id} · {delivery.attempts} tentativa(s)
                       {delivery.response_status ? ` · HTTP ${delivery.response_status}` : ''}
                     </p>
@@ -115,10 +112,10 @@ export function renderMetaDelivery(context: TrackingContentContext) {
                   <span
                     className={
                       confirmed
-                        ? 'text-emerald-300'
+                        ? 'text-success'
                         : delivery.state === 'failed'
-                          ? 'text-red-300'
-                          : 'text-amber-300'
+                          ? 'text-danger'
+                          : 'text-warning'
                     }
                   >
                     {confirmed ? `${delivery.provider_event_count} confirmado(s)` : delivery.state}
@@ -138,8 +135,8 @@ export function renderMetaDelivery(context: TrackingContentContext) {
                       className={cn(
                         'rounded-full border px-2 py-1 font-mono text-[10px]',
                         available
-                          ? 'border-emerald-300/20 bg-emerald-300/[0.06] text-emerald-200'
-                          : 'border-red-300/15 bg-red-300/[0.04] text-red-200/65',
+                          ? 'border-success/30 bg-success/10 text-success'
+                          : 'border-danger/30 bg-danger/10 text-danger',
                       )}
                     >
                       {available ? '✓' : '×'} {label}
@@ -147,18 +144,18 @@ export function renderMetaDelivery(context: TrackingContentContext) {
                   ))}
                 </div>
                 {delivery.event_url && (
-                  <p className="mt-2 truncate font-mono text-[10px] text-white/25">
+                  <p className="mt-2 truncate font-mono text-[10px] text-muted-foreground">
                     {delivery.event_url}
                   </p>
                 )}
                 {delivery.last_error && (
-                  <p className="mt-2 break-words text-red-200/75">{delivery.last_error}</p>
+                  <p className="mt-2 break-words text-danger">{delivery.last_error}</p>
                 )}
               </div>
             );
           })}
           {!metaDeliveries.data?.deliveries?.length && (
-            <p className="rounded border border-dashed border-white/[0.08] p-4 text-sm text-white/35">
+            <p className="rounded border border-dashed border-border p-4 text-sm text-muted-foreground">
               Nenhuma entrega Meta registrada.
             </p>
           )}

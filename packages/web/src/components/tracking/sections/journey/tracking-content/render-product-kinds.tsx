@@ -18,31 +18,31 @@ export function renderProductKinds(context: TrackingContentContext) {
   return (
     <div className="mt-6">
       <p className="hud-label">Produtos: front ou upsell?</p>
-      <p className="mt-1 max-w-2xl text-xs text-white/45">
+      <p className="mt-1 max-w-2xl text-xs text-muted-foreground">
         Cada produto da Vendepay precisa ser marcado como venda front (novo comprador) ou upsell
         (compra adicional do mesmo comprador). Sem isso o pedido fica &quot;não mapeado&quot; e não
         entra corretamente nos números de front/upsell do resumo.
       </p>
       {(productKinds.data?.unmapped ?? []).length > 0 && (
         <div className="mt-3 space-y-2">
-          <p className="text-[10px] uppercase tracking-wider text-amber-300/70">
+          <p className="text-[10px] uppercase tracking-wider text-warning">
             Produtos vistos em pedidos mas ainda não classificados
           </p>
           {(productKinds.data?.unmapped ?? []).map((product) => (
             <div
               key={product.product_id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded border border-amber-300/15 bg-amber-300/[0.03] p-3 text-xs"
+              className="flex flex-wrap items-center justify-between gap-3 rounded border border-warning/30 bg-warning/10 p-3 text-xs"
             >
               <div>
-                <p className="font-mono text-white/70">{product.product_id}</p>
-                <p className="mt-1 text-white/40">
+                <p className="font-mono text-muted-foreground">{product.product_id}</p>
+                <p className="mt-1 text-muted-foreground">
                   {product.product_name ?? 'sem nome'} · {product.orders} pedido(s)
                 </p>
               </div>
               {canManage && (
                 <div className="flex items-center gap-2">
                   <select
-                    className="rounded border border-white/10 bg-black/20 px-2 py-1 text-xs text-white/80"
+                    className="rounded border border-border bg-accent px-2 py-1 text-xs text-foreground"
                     value={productKindSelection[product.product_id] ?? 'front'}
                     onChange={(event) =>
                       setProductKindSelection((prev) => ({
@@ -80,7 +80,9 @@ export function renderProductKinds(context: TrackingContentContext) {
       )}
       <div className="mt-4 space-y-2">
         <div className="flex items-center justify-between">
-          <p className="text-[10px] uppercase tracking-wider text-white/35">Mapeamentos salvos</p>
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            Mapeamentos salvos
+          </p>
           {canManage && (productKinds.data?.mapped ?? []).length > 0 && (
             <div className="flex flex-wrap gap-2">
               <Button
@@ -105,21 +107,21 @@ export function renderProductKinds(context: TrackingContentContext) {
         {(productKinds.data?.mapped ?? []).map((mapping) => (
           <div
             key={mapping.id}
-            className="flex flex-wrap items-center justify-between gap-3 rounded border border-white/[0.07] p-3 text-xs"
+            className="flex flex-wrap items-center justify-between gap-3 rounded border border-border p-3 text-xs"
           >
             <div>
-              <p className="font-mono text-white/70">{mapping.product_id}</p>
-              {mapping.label && <p className="mt-1 text-white/40">{mapping.label}</p>}
+              <p className="font-mono text-muted-foreground">{mapping.product_id}</p>
+              {mapping.label && <p className="mt-1 text-muted-foreground">{mapping.label}</p>}
             </div>
             <div className="flex items-center gap-2">
               <span
                 className={
                   mapping.kind === 'front'
-                    ? 'text-emerald-300'
+                    ? 'text-success'
                     : mapping.kind === 'upsell'
-                      ? 'text-cyan-300'
+                      ? 'text-primary'
                       : mapping.kind === 'upsell_2'
-                        ? 'text-amber-300'
+                        ? 'text-warning'
                         : 'text-fuchsia-300'
                 }
               >
@@ -143,7 +145,7 @@ export function renderProductKinds(context: TrackingContentContext) {
           </div>
         ))}
         {!productKinds.data?.mapped?.length && (
-          <p className="rounded border border-dashed border-white/[0.08] p-4 text-sm text-white/35">
+          <p className="rounded border border-dashed border-border p-4 text-sm text-muted-foreground">
             Nenhum produto classificado ainda.
           </p>
         )}

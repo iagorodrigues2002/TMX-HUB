@@ -18,9 +18,10 @@ import { Button } from '@/components/ui/button';
 import { DataState } from '@/components/ui/data-state';
 import type { OfferView } from '@/lib/api-client';
 import { useDisplayCurrency } from '@/lib/currency-preference';
+import { useRouter } from '@/lib/motion-router';
 import { cn } from '@/lib/utils';
 import { ChevronDown, RefreshCw, Store } from 'lucide-react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useMemo } from 'react';
 
 function groupOffersByCompany(offers: OfferView[]) {
@@ -77,19 +78,26 @@ function TrackingWorkspaceContent() {
   };
 
   return (
-    <div data-surface="tracking" className="space-y-4">
+    <div
+      data-surface="tracking"
+      data-motion-screen={`tracking:${view}:${section}`}
+      className="space-y-4"
+    >
       <TrackingBackdrop />
-      <header className="rounded-xl border border-[var(--hairline-strong)] bg-bg-elevated/75 p-4 md:p-5">
+      <header
+        data-motion-panel
+        className="glass-card rounded-xl border border-[var(--hairline-strong)] bg-bg-elevated/75 p-4 md:p-5"
+      >
         <div className="flex flex-wrap items-center justify-between gap-2 sm:items-start sm:gap-4">
           <div className="flex min-w-0 items-center gap-2 sm:items-start sm:gap-3">
             <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-[var(--hairline-strong)] bg-[var(--hairline)] sm:h-10 sm:w-10">
               <AreaIcon className="h-5 w-5 text-[var(--signal-300)]" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-lg font-semibold tracking-tight text-white sm:text-xl md:text-2xl">
+              <h1 className="text-lg font-semibold tracking-tight text-foreground sm:text-xl md:text-2xl">
                 {workspaceNav.title}
               </h1>
-              <p className="mt-1 hidden max-w-2xl text-sm leading-6 text-white/55 sm:block">
+              <p className="mt-1 hidden max-w-2xl text-sm leading-6 text-muted-foreground sm:block">
                 {workspaceNav.description}
               </p>
             </div>
@@ -111,9 +119,9 @@ function TrackingWorkspaceContent() {
           </fieldset>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-white/[0.07] pt-3 sm:mt-4 sm:gap-3 sm:pt-4">
+        <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-border pt-3 sm:mt-4 sm:gap-3 sm:pt-4">
           <div className="min-w-full flex-1 sm:min-w-72">
-            <label htmlFor="tracking-offer" className="text-xs font-medium text-white/55">
+            <label htmlFor="tracking-offer" className="text-xs font-medium text-muted-foreground">
               Oferta ativa
             </label>
             <div className="relative mt-1.5">
@@ -134,23 +142,23 @@ function TrackingWorkspaceContent() {
                   </optgroup>
                 ))}
               </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-white/40" />
+              <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-muted-foreground" />
             </div>
           </div>
           {activeOffer && (
             <div className="flex min-h-11 flex-wrap items-center gap-2 text-xs">
-              <span className="rounded-md border border-white/[0.08] px-2.5 py-1.5 text-white/55">
+              <span className="rounded-md border border-border px-2.5 py-1.5 text-muted-foreground">
                 {activeOffer.status}
               </span>
-              <span className="rounded-md border border-white/[0.08] px-2.5 py-1.5 text-white/55">
+              <span className="rounded-md border border-border px-2.5 py-1.5 text-muted-foreground">
                 {activeOffer.currency}
               </span>
               <span
                 className={cn(
                   'rounded-md border px-2.5 py-1.5',
                   canManage
-                    ? 'border-emerald-300/20 text-emerald-200'
-                    : 'border-white/[0.08] text-white/55',
+                    ? 'border-success/30 text-success'
+                    : 'border-border text-muted-foreground',
                 )}
               >
                 {canManage ? 'Pode configurar' : 'Somente leitura'}
@@ -167,10 +175,14 @@ function TrackingWorkspaceContent() {
         )}
       >
         {workspaceNav.sections.length > 0 && (
-          <aside className="h-fit min-w-0 rounded-lg border border-white/[0.08] bg-black/15 p-2 xl:sticky xl:top-20">
+          <aside
+            data-motion-panel
+            data-glass-surface
+            className="h-fit min-w-0 rounded-lg border border-border bg-accent p-2 xl:sticky xl:top-20"
+          >
             <div className="px-2 py-2">
-              <h2 className="text-sm font-semibold text-white/85">Nesta área</h2>
-              <p className="mt-1 hidden text-xs leading-5 text-white/45 xl:block">
+              <h2 className="text-sm font-semibold text-foreground">Nesta área</h2>
+              <p className="mt-1 hidden text-xs leading-5 text-muted-foreground xl:block">
                 {workspaceNav.description}
               </p>
             </div>
@@ -187,26 +199,26 @@ function TrackingWorkspaceContent() {
                     aria-current={section === item.id ? 'location' : undefined}
                     onClick={() => navigate(view, item.id)}
                     className={cn(
-                      'flex min-h-11 min-w-max shrink-0 items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--signal-500)] xl:mb-1 xl:w-full xl:min-w-0 xl:items-start',
-                      section === item.id && 'bg-white/[0.06]',
+                      'flex min-h-11 min-w-max shrink-0 items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--signal-500)] xl:mb-1 xl:w-full xl:min-w-0 xl:items-start',
+                      section === item.id && 'bg-accent',
                     )}
                   >
                     <Icon
                       className={cn(
-                        'mt-0.5 h-4 w-4 shrink-0 text-white/35',
+                        'mt-0.5 h-4 w-4 shrink-0 text-muted-foreground',
                         section === item.id && 'text-[var(--signal-300)]',
                       )}
                     />
                     <span>
                       <span
                         className={cn(
-                          'block text-xs font-medium text-white/55',
-                          section === item.id && 'text-white',
+                          'block text-xs font-medium text-muted-foreground',
+                          section === item.id && 'text-foreground',
                         )}
                       >
                         {item.label}
                       </span>
-                      <span className="mt-0.5 hidden text-[11px] leading-4 text-white/35 xl:block">
+                      <span className="mt-0.5 hidden text-[11px] leading-4 text-muted-foreground xl:block">
                         {item.description}
                       </span>
                     </span>
@@ -255,7 +267,7 @@ function TrackingWorkspaceContent() {
       </div>
 
       {isFetching && !isLoading && (
-        <output className="fixed bottom-20 right-4 z-20 flex items-center gap-2 rounded-lg border border-white/[0.10] bg-bg-elevated px-3 py-2 text-xs text-white/60 shadow-xl md:bottom-4">
+        <output className="fixed bottom-20 right-4 z-20 flex items-center gap-2 rounded-lg border border-border bg-bg-elevated px-3 py-2 text-xs text-muted-foreground shadow-xl md:bottom-4">
           <RefreshCw className="h-3.5 w-3.5 animate-spin" /> Atualizando contexto
         </output>
       )}

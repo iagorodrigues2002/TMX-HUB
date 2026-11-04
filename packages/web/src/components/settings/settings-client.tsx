@@ -12,6 +12,7 @@ import {
 import { type OfferView, apiClient, authToken } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
 import { env } from '@/lib/env';
+import { useRouter } from '@/lib/motion-router';
 import {
   SHOW_SETTINGS_N8N_INTEGRATION,
   SHOW_SETTINGS_OFFER_DESTINATION,
@@ -30,7 +31,6 @@ import {
   ShieldCheck,
   Workflow,
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -97,17 +97,17 @@ function FieldRow({ label, value, copyValue, copyLabel, mono, hint, warning, ok 
     <div className="space-y-1.5">
       <div className="flex items-baseline justify-between gap-2">
         <p className="hud-label">{label}</p>
-        {hint && <p className="text-[11px] text-white/40">{hint}</p>}
+        {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
       </div>
       <div className="flex items-center gap-2">
         <div
           className={cn(
-            'flex-1 rounded-md border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[13px]',
-            mono ? 'font-mono text-white/85' : 'text-white/85',
+            'flex-1 rounded-md border border-border bg-muted px-3 py-2 text-[13px]',
+            mono ? 'font-mono text-foreground' : 'text-foreground',
             'break-all',
           )}
         >
-          {value || <span className="italic text-white/40">— vazio —</span>}
+          {value || <span className="italic text-muted-foreground">— vazio —</span>}
         </div>
         <Button
           size="sm"
@@ -120,13 +120,13 @@ function FieldRow({ label, value, copyValue, copyLabel, mono, hint, warning, ok 
         </Button>
       </div>
       {warning && (
-        <p className="flex items-start gap-1.5 text-[11px] text-amber-300/90">
+        <p className="flex items-start gap-1.5 text-[11px] text-warning">
           <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
           <span>{warning}</span>
         </p>
       )}
       {ok && (
-        <p className="flex items-start gap-1.5 text-[11px] text-emerald-300/85">
+        <p className="flex items-start gap-1.5 text-[11px] text-success">
           <CheckCircle2 className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
           <span>{ok}</span>
         </p>
@@ -169,13 +169,13 @@ function SettingsIntegrations({ isAdmin }: { isAdmin: boolean }) {
   return (
     <>
       {SHOW_SETTINGS_TMX_CONNECTION && apiIsLocal && (
-        <div className="glass-card flex items-start gap-3 border-amber-300/20 bg-amber-300/[0.04] p-4">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" aria-hidden />
+        <div className="glass-card flex items-start gap-3 border-warning/30 bg-warning/10 p-4">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
           <div className="space-y-1 text-[13px]">
-            <p className="font-semibold text-amber-200">
+            <p className="font-semibold text-warning">
               Sua API está apontada pra um host local ({apiUrl}).
             </p>
-            <p className="text-amber-100/80">
+            <p className="text-warning">
               Serviços remotos não conseguem acessar essa URL. Use um host público ou um túnel
               temporário antes de configurar a integração.
             </p>
@@ -186,7 +186,7 @@ function SettingsIntegrations({ isAdmin }: { isAdmin: boolean }) {
       {SHOW_SETTINGS_TMX_CONNECTION && (
         <section className="glass-card space-y-5 p-6">
           <div className="flex items-center gap-2">
-            <Server className="h-4 w-4 text-cyan-300" aria-hidden />
+            <Server className="h-4 w-4 text-primary" aria-hidden />
             <h2 className="hud-label">Conexão TMX HUB</h2>
           </div>
           <FieldRow
@@ -219,13 +219,13 @@ function SettingsIntegrations({ isAdmin }: { isAdmin: boolean }) {
       {SHOW_SETTINGS_OFFER_DESTINATION && (
         <section className="glass-card space-y-5 p-6">
           <div className="flex items-center gap-2">
-            <Link2 className="h-4 w-4 text-cyan-300" aria-hidden />
+            <Link2 className="h-4 w-4 text-primary" aria-hidden />
             <h2 className="hud-label">Oferta de destino</h2>
           </div>
           {offersLoading ? (
-            <p className="text-[13px] text-white/55">Carregando ofertas…</p>
+            <p className="text-[13px] text-muted-foreground">Carregando ofertas…</p>
           ) : offers.length === 0 ? (
-            <p className="rounded-md border border-white/[0.08] bg-white/[0.02] p-4 text-[13px] text-white/65">
+            <p className="rounded-md border border-border bg-muted p-4 text-[13px] text-muted-foreground">
               Crie uma oferta antes de configurar este destino.
             </p>
           ) : (
@@ -252,7 +252,7 @@ function SettingsIntegrations({ isAdmin }: { isAdmin: boolean }) {
       {SHOW_SETTINGS_N8N_INTEGRATION && (
         <section className="glass-card space-y-5 p-6">
           <div className="flex items-center gap-2">
-            <Workflow className="h-4 w-4 text-cyan-300" aria-hidden />
+            <Workflow className="h-4 w-4 text-primary" aria-hidden />
             <h2 className="hud-label">Integração n8n</h2>
           </div>
           <div className="grid gap-3 md:grid-cols-2">
@@ -277,11 +277,11 @@ function SettingsIntegrations({ isAdmin }: { isAdmin: boolean }) {
             copyLabel="UTMIFY_DASHBOARD_ID"
             mono
           />
-          <pre className="overflow-x-auto rounded-md border border-white/[0.08] bg-[#04101A]/60 p-4 text-[12px] leading-6 text-white/80">
+          <pre className="overflow-x-auto rounded-md border border-border bg-background p-4 text-[12px] leading-6 text-foreground">
             <code>{fullConfigBlock}</code>
           </pre>
-          <p className="flex items-center gap-2 text-[13px] text-white/65">
-            <ShieldCheck className="h-4 w-4 text-cyan-300" aria-hidden />
+          <p className="flex items-center gap-2 text-[13px] text-muted-foreground">
+            <ShieldCheck className="h-4 w-4 text-primary" aria-hidden />
             Importe o arquivo e preencha o node de configuração com os valores acima.
           </p>
         </section>
@@ -289,9 +289,9 @@ function SettingsIntegrations({ isAdmin }: { isAdmin: boolean }) {
 
       {(SHOW_SETTINGS_TMX_CONNECTION || SHOW_SETTINGS_N8N_INTEGRATION) && (
         <section className="glass-card flex items-start gap-3 p-5 text-[13px]">
-          <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-white/55" aria-hidden />
-          <div className="space-y-1 text-white/65">
-            <p className="font-medium text-white/85">Sobre o token</p>
+          <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+          <div className="space-y-1 text-muted-foreground">
+            <p className="font-medium text-foreground">Sobre o token</p>
             <p>O token mostrado é o JWT da sessão atual e precisa ser renovado após expirar.</p>
           </div>
         </section>

@@ -39,9 +39,9 @@ export function ExplodelySettingsForm({
   };
 
   return (
-    <div className="grid gap-4 border-t border-cyan-300/15 p-4 sm:grid-cols-2 lg:grid-cols-3 sm:p-5">
+    <div className="grid gap-4 border-t border-border p-4 sm:grid-cols-2 lg:grid-cols-3 sm:p-5">
       <label className="space-y-2" htmlFor={`explodely-name-${account?.id ?? 'new'}`}>
-        <span className="text-xs font-medium text-white/65">Nome da conexão</span>
+        <span className="text-xs font-medium text-muted-foreground">Nome da conexão</span>
         <Input
           id={`explodely-name-${account?.id ?? 'new'}`}
           value={name}
@@ -49,7 +49,7 @@ export function ExplodelySettingsForm({
         />
       </label>
       <label className="space-y-2" htmlFor={`explodely-vendor-${account?.id ?? 'new'}`}>
-        <span className="text-xs font-medium text-white/65">Vendor ID</span>
+        <span className="text-xs font-medium text-muted-foreground">Vendor ID</span>
         <Input
           id={`explodely-vendor-${account?.id ?? 'new'}`}
           value={vendorId}
@@ -58,7 +58,7 @@ export function ExplodelySettingsForm({
         />
       </label>
       <label className="space-y-2" htmlFor={`explodely-seller-${account?.id ?? 'new'}`}>
-        <span className="text-xs font-medium text-white/65">Seller ID</span>
+        <span className="text-xs font-medium text-muted-foreground">Seller ID</span>
         <Input
           id={`explodely-seller-${account?.id ?? 'new'}`}
           value={sellerId}
@@ -67,7 +67,7 @@ export function ExplodelySettingsForm({
         />
       </label>
       <label className="space-y-2" htmlFor={`explodely-currency-${account?.id ?? 'new'}`}>
-        <span className="text-xs font-medium text-white/65">Currency</span>
+        <span className="text-xs font-medium text-muted-foreground">Currency</span>
         <Input
           id={`explodely-currency-${account?.id ?? 'new'}`}
           value={currency}
@@ -77,7 +77,7 @@ export function ExplodelySettingsForm({
         />
       </label>
       <label className="space-y-2" htmlFor={`explodely-unit-${account?.id ?? 'new'}`}>
-        <span className="text-xs font-medium text-white/65">Amount unit</span>
+        <span className="text-xs font-medium text-muted-foreground">Amount unit</span>
         <select
           id={`explodely-unit-${account?.id ?? 'new'}`}
           value={amountUnit}
@@ -89,7 +89,7 @@ export function ExplodelySettingsForm({
         </select>
       </label>
       <label className="space-y-2" htmlFor={`explodely-scale-${account?.id ?? 'new'}`}>
-        <span className="text-xs font-medium text-white/65">Amount scale</span>
+        <span className="text-xs font-medium text-muted-foreground">Amount scale</span>
         <Input
           id={`explodely-scale-${account?.id ?? 'new'}`}
           type="number"
@@ -104,7 +104,7 @@ export function ExplodelySettingsForm({
         className="space-y-2 sm:col-span-2 lg:col-span-3"
         htmlFor={`explodely-secret-${account?.id ?? 'new'}`}
       >
-        <span className="text-xs font-medium text-white/65">Webhook secret</span>
+        <span className="text-xs font-medium text-muted-foreground">Webhook secret</span>
         <textarea
           id={`explodely-secret-${account?.id ?? 'new'}`}
           value={webhookSecret}

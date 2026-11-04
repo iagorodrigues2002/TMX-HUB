@@ -189,17 +189,17 @@ export function TrackingSectionContent({
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <p className="hud-label">Configuração guiada</p>
-              <h2 className="mt-2 text-lg font-semibold text-white">
+              <h2 className="mt-2 text-lg font-semibold text-foreground">
                 Oferta pronta em cinco etapas
               </h2>
-              <p className="mt-1 text-xs text-white/45">
+              <p className="mt-1 text-xs text-muted-foreground">
                 {setupReady} de {setupSteps.length} etapas concluídas
               </p>
             </div>
             <div className="flex w-full items-center gap-3 sm:w-auto">
-              <div className="h-1.5 min-w-32 flex-1 overflow-hidden rounded-full bg-white/[0.07] sm:w-52">
+              <div className="h-1.5 min-w-32 flex-1 overflow-hidden rounded-full bg-accent sm:w-52">
                 <div
-                  className="h-full rounded-full bg-emerald-300 transition-all"
+                  className="h-full rounded-full bg-success/10 transition-all"
                   style={{ width: `${(setupReady / setupSteps.length) * 100}%` }}
                 />
               </div>
@@ -222,22 +222,20 @@ export function TrackingSectionContent({
                 type="button"
                 onClick={() => setSection(step.target)}
                 className={cn(
-                  'rounded-lg border p-3 text-left transition hover:bg-white/[0.04]',
-                  step.ready
-                    ? 'border-emerald-300/15 bg-emerald-300/[0.04]'
-                    : 'border-white/[0.08] bg-black/10',
+                  'rounded-lg border p-3 text-left transition hover:bg-muted',
+                  step.ready ? 'border-success/30 bg-success/10' : 'border-border bg-accent',
                 )}
               >
                 <span
                   className={cn(
                     'font-mono text-[10px]',
-                    step.ready ? 'text-emerald-300' : 'text-amber-200',
+                    step.ready ? 'text-success' : 'text-warning',
                   )}
                 >
                   {step.ready ? '✓ CONCLUÍDO' : `0${index + 1} PENDENTE`}
                 </span>
-                <p className="mt-2 text-sm font-medium text-white/80">{step.label}</p>
-                <p className="mt-1 text-[11px] leading-4 text-white/40">{step.detail}</p>
+                <p className="mt-2 text-sm font-medium text-foreground">{step.label}</p>
+                <p className="mt-1 text-[11px] leading-4 text-muted-foreground">{step.detail}</p>
               </button>
             ))}
           </div>

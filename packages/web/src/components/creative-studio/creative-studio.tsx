@@ -78,12 +78,12 @@ export function CreativeStudio({
   return (
     <div className="space-y-8">
       <section className="glass-card space-y-5 p-5">
-        <label className="block cursor-pointer rounded-md border border-dashed border-cyan-300/25 bg-cyan-300/[0.03] p-7 text-center hover:bg-cyan-300/[0.06]">
-          <Upload className="mx-auto mb-2 h-6 w-6 text-cyan-300" />
-          <p className="text-sm font-semibold text-white">
+        <label className="block cursor-pointer rounded-md border border-dashed border-border bg-accent p-7 text-center hover:bg-accent">
+          <Upload className="mx-auto mb-2 h-6 w-6 text-primary" />
+          <p className="text-sm font-semibold text-foreground">
             Selecionar vídeos para processamento em lote
           </p>
-          <p className="mt-1 text-xs text-white/45">
+          <p className="mt-1 text-xs text-muted-foreground">
             Até {MAX_BATCH_FILES} vídeos · MP4, MOV, AVI, WEBM, MKV ou M4V · 500 MB cada
           </p>
           <input
@@ -252,22 +252,22 @@ export function CreativeStudio({
       })}
 
       <details className="glass-card group p-5">
-        <summary className="cursor-pointer list-none text-sm font-semibold text-white/80">
+        <summary className="cursor-pointer list-none text-sm font-semibold text-foreground">
           Gerenciar nichos e White Audios{' '}
-          <span className="ml-2 text-xs font-normal text-white/35">
+          <span className="ml-2 text-xs font-normal text-muted-foreground">
             {niches.length} cadastrado(s)
           </span>
         </summary>
-        <div className="mt-5 border-t border-white/[0.07] pt-5">
+        <div className="mt-5 border-t border-border pt-5">
           <NicheManager niches={niches} isLoading={nichesLoading} />
         </div>
       </details>
 
       <details className="glass-card group p-5">
-        <summary className="cursor-pointer list-none text-sm font-semibold text-white/80">
+        <summary className="cursor-pointer list-none text-sm font-semibold text-foreground">
           Processamentos antigos do Video Shield
         </summary>
-        <div className="mt-5 border-t border-white/[0.07] pt-5">
+        <div className="mt-5 border-t border-border pt-5">
           <ShieldJobsHistory />
         </div>
       </details>

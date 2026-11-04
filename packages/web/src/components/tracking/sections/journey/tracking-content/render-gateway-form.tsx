@@ -31,11 +31,11 @@ export function renderGatewayForm(context: TrackingContentContext) {
     gatewayCreatedWebhook,
   } = context;
   return (
-    <div className="mb-5 rounded-lg border border-violet-300/20 bg-violet-300/[0.04] p-4">
+    <div className="glass-card mb-5 rounded-lg border border-violet-300/20 bg-violet-300/[0.04] p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="hud-label text-violet-200">Gateways universais</p>
-          <p className="mt-1 text-xs leading-5 text-white/50">
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
             Use esta camada para Paysight, Explodely e próximos processadores. A VendePay abaixo
             continua independente e não é alterada.
           </p>
@@ -46,10 +46,10 @@ export function renderGatewayForm(context: TrackingContentContext) {
         .map((gateway) => (
           <div
             key={gateway.id ?? gateway.provider}
-            className="mt-3 flex items-center justify-between rounded border border-white/[0.08] bg-black/15 px-3 py-2 text-xs"
+            className="mt-3 flex items-center justify-between rounded border border-border bg-accent px-3 py-2 text-xs"
           >
-            <span className="text-white/75">{gateway.name ?? gateway.provider}</span>
-            <span className={gateway.enabled ? 'text-emerald-200' : 'text-white/40'}>
+            <span className="text-foreground">{gateway.name ?? gateway.provider}</span>
+            <span className={gateway.enabled ? 'text-success' : 'text-muted-foreground'}>
               {gateway.last_webhook_at
                 ? 'webhook ativo'
                 : gateway.enabled
@@ -61,7 +61,7 @@ export function renderGatewayForm(context: TrackingContentContext) {
       {canManage && config.data?.configured && (
         <div className="mt-4 border-t border-violet-300/15 pt-4">
           <p className="hud-label text-violet-200">Nova conexão</p>
-          <p className="mt-1 text-xs text-white/45">
+          <p className="mt-1 text-xs text-muted-foreground">
             1. Escolha a plataforma · 2. Dê um nome interno · 3. Salve e receba o webhook exclusivo.
           </p>
           <div className="mt-3 grid gap-2 md:grid-cols-[220px_minmax(0,1fr)_auto]">
@@ -73,7 +73,7 @@ export function renderGatewayForm(context: TrackingContentContext) {
                 setGatewayCreatedWebhook('');
                 setGatewayFormError('');
               }}
-              className="h-10 rounded-md border border-white/[0.1] bg-[#071720] px-3 text-sm text-white"
+              className="h-10 rounded-md border border-border bg-background px-3 text-sm text-foreground"
             >
               <option value="vendepay">VendePay</option>
               <option value="paysight">Paysight</option>
@@ -100,10 +100,10 @@ export function renderGatewayForm(context: TrackingContentContext) {
             </Button>
           </div>
           {gatewayPlatform === 'explodely' && (
-            <div className="mt-3 rounded border border-white/[0.08] bg-black/15 p-3">
+            <div className="mt-3 rounded border border-border bg-accent p-3">
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                 <label className="space-y-1 lg:col-span-2" htmlFor="explodely-vendor-id">
-                  <span className="text-xs text-white/55">Vendor ID</span>
+                  <span className="text-xs text-muted-foreground">Vendor ID</span>
                   <Input
                     id="explodely-vendor-id"
                     required
@@ -116,7 +116,7 @@ export function renderGatewayForm(context: TrackingContentContext) {
                   />
                 </label>
                 <label className="space-y-1 lg:col-span-2" htmlFor="explodely-seller-id">
-                  <span className="text-xs text-white/55">Seller ID (opcional)</span>
+                  <span className="text-xs text-muted-foreground">Seller ID (opcional)</span>
                   <Input
                     id="explodely-seller-id"
                     value={explodelySellerId}
@@ -128,7 +128,7 @@ export function renderGatewayForm(context: TrackingContentContext) {
                   />
                 </label>
                 <label className="space-y-1">
-                  <span className="text-xs text-white/55">Moeda</span>
+                  <span className="text-xs text-muted-foreground">Moeda</span>
                   <select
                     value={explodelyCurrency}
                     onChange={(event) =>
@@ -136,7 +136,7 @@ export function renderGatewayForm(context: TrackingContentContext) {
                         event.target.value as ExplodelyGatewaySettings['currency'],
                       )
                     }
-                    className="h-10 w-full rounded-md border border-white/[0.1] bg-[#071720] px-3 text-sm text-white"
+                    className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground"
                   >
                     <option value="USD">USD</option>
                     <option value="BRL">BRL</option>
@@ -144,7 +144,7 @@ export function renderGatewayForm(context: TrackingContentContext) {
                   </select>
                 </label>
                 <label className="space-y-1 lg:col-span-2">
-                  <span className="text-xs text-white/55">Unidade do valor</span>
+                  <span className="text-xs text-muted-foreground">Unidade do valor</span>
                   <select
                     value={explodelyAmountUnit}
                     onChange={(event) =>
@@ -152,14 +152,14 @@ export function renderGatewayForm(context: TrackingContentContext) {
                         event.target.value as ExplodelyGatewaySettings['amount_unit'],
                       )
                     }
-                    className="h-10 w-full rounded-md border border-white/[0.1] bg-[#071720] px-3 text-sm text-white"
+                    className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground"
                   >
                     <option value="cents">Centavos</option>
                     <option value="decimal">Decimal</option>
                   </select>
                 </label>
                 <label className="space-y-1 lg:col-span-2" htmlFor="explodely-amount-scale">
-                  <span className="text-xs text-white/55">Divisor do valor</span>
+                  <span className="text-xs text-muted-foreground">Divisor do valor</span>
                   <Input
                     id="explodely-amount-scale"
                     type="number"
@@ -174,27 +174,27 @@ export function renderGatewayForm(context: TrackingContentContext) {
                   />
                 </label>
               </div>
-              <p className="mt-3 text-xs leading-5 text-white/45">
+              <p className="mt-3 text-xs leading-5 text-muted-foreground">
                 Encontre o vendor_id no painel Explodely em Settings → Webhooks.
               </p>
               {/* TODO: persist require_signature and webhook_secret per tenant. */}
-              <p className="mt-1 text-xs leading-5 text-white/35">
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
                 A assinatura ainda usa EXPLODELY_REQUIRE_SIGNATURE e EXPLODELY_WEBHOOK_SECRET
                 globais; configuração por conexão fica para uma próxima etapa.
               </p>
             </div>
           )}
           {gatewayFormError && (
-            <p className="mt-2 text-xs text-red-300" role="alert">
+            <p className="mt-2 text-xs text-danger" role="alert">
               {gatewayFormError}
             </p>
           )}
           {gatewayCreatedWebhook && (
-            <div className="mt-3 rounded border border-amber-300/25 bg-amber-300/[0.05] p-3 text-xs">
-              <p className="font-medium text-amber-100">
+            <div className="mt-3 rounded border border-warning/30 bg-warning/10 p-3 text-xs">
+              <p className="font-medium text-warning">
                 Webhook pronto para cadastrar na {GATEWAY_PLATFORM_LABELS[gatewayPlatform]}
               </p>
-              <code className="mt-2 block break-all text-cyan-100">{gatewayCreatedWebhook}</code>
+              <code className="mt-2 block break-all text-primary">{gatewayCreatedWebhook}</code>
             </div>
           )}
         </div>

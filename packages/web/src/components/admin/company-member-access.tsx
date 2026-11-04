@@ -45,7 +45,7 @@ export function CompanyMemberAccess({
         : [...current[key], value],
     }));
   return (
-    <article className="rounded-xl border border-border bg-card p-5">
+    <article className="glass-card rounded-xl border border-border bg-card p-5">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="font-semibold">{member.name}</h3>

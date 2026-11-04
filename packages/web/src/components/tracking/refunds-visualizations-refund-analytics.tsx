@@ -30,8 +30,8 @@ export function RefundAnalytics({
     <div className="refund-analytics">
       <section id="refund-overview" className={`${panel} refund-summary`}>
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-base font-semibold text-cyan-200">Visão financeira</h2>
-          <span className="text-xs text-white/60">Período e filtros selecionados</span>
+          <h2 className="text-base font-semibold text-primary">Visão financeira</h2>
+          <span className="text-xs text-muted-foreground">Período e filtros selecionados</span>
         </div>
         <dl className="grid gap-x-8 gap-y-7 sm:grid-cols-2 xl:grid-cols-4">
           <Metric
@@ -57,13 +57,13 @@ export function RefundAnalytics({
             danger
           />
         </dl>
-        <p className="mt-6 border-t border-white/10 pt-4 text-xs leading-5 text-white/65">
+        <p className="mt-6 border-t border-border pt-4 text-xs leading-5 text-muted-foreground">
           Percentual = devoluções recebidas por webhook no período ÷ faturamento das vendas no
           período. Pode incluir devoluções de compras antigas e superar 100%. Para avaliar a
           qualidade das compras, consulte os meses de compra abaixo.
         </p>
         {(t.missing_brl_orders > 0 || t.missing_fee_orders > 0) && (
-          <output className="mt-4 block rounded-xl border border-amber-200/20 bg-amber-200/5 px-4 py-3 text-sm leading-6 text-amber-200">
+          <output className="mt-4 block rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm leading-6 text-warning">
             Total parcial: {t.missing_brl_orders} pedidos sem conversão BRL e {t.missing_fee_orders}{' '}
             ocorrências sem multa calculável. Os valores exibidos são apenas a parcela conhecida.
           </output>
@@ -71,8 +71,8 @@ export function RefundAnalytics({
       </section>
       {data.origin_totals && (
         <section className={panel} aria-label="Conciliação das origens das devoluções">
-          <h2 className="text-base font-semibold text-cyan-200">De onde vêm as devoluções</h2>
-          <p className="mt-2 text-xs leading-5 text-white/65">
+          <h2 className="text-base font-semibold text-primary">De onde vêm as devoluções</h2>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">
             No mesmo período e filtros: geral = natural + com clique registrado + origem
             indeterminada. Clique registrado é o clique operacional do colaborador antes da
             aprovação, não o clique do anúncio.
@@ -98,7 +98,7 @@ export function RefundAnalytics({
             })}
           </dl>
           {data.origin_totals.unknown.count > 0 && (
-            <p className="mt-5 rounded-xl border border-amber-200/20 bg-amber-200/5 px-4 py-3 text-sm leading-6 text-amber-200">
+            <p className="mt-5 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm leading-6 text-warning">
               Origem indeterminada: falta evidência suficiente para classificar essas compras. Elas
               permanecem na visão geral e não são tratadas automaticamente como naturais.
             </p>
@@ -107,11 +107,11 @@ export function RefundAnalytics({
       )}
       {!!data.undated_refunds?.count && (
         <section
-          className={`${panel} border-amber-200/20`}
+          className={`${panel} border-warning/30`}
           aria-label="Devoluções sem data comprovada"
         >
-          <h2 className="text-base font-semibold text-amber-200">Sem recebimento comprovado</h2>
-          <p className="mt-2 text-sm leading-6 text-white/65">
+          <h2 className="text-base font-semibold text-warning">Sem recebimento comprovado</h2>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
             {data.undated_refunds.count} devoluções no histórico das ofertas e filtros desta visão:{' '}
             {pick(data.undated_refunds.brl_minor)}, multas{' '}
             {pick(data.undated_refunds.fee_brl_minor)} e impacto{' '}
@@ -121,20 +121,20 @@ export function RefundAnalytics({
           </p>
           {(data.undated_refunds.missing_brl_orders > 0 ||
             data.undated_refunds.missing_fee_orders > 0) && (
-            <p className="mt-2 text-xs text-amber-200">
+            <p className="mt-2 text-xs text-warning">
               Valores parciais: há conversões BRL ou multas ainda não identificadas.
             </p>
           )}
         </section>
       )}
       <section className={`${panel} refund-comparison`}>
-        <h2 className="text-lg font-semibold text-white">Comparação com o período anterior</h2>
-        <p className="mt-1 text-xs text-white/50">
+        <h2 className="text-lg font-semibold text-foreground">Comparação com o período anterior</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
           {data.comparison.previous_from} a {data.comparison.previous_to} · mesma duração
         </p>
         {(data.comparison.previous.missing_brl_orders > 0 ||
           data.comparison.previous.missing_fee_orders > 0) && (
-          <p className="mt-2 text-xs text-amber-200">
+          <p className="mt-2 text-xs text-warning">
             O período anterior tem conversões ou multas incompletas. Comparações sem base completa
             aparecem como —.
           </p>
@@ -162,14 +162,14 @@ export function RefundAnalytics({
       <section id="refund-evolution" className={panel}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold text-white">Evolução das devoluções</h2>
-            <p className="mt-1 text-xs text-white/50">
+            <h2 className="text-lg font-semibold text-foreground">Evolução das devoluções</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
               Valores unificados e média móvel para observar a tendência.
             </p>
           </div>
           <select
             aria-label="Agrupar evolução"
-            className="h-11 rounded-lg border border-white/20 bg-bg-elevated px-3 text-sm text-white"
+            className="h-11 rounded-lg border border-border bg-bg-elevated px-3 text-sm text-foreground"
             value={interval}
             onChange={(e) => onIntervalChange(e.target.value as typeof interval)}
           >
@@ -181,14 +181,14 @@ export function RefundAnalytics({
         <RefundTrend points={data.trend} isPrivate={isPrivate} interval={interval} />
       </section>
       <section className={`${panel} refund-breakdown`}>
-        <h2 className="text-lg font-semibold text-white">Devoluções por mês da compra</h2>
-        <p className="mt-1 max-w-3xl text-sm leading-6 text-white/50">
+        <h2 className="text-lg font-semibold text-foreground">Devoluções por mês da compra</h2>
+        <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
           Compras do intervalo selecionado agrupadas por mês, com devoluções observadas até hoje. Os
           primeiros 90 dias são uma referência operacional de maturação, não uma garantia de
           encerramento. Meses recentes não são diretamente comparáveis aos antigos.
         </p>
         <section
-          className="mt-5 overflow-x-auto rounded-xl border border-white/10"
+          className="glass-card mt-5 overflow-x-auto rounded-xl border border-border"
           // biome-ignore lint/a11y/noNoninteractiveTabindex: The horizontal table scroll region must be keyboard-focusable.
           tabIndex={0}
           aria-label="Devoluções por mês da compra, role horizontalmente para ver todas as colunas"
@@ -196,7 +196,7 @@ export function RefundAnalytics({
           <table className="w-full min-w-[680px] text-sm tabular-nums">
             <caption className="sr-only">Vendas e devoluções agrupadas pelo mês da compra</caption>
             <thead>
-              <tr className="border-b border-white/10 text-left text-xs text-white/50">
+              <tr className="border-b border-border text-left text-xs text-muted-foreground">
                 {[
                   'Mês da compra',
                   'Vendas',
@@ -208,7 +208,7 @@ export function RefundAnalytics({
                   <th
                     key={h}
                     scope="col"
-                    className={`bg-white/[0.025] px-4 py-4 font-medium text-white/70 ${index ? 'text-right' : 'text-left'}`}
+                    className={`bg-muted px-4 py-4 font-medium text-muted-foreground ${index ? 'text-right' : 'text-left'}`}
                   >
                     {h}
                   </th>
@@ -219,12 +219,12 @@ export function RefundAnalytics({
               {data.cohorts.map((c) => (
                 <tr
                   key={c.month}
-                  className="border-b border-white/5 transition-colors hover:bg-white/[0.035] [&>td:not(:first-child)]:text-right"
+                  className="border-b border-border transition-colors hover:bg-muted [&>td:not(:first-child)]:text-right"
                 >
-                  <td className="px-3 py-3 text-white">
+                  <td className="px-3 py-3 text-foreground">
                     {c.month}
                     {c.immature && (
-                      <span className="ml-2 whitespace-nowrap rounded border border-amber-200/20 px-2 py-1 text-xs text-amber-200">
+                      <span className="ml-2 whitespace-nowrap rounded border border-warning/30 px-2 py-1 text-xs text-warning">
                         Em maturação
                       </span>
                     )}
@@ -244,14 +244,14 @@ export function RefundAnalytics({
       <section className={`${panel} refund-breakdown`}>
         <div className="flex flex-wrap justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold text-white">Onde estão as devoluções</h2>
-            <p className="mt-1 text-xs text-white/50">
+            <h2 className="text-lg font-semibold text-foreground">Onde estão as devoluções</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
               Mesmo período e filtros do resumo. Ordenado pelo valor devolvido.
             </p>
           </div>
           <select
             aria-label="Agrupar ranking"
-            className="h-11 rounded-lg border border-white/20 bg-bg-elevated px-3 text-sm text-white"
+            className="h-11 rounded-lg border border-border bg-bg-elevated px-3 text-sm text-foreground"
             value={ranking}
             onChange={(e) => setRanking(e.target.value as typeof ranking)}
           >
@@ -263,13 +263,13 @@ export function RefundAnalytics({
         <RefundRankingTable rows={data.rankings[ranking]} isPrivate={isPrivate} />
       </section>
       <section id="refund-timing" className={panel}>
-        <h2 className="text-lg font-semibold text-white">Tempo entre compra e devolução</h2>
-        <p className="mt-1 max-w-3xl text-sm leading-6 text-white/60">
+        <h2 className="text-lg font-semibold text-foreground">Tempo entre compra e devolução</h2>
+        <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
           Data do primeiro recebimento do webhook de reembolso ou chargeback no TMX menos a data da
           compra, vinculadas ao mesmo pedido, gateway e conta. Reenvios posteriores não alteram o
           prazo. Considera as devoluções contabilizadas no período selecionado.
         </p>
-        <p className="mt-2 text-xs leading-5 text-white/60">
+        <p className="mt-2 text-xs leading-5 text-muted-foreground">
           Atrasos no envio original do gateway entram neste intervalo. A base é o recebimento
           registrado pelo TMX, não a data contida no payload. Valores financeiros preservados.
         </p>

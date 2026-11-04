@@ -32,43 +32,40 @@ export function renderAbTestMetrics({
         const revenueBrlMinor = Number(row?.revenue_brl_minor ?? 0);
         const aovBrlMinor = frontBuyers ? revenueBrlMinor / frontBuyers : 0;
         return (
-          <div
-            key={variant.id}
-            className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-4"
-          >
+          <div key={variant.id} className="glass-card rounded-xl border border-border bg-muted p-4">
             <div className="flex items-center justify-between gap-2">
-              <p className="font-medium text-white/85">{variant.label}</p>
-              <span className="text-xs text-white/45">
+              <p className="font-medium text-foreground">{variant.label}</p>
+              <span className="text-xs text-muted-foreground">
                 {index === 0 ? test.traffic_a : 100 - test.traffic_a}% do tráfego
               </span>
             </div>
-            <p className="mt-2 truncate font-mono text-[11px] text-cyan-100/55">
+            <p className="mt-2 truncate font-mono text-[11px] text-primary">
               {variant.destination_url ?? 'Destino não informado'}
             </p>
             <dl className="mt-4 grid grid-cols-2 gap-3 text-xs">
               <div>
-                <dt className="text-white/45">Visitantes</dt>
-                <dd className="mt-1 text-base font-semibold text-white">{visitors}</dd>
+                <dt className="text-muted-foreground">Visitantes</dt>
+                <dd className="mt-1 text-base font-semibold text-foreground">{visitors}</dd>
               </div>
               <div>
-                <dt className="text-white/45">Acessos ao checkout</dt>
-                <dd className="mt-1 text-base font-semibold text-white">
+                <dt className="text-muted-foreground">Acessos ao checkout</dt>
+                <dd className="mt-1 text-base font-semibold text-foreground">
                   {Number(row?.checkouts ?? 0)}
                 </dd>
               </div>
               <div>
-                <dt className="text-white/45">Compras</dt>
-                <dd className="mt-1 text-base font-semibold text-emerald-300">{paid}</dd>
+                <dt className="text-muted-foreground">Compras</dt>
+                <dd className="mt-1 text-base font-semibold text-success">{paid}</dd>
               </div>
               <div>
-                <dt className="text-white/45">Conversão</dt>
-                <dd className="mt-1 text-base font-semibold text-cyan-200">
+                <dt className="text-muted-foreground">Conversão</dt>
+                <dd className="mt-1 text-base font-semibold text-primary">
                   {conversion.toFixed(2)}%
                 </dd>
               </div>
               <div>
-                <dt className="text-white/45">Receita atribuída</dt>
-                <dd className="mt-1 text-base font-semibold text-emerald-300">
+                <dt className="text-muted-foreground">Receita atribuída</dt>
+                <dd className="mt-1 text-base font-semibold text-success">
                   {(revenueBrlMinor / 100).toLocaleString('pt-BR', {
                     style: 'currency',
                     currency: 'BRL',
@@ -77,12 +74,12 @@ export function renderAbTestMetrics({
               </div>
               <div>
                 <dt
-                  className="text-white/45"
+                  className="text-muted-foreground"
                   title="Receita do front e upsells dividida pelos compradores únicos de front"
                 >
                   AOV do funil
                 </dt>
-                <dd className="mt-1 text-base font-semibold text-amber-200">
+                <dd className="mt-1 text-base font-semibold text-warning">
                   {(aovBrlMinor / 100).toLocaleString('pt-BR', {
                     style: 'currency',
                     currency: 'BRL',
@@ -102,7 +99,7 @@ export function renderAbTestMetrics({
               </Button>
             )}
             {test.winner_variant_id === variant.id && (
-              <p className="mt-4 text-xs font-semibold text-emerald-300">Variante vencedora</p>
+              <p className="mt-4 text-xs font-semibold text-success">Variante vencedora</p>
             )}
           </div>
         );

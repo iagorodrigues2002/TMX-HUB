@@ -22,18 +22,18 @@ export default function VideoShieldPage() {
         <div className="mx-auto max-w-5xl">
           <header className="mb-8 space-y-3 text-center">
             <div
-              className="mx-auto grid h-14 w-14 place-items-center rounded-md border border-cyan-300/30"
+              className="mx-auto grid h-14 w-14 place-items-center rounded-md border border-border"
               style={{
                 background: 'linear-gradient(135deg, rgba(20,184,166,0.18), rgba(34,211,238,0.05))',
               }}
             >
-              <Clapperboard className="h-6 w-6 text-cyan-300" />
+              <Clapperboard className="h-6 w-6 text-primary" />
             </div>
             <p className="hud-label">Video Studio · Processamento unificado</p>
-            <h1 className="text-3xl font-bold tracking-tight text-white">
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">
               Proteja, otimize e adapte seus criativos
             </h1>
-            <p className="mx-auto max-w-2xl text-[14px] text-white/55">
+            <p className="mx-auto max-w-2xl text-[14px] text-muted-foreground">
               Comprima, redimensione, normalize e estenda seus vídeos. Quando precisar, ative o
               Phase Cancel no mesmo processamento para adicionar White Audio e verificar com
               AssemblyAI.
@@ -42,7 +42,7 @@ export default function VideoShieldPage() {
 
           <CreativeStudio niches={niches} nichesLoading={isLoading} />
 
-          <p className="mt-8 text-center text-[10px] uppercase tracking-[0.18em] text-white/30">
+          <p className="mt-8 text-center text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
             Video Studio · FFmpeg + Phase Cancel + AssemblyAI
           </p>
         </div>

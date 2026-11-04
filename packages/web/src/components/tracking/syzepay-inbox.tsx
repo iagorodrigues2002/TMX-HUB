@@ -4,9 +4,10 @@ import { Button } from '@/components/ui/button';
 import { DataState } from '@/components/ui/data-state';
 import { apiClient } from '@/lib/api-client';
 import { copyText } from '@/lib/clipboard';
+import { useRouter } from '@/lib/motion-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Building2, Copy, RefreshCw, Webhook } from 'lucide-react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { SyzepayFeeForm } from './syzepay-fees';
@@ -86,12 +87,12 @@ export function SyzepayInbox() {
     );
   return (
     <div className="space-y-5">
-      <header className="rounded-xl border border-white/10 bg-bg-elevated p-5">
+      <header className="glass-card rounded-xl border border-border bg-bg-elevated p-5">
         <div className="flex items-center gap-3">
           <Building2 className="h-6 w-6 text-primary" />
           <div>
             <h1 className="text-xl font-semibold">SyzePay por empresa</h1>
-            <p className="mt-1 text-sm text-white/55">
+            <p className="mt-1 text-sm text-muted-foreground">
               Uma conexão geral para os produtos da empresa. Os demais gateways continuam por
               oferta.
             </p>
@@ -104,7 +105,7 @@ export function SyzepayInbox() {
           id="syze-company"
           value={company?.key ?? ''}
           onChange={(e) => choose(e.target.value)}
-          className="mt-2 h-11 w-full rounded-md border border-white/15 bg-bg px-3"
+          className="mt-2 h-11 w-full rounded-md border border-border bg-bg px-3"
         >
           {!company && <option value="">Nenhuma empresa própria disponível</option>}
           {companies.data?.companies.map((c) => (
@@ -114,22 +115,22 @@ export function SyzepayInbox() {
           ))}
         </select>
         {!company && (
-          <p className="mt-3 text-sm text-white/55">
+          <p className="mt-3 text-sm text-muted-foreground">
             Cadastre uma empresa nas suas ofertas. Convites para ofertas não concedem acesso ao
             webhook geral da empresa.
           </p>
         )}
       </header>
-      <section className="rounded-lg border border-amber-300/25 bg-amber-300/5 p-4 text-sm">
+      <section className="rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm">
         <strong>Recepção rápida · classificação segura por pedido</strong>
-        <p className="mt-2 text-white/60">
+        <p className="mt-2 text-muted-foreground">
           Os eventos são guardados criptografados e só geram venda após assinatura validada e
           classificação. Os envios respeitam os destinos ativos da oferta. Compras front são
           elegíveis aos pixels; upsells não inflam a otimização.
         </p>
       </section>
       {company && (
-        <section className="rounded-lg border border-white/10 p-5">
+        <section className="glass-card rounded-lg border border-border p-5">
           <h2 className="font-semibold">Adicionar conta SyzePay à {company.name}</h2>
           <form
             className="mt-4 flex flex-wrap items-end gap-3"
@@ -139,7 +140,7 @@ export function SyzepayInbox() {
             }}
           >
             <div className="min-w-56 flex-1">
-              <label htmlFor="syze-name" className="text-sm text-white/65">
+              <label htmlFor="syze-name" className="text-sm text-muted-foreground">
                 Nome da conexão
               </label>
               <input
@@ -149,7 +150,7 @@ export function SyzepayInbox() {
                 minLength={2}
                 maxLength={100}
                 required
-                className="mt-2 h-11 w-full rounded-md border border-white/15 bg-bg px-3"
+                className="mt-2 h-11 w-full rounded-md border border-border bg-bg px-3"
               />
             </div>
             <Button type="submit" disabled={create.isPending}>
@@ -166,17 +167,17 @@ export function SyzepayInbox() {
         />
       ) : (
         rows.map((c) => (
-          <section key={c.id} className="rounded-lg border border-white/10 p-5">
+          <section key={c.id} className="glass-card rounded-lg border border-border p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="flex items-center gap-2 font-semibold">
                 <Webhook className="h-5 w-5 text-primary" />
                 {c.name}
               </h2>
-              <span className="text-xs text-amber-200">
+              <span className="text-xs text-warning">
                 {c.receipts} eventos aguardando mapeamento
               </span>
             </div>
-            <p className="mt-2 text-sm text-white/50">
+            <p className="mt-2 text-sm text-muted-foreground">
               Empresa: {c.company_name} · SyzePay ·{' '}
               {c.enabled ? 'Recepção ativa' : 'Recepção pausada'}
             </p>
@@ -187,7 +188,7 @@ export function SyzepayInbox() {
                     aria-label={`Webhook de ${c.name}`}
                     readOnly
                     value={urls[c.id]}
-                    className="h-11 min-w-48 flex-1 rounded-md border border-white/15 bg-bg px-3 text-xs"
+                    className="h-11 min-w-48 flex-1 rounded-md border border-border bg-bg px-3 text-xs"
                   />
                   <Button onClick={() => void copyText(urls[c.id]!, 'Webhook copiado.')}>
                     <Copy className="h-4 w-4" />
@@ -214,9 +215,9 @@ export function SyzepayInbox() {
                 {c.enabled ? 'Pausar recepção' : 'Retomar recepção'}
               </Button>
             </div>
-            <div className="mt-5 border-t border-white/10 pt-4">
+            <div className="mt-5 border-t border-border pt-4">
               <h3 className="text-sm font-medium">Produtos → Oferta → Front ou upsell</h3>
-              <p className="mt-2 text-sm text-white/45">
+              <p className="mt-2 text-sm text-muted-foreground">
                 Produto não informado pelo gateway. A classificação abaixo é por pedido, sem
                 presumir que todos os produtos da loja são front.
               </p>
@@ -227,7 +228,7 @@ export function SyzepayInbox() {
         ))
       )}
       {active && (
-        <section className="rounded-lg border border-white/10 p-5">
+        <section className="glass-card rounded-lg border border-border p-5">
           <div className="flex items-center justify-between gap-3">
             <h2 className="font-semibold">Eventos recebidos · {active.name}</h2>
             <Button
@@ -242,17 +243,17 @@ export function SyzepayInbox() {
             </Button>
           </div>
           {receipts.isError ? (
-            <p role="alert" className="mt-3 text-red-300">
+            <p role="alert" className="mt-3 text-danger">
               Falha ao carregar eventos. Tente atualizar.
             </p>
           ) : receipts.isLoading ? (
-            <p className="mt-3 text-white/50">Carregando eventos…</p>
+            <p className="mt-3 text-muted-foreground">Carregando eventos…</p>
           ) : !receipts.data?.receipts.length ? (
-            <p className="mt-3 text-white/50">Nenhum evento recebido ainda.</p>
+            <p className="mt-3 text-muted-foreground">Nenhum evento recebido ainda.</p>
           ) : (
             <div className="mt-4 overflow-x-auto">
               <table className="w-full text-left text-sm">
-                <thead className="text-white/50">
+                <thead className="text-muted-foreground">
                   <tr>
                     <th className="py-2">Recebido</th>
                     <th>Formato</th>
@@ -262,7 +263,7 @@ export function SyzepayInbox() {
                 </thead>
                 <tbody>
                   {receipts.data.receipts.map((r) => (
-                    <tr key={r.id} className="border-t border-white/10">
+                    <tr key={r.id} className="border-t border-border">
                       <td className="py-3">
                         {new Date(r.received_at).toLocaleString('pt-BR', {
                           timeZone: 'America/Sao_Paulo',
@@ -272,7 +273,7 @@ export function SyzepayInbox() {
                         {r.content_type} · {r.body_bytes} bytes
                       </td>
                       <td>{r.attempts - 1}</td>
-                      <td className="text-amber-200">
+                      <td className="text-warning">
                         {r.state === 'processed'
                           ? 'Processado'
                           : r.state === 'ignored'
@@ -285,7 +286,7 @@ export function SyzepayInbox() {
                   ))}
                 </tbody>
               </table>
-              <p className="mt-3 text-xs text-white/40">
+              <p className="mt-3 text-xs text-muted-foreground">
                 Últimos 50 eventos. Reenvios são agrupados por event.id. Sem ele, preservamos
                 alterações do pedido para não perder reembolsos ou renovações.
               </p>

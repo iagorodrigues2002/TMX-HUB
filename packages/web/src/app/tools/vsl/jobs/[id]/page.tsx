@@ -58,10 +58,8 @@ interface VariantCardProps {
 
 function VariantCard(props: VariantCardProps) {
   const isBlack = props.label === 'BLACK';
-  const accent = isBlack
-    ? 'border-cyan-300/40 bg-cyan-300/[0.04]'
-    : 'border-emerald-300/30 bg-emerald-300/[0.03]';
-  const labelColor = isBlack ? 'text-cyan-300' : 'text-emerald-300';
+  const accent = isBlack ? 'border-border bg-accent' : 'border-success/30 bg-success/10';
+  const labelColor = isBlack ? 'text-primary' : 'text-success';
 
   return (
     <div className={`rounded-md border ${accent} p-4 space-y-3`}>
@@ -69,27 +67,27 @@ function VariantCard(props: VariantCardProps) {
         <div className="flex items-center gap-2">
           <span
             className={`rounded-sm border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.2em] ${labelColor} ${
-              isBlack ? 'border-cyan-300/50' : 'border-emerald-300/50'
+              isBlack ? 'border-border' : 'border-success/30'
             }`}
           >
             {props.label}
           </span>
-          <span className="text-[12px] text-white/60">{props.description}</span>
+          <span className="text-[12px] text-muted-foreground">{props.description}</span>
         </div>
-        <span className="font-mono text-[10px] uppercase text-white/40">
+        <span className="font-mono text-[10px] uppercase text-muted-foreground">
           {props.manifestKind ?? '—'}
         </span>
       </div>
 
       {props.manifestUrl && (
-        <p className="break-all font-mono text-[11px] text-white/55">{props.manifestUrl}</p>
+        <p className="break-all font-mono text-[11px] text-muted-foreground">{props.manifestUrl}</p>
       )}
 
       {props.showPreview && props.downloadUrl && (
         <video
           controls
           preload="metadata"
-          className="w-full rounded border border-white/[0.08] bg-black"
+          className="w-full rounded border border-border bg-background"
           src={props.downloadUrl}
         >
           <track kind="captions" />
@@ -97,7 +95,7 @@ function VariantCard(props: VariantCardProps) {
       )}
 
       <div className="flex items-center justify-between gap-3">
-        <span className="text-[11px] text-white/40">{formatBytes(props.bytes)}</span>
+        <span className="text-[11px] text-muted-foreground">{formatBytes(props.bytes)}</span>
         {props.downloadUrl && (
           <Button asChild size="sm" variant={isBlack ? 'default' : 'outline'}>
             <a href={props.downloadUrl} download={props.filename}>
@@ -132,10 +130,10 @@ export default function VslJobPage({ params }: { params: Promise<{ id: string }>
 
         <header className="mb-6 space-y-2">
           <div className="flex items-center gap-2">
-            <Video className="h-5 w-5 text-cyan-300" />
+            <Video className="h-5 w-5 text-primary" />
             <p className="hud-label">VSL Downloader · Job</p>
           </div>
-          <h1 className="break-all text-xl font-semibold text-white">{data?.url ?? id}</h1>
+          <h1 className="break-all text-xl font-semibold text-foreground">{data?.url ?? id}</h1>
         </header>
 
         <div className="glass-card space-y-6 p-6">
@@ -143,15 +141,15 @@ export default function VslJobPage({ params }: { params: Promise<{ id: string }>
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               {data?.status === 'ready' ? (
-                <CheckCircle2 className="h-6 w-6 text-emerald-400" />
+                <CheckCircle2 className="h-6 w-6 text-success" />
               ) : data?.status === 'failed' ? (
-                <XCircle className="h-6 w-6 text-red-400" />
+                <XCircle className="h-6 w-6 text-danger" />
               ) : (
-                <Loader2 className="h-6 w-6 animate-spin text-cyan-300" />
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
               )}
               <div>
                 <p className="hud-label">Status</p>
-                <p className="text-[15px] font-semibold text-white">
+                <p className="text-[15px] font-semibold text-foreground">
                   {data ? (STATUS_LABEL[data.status] ?? data.status) : 'Carregando…'}
                 </p>
               </div>
@@ -159,14 +157,14 @@ export default function VslJobPage({ params }: { params: Promise<{ id: string }>
             {data && (
               <div className="text-right">
                 <p className="hud-label">Progresso</p>
-                <p className="text-[15px] font-semibold text-white">{data.progress}%</p>
+                <p className="text-[15px] font-semibold text-foreground">{data.progress}%</p>
               </div>
             )}
           </div>
 
           {/* Progress bar */}
           {data && data.status !== 'failed' && (
-            <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+            <div className="h-1.5 overflow-hidden rounded-full bg-accent">
               <div
                 className="h-full transition-all"
                 style={{
@@ -185,26 +183,26 @@ export default function VslJobPage({ params }: { params: Promise<{ id: string }>
             <div
               className={`flex items-start gap-3 rounded-md border p-4 ${
                 data.cloakerDetected
-                  ? 'border-amber-400/40 bg-amber-400/[0.05]'
-                  : 'border-emerald-400/30 bg-emerald-400/[0.04]'
+                  ? 'border-warning/30 bg-warning/10'
+                  : 'border-success/30 bg-success/10'
               }`}
             >
               {data.cloakerDetected ? (
-                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
               ) : (
-                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />
+                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-success" />
               )}
               <div className="flex-1">
                 <p
                   className={`text-[13px] font-semibold ${
-                    data.cloakerDetected ? 'text-amber-200' : 'text-emerald-200'
+                    data.cloakerDetected ? 'text-warning' : 'text-success'
                   }`}
                 >
                   {data.cloakerDetected
                     ? 'Cloaker DETECTADO — duas versões diferentes'
                     : 'Sem cloaker — versão única'}
                 </p>
-                <p className="mt-1 text-[12px] text-white/60">
+                <p className="mt-1 text-[12px] text-muted-foreground">
                   {data.cloakerDetected
                     ? 'A página retorna manifests diferentes para tráfego pago (BLACK) e tráfego direto (WHITE). Baixamos as duas para você comparar.'
                     : 'A mesma versão é servida tanto para tráfego pago quanto para visitas diretas — não há cloaker ativo.'}
@@ -218,11 +216,13 @@ export default function VslJobPage({ params }: { params: Promise<{ id: string }>
             <dl className="grid grid-cols-2 gap-4 text-[13px]">
               <div>
                 <dt className="hud-label">Duração</dt>
-                <dd className="mt-1 font-mono text-white/80">{formatDuration(data.durationSec)}</dd>
+                <dd className="mt-1 font-mono text-foreground">
+                  {formatDuration(data.durationSec)}
+                </dd>
               </div>
               <div>
                 <dt className="hud-label">Tipo</dt>
-                <dd className="mt-1 font-mono uppercase text-white/80">
+                <dd className="mt-1 font-mono uppercase text-foreground">
                   {data.manifestKind ?? '—'}
                 </dd>
               </div>
@@ -263,10 +263,12 @@ export default function VslJobPage({ params }: { params: Promise<{ id: string }>
 
           {/* In-progress manifest hint */}
           {data && data.status !== 'ready' && data.status !== 'failed' && data.manifestUrl && (
-            <div className="rounded-md border border-white/[0.06] bg-black/20 p-4">
+            <div className="rounded-md border border-border bg-accent p-4">
               <p className="hud-label mb-2">Manifest detectado</p>
-              <p className="break-all font-mono text-[12px] text-white/70">{data.manifestUrl}</p>
-              <p className="mt-2 text-[11px] uppercase tracking-[0.18em] text-white/40">
+              <p className="break-all font-mono text-[12px] text-muted-foreground">
+                {data.manifestUrl}
+              </p>
+              <p className="mt-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                 Tipo: {data.manifestKind ?? '—'}
                 {data.cloakerDetected && ' · cloaker detectado, baixando ambas versões'}
               </p>
@@ -275,10 +277,10 @@ export default function VslJobPage({ params }: { params: Promise<{ id: string }>
 
           {/* Error */}
           {data?.status === 'failed' && data.error && (
-            <div className="rounded-md border border-red-500/30 bg-red-950/20 p-4 text-[13px]">
-              <p className="font-semibold text-red-300">Falha: {data.error.code}</p>
-              <p className="mt-1 text-red-200/80">{data.error.message}</p>
-              <p className="mt-3 text-[11px] uppercase tracking-[0.18em] text-red-300/60">
+            <div className="rounded-md border border-danger/30 bg-danger/10 p-4 text-[13px]">
+              <p className="font-semibold text-danger">Falha: {data.error.code}</p>
+              <p className="mt-1 text-danger">{data.error.message}</p>
+              <p className="mt-3 text-[11px] uppercase tracking-[0.18em] text-danger">
                 {data.error.code === 'manifest_not_found'
                   ? 'O player não carregou nenhum vídeo. Tente colar a URL completa, com os parâmetros do anúncio (fbclid, utm_*, gclid). Muitos players de VSL só servem o vídeo pra tráfego que parece pago.'
                   : data.error.code === 'download_timeout'

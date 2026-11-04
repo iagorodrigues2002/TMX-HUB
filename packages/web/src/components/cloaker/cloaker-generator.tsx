@@ -81,10 +81,10 @@ export function CloakerGenerator() {
             placeholder="https://meusite.com/lp"
             className="font-mono"
           />
-          <p className="text-[11px] text-white/40">
+          <p className="text-[11px] text-muted-foreground">
             Pode incluir parâmetros pré-existentes (ex.{' '}
-            <code className="text-white/65">?gclid=xxx</code>) — os novos serão concatenados com{' '}
-            <code className="text-white/65">&amp;</code>.
+            <code className="text-muted-foreground">?gclid=xxx</code>) — os novos serão concatenados
+            com <code className="text-muted-foreground">&amp;</code>.
           </p>
         </div>
 
@@ -110,7 +110,9 @@ export function CloakerGenerator() {
         <div className="flex items-center justify-between">
           <div>
             <p className="hud-label">Parâmetros</p>
-            <h3 className="mt-1 text-[14px] font-semibold text-white">{slots.length} slot(s)</h3>
+            <h3 className="mt-1 text-[14px] font-semibold text-foreground">
+              {slots.length} slot(s)
+            </h3>
           </div>
           <Button size="sm" variant="outline" onClick={addSlot}>
             <Plus className="h-3.5 w-3.5" />
@@ -119,7 +121,7 @@ export function CloakerGenerator() {
         </div>
 
         {slots.length === 0 ? (
-          <p className="rounded-md border border-dashed border-white/10 bg-white/[0.01] p-6 text-center text-[12px] text-white/40">
+          <p className="rounded-md border border-dashed border-border bg-muted p-6 text-center text-[12px] text-muted-foreground">
             Nenhum parâmetro. Clique em <strong>Adicionar</strong> ou escolha um preset.
           </p>
         ) : (
@@ -135,11 +137,11 @@ export function CloakerGenerator() {
           </div>
         )}
 
-        <div className="rounded-md border border-cyan-300/15 bg-cyan-300/[0.03] p-3">
-          <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-200/80">
+        <div className="rounded-md border border-border bg-accent p-3">
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
             Preview (1 amostra)
           </p>
-          <p className="break-all font-mono text-[12px] text-white/80">{previewUrl}</p>
+          <p className="break-all font-mono text-[12px] text-foreground">{previewUrl}</p>
         </div>
       </section>
 
@@ -162,7 +164,7 @@ export function CloakerGenerator() {
 
         <label
           htmlFor={uniqueId}
-          className="flex items-center gap-2 pb-2 text-[13px] text-white/75"
+          className="flex items-center gap-2 pb-2 text-[13px] text-foreground"
         >
           <Checkbox id={uniqueId} checked={unique} onChange={(e) => setUnique(e.target.checked)} />
           Apenas URLs únicas
@@ -186,7 +188,9 @@ export function CloakerGenerator() {
           <div className="flex items-center justify-between">
             <div>
               <p className="hud-label">Resultado</p>
-              <h3 className="mt-1 text-[14px] font-semibold text-white">{results.length} URLs</h3>
+              <h3 className="mt-1 text-[14px] font-semibold text-foreground">
+                {results.length} URLs
+              </h3>
             </div>
             <div className="flex gap-2">
               <Button
@@ -215,22 +219,19 @@ export function CloakerGenerator() {
             </div>
           </div>
 
-          <div className="max-h-[480px] space-y-1 overflow-y-auto rounded-md border border-white/[0.06] bg-black/15 p-2">
+          <div className="max-h-[480px] space-y-1 overflow-y-auto rounded-md border border-border bg-accent p-2">
             {results.map(({ id, url }, i) => (
-              <div
-                key={id}
-                className="flex items-center gap-2 rounded px-2 py-1 hover:bg-white/[0.03]"
-              >
-                <span className="w-8 shrink-0 text-right font-mono text-[10px] text-white/30">
+              <div key={id} className="flex items-center gap-2 rounded px-2 py-1 hover:bg-muted">
+                <span className="w-8 shrink-0 text-right font-mono text-[10px] text-muted-foreground">
                   {i + 1}
                 </span>
-                <span className="flex-1 truncate font-mono text-[11px] text-white/80" title={url}>
+                <span className="flex-1 truncate font-mono text-[11px] text-foreground" title={url}>
                   {url}
                 </span>
                 <button
                   type="button"
                   onClick={() => copyText(url, `URL #${i + 1}`)}
-                  className="text-white/40 hover:text-cyan-300"
+                  className="text-muted-foreground hover:text-primary"
                   title="Copiar"
                 >
                   <Copy className="h-3 w-3" />
@@ -239,7 +240,7 @@ export function CloakerGenerator() {
                   href={url}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-white/40 hover:text-cyan-300"
+                  className="text-muted-foreground hover:text-primary"
                   title="Abrir"
                 >
                   <ExternalLink className="h-3 w-3" />

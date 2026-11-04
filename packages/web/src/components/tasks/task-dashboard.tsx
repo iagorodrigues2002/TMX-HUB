@@ -318,7 +318,7 @@ export function TaskDashboard({
   if (!preview && loading) return <output>Validando acesso…</output>;
   if (!allowed)
     return (
-      <div role="alert" className="rounded-xl border border-border bg-card p-8">
+      <div role="alert" className="glass-card rounded-xl border border-border bg-card p-8">
         <ShieldCheck aria-hidden />
         <h1 className="mt-3 text-xl font-semibold">Acesso às tarefas não autorizado</h1>
         <p>Nenhum dado de tarefas foi solicitado.</p>
@@ -381,10 +381,7 @@ export function TaskDashboard({
         </p>
       )}
       {!preview && (!configured || tasksQuery.error || peopleQuery.error) && (
-        <div
-          role="alert"
-          className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm"
-        >
+        <div role="alert" className="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm">
           <strong>Integração ainda não disponível neste ambiente.</strong>
           <p className="mt-1">
             A API, a migração e o vínculo do n8n precisam ser habilitados. Dados demonstrativos não
@@ -393,7 +390,7 @@ export function TaskDashboard({
         </div>
       )}
       {error && (
-        <p role="alert" className="rounded-lg border border-red-500/30 p-3 text-sm text-red-500">
+        <p role="alert" className="rounded-lg border border-danger/30 p-3 text-sm text-danger">
           {error}
         </p>
       )}
@@ -404,8 +401,8 @@ export function TaskDashboard({
         {[
           { label: 'Em aberto', count: totals.open, icon: ListTodo, color: 'text-primary' },
           { label: 'Em progresso', count: totals.progress, icon: Clock3, color: 'text-primary' },
-          { label: 'Atrasadas', count: totals.overdue, icon: AlertCircle, color: 'text-amber-500' },
-          { label: 'Concluídas', count: totals.done, icon: CheckCheck, color: 'text-emerald-400' },
+          { label: 'Atrasadas', count: totals.overdue, icon: AlertCircle, color: 'text-warning' },
+          { label: 'Concluídas', count: totals.done, icon: CheckCheck, color: 'text-success' },
         ].map((stat) => (
           <div key={stat.label} className={styles.stat}>
             <div>
@@ -465,7 +462,7 @@ export function TaskDashboard({
                 </div>
                 <p className="mt-3 flex justify-between text-xs">
                   <span className="text-sky-400">{progress} em progresso</span>
-                  <span className={overdue ? 'text-amber-500' : 'text-muted-foreground'}>
+                  <span className={overdue ? 'text-warning' : 'text-muted-foreground'}>
                     {overdue} atrasadas
                   </span>
                 </p>
@@ -524,7 +521,7 @@ export function TaskDashboard({
                   onClick={() => setExpanded(expanded === task.id ? null : task.id)}
                 >
                   <span
-                    className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${task.status === 'done' ? 'bg-emerald-400' : task.status === 'progress' ? 'bg-sky-400' : 'bg-amber-400'}`}
+                    className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${task.status === 'done' ? 'bg-success/10' : task.status === 'progress' ? 'bg-sky-400' : 'bg-warning/10'}`}
                     aria-hidden
                   />
                   <div className="min-w-0 flex-1">
@@ -844,7 +841,7 @@ export function TaskDashboard({
               </label>
             </div>
             {error && (
-              <p role="alert" className="text-sm text-red-500">
+              <p role="alert" className="text-sm text-danger">
                 {error}
               </p>
             )}
@@ -950,12 +947,12 @@ export function TaskDashboard({
               </span>
             </label>
             {usersQuery.error && (
-              <p role="alert" className="text-sm text-red-500">
+              <p role="alert" className="text-sm text-danger">
                 Não foi possível listar as contas TMX. Tente novamente antes de salvar o vínculo.
               </p>
             )}
             {error && (
-              <p role="alert" className="text-sm text-red-500">
+              <p role="alert" className="text-sm text-danger">
                 {error}
               </p>
             )}

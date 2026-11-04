@@ -55,7 +55,7 @@ export function UpsellOperatorSummary({
               <td className="px-3 py-4 text-right tabular-nums">
                 {row.confirmed_purchases.toLocaleString('pt-BR')}
               </td>
-              <td className="px-3 py-4 text-right font-medium tabular-nums text-emerald-400">
+              <td className="px-3 py-4 text-right font-medium tabular-nums text-success">
                 {money(row.amounts)}
               </td>
             </tr>

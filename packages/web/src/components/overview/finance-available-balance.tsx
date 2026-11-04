@@ -39,7 +39,7 @@ export function FinanceAvailableBalance({
   const ready = !query.isPending && !query.isError && result.count > 0 && result.unavailable === 0;
   return (
     <section
-      className="rounded-2xl border border-primary/30 bg-card/95 p-5 sm:p-6"
+      className="glass-card rounded-2xl border border-primary/30 bg-card/95 p-5 sm:p-6"
       aria-label="Saldo disponível consolidado"
     >
       <div className="flex flex-wrap justify-between gap-3">
@@ -67,7 +67,7 @@ export function FinanceAvailableBalance({
       {query.isPending ? (
         <output className="mt-2 block text-sm">Consultando cotação…</output>
       ) : !ready || !usd ? (
-        <output className="mt-2 block text-sm text-amber-600 dark:text-amber-400">
+        <output className="mt-2 block text-sm text-warning dark:text-warning">
           Consolidado indisponível: falta saldo ou cotação para alguma moeda. Os valores individuais
           permanecem abaixo.
         </output>
@@ -79,12 +79,12 @@ export function FinanceAvailableBalance({
         </p>
       )}
       {result.stale && (
-        <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
+        <p className="mt-2 text-sm text-warning dark:text-warning">
           Há saldos desatualizados. Confira o horário da última consulta em cada conta.
         </p>
       )}
       {oldQuote && (
-        <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
+        <p className="mt-2 text-sm text-warning dark:text-warning">
           A cotação disponível não foi atualizada hoje. A conversão usa a última consulta indicada
           acima.
         </p>

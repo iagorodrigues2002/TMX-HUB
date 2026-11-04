@@ -152,7 +152,7 @@ export function CallsDashboard({
   if (loading) return <output>Validando acesso…</output>;
   if (!allowed)
     return (
-      <div role="alert" className="rounded-xl border border-border bg-card p-8">
+      <div role="alert" className="glass-card rounded-xl border border-border bg-card p-8">
         <ShieldCheck aria-hidden />
         <h1 className="mt-3 text-xl font-semibold">Acesso às calls não autorizado</h1>
         <p>Nenhum agendamento foi solicitado.</p>
@@ -212,7 +212,7 @@ export function CallsDashboard({
         Datas e horários de São Paulo. Reagendamentos invalidam os lembretes da versão anterior.
       </p>
       {error && (
-        <p role="alert" className="rounded-lg border border-red-500/30 p-3 text-sm text-red-500">
+        <p role="alert" className="rounded-lg border border-danger/30 p-3 text-sm text-danger">
           {error}
         </p>
       )}
@@ -220,10 +220,7 @@ export function CallsDashboard({
         <output className="block rounded-lg border border-primary/30 p-3 text-sm">{notice}</output>
       )}
       {(callsQuery.error || peopleQuery.error) && (
-        <p
-          role="alert"
-          className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm"
-        >
+        <p role="alert" className="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm">
           Não foi possível consultar a agenda. Confira a API e a configuração da integração. Dados
           demonstrativos não substituem calls reais.
         </p>
@@ -245,7 +242,7 @@ export function CallsDashboard({
       </div>
       {callsQuery.isLoading && <output>Consultando agenda…</output>}
       {!callsQuery.isLoading && !callsQuery.error && calls.length === 0 && (
-        <div className="rounded-xl border border-dashed border-border bg-card p-10 text-center">
+        <div className="glass-card rounded-xl border border-dashed border-border bg-card p-10 text-center">
           <CalendarDays className="mx-auto mb-3 text-primary" aria-hidden />
           <h2 className="font-medium">Nenhuma call nesta seleção</h2>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -295,7 +292,7 @@ export function CallsDashboard({
             </DialogDescription>
           </DialogHeader>
           {error && (
-            <p role="alert" className="text-sm text-red-500">
+            <p role="alert" className="text-sm text-danger">
               {error}
             </p>
           )}
@@ -370,7 +367,7 @@ export function CallsDashboard({
                         </span>
                       )}
                       {!p.discordId && (
-                        <span className="ml-1 text-xs text-amber-500">Sem vínculo Discord</span>
+                        <span className="ml-1 text-xs text-warning">Sem vínculo Discord</span>
                       )}
                     </span>
                   </label>
@@ -444,7 +441,7 @@ export function CallsDashboard({
             </DialogDescription>
           </DialogHeader>
           {error && (
-            <p role="alert" className="text-sm text-red-500">
+            <p role="alert" className="text-sm text-danger">
               {error}
             </p>
           )}

@@ -43,10 +43,10 @@ export default function FunnelJobPage({ params }: { params: Promise<{ id: string
 
         <header className="mb-6 space-y-2">
           <div className="flex items-center gap-2">
-            <Network className="h-5 w-5 text-cyan-300" />
+            <Network className="h-5 w-5 text-primary" />
             <p className="hud-label">Funnel Clone · Job</p>
           </div>
-          <h1 className="break-all text-xl font-semibold text-white">{data?.rootUrl ?? id}</h1>
+          <h1 className="break-all text-xl font-semibold text-foreground">{data?.rootUrl ?? id}</h1>
         </header>
 
         <div className="glass-card space-y-5 p-6">
@@ -54,15 +54,15 @@ export default function FunnelJobPage({ params }: { params: Promise<{ id: string
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               {data?.status === 'ready' ? (
-                <CheckCircle2 className="h-6 w-6 text-emerald-400" />
+                <CheckCircle2 className="h-6 w-6 text-success" />
               ) : data?.status === 'failed' ? (
-                <XCircle className="h-6 w-6 text-red-400" />
+                <XCircle className="h-6 w-6 text-danger" />
               ) : (
-                <Loader2 className="h-6 w-6 animate-spin text-cyan-300" />
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
               )}
               <div>
                 <p className="hud-label">Status</p>
-                <p className="text-[15px] font-semibold text-white">
+                <p className="text-[15px] font-semibold text-foreground">
                   {data ? (STATUS_LABEL[data.status] ?? data.status) : 'Carregando…'}
                 </p>
               </div>
@@ -70,13 +70,13 @@ export default function FunnelJobPage({ params }: { params: Promise<{ id: string
             {data && (
               <div className="text-right">
                 <p className="hud-label">Progresso</p>
-                <p className="text-[15px] font-semibold text-white">{data.progress}%</p>
+                <p className="text-[15px] font-semibold text-foreground">{data.progress}%</p>
               </div>
             )}
           </div>
 
           {data && data.status !== 'failed' && (
-            <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+            <div className="h-1.5 overflow-hidden rounded-full bg-accent">
               <div
                 className="h-full transition-all"
                 style={{
@@ -94,30 +94,28 @@ export default function FunnelJobPage({ params }: { params: Promise<{ id: string
             <dl className="grid gap-4 text-[13px] sm:grid-cols-3">
               <div>
                 <dt className="hud-label">Páginas</dt>
-                <dd className="mt-1 font-mono text-white/80">
+                <dd className="mt-1 font-mono text-foreground">
                   {data.pages.length} / {data.maxPages}
                 </dd>
               </div>
               <div>
                 <dt className="hud-label">Profundidade</dt>
-                <dd className="mt-1 font-mono text-white/80">
+                <dd className="mt-1 font-mono text-foreground">
                   {Math.max(0, ...data.pages.map((p) => p.depth))} / {data.maxDepth}
                 </dd>
               </div>
               <div>
                 <dt className="hud-label">ZIP</dt>
-                <dd className="mt-1 font-mono text-white/80">{formatBytes(data.totalBytes)}</dd>
+                <dd className="mt-1 font-mono text-foreground">{formatBytes(data.totalBytes)}</dd>
               </div>
             </dl>
           )}
 
           {/* Pages tree */}
           {data && data.pages.length > 0 && (
-            <div className="rounded-md border border-white/[0.06] bg-black/20">
-              <p className="hud-label border-b border-white/[0.06] px-3 py-2">
-                Páginas descobertas
-              </p>
-              <ul className="divide-y divide-white/[0.04] text-[12px]">
+            <div className="rounded-md border border-border bg-accent">
+              <p className="hud-label border-b border-border px-3 py-2">Páginas descobertas</p>
+              <ul className="divide-y divide-border text-[12px]">
                 {data.pages.map((p) => (
                   <li key={p.url + p.index} className="px-3 py-2">
                     <div className="flex items-center justify-between gap-3">
@@ -125,17 +123,17 @@ export default function FunnelJobPage({ params }: { params: Promise<{ id: string
                         className="flex items-center gap-2 truncate"
                         style={{ paddingLeft: p.depth * 12 }}
                       >
-                        <span className="rounded-sm border border-cyan-300/30 px-1 py-px text-[9px] font-bold uppercase tracking-[0.16em] text-cyan-300">
+                        <span className="rounded-sm border border-border px-1 py-px text-[9px] font-bold uppercase tracking-[0.16em] text-primary">
                           d{p.depth}
                         </span>
-                        <span className="truncate text-white/85">{p.label || '(sem label)'}</span>
+                        <span className="truncate text-foreground">{p.label || '(sem label)'}</span>
                       </span>
-                      <span className="shrink-0 font-mono text-[10px] text-white/40">
-                        {p.error ? '⚠ erro' : formatBytes(p.bytes)}
+                      <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                        {p.error ? '! erro' : formatBytes(p.bytes)}
                       </span>
                     </div>
                     <p
-                      className="mt-0.5 truncate font-mono text-[10px] text-white/40"
+                      className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground"
                       style={{ paddingLeft: p.depth * 12 + 30 }}
                     >
                       {p.url}
@@ -158,9 +156,9 @@ export default function FunnelJobPage({ params }: { params: Promise<{ id: string
 
           {/* Error */}
           {data?.status === 'failed' && data.error && (
-            <div className="rounded-md border border-red-500/30 bg-red-950/20 p-4 text-[13px]">
-              <p className="font-semibold text-red-300">Falha: {data.error.code}</p>
-              <p className="mt-1 text-red-200/80">{data.error.message}</p>
+            <div className="rounded-md border border-danger/30 bg-danger/10 p-4 text-[13px]">
+              <p className="font-semibold text-danger">Falha: {data.error.code}</p>
+              <p className="mt-1 text-danger">{data.error.message}</p>
             </div>
           )}
         </div>

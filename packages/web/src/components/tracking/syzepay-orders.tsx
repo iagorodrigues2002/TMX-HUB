@@ -28,9 +28,9 @@ function OrderClassification({
     },
     onError: (e) => toast.error((e as Error).message),
   });
-  const input = 'h-11 rounded-md border border-white/15 bg-bg px-3 text-sm';
+  const input = 'h-11 rounded-md border border-border bg-bg px-3 text-sm';
   return (
-    <article className="border-t border-white/10 py-4">
+    <article className="border-t border-border py-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="font-medium">
@@ -38,20 +38,18 @@ function OrderClassification({
               order.amount_minor / 100,
             )}
           </p>
-          <p className="mt-1 break-all text-xs text-white/45">Pedido {order.order_id}</p>
-          <p className="mt-1 text-xs text-white/45">
+          <p className="mt-1 break-all text-xs text-muted-foreground">Pedido {order.order_id}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
             {[...new Set(order.types)].join(' + ')} · um único pedido
           </p>
-          <p className="mt-1 text-xs text-white/55">Produto: não informado pela SyzePay</p>
+          <p className="mt-1 text-xs text-muted-foreground">Produto: não informado pela SyzePay</p>
         </div>
-        <span
-          className={order.signature_valid ? 'text-xs text-emerald-200' : 'text-xs text-amber-200'}
-        >
+        <span className={order.signature_valid ? 'text-xs text-success' : 'text-xs text-warning'}>
           {order.signature_valid ? 'Assinatura validada' : 'Configure/verifique o secret'}
         </span>
       </div>
       {order.status === 'processed' ? (
-        <p className="mt-3 text-sm text-emerald-200">
+        <p className="mt-3 text-sm text-success">
           Registrado: {offers.find((o) => o.id === order.mapping?.offer_id)?.name ?? 'Oferta'} ·{' '}
           {order.mapping?.order_kind}. Os envios podem ser acompanhados nas integrações da oferta.
         </p>
@@ -134,21 +132,21 @@ export function SyzepayOrders({ connectionId }: { connectionId: string }) {
     groups.set(key, [...(groups.get(key) ?? []), order]);
   }
   return (
-    <div className="mt-5 border-t border-white/10 pt-4">
+    <div className="mt-5 border-t border-border pt-4">
       <h3 className="text-sm font-semibold">Pedidos não classificados · {pending.length}</h3>
-      <p className="mt-2 text-sm text-white/50">
+      <p className="mt-2 text-sm text-muted-foreground">
         A SyzePay ainda não informa o ID do produto. Associe cada pedido à oferta e etapa. Somente
         order.paid aprovado gera venda; order.created e reenvios não duplicam a compra.
       </p>
       {query.isError ? (
-        <p role="alert" className="mt-3 text-red-300">
+        <p role="alert" className="mt-3 text-danger">
           Não foi possível carregar os pedidos.{' '}
           <button type="button" onClick={() => void query.refetch()}>
             Tentar novamente
           </button>
         </p>
       ) : query.isLoading ? (
-        <p className="mt-3 text-white/45">Carregando pedidos…</p>
+        <p className="mt-3 text-muted-foreground">Carregando pedidos…</p>
       ) : (
         <>
           {!query.data?.signing_secret_configured && (
@@ -168,7 +166,7 @@ export function SyzepayOrders({ connectionId }: { connectionId: string }) {
                 value={secret}
                 onChange={(e) => setSecret(e.target.value)}
                 placeholder="Cole o secret da SyzePay"
-                className="h-11 min-w-56 flex-1 rounded-md border border-white/15 bg-bg px-3 text-sm"
+                className="h-11 min-w-56 flex-1 rounded-md border border-border bg-bg px-3 text-sm"
               />
               <Button type="submit" disabled={saveSecret.isPending}>
                 Salvar secret
@@ -176,7 +174,7 @@ export function SyzepayOrders({ connectionId }: { connectionId: string }) {
             </form>
           )}
           {!pending.length ? (
-            <p className="mt-4 text-sm text-white/45">
+            <p className="mt-4 text-sm text-muted-foreground">
               Nenhum pedido aguardando classificação. Os já classificados ficam no histórico.
             </p>
           ) : (
@@ -200,8 +198,8 @@ export function SyzepayOrders({ connectionId }: { connectionId: string }) {
             ))
           )}
           {classified.length > 0 && (
-            <details className="mt-5 border-t border-white/10 pt-4">
-              <summary className="cursor-pointer text-sm text-white/65">
+            <details className="mt-5 border-t border-border pt-4">
+              <summary className="cursor-pointer text-sm text-muted-foreground">
                 Histórico de classificados · {classified.length}
               </summary>
               {classified.map((order) => (

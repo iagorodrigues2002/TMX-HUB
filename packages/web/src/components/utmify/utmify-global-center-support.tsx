@@ -20,10 +20,10 @@ export function MetricCard({
   value: string | number;
 }) {
   return (
-    <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-4">
-      <Icon className="h-4 w-4 text-cyan-300" />
-      <p className="mt-4 font-mono text-2xl tabular-nums text-white">{value}</p>
-      <p className="mt-1 text-[10px] uppercase tracking-[0.15em] text-white/35">{label}</p>
+    <div className="glass-card rounded-xl border border-border bg-muted p-4">
+      <Icon className="h-4 w-4 text-primary" />
+      <p className="mt-4 font-mono text-2xl tabular-nums text-foreground">{value}</p>
+      <p className="mt-1 text-[10px] uppercase tracking-[0.15em] text-muted-foreground">{label}</p>
     </div>
   );
 }
@@ -41,11 +41,11 @@ export function UtmifyLoadingState() {
         {skeletons.map((skeleton) => (
           <div
             key={skeleton}
-            className="h-28 rounded-xl border border-white/[0.08] bg-white/[0.025]"
+            className="glass-card h-28 rounded-xl border border-border bg-muted"
           />
         ))}
       </section>
-      <div className="mt-6 h-72 animate-pulse rounded-2xl border border-white/[0.08] bg-white/[0.025]" />
+      <div className="glass-card mt-6 h-72 animate-pulse rounded-2xl border border-border bg-muted" />
     </output>
   );
 }

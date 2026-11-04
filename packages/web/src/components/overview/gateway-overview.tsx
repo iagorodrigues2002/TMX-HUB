@@ -13,20 +13,20 @@ const labels: Record<string, string> = {
 export function GatewayOverview({ accounts }: { accounts: TrackingOverviewAccount[] }) {
   const { isPrivate } = usePrivacy();
   return (
-    <section className="space-y-4 rounded-xl border border-white/10 bg-white/[0.025] p-4 sm:p-5">
+    <section className="glass-card space-y-4 rounded-xl border border-border bg-muted p-4 sm:p-5">
       <div>
-        <h2 className="text-base font-semibold text-white">Vendas por gateway</h2>
-        <p className="mt-1 text-sm text-white/50">
+        <h2 className="text-base font-semibold text-foreground">Vendas por gateway</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
           Mesmo período da visão geral. Faturamento bruto das aprovações, antes de taxas e
           devoluções.
         </p>
       </div>
       {accounts.map((account) => (
         <div key={account.owner_id} className="space-y-3">
-          <h3 className="text-sm font-medium text-white/70">{account.owner_name}</h3>
+          <h3 className="text-sm font-medium text-muted-foreground">{account.owner_name}</h3>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[880px] text-left text-sm">
-              <thead className="text-xs text-white/45">
+              <thead className="text-xs text-muted-foreground">
                 <tr>
                   <th className="pb-3">Gateway</th>
                   <th className="pb-3 text-right">Transações aprovadas</th>
@@ -40,17 +40,17 @@ export function GatewayOverview({ accounts }: { accounts: TrackingOverviewAccoun
               </thead>
               <tbody>
                 {account.gateways?.map((row) => (
-                  <tr key={row.provider} className="border-t border-white/10">
+                  <tr key={row.provider} className="border-t border-border">
                     <th className="py-3 font-medium">{labels[row.provider] ?? row.provider}</th>
                     <td className="text-right">{formatInt(row.transactions)}</td>
                     <td className="text-right">{formatInt(row.fronts)}</td>
                     <td className="text-right">{formatInt(row.upsells)}</td>
-                    <td className="text-right text-cyan-200">
+                    <td className="text-right text-primary">
                       {isPrivate
                         ? '****'
                         : formatCurrency(Number(row.gross_brl_minor) / 100, 'BRL')}
                       {row.missing_amounts > 0 && (
-                        <span className="block text-xs text-amber-200">
+                        <span className="block text-xs text-warning">
                           Parcial: {row.missing_amounts} sem valor/cotação
                         </span>
                       )}
@@ -69,19 +69,19 @@ export function GatewayOverview({ accounts }: { accounts: TrackingOverviewAccoun
                   </tr>
                 ))}
                 {account.syzepay_pending?.map((row) => (
-                  <tr key={`syze-${row.company_name}`} className="border-t border-white/10">
+                  <tr key={`syze-${row.company_name}`} className="border-t border-border">
                     <th className="py-3 font-medium">SyzePay · {row.company_name}</th>
-                    <td colSpan={3} className="text-right text-amber-200">
+                    <td colSpan={3} className="text-right text-warning">
                       {formatInt(row.pending_events)} eventos aguardando mapeamento
                     </td>
-                    <td colSpan={4} className="text-right text-white/40">
+                    <td colSpan={4} className="text-right text-muted-foreground">
                       Ainda não contabilizado
                     </td>
                   </tr>
                 ))}
                 {!account.gateways?.length && !account.syzepay_pending?.length && (
                   <tr>
-                    <td colSpan={8} className="py-4 text-white/40">
+                    <td colSpan={8} className="py-4 text-muted-foreground">
                       Nenhuma transação aprovada neste período.
                     </td>
                   </tr>
@@ -91,7 +91,7 @@ export function GatewayOverview({ accounts }: { accounts: TrackingOverviewAccoun
           </div>
         </div>
       ))}
-      <p className="text-xs text-white/40">
+      <p className="text-xs text-muted-foreground">
         Transações incluem front e upsells; não representam compradores únicos. Produtos não
         classificados continuam no total de transações. Eventos SyzePay pendentes não entram no
         faturamento.

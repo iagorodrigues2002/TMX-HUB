@@ -731,7 +731,7 @@ function AccessDetails({
                   </p>
                 )}
                 {offerIds.length === 0 && (
-                  <p className="text-sm text-amber-500">
+                  <p className="text-sm text-warning">
                     Nenhuma oferta liberada. As ferramentas não concedem acesso a ofertas por conta
                     própria.
                   </p>
@@ -751,7 +751,7 @@ function AccessDetails({
         {editable ? (
           <div className={styles.accessActions}>
             {saveError && (
-              <p role="alert" className="mb-3 text-sm text-red-500">
+              <p role="alert" className="mb-3 text-sm text-danger">
                 {saveError}
               </p>
             )}

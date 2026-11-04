@@ -54,20 +54,20 @@ export function GatewayCard({ offerId, provider, accounts, canManage, onSave }: 
   };
 
   return (
-    <article className="overflow-hidden rounded-xl border border-white/[0.09] bg-black/15">
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-white/[0.07] px-4 py-4 sm:px-5">
+    <article className="glass-card overflow-hidden rounded-xl border border-border bg-accent">
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-border px-4 py-4 sm:px-5">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-cyan-300/20 bg-cyan-300/[0.06] text-cyan-200">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-border bg-accent text-primary">
             <Icon aria-hidden className="h-5 w-5" />
           </span>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-base font-semibold text-white">{registry.label}</h3>
-              <span className="rounded-full border border-white/[0.09] px-2 py-0.5 text-[11px] text-white/45">
+              <h3 className="text-base font-semibold text-foreground">{registry.label}</h3>
+              <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">
                 {accounts.length} {accounts.length === 1 ? 'conta' : 'contas'}
               </span>
             </div>
-            <p className="mt-1 text-xs leading-5 text-white/45">{registry.description}</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">{registry.description}</p>
           </div>
         </div>
         {canManage && canAdd && (
@@ -87,14 +87,14 @@ export function GatewayCard({ offerId, provider, accounts, canManage, onSave }: 
         )}
       </header>
 
-      <div className="divide-y divide-white/[0.06]">
+      <div className="divide-y divide-border">
         {accounts.map((account) => (
           <div key={account.id}>
             <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-5">
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-white/80">{account.name}</p>
-                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/40">
-                  <span className={account.enabled ? 'text-emerald-300' : 'text-white/40'}>
+                <p className="truncate text-sm font-medium text-foreground">{account.name}</p>
+                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                  <span className={account.enabled ? 'text-success' : 'text-muted-foreground'}>
                     {account.enabled ? 'Ativa' : 'Pausada'}
                   </span>
                   {account.propagationParam && <span>atribuição: {account.propagationParam}</span>}
@@ -139,7 +139,7 @@ export function GatewayCard({ offerId, provider, accounts, canManage, onSave }: 
           </div>
         ))}
         {!accounts.length && editingAccount !== 'new' && (
-          <p className="px-5 py-5 text-sm text-white/40">Nenhuma conta configurada.</p>
+          <p className="px-5 py-5 text-sm text-muted-foreground">Nenhuma conta configurada.</p>
         )}
       </div>
 
@@ -155,7 +155,7 @@ export function GatewayCard({ offerId, provider, accounts, canManage, onSave }: 
 
       {error && (
         <p
-          className="border-t border-red-300/15 bg-red-300/[0.04] px-5 py-3 text-xs text-red-200"
+          className="border-t border-danger/30 bg-danger/10 px-5 py-3 text-xs text-danger"
           role="alert"
         >
           {error}
@@ -163,13 +163,13 @@ export function GatewayCard({ offerId, provider, accounts, canManage, onSave }: 
       )}
 
       {webhookUrl && (
-        <div className="border-t border-amber-300/20 bg-amber-300/[0.04] px-4 py-4 sm:px-5">
-          <p className="flex items-center gap-2 text-sm font-medium text-amber-100">
+        <div className="border-t border-warning/30 bg-warning/10 px-4 py-4 sm:px-5">
+          <p className="flex items-center gap-2 text-sm font-medium text-warning">
             <Check aria-hidden className="h-4 w-4" />
             Webhook gerado. Copie agora; ele não será exibido novamente.
           </p>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-            <code className="min-w-0 flex-1 overflow-x-auto rounded-lg bg-black/25 p-3 text-xs text-cyan-100">
+            <code className="min-w-0 flex-1 overflow-x-auto rounded-lg bg-accent p-3 text-xs text-primary">
               {webhookUrl}
             </code>
             <Button

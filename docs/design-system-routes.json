@@ -1,0 +1,229 @@
+[
+  {
+    "route": "/admin",
+    "source": "packages/web/src/app/admin/page.tsx",
+    "frame": "hub"
+  },
+  {
+    "route": "/ads-intelligence",
+    "source": "packages/web/src/app/ads-intelligence/page.tsx",
+    "frame": "hub"
+  },
+  {
+    "route": "/contas-meta",
+    "source": "packages/web/src/app/contas-meta/page.tsx",
+    "frame": "hub"
+  },
+  {
+    "route": "/debug",
+    "source": "packages/web/src/app/debug/page.tsx",
+    "frame": "public"
+  },
+  {
+    "route": "/empresa/financeiro",
+    "source": "packages/web/src/app/empresa/financeiro/page.tsx",
+    "frame": "hub"
+  },
+  {
+    "route": "/empresa/membros",
+    "source": "packages/web/src/app/empresa/membros/page.tsx",
+    "frame": "hub"
+  },
+  {
+    "route": "/help/tracking-vendepay",
+    "source": "packages/web/src/app/help/tracking-vendepay/page.tsx",
+    "frame": "redirect",
+    "target": "/tracking"
+  },
+  {
+    "route": "/info",
+    "source": "packages/web/src/app/info/page.tsx",
+    "frame": "public"
+  },
+  {
+    "route": "/integracoes/syzepay",
+    "source": "packages/web/src/app/integracoes/syzepay/page.tsx",
+    "frame": "hub"
+  },
+  {
+    "route": "/login",
+    "source": "packages/web/src/app/login/page.tsx",
+    "frame": "reference"
+  },
+  {
+    "route": "/logs",
+    "source": "packages/web/src/app/logs/page.tsx",
+    "frame": "hub"
+  },
+  {
+    "route": "/ofertas/[id]",
+    "source": "packages/web/src/app/ofertas/[id]/page.tsx",
+    "frame": "hub"
+  },
+  {
+    "route": "/ofertas",
+    "source": "packages/web/src/app/ofertas/page.tsx",
+    "frame": "hub"
+  },
+  {
+    "route": "/",
+    "source": "packages/web/src/app/page.tsx",
+    "frame": "hub"
+  },
+  {
+    "route": "/preview/design-system",
+    "source": "packages/web/src/app/preview/design-system/page.tsx",
+    "frame": "reference"
+  },
+  {
+    "route": "/preview/membros",
+    "source": "packages/web/src/app/preview/membros/page.tsx",
+    "frame": "redirect",
+    "target": "/empresa/membros"
+  },
+  {
+    "route": "/preview/notificacoes",
+    "source": "packages/web/src/app/preview/notificacoes/page.tsx",
+    "frame": "public"
+  },
+  {
+    "route": "/preview/tarefas",
+    "source": "packages/web/src/app/preview/tarefas/page.tsx",
+    "frame": "public"
+  },
+  {
+    "route": "/privacy",
+    "source": "packages/web/src/app/privacy/page.tsx",
+    "frame": "public"
+  },
+  {
+    "route": "/recovery",
+    "source": "packages/web/src/app/recovery/page.tsx",
+    "frame": "hub"
+  },
+  {
+    "route": "/reembolsos",
+    "source": "packages/web/src/app/reembolsos/page.tsx",
+    "frame": "hub"
+  },
+  {
+    "route": "/register",
+    "source": "packages/web/src/app/register/page.tsx",
+    "frame": "public"
+  },
+  {
+    "route": "/settings",
+    "source": "packages/web/src/app/settings/page.tsx",
+    "frame": "hub"
+  },
+  {
+    "route": "/tarefas",
+    "source": "packages/web/src/app/tarefas/page.tsx",
+    "frame": "hub"
+  },
+  {
+    "route": "/terms",
+    "source": "packages/web/src/app/terms/page.tsx",
+    "frame": "public"
+  },
+  {
+    "route": "/tools/cloaker-urls",
+    "source": "packages/web/src/app/tools/cloaker-urls/page.tsx",
+    "frame": "redirect",
+    "target": "/tools"
+  },
+  {
+    "route": "/tools/cloner/jobs/[id]",
+    "source": "packages/web/src/app/tools/cloner/jobs/[id]/page.tsx",
+    "frame": "hub"
+  },
+  {
+    "route": "/tools/cloner/jobs/[id]/preview",
+    "source": "packages/web/src/app/tools/cloner/jobs/[id]/preview/page.tsx",
+    "frame": "public"
+  },
+  {
+    "route": "/tools/cloner",
+    "source": "packages/web/src/app/tools/cloner/page.tsx",
+    "frame": "hub"
+  },
+  {
+    "route": "/tools/creative-studio",
+    "source": "packages/web/src/app/tools/creative-studio/page.tsx",
+    "frame": "redirect",
+    "target": "/tools/video-shield"
+  },
+  {
+    "route": "/tools/digi-approval/[id]",
+    "source": "packages/web/src/app/tools/digi-approval/[id]/page.tsx",
+    "frame": "redirect",
+    "target": "/tools"
+  },
+  {
+    "route": "/tools/digi-approval",
+    "source": "packages/web/src/app/tools/digi-approval/page.tsx",
+    "frame": "redirect",
+    "target": "/tools"
+  },
+  {
+    "route": "/tools/funnel-clone/jobs/[id]",
+    "source": "packages/web/src/app/tools/funnel-clone/jobs/[id]/page.tsx",
+    "frame": "hub"
+  },
+  {
+    "route": "/tools/funnel-clone",
+    "source": "packages/web/src/app/tools/funnel-clone/page.tsx",
+    "frame": "hub"
+  },
+  {
+    "route": "/tools/page-diff",
+    "source": "packages/web/src/app/tools/page-diff/page.tsx",
+    "frame": "redirect",
+    "target": "/tools"
+  },
+  {
+    "route": "/tools",
+    "source": "packages/web/src/app/tools/page.tsx",
+    "frame": "hub"
+  },
+  {
+    "route": "/tools/upsell-analyzer",
+    "source": "packages/web/src/app/tools/upsell-analyzer/page.tsx",
+    "frame": "hub"
+  },
+  {
+    "route": "/tools/video-shield",
+    "source": "packages/web/src/app/tools/video-shield/page.tsx",
+    "frame": "hub"
+  },
+  {
+    "route": "/tools/vsl/jobs/[id]",
+    "source": "packages/web/src/app/tools/vsl/jobs/[id]/page.tsx",
+    "frame": "hub"
+  },
+  {
+    "route": "/tools/vsl",
+    "source": "packages/web/src/app/tools/vsl/page.tsx",
+    "frame": "hub"
+  },
+  {
+    "route": "/tools/webhook-tester",
+    "source": "packages/web/src/app/tools/webhook-tester/page.tsx",
+    "frame": "hub"
+  },
+  {
+    "route": "/tracking/google-callback",
+    "source": "packages/web/src/app/tracking/google-callback/page.tsx",
+    "frame": "public"
+  },
+  {
+    "route": "/tracking",
+    "source": "packages/web/src/app/tracking/page.tsx",
+    "frame": "hub"
+  },
+  {
+    "route": "/utmify-geral",
+    "source": "packages/web/src/app/utmify-geral/page.tsx",
+    "frame": "hub"
+  }
+]

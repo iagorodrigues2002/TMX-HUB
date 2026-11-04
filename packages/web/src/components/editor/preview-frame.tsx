@@ -35,14 +35,14 @@ export function PreviewFrame({ jobId, status }: PreviewFrameProps) {
         <div className="flex flex-col items-center gap-4">
           <span
             aria-hidden
-            className="grid h-14 w-14 place-items-center rounded-full border border-cyan-300/30 shadow-[0_0_24px_rgba(34,211,238,0.25)]"
+            className="grid h-14 w-14 place-items-center rounded-full border border-border shadow-[0_0_24px_rgba(34,211,238,0.25)]"
             style={{
               background: 'linear-gradient(135deg, rgba(20,184,166,0.18), rgba(34,211,238,0.05))',
             }}
           >
-            <Loader2 className="h-6 w-6 animate-spin text-cyan-300" />
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
           </span>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             {status === 'failed' ? 'Renderização falhou' : 'Aguardando renderização'}
           </p>
         </div>
@@ -64,7 +64,7 @@ export function PreviewFrame({ jobId, status }: PreviewFrameProps) {
       srcDoc={preview.html}
       sandbox="allow-popups"
       referrerPolicy="no-referrer"
-      className="h-full w-full bg-white"
+      className="h-full w-full bg-background"
     />
   );
 }

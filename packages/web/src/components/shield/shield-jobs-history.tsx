@@ -119,11 +119,11 @@ export function ShieldJobsHistory() {
       <div className="flex items-baseline justify-between">
         <div>
           <p className="hud-label">Histórico</p>
-          <h2 className="mt-1 text-[16px] font-semibold text-white">
+          <h2 className="mt-1 text-[16px] font-semibold text-foreground">
             {jobs.length} job(s) recente(s)
           </h2>
           {jobs.some((j) => j.status === 'ready') && (
-            <p className="mt-1 flex items-center gap-1.5 text-[11px] text-cyan-300/75">
+            <p className="mt-1 flex items-center gap-1.5 text-[11px] text-primary">
               <Package className="h-3 w-3" />
               Marque os checkboxes abaixo pra baixar vários em um .zip (até 3GB).
             </p>
@@ -173,27 +173,23 @@ export function ShieldJobsHistory() {
       {visibleSelected.length > 0 && (
         <div
           className={`glass-card flex items-center justify-between gap-3 p-3 ${
-            exceedsBytesCap ? 'border-amber-300/40' : 'border-cyan-300/30'
+            exceedsBytesCap ? 'border-warning/30' : 'border-border'
           }`}
         >
-          <div className="text-[13px] text-white/85">
-            <span
-              className={`font-semibold ${exceedsBytesCap ? 'text-amber-200' : 'text-cyan-200'}`}
-            >
+          <div className="text-[13px] text-foreground">
+            <span className={`font-semibold ${exceedsBytesCap ? 'text-warning' : 'text-primary'}`}>
               {visibleSelected.length}
             </span>{' '}
             selecionado(s) ·{' '}
             <span
               className={`font-mono text-[11px] ${
-                exceedsBytesCap ? 'text-amber-300' : 'text-white/55'
+                exceedsBytesCap ? 'text-warning' : 'text-muted-foreground'
               }`}
             >
               {(totalBytesSelected / 1024 / 1024).toFixed(1)} MB
             </span>
             {exceedsBytesCap && (
-              <span className="ml-2 text-[11px] text-amber-300/85">
-                · excede 3GB, desmarque alguns
-              </span>
+              <span className="ml-2 text-[11px] text-warning">· excede 3GB, desmarque alguns</span>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -218,10 +214,10 @@ export function ShieldJobsHistory() {
 
       {isLoading ? (
         <div className="glass-card flex items-center justify-center p-8">
-          <Loader2 className="h-5 w-5 animate-spin text-cyan-300" />
+          <Loader2 className="h-5 w-5 animate-spin text-primary" />
         </div>
       ) : filtered.length === 0 ? (
-        <div className="glass-card p-8 text-center text-[13px] text-white/45">
+        <div className="glass-card p-8 text-center text-[13px] text-muted-foreground">
           {jobs.length === 0
             ? 'Nenhum job ainda. Suba um vídeo no formulário acima.'
             : 'Nenhum job nesse filtro.'}
@@ -230,7 +226,7 @@ export function ShieldJobsHistory() {
         <div className="glass-card overflow-hidden p-0">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px] text-[12px]">
-              <thead className="bg-white/[0.03] text-left text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
+              <thead className="bg-muted text-left text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                 <tr>
                   <th className="w-8 px-3 py-2">
                     <Checkbox

@@ -13,11 +13,12 @@ import {
 import { apiClient, canAccessTool } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
 import { useTaskManagementAccess } from '@/lib/hooks/use-task-management-access';
+import { useRouter } from '@/lib/motion-router';
 import { usePrivacy } from '@/lib/privacy-context';
 import { cn } from '@/lib/utils';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Eye, KeyRound, LogOut, Moon, Plus, RefreshCw, Search, Store, Sun } from 'lucide-react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import type { NavItem } from './nav-config';

@@ -37,7 +37,7 @@ test('last opening persists in purchased, validating and unavailable branches wi
   const links = source.slice(source.indexOf('function ValidatedUpsellLink'), source.length);
   assert.match(links, /if \(link\.already_purchased\) \{\s*return withLastOpening\(/);
   assert.match(links, /if \(validation\.isLoading\) \{\s*return withLastOpening\(/);
-  assert.match(links, /return withLastOpening\(\s*<span className="text-xs text-amber/);
+  assert.match(links, /return withLastOpening\(\s*<span className="text-xs text-warning/);
   assert.match(
     links,
     /const withManualResult = \(openLink: React.ReactNode\) =>\s*withLastOpening\(/,

@@ -31,9 +31,9 @@ export function TikTokDestinations({ offerId }: { offerId: string }) {
 
   return (
     <section className="space-y-5" aria-label="Destinos TikTok Ads">
-      <div className="rounded-xl border border-fuchsia-300/20 bg-fuchsia-300/5 p-4 text-sm text-fuchsia-50">
+      <div className="glass-card rounded-xl border border-fuchsia-300/20 bg-fuchsia-300/5 p-4 text-sm text-fuchsia-50">
         <p className="font-medium">Pixel + Events API · entrega resiliente</p>
-        <p className="mt-1 text-white/60">
+        <p className="mt-1 text-muted-foreground">
           O TMX instala o Pixel no navegador para PageView e InitiateCheckout, e envia somente
           compras front aprovadas pela Events API. O clique <code>ttclid</code>, quando presente,
           segue com a venda sem redirect. Upsells permanecem no financeiro e não inflam a otimização
@@ -43,13 +43,13 @@ export function TikTokDestinations({ offerId }: { offerId: string }) {
       {destinations.isPending ? (
         <DataState className="min-h-64" variant="loading" title="Carregando pixels TikTok…" />
       ) : destinations.isError ? (
-        <p role="alert" className="text-rose-200">
+        <p role="alert" className="text-danger">
           Não foi possível carregar os pixels TikTok.
         </p>
       ) : (
         <div className="space-y-3">
           {destinations.data.destinations.map((d) => (
-            <article key={d.id} className="rounded-xl border border-white/10 p-4">
+            <article key={d.id} className="glass-card rounded-xl border border-border p-4">
               {(() => {
                 const savedTestContext = { ...emptyTest, code: d.test_event_code ?? '' };
                 const context = testContext[d.id] ?? savedTestContext;
@@ -63,17 +63,15 @@ export function TikTokDestinations({ offerId }: { offerId: string }) {
                     <div className="flex flex-wrap justify-between gap-3">
                       <div>
                         <h3 className="font-medium">{d.name}</h3>
-                        <p className="mt-1 font-mono text-xs text-white/55">Pixel {d.pixel_code}</p>
+                        <p className="mt-1 font-mono text-xs text-muted-foreground">
+                          Pixel {d.pixel_code}
+                        </p>
                       </div>
-                      <span
-                        className={
-                          d.enabled ? 'text-xs text-emerald-200' : 'text-xs text-amber-200'
-                        }
-                      >
+                      <span className={d.enabled ? 'text-xs text-success' : 'text-xs text-warning'}>
                         {d.enabled ? 'Ativo' : 'Pausado'}
                       </span>
                     </div>
-                    <p className="mt-3 text-xs text-white/50">
+                    <p className="mt-3 text-xs text-muted-foreground">
                       7 dias: {d.delivered_7d}/{d.deliveries_7d} entregas · última confirmação:{' '}
                       {d.last_delivered_at
                         ? new Date(d.last_delivered_at).toLocaleString('pt-BR')
@@ -85,8 +83,11 @@ export function TikTokDestinations({ offerId }: { offerId: string }) {
                         Remover
                       </Button>
                     </div>
-                    <div className="mt-4 rounded-lg border border-cyan-300/15 bg-cyan-300/[0.03] p-3">
-                      <label htmlFor={`tiktok-test-code-${d.id}`} className="text-xs text-white/65">
+                    <div className="mt-4 rounded-lg border border-border bg-accent p-3">
+                      <label
+                        htmlFor={`tiktok-test-code-${d.id}`}
+                        className="text-xs text-muted-foreground"
+                      >
                         Test Event Code
                         <Input
                           id={`tiktok-test-code-${d.id}`}
@@ -96,14 +97,14 @@ export function TikTokDestinations({ offerId }: { offerId: string }) {
                           className="mt-2"
                         />
                       </label>
-                      <p className="mt-2 text-xs leading-5 text-white/55">
+                      <p className="mt-2 text-xs leading-5 text-muted-foreground">
                         Opcional. Cole o código criado no TikTok Events Manager &gt; Test Events pra
                         validar eventos em modo teste.{' '}
                         <a
                           href={TIKTOK_TEST_EVENTS_DOCS}
                           target="_blank"
                           rel="noreferrer"
-                          className="font-medium text-cyan-200 underline decoration-cyan-200/40 underline-offset-4 hover:text-cyan-100"
+                          className="font-medium text-primary underline decoration-cyan-200/40 underline-offset-4 hover:text-primary"
                         >
                           Ver documentação do TikTok
                         </a>
@@ -112,7 +113,7 @@ export function TikTokDestinations({ offerId }: { offerId: string }) {
                       <div className="mt-3 grid gap-3 md:grid-cols-3">
                         <label
                           htmlFor={`tiktok-event-url-${d.id}`}
-                          className="text-xs text-white/65"
+                          className="text-xs text-muted-foreground"
                         >
                           URL real da página (recomendado)
                           <Input
@@ -125,7 +126,7 @@ export function TikTokDestinations({ offerId }: { offerId: string }) {
                         </label>
                         <label
                           htmlFor={`tiktok-test-email-${d.id}`}
-                          className="text-xs text-white/65"
+                          className="text-xs text-muted-foreground"
                         >
                           Email de teste (opcional)
                           <Input
@@ -139,7 +140,7 @@ export function TikTokDestinations({ offerId }: { offerId: string }) {
                         </label>
                         <label
                           htmlFor={`tiktok-test-phone-${d.id}`}
-                          className="text-xs text-white/65"
+                          className="text-xs text-muted-foreground"
                         >
                           Telefone de teste (opcional)
                           <Input
@@ -151,7 +152,7 @@ export function TikTokDestinations({ offerId }: { offerId: string }) {
                           />
                         </label>
                       </div>
-                      <p className="mt-2 text-[11px] leading-4 text-white/45">
+                      <p className="mt-2 text-[11px] leading-4 text-muted-foreground">
                         Email e telefone são enviados apenas como SHA-256 para validar o matching;
                         use dados seus e somente se quiser conferir esses campos no Events Manager.
                       </p>
@@ -169,12 +170,14 @@ export function TikTokDestinations({ offerId }: { offerId: string }) {
             </article>
           ))}
           {!destinations.data.destinations.length && (
-            <p className="text-sm text-white/55">Nenhum pixel TikTok configurado nesta oferta.</p>
+            <p className="text-sm text-muted-foreground">
+              Nenhum pixel TikTok configurado nesta oferta.
+            </p>
           )}
         </div>
       )}
       {testDelivery && (
-        <output className="block rounded-xl border border-cyan-300/20 bg-cyan-300/5 p-4 text-sm">
+        <output className="block rounded-xl border border-border bg-accent p-4 text-sm">
           <p className="font-medium">Teste Events API</p>
           <p className="mt-1">
             {delivery.isPending
@@ -183,14 +186,14 @@ export function TikTokDestinations({ offerId }: { offerId: string }) {
                 ? `${delivery.data.delivery.state === 'delivered' ? 'Confirmado pelo TikTok' : `Estado: ${delivery.data.delivery.state}`} · HTTP ${delivery.data.delivery.response_status ?? '—'}${delivery.data.delivery.last_error ? ` · ${delivery.data.delivery.last_error}` : ''}`
                 : 'Aguardando fila.'}
           </p>
-          <p className="mt-2 text-xs text-white/55">
+          <p className="mt-2 text-xs text-muted-foreground">
             Use este mesmo código na aba <em>Test Events</em> do Events Manager. O teste não cria
             compra nem altera métricas da campanha.
           </p>
         </output>
       )}
       <form
-        className="space-y-4 rounded-xl border border-white/10 p-4"
+        className="glass-card space-y-4 rounded-xl border border-border p-4"
         onSubmit={(e) => {
           e.preventDefault();
           save.mutate();
@@ -245,14 +248,17 @@ export function TikTokDestinations({ offerId }: { offerId: string }) {
               className="mt-2"
               aria-describedby="tiktok-test-event-code-help"
             />
-            <p id="tiktok-test-event-code-help" className="mt-2 text-xs leading-5 text-white/55">
+            <p
+              id="tiktok-test-event-code-help"
+              className="mt-2 text-xs leading-5 text-muted-foreground"
+            >
               Opcional. Cole o código criado no TikTok Events Manager &gt; Test Events pra validar
               eventos em modo teste.{' '}
               <a
                 href={TIKTOK_TEST_EVENTS_DOCS}
                 target="_blank"
                 rel="noreferrer"
-                className="font-medium text-cyan-200 underline decoration-cyan-200/40 underline-offset-4 hover:text-cyan-100"
+                className="font-medium text-primary underline decoration-cyan-200/40 underline-offset-4 hover:text-primary"
               >
                 Ver documentação do TikTok
               </a>
@@ -303,7 +309,7 @@ export function TikTokDestinations({ offerId }: { offerId: string }) {
         </div>
       </form>
       {(save.isError || test.isError) && (
-        <p role="alert" className="text-sm text-rose-200">
+        <p role="alert" className="text-sm text-danger">
           {String((save.error || test.error)?.message ?? 'Não foi possível concluir a operação.')}
         </p>
       )}

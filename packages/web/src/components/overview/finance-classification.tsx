@@ -42,7 +42,7 @@ export function FinanceRules({
   }
   const enabled = rules.vendepay_income && !!rules.withdrawal_recipient;
   return (
-    <section className="rounded-xl border border-border bg-card p-4 space-y-3">
+    <section className="glass-card rounded-xl border border-border bg-card p-4 space-y-3">
       <h3 className="font-semibold">Regras de classificação desta empresa</h3>
       <p className="text-sm text-muted-foreground">
         Créditos identificados como VendePay → Entrada. Débitos para 52.210.584 IAGO RODRIGUES DA

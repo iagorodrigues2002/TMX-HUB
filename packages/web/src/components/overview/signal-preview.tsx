@@ -2,24 +2,34 @@
 
 import { formatCurrency, formatInt } from '@/components/dashboard/kpi-cards';
 import { Kpi } from '@/components/ui/kpi';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import type { TrackingOverviewAccount } from '@/lib/api-client';
 import { request } from '@/lib/api-client/request';
 import { useAuth } from '@/lib/auth-context';
+import { useDataPending } from '@/lib/data-pending';
 import type { DateRange } from '@/lib/date-range';
 import { funnelRates } from '@/lib/funnel-rates';
+import { useCountUp } from '@/lib/hooks/use-count-up';
 import { useInterfaceEffects } from '@/lib/interface-effects';
 import { usePrivacy } from '@/lib/privacy-context';
 import { useQueries } from '@tanstack/react-query';
 import {
   ChartNoAxesCombined,
   CreditCard,
-  MousePointerClick,
-  Network,
+  Filter,
+  LogIn,
   Percent,
+  ShoppingBag,
   ShoppingCart,
   Wallet,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { CountryActivityMap } from './country-activity-map';
 import { GatewayOverview } from './gateway-overview';
 import { Dataset } from './overview-dashboard-dataset';
@@ -28,6 +38,25 @@ import { ReceiptRevenueChart } from './receipt-revenue-chart';
 import styles from './signal-preview.module.css';
 
 export const SIGNAL_PREVIEW = process.env.NEXT_PUBLIC_TMX_SIGNAL_PREVIEW === '1';
+
+function FlowNumber({
+  value,
+  label,
+  privateMode,
+  motion,
+}: { value: number | null; label: string; privateMode: boolean; motion: boolean }) {
+  const pending = useDataPending();
+  const reading = useCountUp(
+    !privateMode && motion ? (value ?? undefined) : undefined,
+    1650,
+    label,
+  );
+  return (
+    <strong>
+      {pending ? '—' : privateMode ? '••••' : value === null ? '—' : formatInt(reading ?? value)}
+    </strong>
+  );
+}
 
 export function SignalPreview({
   datasets,
@@ -45,6 +74,8 @@ export function SignalPreview({
   onSelect: (key: string) => void;
 }) {
   const { visual: effects } = useInterfaceEffects();
+  const pending = useDataPending();
+  const scopeLabelId = useId();
   const [motion, setMotion] = useState(false);
   const [hidden, setHidden] = useState(false);
   const { isPrivate } = usePrivacy();
@@ -82,11 +113,13 @@ export function SignalPreview({
     : null;
   const rates = cohort ? funnelRates(cohort.entrants, cohort.checkouts, cohort.buyers) : null;
   const percentage = (value: number | null | undefined) =>
-    isPrivate
-      ? '••••'
-      : value == null
-        ? '—'
-        : `${value.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
+    pending
+      ? '—'
+      : isPrivate
+        ? '••••'
+        : value == null
+          ? '—'
+          : `${value.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
 
   useEffect(() => {
     const reduced = matchMedia('(prefers-reduced-motion: reduce)');
@@ -131,21 +164,21 @@ export function SignalPreview({
   const steps = [
     {
       label: 'Entrada',
-      value: cohort ? formatInt(cohort.entrants) : '—',
+      value: cohort?.entrants ?? null,
       hint: 'Visitantes com entrada rastreada',
-      Icon: MousePointerClick,
+      Icon: LogIn,
     },
     {
       label: 'Checkout',
-      value: cohort ? formatInt(cohort.checkouts) : '—',
+      value: cohort?.checkouts ?? null,
       hint: 'Visitantes que abriram checkout',
       Icon: CreditCard,
     },
     {
       label: 'Compra',
-      value: cohort ? formatInt(cohort.buyers) : '—',
+      value: cohort?.buyers ?? null,
       hint: 'Compradores de front vinculados',
-      Icon: ShoppingCart,
+      Icon: ShoppingBag,
     },
   ];
 
@@ -156,31 +189,32 @@ export function SignalPreview({
       data-paused={hidden}
       aria-label="Visão geral Signal"
     >
-      <div className={styles.toolbar}>
-        <label>
-          Escopo dos dados
-          <select
-            aria-label="Escopo dos dados"
-            value={dataset.key}
-            onChange={(event) => onSelect(event.target.value)}
-          >
-            {datasets.map((item) => (
-              <option key={item.key} value={item.key}>
-                {item.label} · {item.offerCount} {item.offerCount === 1 ? 'oferta' : 'ofertas'} ·{' '}
-                {item.currency}
-              </option>
-            ))}
-          </select>
-        </label>
+      <div className={styles.toolbar} data-motion-panel>
+        <div className={styles.scope}>
+          <span id={scopeLabelId}>Escopo dos dados</span>
+          <Select value={dataset.key} onValueChange={onSelect}>
+            <SelectTrigger aria-labelledby={scopeLabelId}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {datasets.map((item) => (
+                <SelectItem key={item.key} value={item.key}>
+                  {item.label} · {item.offerCount} {item.offerCount === 1 ? 'oferta' : 'ofertas'} ·{' '}
+                  {item.currency}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
       <div className={styles.kpis}>
         {metrics.map(({ label, value, format, Icon }) => (
           <Kpi
-            key={`${dataset.key}:${label}`}
+            key={label}
             label={label}
             value={isPrivate ? '****' : value === null ? '—' : format(value)}
             countUp={
-              !isPrivate && motion && value !== null ? { value, format, duration: 2600 } : undefined
+              !isPrivate && motion && value !== null ? { value, format, duration: 1650 } : undefined
             }
             icon={<Icon aria-hidden className="h-5 w-5" />}
             hint={
@@ -205,9 +239,9 @@ export function SignalPreview({
           period={period}
         />
       </div>
-      <section className={styles.journey}>
+      <section className={styles.journey} data-motion-panel data-glass-surface>
         <h3>
-          <Network aria-hidden /> Entrada → Checkout → Compra
+          <Filter aria-hidden /> Entrada → Checkout → Compra
         </h3>
         <p className={styles.flowNote}>
           Visitantes únicos por oferta · etapas vinculadas no período · upsells excluídos. Animação
@@ -235,7 +269,7 @@ export function SignalPreview({
               <span className={styles.ring} style={{ animationDelay: `${index * 2.4}s` }}>
                 <Icon aria-hidden />
               </span>
-              <strong>{isPrivate ? '****' : value}</strong>
+              <FlowNumber value={value} label={label} privateMode={isPrivate} motion={motion} />
               <span>{label}</span>
               <small>{hint}</small>
             </div>

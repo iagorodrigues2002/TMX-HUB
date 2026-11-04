@@ -25,19 +25,19 @@ export function renderPushcutSettings({
   >;
 }) {
   return (
-    <section className="rounded-2xl border border-amber-300/20 bg-gradient-to-br from-amber-300/[0.07] via-bg-elevated to-transparent p-5 sm:p-6">
+    <section className="glass-card rounded-2xl border border-warning/30 bg-gradient-to-br from-warning via-bg-elevated to-transparent p-5 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3">
-          <BellRing className="mt-0.5 h-5 w-5 text-amber-300" />
+          <BellRing className="mt-0.5 h-5 w-5 text-warning" />
           <div>
-            <h2 className="font-semibold text-white">Conta travada por pagamento</h2>
-            <p className="mt-1 text-xs leading-5 text-white/40">
+            <h2 className="font-semibold text-foreground">Conta travada por pagamento</h2>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
               Configuração exclusiva do dashboard {selectedConnection.name}. O alerta dispara uma
               vez por bloqueio e rearma quando a conta normaliza.
             </p>
           </div>
         </div>
-        <label className="flex items-center gap-2 text-xs text-white/60">
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
           <input
             type="checkbox"
             checked={pushcutForm.enabled}
@@ -58,7 +58,7 @@ export function renderPushcutSettings({
               ? 'Secret já salvo — deixe vazio para manter'
               : 'Secret da API Pushcut'
           }
-          className="h-11 rounded-lg border border-white/10 bg-black/20 px-4 text-sm text-white outline-none focus:border-amber-300/40"
+          className="h-11 rounded-lg border border-border bg-accent px-4 text-sm text-foreground outline-none focus:border-warning/30"
         />
         <input
           aria-label="Nome da notificação Pushcut"
@@ -67,14 +67,14 @@ export function renderPushcutSettings({
             setPushcutForm({ ...pushcutForm, notification_name: event.target.value })
           }
           placeholder="Nome ou Reference ID da notificação"
-          className="h-11 rounded-lg border border-white/10 bg-black/20 px-4 text-sm text-white outline-none focus:border-amber-300/40"
+          className="h-11 rounded-lg border border-border bg-accent px-4 text-sm text-foreground outline-none focus:border-warning/30"
         />
         <input
           aria-label="Dispositivos Pushcut"
           value={pushcutForm.devices}
           onChange={(event) => setPushcutForm({ ...pushcutForm, devices: event.target.value })}
           placeholder="Dispositivos opcionais, separados por vírgula"
-          className="h-11 rounded-lg border border-white/10 bg-black/20 px-4 text-sm text-white outline-none focus:border-amber-300/40 md:col-span-2"
+          className="h-11 rounded-lg border border-border bg-accent px-4 text-sm text-foreground outline-none focus:border-warning/30 md:col-span-2"
         />
       </div>
       <div className="mt-4 flex flex-wrap justify-end gap-2">
@@ -82,7 +82,7 @@ export function renderPushcutSettings({
           variant="outline"
           onClick={() => testPushcut.mutate()}
           disabled={!pushcutConfig.data?.secret_configured || testPushcut.isPending}
-          className="gap-2 border-white/10"
+          className="gap-2 border-border"
         >
           <Send className="h-4 w-4" /> Enviar teste
         </Button>
@@ -93,7 +93,7 @@ export function renderPushcutSettings({
             !pushcutForm.notification_name.trim() ||
             (!pushcutForm.secret.trim() && !pushcutConfig.data?.secret_configured)
           }
-          className="bg-amber-300 text-accent-on hover:bg-amber-200"
+          className="bg-warning/10 text-accent-on hover:bg-warning/10"
         >
           {savePushcut.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Salvar alerta
         </Button>

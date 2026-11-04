@@ -11,8 +11,8 @@ export function renderAttributionView({
     <div className="p-5 md:p-6">
       <div className="mb-5">
         <p className="hud-label">Atribuição completa · first-party</p>
-        <h3 className="mt-2 text-xl font-semibold text-white">Campanhas e anúncios</h3>
-        <p className="mt-2 text-sm text-white/45">
+        <h3 className="mt-2 text-xl font-semibold text-foreground">Campanhas e anúncios</h3>
+        <p className="mt-2 text-sm text-muted-foreground">
           Visitas, checkouts e vendas agrupados pelas UTMs e IDs preservados pelo TMX.
         </p>
       </div>
@@ -52,20 +52,17 @@ export function renderAttributionView({
             ),
           },
         ].map((metric) => (
-          <div
-            key={metric.label}
-            className="rounded-lg border border-white/[0.07] bg-black/10 px-4 py-3"
-          >
+          <div key={metric.label} className="rounded-lg border border-border bg-accent px-4 py-3">
             <p className="hud-label">{metric.label}</p>
-            <p className="mt-2 font-mono text-2xl text-white">
+            <p className="mt-2 font-mono text-2xl text-foreground">
               {metric.value.toLocaleString('pt-BR')}
             </p>
           </div>
         ))}
       </div>
-      <div className="overflow-x-auto rounded-xl border border-white/[0.08]">
+      <div className="glass-card overflow-x-auto rounded-xl border border-border">
         <table className="min-w-[1480px] w-full text-left text-xs">
-          <thead className="border-b border-white/[0.08] bg-black/20 text-white/35">
+          <thead className="border-b border-border bg-accent text-muted-foreground">
             <tr>
               {[
                 'Campanha',
@@ -88,60 +85,62 @@ export function renderAttributionView({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/[0.06]">
+          <tbody className="divide-y divide-border">
             {(attribution.data?.rows ?? []).map((row, index) => (
               <tr
                 key={`${row.campaign_id ?? row.campaign_name}-${row.ad_id ?? row.ad_name}-${index}`}
-                className="bg-black/5"
+                className="bg-accent"
               >
                 <td className="px-4 py-3">
-                  <p className="font-medium text-white/80">{row.campaign_name}</p>
-                  <p className="mt-1 font-mono text-[10px] text-white/30">
+                  <p className="font-medium text-foreground">{row.campaign_name}</p>
+                  <p className="mt-1 font-mono text-[10px] text-muted-foreground">
                     {row.campaign_id ?? 'sem campaign_id'}
                   </p>
                 </td>
                 <td className="min-w-48 px-4 py-3">
-                  <p className="text-white/65">{row.page_name || 'Não informada'}</p>
+                  <p className="text-muted-foreground">{row.page_name || 'Não informada'}</p>
                   {row.page_id && (
-                    <p className="mt-1 break-all font-mono text-[10px] text-white/30">
+                    <p className="mt-1 break-all font-mono text-[10px] text-muted-foreground">
                       ID: {row.page_id}
                     </p>
                   )}
                 </td>
                 <td className="px-4 py-3">
-                  <p className="text-white/65">{row.adset_name}</p>
-                  <p className="mt-1 font-mono text-[10px] text-white/30">
+                  <p className="text-muted-foreground">{row.adset_name}</p>
+                  <p className="mt-1 font-mono text-[10px] text-muted-foreground">
                     {row.adset_id ?? 'sem adset_id'}
                   </p>
                 </td>
                 <td className="px-4 py-3">
-                  <p className="text-white/65">{row.ad_name}</p>
-                  <p className="mt-1 font-mono text-[10px] text-white/30">
+                  <p className="text-muted-foreground">{row.ad_name}</p>
+                  <p className="mt-1 font-mono text-[10px] text-muted-foreground">
                     {row.ad_id ?? 'sem ad_id'} · {row.placement}
                   </p>
                 </td>
-                <td className="px-4 py-3 text-white/55">{row.source}</td>
+                <td className="px-4 py-3 text-muted-foreground">{row.source}</td>
                 <td className="px-4 py-3">
-                  <p className="font-mono text-white">{row.unique_ad_clicks}</p>
-                  <p className="mt-1 text-[10px] text-white/30">{row.ad_clicks} totais</p>
+                  <p className="font-mono text-foreground">{row.unique_ad_clicks}</p>
+                  <p className="mt-1 text-[10px] text-muted-foreground">{row.ad_clicks} totais</p>
                 </td>
                 <td className="px-4 py-3">
-                  <p className="font-mono text-white">{row.visitors}</p>
-                  <p className="mt-1 text-[10px] text-white/30">{row.page_views} pageviews</p>
+                  <p className="font-mono text-foreground">{row.visitors}</p>
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    {row.page_views} pageviews
+                  </p>
                 </td>
-                <td className="px-4 py-3 font-mono text-emerald-200">
+                <td className="px-4 py-3 font-mono text-success">
                   {percentage(row.visitors, row.unique_ad_clicks)}
                 </td>
                 <td className="px-4 py-3">
-                  <p className="font-mono text-cyan-200">{row.unique_checkouts}</p>
-                  <p className="mt-1 text-[10px] text-white/30">{row.checkouts} disparos</p>
+                  <p className="font-mono text-primary">{row.unique_checkouts}</p>
+                  <p className="mt-1 text-[10px] text-muted-foreground">{row.checkouts} disparos</p>
                 </td>
-                <td className="px-4 py-3 font-mono text-cyan-200">
+                <td className="px-4 py-3 font-mono text-primary">
                   {percentage(row.unique_checkouts, row.visitors)}
                 </td>
-                <td className="px-4 py-3 font-mono text-white">{row.orders}</td>
-                <td className="px-4 py-3 font-mono text-emerald-200">{row.paid_orders}</td>
-                <td className="px-4 py-3 font-mono text-emerald-300">
+                <td className="px-4 py-3 font-mono text-foreground">{row.orders}</td>
+                <td className="px-4 py-3 font-mono text-success">{row.paid_orders}</td>
+                <td className="px-4 py-3 font-mono text-success">
                   {money(row.paid_revenue_minor)}
                 </td>
               </tr>
@@ -150,7 +149,7 @@ export function renderAttributionView({
         </table>
       </div>
       {!attribution.isLoading && !attribution.data?.rows.length && (
-        <p className="mt-4 rounded-xl border border-dashed border-white/[0.08] p-8 text-center text-sm text-white/35">
+        <p className="mt-4 rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
           Nenhuma visita, checkout ou venda com atribuição foi encontrada neste dia.
         </p>
       )}

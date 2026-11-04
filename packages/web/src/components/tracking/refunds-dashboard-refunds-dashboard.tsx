@@ -48,10 +48,10 @@ export function RefundsDashboard() {
     <div ref={workspace} className="refund-workspace space-y-6">
       <header className="refund-header">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
             Reembolsos e chargebacks
           </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
             Acompanhe o impacto financeiro, a evolução das devoluções e o prazo desde a compra.
           </p>
         </div>
@@ -126,7 +126,7 @@ export function RefundsDashboard() {
       ) : (
         <>
           {report.isError && (
-            <p role="alert" className="text-amber-200">
+            <p role="alert" className="text-warning">
               Falha na atualização. Exibindo os últimos dados carregados.
             </p>
           )}
@@ -152,19 +152,19 @@ export function RefundsDashboard() {
                 onIntervalChange={setInterval}
               />
               <section id="refund-audit" className={`${panel} refund-audit`}>
-                <h2 className="text-lg font-semibold text-white">Auditoria das devoluções</h2>
-                <p className="mt-1 text-xs text-white/50">
+                <h2 className="text-lg font-semibold text-foreground">Auditoria das devoluções</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
                   Pedidos únicos, com reembolsos e chargebacks unificados. Compare a data da compra
                   com a devolução; o prazo não inclui registros com datas ausentes ou
                   inconsistentes.
                 </p>
                 {data.totals.count > data.items.length && (
-                  <p className="mt-2 text-xs text-amber-200">
+                  <p className="mt-2 text-xs text-warning">
                     Exibindo as {data.items.length} devoluções mais recentes; indicadores e gráficos
                     consideram todo o período.
                   </p>
                 )}
-                <p className="mt-3 text-xs text-slate-400">
+                <p className="mt-3 text-xs text-muted-foreground">
                   Deslize a tabela para consultar todos os campos de cada pedido.
                 </p>
                 <section
@@ -178,7 +178,7 @@ export function RefundsDashboard() {
                       Compras e devoluções por pedido, com o intervalo entre as duas datas.
                     </caption>
                     <thead>
-                      <tr className="border-b border-white/10 text-left text-xs text-white/50">
+                      <tr className="border-b border-border text-left text-xs text-muted-foreground">
                         {[
                           'Data da compra',
                           'Recebimento do webhook',
@@ -202,26 +202,26 @@ export function RefundsDashboard() {
                     </thead>
                     <tbody>
                       {data.items.slice((currentPage - 1) * 50, currentPage * 50).map((item) => (
-                        <tr key={item.id} className="border-b border-white/5">
-                          <td className="whitespace-nowrap px-3 py-3 text-xs tabular-nums text-white/80">
+                        <tr key={item.id} className="border-b border-border">
+                          <td className="whitespace-nowrap px-3 py-3 text-xs tabular-nums text-foreground">
                             {formatRefundDate(item.delay_paid_at, isPrivate)}
                           </td>
-                          <td className="whitespace-nowrap px-3 py-3 text-xs tabular-nums text-white/80">
+                          <td className="whitespace-nowrap px-3 py-3 text-xs tabular-nums text-foreground">
                             {formatRefundDate(item.observed_reversal_at, isPrivate)}
                           </td>
-                          <td className="whitespace-nowrap px-3 py-3 text-xs tabular-nums text-cyan-200">
+                          <td className="whitespace-nowrap px-3 py-3 text-xs tabular-nums text-primary">
                             {formatRefundElapsed(
                               item.delay_paid_at,
                               item.observed_reversal_at,
                               isPrivate,
                             )}
                           </td>
-                          <td className="whitespace-nowrap px-3 py-3 text-xs tabular-nums text-white/70">
+                          <td className="whitespace-nowrap px-3 py-3 text-xs tabular-nums text-muted-foreground">
                             {formatRefundDate(item.delay_reversal_at, isPrivate)}
                           </td>
                           <td className="px-3 py-3">
                             <p>{item.offer_name}</p>
-                            <p className="text-xs text-white/50">{item.product_name}</p>
+                            <p className="text-xs text-muted-foreground">{item.product_name}</p>
                           </td>
                           <td className="px-3 py-3">{item.connection_name}</td>
                           <td className="px-3 py-3 text-xs">
@@ -253,7 +253,7 @@ export function RefundsDashboard() {
                     >
                       Anterior
                     </Button>
-                    <span className="text-xs text-white/50">
+                    <span className="text-xs text-muted-foreground">
                       Página {currentPage} de {Math.ceil(data.items.length / 50)}
                     </span>
                     <Button

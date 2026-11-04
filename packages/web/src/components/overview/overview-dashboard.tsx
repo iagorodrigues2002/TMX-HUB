@@ -4,6 +4,7 @@ import { TRACKING_DASHBOARD_STALE_TIME } from '@/components/tracking/tracking-qu
 import { DataState } from '@/components/ui/data-state';
 import { DateRangeFilter } from '@/components/ui/date-range-filter';
 import { apiClient } from '@/lib/api-client';
+import { DataPendingContext } from '@/lib/data-pending';
 import {
   DASHBOARD_DATE_PRESETS,
   type DateRange,
@@ -11,16 +12,16 @@ import {
   todayIso,
 } from '@/lib/date-range';
 import { INTRADAY_RANGE_LIMIT_MESSAGE, supportsIntradayRange } from '@/lib/intraday-range';
+import { getSessionGeneration } from '@/lib/session-data';
 import { useQueries, useQuery } from '@tanstack/react-query';
-import { LayoutDashboard } from 'lucide-react';
-import { useState } from 'react';
+import { LayoutGrid } from 'lucide-react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { GatewayOverview } from './gateway-overview';
 import { buildDatasets, hasCompleteOverviewScope } from './overview-dashboard-build-datasets';
 import { Dataset } from './overview-dashboard-dataset';
 import {
   type OfferDescriptor,
   type OverviewDashboardProps,
-  OverviewLoadingSkeleton,
   accountOffers,
 } from './overview-dashboard-support';
 import { periodArpu, useSalesComposition } from './sales-composition';
@@ -116,6 +117,20 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
     (scope === 'account' && dashboard.isError && !dashboard.data) ||
     (offers.length > 0 && snapshotQueries.every((query) => query.isError && !query.data));
 
+  const identity = `${getSessionGeneration()}:${scope}:${props.offerId ?? ''}`;
+  const committed = useRef<{
+    identity: string;
+    datasets: typeof datasets;
+    financial: typeof financialQuery.data;
+  } | null>(null);
+  useLayoutEffect(() => {
+    if (!isLoading && !hasFatalError && hasCompleteOverviewScope(offers, datasets))
+      committed.current = { identity, datasets, financial: financialQuery.data };
+  }, [identity, isLoading, hasFatalError, offers, datasets, financialQuery.data]);
+  const previous = committed.current?.identity === identity ? committed.current : null;
+  const presentedDatasets = isLoading && previous ? previous.datasets : datasets;
+  const presentedFinancial = isLoading && previous ? previous.financial : financialQuery.data;
+
   const refresh = () => {
     if (scope === 'account') void dashboard.refetch();
     for (const query of detailQueries) void query.refetch();
@@ -127,96 +142,110 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
       : 'A mesma leitura operacional, filtrada pela oferta ativa.';
 
   return (
-    <div className="space-y-5" data-overview-dashboard data-overview-scope={scope}>
-      <section className="animate-[tmx-reveal_220ms_cubic-bezier(0,0,0.2,1)_both] rounded-lg border border-white/[0.08] bg-white/[0.025] p-4 motion-reduce:animate-none sm:p-5">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="grid h-10 w-10 place-items-center rounded-lg border border-cyan-300/25 bg-cyan-300/[0.08]">
-            <LayoutDashboard aria-hidden className="h-4.5 w-4.5 text-cyan-300" />
-          </div>
-          <div>
-            <h2 className="text-sm font-semibold text-white">Visão geral</h2>
-            <p className="mt-1 text-sm leading-6 text-white/50">{scopeDescription}</p>
-          </div>
-          <fieldset
-            aria-label="Visão das vendas"
-            className="ml-auto flex rounded-lg border bg-card p-1"
-          >
-            {(['general', 'natural'] as const).map((view) => (
-              <button
-                key={view}
-                type="button"
-                aria-pressed={salesView === view}
-                onClick={() => setSalesView(view)}
-                className={`rounded-md px-3 py-2 text-sm transition-colors ${salesView === view ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-              >
-                {view === 'general' ? 'Visão geral' : 'Visão natural'}
-              </button>
-            ))}
-          </fieldset>
-        </div>
-        <DateRangeFilter
-          value={period}
-          onChange={setPeriod}
-          presets={DASHBOARD_DATE_PRESETS}
-          max={todayIso()}
-          isRefreshing={isFetching}
-          onRefresh={refresh}
-          className="mt-4"
-          status={
-            offers.length > 0 ? (
-              <span className="hud-label pb-2">
-                {offers.length} {offers.length === 1 ? 'oferta' : 'ofertas'} no escopo
-              </span>
-            ) : null
-          }
-        />
-      </section>
-
-      {isLoading ? (
-        <OverviewLoadingSkeleton />
-      ) : hasFatalError || !hasCompleteOverviewScope(offers, datasets) ? (
-        <DataState
-          variant="error"
-          title="Não foi possível carregar a visão geral completa"
-          description="Faltam dados de uma ou mais ofertas. Não exibiremos uma soma parcial como total. Os filtros foram preservados; tente novamente."
-          isRetrying={isFetching}
-          onRetry={refresh}
-        />
-      ) : offers.length === 0 ? (
-        <DataState
-          variant="empty"
-          title="Nenhuma oferta disponível"
-          description="Cadastre ou libere uma oferta para começar a acompanhar os resultados."
-        />
-      ) : (
-        <>
-          {hasPartialError && (
-            <output
-              aria-live="polite"
-              className="block rounded-xl border border-warning/25 bg-warning/[0.07] px-4 py-3 text-sm text-warning"
+    <DataPendingContext.Provider value={isLoading}>
+      <div
+        className="space-y-5"
+        data-overview-dashboard
+        data-overview-scope={scope}
+        aria-busy={isLoading}
+        data-overview-loading={isLoading || undefined}
+      >
+        <section
+          data-overview-heading
+          data-motion-panel
+          className="glass-card animate-[tmx-reveal_220ms_cubic-bezier(0,0,0.2,1)_both] p-4 motion-reduce:animate-none sm:p-5"
+        >
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="grid h-10 w-10 place-items-center rounded-lg border border-border bg-accent">
+              <LayoutGrid aria-hidden className="h-4.5 w-4.5 text-primary" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-foreground">Visão geral</h2>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">{scopeDescription}</p>
+            </div>
+            <fieldset
+              aria-label="Visão das vendas"
+              className="ml-auto flex rounded-lg border bg-card p-1"
             >
-              Parte das fontes não respondeu. Os módulos disponíveis continuam visíveis abaixo.
-            </output>
-          )}
-          {SIGNAL_PREVIEW ? (
-            <SignalPreview
-              salesView={salesView}
-              selected={selectedDataset}
-              onSelect={setSelectedDataset}
-              period={period}
-              datasets={datasets}
-              accounts={scope === 'account' ? financialQuery.data?.accounts : undefined}
-            />
-          ) : (
-            datasets.map((dataset) => (
-              <Dataset key={dataset.key} dataset={dataset} salesView={salesView} />
-            ))
-          )}
-          {!SIGNAL_PREVIEW && scope === 'account' && financialQuery.data?.accounts && (
-            <GatewayOverview accounts={financialQuery.data.accounts} />
-          )}
-        </>
-      )}
-    </div>
+              {(['general', 'natural'] as const).map((view) => (
+                <button
+                  key={view}
+                  type="button"
+                  aria-pressed={salesView === view}
+                  onClick={() => setSalesView(view)}
+                  className={`rounded-md px-3 py-2 text-sm transition-colors ${salesView === view ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  {view === 'general' ? 'Visão geral' : 'Visão natural'}
+                </button>
+              ))}
+            </fieldset>
+          </div>
+          <DateRangeFilter
+            value={period}
+            onChange={setPeriod}
+            presets={DASHBOARD_DATE_PRESETS}
+            max={todayIso()}
+            isRefreshing={isFetching}
+            onRefresh={refresh}
+            className="mt-4"
+            status={
+              offers.length > 0 ? (
+                <span className="hud-label pb-2">
+                  {offers.length} {offers.length === 1 ? 'oferta' : 'ofertas'} no escopo
+                </span>
+              ) : null
+            }
+          />
+        </section>
+
+        {isLoading && !presentedDatasets.length ? (
+          <output className="block min-h-[600px] pt-4 text-sm text-muted-foreground">
+            Carregando dados…
+          </output>
+        ) : !isLoading && (hasFatalError || !hasCompleteOverviewScope(offers, datasets)) ? (
+          <DataState
+            variant="error"
+            title="Não foi possível carregar a visão geral completa"
+            description="Faltam dados de uma ou mais ofertas. Não exibiremos uma soma parcial como total. Os filtros foram preservados; tente novamente."
+            isRetrying={isFetching}
+            onRetry={refresh}
+          />
+        ) : !isLoading && offers.length === 0 ? (
+          <DataState
+            variant="empty"
+            title="Nenhuma oferta disponível"
+            description="Cadastre ou libere uma oferta para começar a acompanhar os resultados."
+          />
+        ) : (
+          <>
+            {hasPartialError && (
+              <output
+                aria-live="polite"
+                className="block rounded-xl border border-warning/25 bg-warning/[0.07] px-4 py-3 text-sm text-warning"
+              >
+                Parte das fontes não respondeu. Os módulos disponíveis continuam visíveis abaixo.
+              </output>
+            )}
+            {SIGNAL_PREVIEW ? (
+              <SignalPreview
+                salesView={salesView}
+                selected={selectedDataset}
+                onSelect={setSelectedDataset}
+                period={period}
+                datasets={presentedDatasets}
+                accounts={scope === 'account' ? presentedFinancial?.accounts : undefined}
+              />
+            ) : (
+              presentedDatasets.map((dataset) => (
+                <Dataset key={dataset.key} dataset={dataset} salesView={salesView} />
+              ))
+            )}
+            {!SIGNAL_PREVIEW && scope === 'account' && presentedFinancial?.accounts && (
+              <GatewayOverview accounts={presentedFinancial.accounts} />
+            )}
+          </>
+        )}
+      </div>
+    </DataPendingContext.Provider>
   );
 }

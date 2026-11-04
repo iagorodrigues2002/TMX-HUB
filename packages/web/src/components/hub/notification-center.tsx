@@ -1,5 +1,6 @@
 'use client';
 
+import { collapseNotificationSpace } from '@/components/design-system/reference-notification-motion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -75,10 +76,14 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
     setNotice('');
     try {
       await action();
-      await animateNotificationExit(
-        exits.flatMap((id) => cards.current.get(id) ?? []),
-        window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-      );
+      const elements = exits.flatMap((id) => cards.current.get(id) ?? []);
+      const reduced =
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches ||
+        document.documentElement.dataset.tmxMotion === 'off';
+      if (!reduced) {
+        await animateNotificationExit(elements, false);
+        await collapseNotificationSpace(elements);
+      }
       await query.refetch();
       if (success) setNotice(success);
     } catch {
@@ -110,7 +115,8 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        overlayClassName="bg-background/40 backdrop-blur-[2px]"
+        data-tmx-drawer="notifications"
+        overlayClassName="tmx-drawer-scrim bg-background/40 backdrop-blur-[2px]"
         className={`${styles.drawer} tmx-sidebar-dialog left-auto right-0 top-0 h-dvh max-h-none w-full max-w-none gap-0 overflow-hidden rounded-none border-y-0 border-r-0 bg-popover p-0 sm:w-[460px] sm:max-h-none sm:p-0`}
       >
         <DialogHeader className="border-b border-border/70 px-5 py-5 pr-16 sm:px-6">
@@ -184,7 +190,7 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
           </div>
         </div>
         {(error || query.error) && (
-          <p role="alert" className="border-b border-border px-5 py-3 text-xs text-red-500">
+          <p role="alert" className="border-b border-border px-5 py-3 text-xs text-danger">
             {error ||
               'Não foi possível consultar as notificações. Use Atualizar para tentar novamente.'}
           </p>
@@ -215,7 +221,7 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
             </Button>
           )}
           {!query.isLoading && !query.error && !visible.length && (
-            <div className="grid min-h-64 place-items-center rounded-xl border border-dashed border-border/70 bg-muted/10 px-6 text-center">
+            <div className="glass-card grid min-h-64 place-items-center rounded-xl border border-dashed border-border/70 bg-muted/10 px-6 text-center">
               <div>
                 <ListTodo className="mx-auto h-8 w-8 text-muted-foreground/50" aria-hidden />
                 <p className="mt-3 text-sm font-medium">Nenhuma notificação por aqui</p>
@@ -237,16 +243,18 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
                 style={{ animationDelay: `${Math.min(index, 3) * 35}ms` }}
               >
                 <span
-                  className={`absolute -left-[25px] top-5 h-2 w-2 rounded-full ring-4 ring-popover ${item.unread ? (item.kind === 'sale' ? 'bg-emerald-400' : 'bg-primary') : 'bg-muted-foreground/40'}`}
+                  className={`absolute -left-[25px] top-5 h-2 w-2 rounded-full ring-4 ring-popover ${item.unread ? (item.kind === 'sale' ? 'bg-success/10' : 'bg-primary') : 'bg-muted-foreground/40'}`}
                   aria-hidden
                 />
                 <article
-                  className={`rounded-xl border p-4 ${item.unread ? (item.kind === 'sale' ? 'border-emerald-400/30 bg-emerald-400/[0.055]' : 'border-primary/25 bg-primary/[0.045]') : 'border-border/60 bg-muted/15'}`}
+                  data-tmx-notification={item.kind}
+                  data-unread={item.unread}
+                  className={`rounded-xl border p-4 ${item.unread ? (item.kind === 'sale' ? 'border-success/30 bg-success/10' : 'border-primary/25 bg-primary/[0.045]') : 'border-border/60 bg-muted/15'}`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-start gap-2">
                       {item.kind === 'sale' ? (
-                        <ShoppingBag className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden />
+                        <ShoppingBag className="h-4 w-4 shrink-0 text-success" aria-hidden />
                       ) : item.kind === 'finance' ? (
                         <Wallet className="h-4 w-4 shrink-0 text-primary" aria-hidden />
                       ) : item.kind === 'call' ? (

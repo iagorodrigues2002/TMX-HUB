@@ -52,7 +52,7 @@ function CompanyTeam({ company, userId }: { company: Company; userId: string }) 
   }
   if (!canManage)
     return (
-      <section className="rounded-xl border border-border bg-card p-6">
+      <section className="glass-card rounded-xl border border-border bg-card p-6">
         <h2 className="text-xl font-semibold">Sua empresa: {company.name}</h2>
         <p className="mt-2 text-muted-foreground">
           Você é colaborador. Somente proprietários e administradores desta empresa podem gerenciar
@@ -63,7 +63,7 @@ function CompanyTeam({ company, userId }: { company: Company; userId: string }) 
   return (
     <div className="space-y-5">
       <form
-        className="rounded-xl border border-border bg-card p-5"
+        className="glass-card rounded-xl border border-border bg-card p-5"
         onSubmit={(event) => {
           event.preventDefault();
           void (async () => {
@@ -124,7 +124,7 @@ function CompanyTeam({ company, userId }: { company: Company; userId: string }) 
       </h2>
       {members.isPending && <output>Carregando membros…</output>}
       {(members.isError || offers.isError) && (
-        <div role="alert" className="rounded-xl border border-destructive/40 p-5">
+        <div role="alert" className="glass-card rounded-xl border border-destructive/40 p-5">
           <p>
             Não foi possível consultar os membros ou as ofertas. Nenhuma permissão foi alterada.
           </p>
@@ -220,7 +220,7 @@ export function CompanyMembers() {
           )}
           {!company && canCreateCompany && (
             <form
-              className="space-y-4 rounded-xl border border-border bg-card p-6"
+              className="glass-card space-y-4 rounded-xl border border-border bg-card p-6"
               onSubmit={(event) => {
                 event.preventDefault();
                 void (async () => {

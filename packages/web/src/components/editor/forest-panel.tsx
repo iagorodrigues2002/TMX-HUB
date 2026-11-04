@@ -45,9 +45,9 @@ export function ForestPanel({ forms, links, isLoading }: ForestPanelProps) {
 
   return (
     <div className="flex h-full flex-col bg-background/40">
-      <div className="border-b border-white/[0.06] p-3">
+      <div className="border-b border-border p-3">
         <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/40" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="BUSCAR FORMS OU LINKS"
             value={search}
@@ -71,11 +71,11 @@ export function ForestPanel({ forms, links, isLoading }: ForestPanelProps) {
 
         <TabsContent value="forms" className="mt-2 flex-1 overflow-y-auto px-2 pb-2">
           {isLoading ? (
-            <p className="px-3 py-6 text-[11px] uppercase tracking-[0.18em] text-white/45">
+            <p className="px-3 py-6 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               Carregando…
             </p>
           ) : filteredForms.length === 0 ? (
-            <p className="px-3 py-6 text-[11px] uppercase tracking-[0.18em] text-white/45">
+            <p className="px-3 py-6 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               {q ? 'Nenhum resultado.' : 'Nenhum formulário detectado.'}
             </p>
           ) : (
@@ -93,28 +93,28 @@ export function ForestPanel({ forms, links, isLoading }: ForestPanelProps) {
                       onClick={() => select({ kind: 'form', id: f.id })}
                       className={cn(
                         'flex w-full items-start gap-2 rounded-md border border-transparent px-2.5 py-2 text-left text-xs transition-all',
-                        'hover:border-white/[0.08] hover:bg-white/[0.04]',
+                        'hover:border-border hover:bg-muted',
                         isSelected &&
-                          'border-cyan-300/30 bg-cyan-300/[0.06] shadow-[inset_0_0_0_1px_rgba(34,211,238,0.1)]',
+                          'border-border bg-accent shadow-[inset_0_0_0_1px_rgba(34,211,238,0.1)]',
                       )}
                     >
                       <span
                         className={cn(
                           'mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full',
                           edited
-                            ? 'bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.6)]'
-                            : 'bg-white/30',
+                            ? 'bg-warning/10 shadow-[0_0_6px_rgba(251,191,36,0.6)]'
+                            : 'bg-accent',
                         )}
                         aria-hidden
                       />
                       <span className="min-w-0 flex-1">
-                        <span className="block font-medium text-white/90">
-                          <span className="font-mono text-[10px] uppercase tracking-wider text-cyan-300/80">
+                        <span className="block font-medium text-foreground">
+                          <span className="font-mono text-[10px] uppercase tracking-wider text-primary">
                             {f.method}
                           </span>{' '}
                           {truncate(f.currentAction || f.originalAction, 32)}
                         </span>
-                        <span className="block truncate pt-0.5 text-[9px] uppercase tracking-[0.18em] text-white/40">
+                        <span className="block truncate pt-0.5 text-[9px] uppercase tracking-[0.18em] text-muted-foreground">
                           {f.mode} · {f.fields.length} campos
                         </span>
                       </span>
@@ -128,11 +128,11 @@ export function ForestPanel({ forms, links, isLoading }: ForestPanelProps) {
 
         <TabsContent value="links" className="mt-2 flex-1 overflow-y-auto px-2 pb-2">
           {isLoading ? (
-            <p className="px-3 py-6 text-[11px] uppercase tracking-[0.18em] text-white/45">
+            <p className="px-3 py-6 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               Carregando…
             </p>
           ) : filteredLinks.length === 0 ? (
-            <p className="px-3 py-6 text-[11px] uppercase tracking-[0.18em] text-white/45">
+            <p className="px-3 py-6 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
               {q ? 'Nenhum resultado.' : 'Nenhum link detectado.'}
             </p>
           ) : (
@@ -147,27 +147,27 @@ export function ForestPanel({ forms, links, isLoading }: ForestPanelProps) {
                       onClick={() => select({ kind: 'link', id: l.id })}
                       className={cn(
                         'flex w-full items-start gap-2 rounded-md border border-transparent px-2.5 py-2 text-left text-xs transition-all',
-                        'hover:border-white/[0.08] hover:bg-white/[0.04]',
+                        'hover:border-border hover:bg-muted',
                         isSelected &&
-                          'border-cyan-300/30 bg-cyan-300/[0.06] shadow-[inset_0_0_0_1px_rgba(34,211,238,0.1)]',
+                          'border-border bg-accent shadow-[inset_0_0_0_1px_rgba(34,211,238,0.1)]',
                       )}
                     >
                       <span
                         className={cn(
                           'mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full',
                           edited
-                            ? 'bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.6)]'
-                            : 'bg-white/30',
+                            ? 'bg-warning/10 shadow-[0_0_6px_rgba(251,191,36,0.6)]'
+                            : 'bg-accent',
                         )}
                         aria-hidden
                       />
                       <span className="min-w-0 flex-1">
-                        <span className="block font-medium text-white/90">
+                        <span className="block font-medium text-foreground">
                           {truncate(l.text || l.currentHref || l.originalHref, 36)}
                         </span>
-                        <span className="block truncate pt-0.5 font-mono text-[10px] text-white/40">
+                        <span className="block truncate pt-0.5 font-mono text-[10px] text-muted-foreground">
                           {truncate(l.currentHref || l.originalHref, 44)}
-                          {l.isCta && <span className="ml-1 text-cyan-300/80"> · CTA</span>}
+                          {l.isCta && <span className="ml-1 text-primary"> · CTA</span>}
                         </span>
                       </span>
                     </button>

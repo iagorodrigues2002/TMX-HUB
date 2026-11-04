@@ -27,10 +27,12 @@ export function SlotRow({
   const showPick = slot.mode === 'pick';
 
   return (
-    <div className="rounded-md border border-white/[0.08] bg-white/[0.02] p-3">
+    <div className="rounded-md border border-border bg-muted p-3">
       <div className="grid gap-2 md:grid-cols-[160px_1fr_120px_36px] md:items-end">
         <div className="space-y-1">
-          <Label className="text-[10px] uppercase tracking-[0.12em] text-white/45">Nome</Label>
+          <Label className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+            Nome
+          </Label>
           <Input
             value={slot.name}
             onChange={(e) => onChange({ name: e.target.value })}
@@ -39,7 +41,9 @@ export function SlotRow({
           />
         </div>
         <div className="space-y-1">
-          <Label className="text-[10px] uppercase tracking-[0.12em] text-white/45">Tipo</Label>
+          <Label className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+            Tipo
+          </Label>
           <Select value={slot.mode} onValueChange={(v) => onChange({ mode: v as SlotMode })}>
             <SelectTrigger className="h-9">
               <SelectValue />
@@ -54,7 +58,9 @@ export function SlotRow({
           </Select>
         </div>
         <div className="space-y-1">
-          <Label className="text-[10px] uppercase tracking-[0.12em] text-white/45">Tamanho</Label>
+          <Label className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+            Tamanho
+          </Label>
           <Input
             type="number"
             min={1}
@@ -78,7 +84,7 @@ export function SlotRow({
 
       {showStatic && (
         <div className="mt-2 space-y-1">
-          <Label className="text-[10px] uppercase tracking-[0.12em] text-white/45">
+          <Label className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
             Valor fixo
           </Label>
           <Input
@@ -92,7 +98,7 @@ export function SlotRow({
 
       {showPick && (
         <div className="mt-2 space-y-1">
-          <Label className="text-[10px] uppercase tracking-[0.12em] text-white/45">
+          <Label className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
             Lista de opções (separar por vírgula ou nova linha)
           </Label>
           <Input

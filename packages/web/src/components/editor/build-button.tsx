@@ -20,9 +20,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useBuildJob, useCreateBuild } from '@/hooks/use-build-job';
+import { useRouter } from '@/lib/motion-router';
 import type { BundleFormat } from '@page-cloner/shared';
 import { Download, Hammer } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -105,7 +105,7 @@ export function BuildButton({ jobId, disabled }: BuildButtonProps) {
               />
               <Label
                 htmlFor="inline"
-                className="cursor-pointer normal-case tracking-normal text-[13px] text-white/80"
+                className="cursor-pointer normal-case tracking-normal text-[13px] text-foreground"
               >
                 Incluir assets (imagens, fontes, CSS)
               </Label>
@@ -155,18 +155,18 @@ interface BuildProgressProps {
 function BuildProgress({ status, downloadUrl, errorMessage, onView }: BuildProgressProps) {
   if (status === 'failed') {
     return (
-      <div className="rounded-md border border-rose-400/40 bg-rose-500/10 p-4 text-[13px]">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-rose-200">
+      <div className="rounded-md border border-danger/30 bg-danger/10 p-4 text-[13px]">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-danger">
           Geração falhou
         </p>
-        {errorMessage && <p className="mt-2 text-white/65">{errorMessage}</p>}
+        {errorMessage && <p className="mt-2 text-muted-foreground">{errorMessage}</p>}
       </div>
     );
   }
   if (status === 'ready') {
     return (
-      <div className="space-y-3 rounded-md border border-cyan-300/30 bg-cyan-300/[0.06] p-4 text-[13px]">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-200">
+      <div className="space-y-3 rounded-md border border-border bg-accent p-4 text-[13px]">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
           Pacote pronto
         </p>
         <div className="flex flex-wrap gap-2">
@@ -190,7 +190,7 @@ function BuildProgress({ status, downloadUrl, errorMessage, onView }: BuildProgr
     );
   }
   return (
-    <div className="rounded-md border border-white/[0.08] bg-white/[0.02] p-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">
+    <div className="rounded-md border border-border bg-muted p-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
       {status === 'building' ? 'Gerando…' : 'Na fila…'}
     </div>
   );

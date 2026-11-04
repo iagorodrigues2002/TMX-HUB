@@ -78,10 +78,10 @@ export function NetworkCaptureParameters() {
   return (
     <section aria-labelledby="capture-network-parameters-title" className="space-y-3">
       <div>
-        <h2 id="capture-network-parameters-title" className="text-sm font-semibold text-white/85">
+        <h2 id="capture-network-parameters-title" className="text-sm font-semibold text-foreground">
           Parâmetros capturados por rede
         </h2>
-        <p className="mt-1 text-xs leading-5 text-white/45">
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">
           A contagem será preenchida quando o TMX identificar cada sinal nas próximas visitas.
         </p>
       </div>
@@ -91,22 +91,19 @@ export function NetworkCaptureParameters() {
           <article
             key={network.id}
             aria-labelledby={`${network.id}-capture-title`}
-            className="overflow-hidden rounded-lg border border-cyan-300/15 bg-cyan-300/[0.035]"
+            className="glass-card overflow-hidden rounded-lg border border-border bg-accent"
           >
-            <div className="border-b border-white/[0.07] px-4 py-3">
+            <div className="border-b border-border px-4 py-3">
               <h3
                 id={`${network.id}-capture-title`}
-                className="text-sm font-semibold text-white/85"
+                className="text-sm font-semibold text-foreground"
               >
                 {network.name}
               </h3>
-              <p className="mt-1 text-xs leading-5 text-white/45">{network.description}</p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">{network.description}</p>
             </div>
 
-            <ul
-              className="divide-y divide-white/[0.06]"
-              aria-label={`Parâmetros de ${network.name}`}
-            >
+            <ul className="divide-y divide-border" aria-label={`Parâmetros de ${network.name}`}>
               {network.parameters.map((parameter) => {
                 const captured = parameter.occurrences > 0;
 
@@ -116,21 +113,21 @@ export function NetworkCaptureParameters() {
                     className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="min-w-0">
-                      <code className="text-xs font-semibold text-cyan-100">{parameter.name}</code>
-                      <p className="mt-1 text-xs leading-5 text-white/45">
+                      <code className="text-xs font-semibold text-primary">{parameter.name}</code>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
                         {parameter.description}
                       </p>
                     </div>
 
                     <div className="flex shrink-0 items-center gap-2 sm:flex-col sm:items-end">
-                      <span className="font-mono text-xs tabular-nums text-white/55">
+                      <span className="font-mono text-xs tabular-nums text-muted-foreground">
                         {formatOccurrences(parameter.occurrences)}
                       </span>
                       <span
                         className={
                           captured
-                            ? 'inline-flex min-h-7 items-center gap-1.5 rounded-full border border-emerald-300/20 bg-emerald-300/[0.06] px-2.5 py-1 text-[11px] font-medium text-emerald-200'
-                            : 'inline-flex min-h-7 items-center gap-1.5 rounded-full border border-white/[0.09] bg-white/[0.035] px-2.5 py-1 text-[11px] font-medium text-white/45'
+                            ? 'inline-flex min-h-7 items-center gap-1.5 rounded-full border border-success/30 bg-success/10 px-2.5 py-1 text-[11px] font-medium text-success'
+                            : 'inline-flex min-h-7 items-center gap-1.5 rounded-full border border-border bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground'
                         }
                       >
                         {captured ? (

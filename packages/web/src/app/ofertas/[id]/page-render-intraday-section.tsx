@@ -84,14 +84,14 @@ export function renderIntradaySection({
   | 'comparedAds'
 >) {
   return (
-    <section className="mt-8 space-y-4 border-t border-cyan-300/10 pt-8">
+    <section className="mt-8 space-y-4 border-t border-border pt-8">
       <header>
         <div>
           <div className="flex items-center gap-2">
-            <Clock3 className="h-4 w-4 text-cyan-300" />
-            <h2 className="text-[16px] font-semibold text-white">Janelas intradiárias</h2>
+            <Clock3 className="h-4 w-4 text-primary" />
+            <h2 className="text-[16px] font-semibold text-foreground">Janelas intradiárias</h2>
           </div>
-          <p className="mt-1 text-xs text-white/45">
+          <p className="mt-1 text-xs text-muted-foreground">
             Checkpoints a cada 30 minutos · janelas fixas de 2 horas · horário de São Paulo ·
             selecione um período pra somar vários dias
           </p>
@@ -124,20 +124,20 @@ export function renderIntradaySection({
       />
 
       <div
-        className="relative inline-grid w-fit grid-cols-2 rounded-lg border border-white/10 bg-black/15 p-1"
+        className="relative inline-grid w-fit grid-cols-2 rounded-lg border border-border bg-accent p-1"
         role="tablist"
         aria-label="Visualização intradiária"
       >
         <span
           aria-hidden="true"
-          className={`pointer-events-none absolute bottom-1 left-1 h-px w-[calc(50%-0.25rem)] bg-cyan-300 shadow-[0_0_8px_rgba(34,211,238,0.6)] transition-transform duration-[180ms] ease-out motion-reduce:transition-none ${intradayMode === 'ads' ? 'translate-x-full' : 'translate-x-0'}`}
+          className={`pointer-events-none absolute bottom-1 left-1 h-px w-[calc(50%-0.25rem)] bg-primary shadow-[0_0_8px_rgba(34,211,238,0.6)] transition-transform duration-[180ms] ease-out motion-reduce:transition-none ${intradayMode === 'ads' ? 'translate-x-full' : 'translate-x-0'}`}
         />
         <button
           type="button"
           onClick={() => setIntradayMode('overview')}
           role="tab"
           aria-selected={intradayMode === 'overview'}
-          className={`min-h-11 rounded-md px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] transition-colors duration-[180ms] ${intradayMode === 'overview' ? 'bg-cyan-300/10 text-cyan-200' : 'text-white/45 hover:text-white/75'}`}
+          className={`min-h-11 rounded-md px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] transition-colors duration-[180ms] ${intradayMode === 'overview' ? 'bg-accent text-primary' : 'text-muted-foreground hover:text-foreground'}`}
         >
           Visão geral
         </button>
@@ -146,7 +146,7 @@ export function renderIntradaySection({
           onClick={() => setIntradayMode('ads')}
           role="tab"
           aria-selected={intradayMode === 'ads'}
-          className={`min-h-11 rounded-md px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] transition-colors duration-[180ms] ${intradayMode === 'ads' ? 'bg-cyan-300/10 text-cyan-200' : 'text-white/45 hover:text-white/75'}`}
+          className={`min-h-11 rounded-md px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] transition-colors duration-[180ms] ${intradayMode === 'ads' ? 'bg-accent text-primary' : 'text-muted-foreground hover:text-foreground'}`}
         >
           Por anúncios
         </button>

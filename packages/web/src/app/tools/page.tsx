@@ -14,10 +14,10 @@ export default function ToolsIndexPage() {
     <HubShell breadcrumb={['TOOLS']}>
       <header className="space-y-3">
         <p className="hud-label">Operator Console · Tools</p>
-        <h1 className="text-3xl font-bold leading-tight tracking-tight text-white md:text-4xl">
+        <h1 className="text-3xl font-bold leading-tight tracking-tight text-foreground md:text-4xl">
           Ferramentas disponíveis
         </h1>
-        <p className="max-w-xl text-[14px] text-white/55">
+        <p className="max-w-xl text-[14px] text-muted-foreground">
           {restricted
             ? 'Sua conta tem acesso restrito. Apenas as ferramentas abaixo estão liberadas.'
             : 'Selecione uma ferramenta abaixo para abrir. Novos módulos aparecem aqui conforme são liberados.'}

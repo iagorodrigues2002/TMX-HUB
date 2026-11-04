@@ -15,7 +15,10 @@ test('the drawer keeps chrome at intrinsic height and gives only the timeline re
 test('only the notification drawer overrides the overlay with a lighter 2px blur', () => {
   const center = source('../src/components/hub/notification-center-preview.tsx');
   const dialog = source('../src/components/ui/dialog.tsx');
-  assert.match(center, /overlayClassName="bg-background\/40 backdrop-blur-\[2px\]"/);
+  assert.match(
+    center,
+    /overlayClassName="tmx-drawer-scrim bg-background\/40 backdrop-blur-\[2px\]"/,
+  );
   assert.match(dialog, /<DialogOverlay className=\{overlayClassName\} \/>/);
   assert.match(dialog, /bg-background\/85 backdrop-blur-md/);
 });

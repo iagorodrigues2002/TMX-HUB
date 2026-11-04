@@ -27,16 +27,16 @@ export function VendepayWebhook({
     }
   };
   return (
-    <div className="space-y-3 border-t border-white/10 px-4 py-4 sm:px-5">
+    <div className="space-y-3 border-t border-border px-4 py-4 sm:px-5">
       <p className="text-sm font-medium">Webhook para cadastrar na VendePay</p>
-      <p className="text-xs text-white/60">
+      <p className="text-xs text-muted-foreground">
         A URL só é exibida ao gerar. Gerar outra invalida a URL anterior desta conta; atualize o
         cadastro na VendePay imediatamente para continuar recebendo vendas.
       </p>
       {url ? (
         <>
-          <p className="text-xs text-amber-200">Copie agora. A URL anterior foi desativada.</p>
-          <code className="block break-all rounded-lg bg-black/25 p-3 text-xs text-cyan-100">
+          <p className="text-xs text-warning">Copie agora. A URL anterior foi desativada.</p>
+          <code className="block break-all rounded-lg bg-accent p-3 text-xs text-primary">
             {url}
           </code>
           <Button
@@ -54,7 +54,7 @@ export function VendepayWebhook({
         </>
       ) : (
         <>
-          <label className="flex items-start gap-2 text-xs text-white/70">
+          <label className="flex items-start gap-2 text-xs text-muted-foreground">
             <input
               type="checkbox"
               checked={confirmed}
@@ -74,7 +74,7 @@ export function VendepayWebhook({
         </>
       )}
       {error && (
-        <p role="alert" className="text-xs text-red-200">
+        <p role="alert" className="text-xs text-danger">
           {error}
         </p>
       )}

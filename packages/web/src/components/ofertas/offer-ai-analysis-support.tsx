@@ -18,8 +18,8 @@ export function AnalysisFeedback({
   onSave: () => void;
 }) {
   return (
-    <div className="mt-3 rounded-md border border-cyan-300/10 bg-cyan-300/[0.025] p-3">
-      <Label htmlFor={`ai-feedback-${analysisId}`} className="text-[11px] text-cyan-100/70">
+    <div className="mt-3 rounded-md border border-border bg-accent p-3">
+      <Label htmlFor={`ai-feedback-${analysisId}`} className="text-[11px] text-primary">
         Resultado depois desta análise
       </Label>
       <textarea
@@ -32,7 +32,7 @@ export function AnalysisFeedback({
         placeholder="Ex.: reduzi o orçamento às 16h; a janela seguinte recuperou para ROAS 1,8."
       />
       <div className="mt-2 flex items-center justify-between gap-3">
-        <p className="text-[10px] text-white/30">
+        <p className="text-[10px] text-muted-foreground">
           A próxima análise usará este resultado como memória operacional.
         </p>
         <Button variant="outline" size="sm" onClick={onSave} disabled={pending}>
@@ -49,7 +49,7 @@ export function AnalysisFeedback({
 }
 
 export const textareaClass =
-  'w-full rounded-md border border-white/10 bg-[#0b1b22] px-3 py-2 text-[12px] leading-5 text-white outline-none placeholder:text-white/25 focus:border-cyan-300/35';
+  'w-full rounded-md border border-border bg-background px-3 py-2 text-[12px] leading-5 text-foreground outline-none placeholder:text-muted-foreground focus:border-border';
 
 export const SCHEDULE_HOURS = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22];
 

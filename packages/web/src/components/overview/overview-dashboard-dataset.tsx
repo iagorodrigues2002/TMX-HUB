@@ -27,15 +27,15 @@ export function Dataset({
   const { isPrivate } = usePrivacy();
   return (
     <section
-      className="space-y-4 rounded-xl border border-cyan-300/[0.14] bg-cyan-300/[0.025] p-3 sm:p-4"
+      className="glass-card space-y-4 rounded-xl border border-border bg-accent p-3 sm:p-4"
       data-overview-dataset={dataset.key}
     >
-      <header className="animate-[tmx-reveal_220ms_cubic-bezier(0,0,0.2,1)_50ms_both] flex flex-wrap items-center justify-between gap-3 border-b border-cyan-300/[0.1] px-1 pb-3 motion-reduce:animate-none">
+      <header className="animate-[tmx-reveal_220ms_cubic-bezier(0,0,0.2,1)_50ms_both] flex flex-wrap items-center justify-between gap-3 border-b border-border px-1 pb-3 motion-reduce:animate-none">
         <div>
           <p className="hud-label">Escopo dos dados</p>
-          <h3 className="mt-1 text-base font-semibold text-white">{dataset.label}</h3>
+          <h3 className="mt-1 text-base font-semibold text-foreground">{dataset.label}</h3>
         </div>
-        <p className="rounded-full border border-cyan-300/20 bg-cyan-300/[0.06] px-3 py-1 text-[11px] text-cyan-100/75">
+        <p className="rounded-full border border-border bg-accent px-3 py-1 text-[11px] text-primary">
           {dataset.offerCount} {dataset.offerCount === 1 ? 'oferta' : 'ofertas'} ·{' '}
           {dataset.currency}
         </p>
@@ -95,6 +95,7 @@ export function Dataset({
         />
         <Kpi
           label="ARPU"
+          className="tmx-arpu-row"
           value={
             isPrivate ? '••••' : dataset.arpu == null ? '—' : formatCurrency(dataset.arpu, 'BRL')
           }
@@ -147,20 +148,27 @@ export function Dataset({
           <Kpi
             key={String(label)}
             label={String(label)}
-            value={typeof value === 'number' ? formatCurrency(value, 'BRL') : '—'}
+            value={
+              isPrivate ? '••••' : typeof value === 'number' ? formatCurrency(value, 'BRL') : '—'
+            }
+            countUp={
+              !isPrivate && typeof value === 'number'
+                ? { value, format: (reading) => formatCurrency(reading, 'BRL') }
+                : undefined
+            }
             hint={String(hint)}
             icon={<Receipt className="h-4 w-4" />}
           />
         ))}
       </div>
-      <p className="text-xs text-white/45">
+      <p className="text-xs text-muted-foreground">
         Reembolsos e chargebacks são unificados pela data da devolução e podem incluir compras
         anteriores. O percentual compara esse fluxo com o bruto do período, não com uma coorte de
         compras. Taxas e retenções calculadas pelo modelo financeiro do TMX. A cotação e as tarifas
         efetivamente liquidadas pelo gateway podem diferir.
       </p>
       {Boolean(dataset.finance?.missingFeeOperations) && (
-        <output className="block rounded-lg border border-amber-300/20 bg-amber-300/5 p-3 text-sm text-amber-200">
+        <output className="block rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
           Líquido indisponível: {dataset.finance?.missingFeeOperations} operações sem taxas ou
           cotação configuradas. Configure o gateway correspondente. As taxas da VendePay não são
           usadas como substituição.
@@ -170,6 +178,7 @@ export function Dataset({
       <div className="animate-[tmx-reveal_220ms_cubic-bezier(0,0,0.2,1)_150ms_both] grid gap-4 motion-reduce:animate-none xl:grid-cols-2">
         <RevenueChart
           title="Série diária"
+          privateMode={isPrivate}
           description="Receita por dia; o rodapé de cada barra mostra as vendas."
           emptyMessage="Nenhum snapshot diário disponível neste período."
           points={dataset.daily}
@@ -177,6 +186,7 @@ export function Dataset({
         />
         <RevenueChart
           title="Intradiário"
+          privateMode={isPrivate}
           description="Receita por janela de duas horas, consolidada no período selecionado."
           emptyMessage={
             dataset.intradayUnavailableReason ??

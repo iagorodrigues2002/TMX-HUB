@@ -3,6 +3,7 @@
 import { request } from '@/lib/api-client/request';
 import { useAuth } from '@/lib/auth-context';
 import type { DateRange } from '@/lib/date-range';
+import { usePrivacy } from '@/lib/privacy-context';
 import { useQueries } from '@tanstack/react-query';
 import { useState } from 'react';
 import { RevenueChart } from './overview-dashboard-revenue-chart';
@@ -25,6 +26,7 @@ export function ReceiptRevenueChart({
   salesView?: 'general' | 'natural';
 }) {
   const { user } = useAuth();
+  const { isPrivate } = usePrivacy();
   const [kind, setKind] = useState<'all' | 'front' | 'upsell'>('all');
   const scopedOffers = [...new Set(offerIds)];
   const queries = useQueries({
@@ -73,6 +75,7 @@ export function ReceiptRevenueChart({
   return (
     <RevenueChart
       title="Receita por hora"
+      privateMode={isPrivate}
       controls={
         <fieldset aria-label="Tipo de venda" className="mt-3 flex gap-2">
           {(['all', 'front', 'upsell'] as const).map((value) => (

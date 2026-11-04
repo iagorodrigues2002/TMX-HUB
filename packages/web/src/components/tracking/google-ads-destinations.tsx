@@ -35,22 +35,22 @@ export function GoogleAdsDestinations({ offerId }: { offerId: string }) {
 
   return (
     <section className="space-y-5" aria-label="Destinos Google Ads">
-      <div className="rounded-xl border border-amber-400/20 bg-amber-400/5 p-4 text-sm text-amber-100">
+      <div className="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm text-warning">
         <p className="font-medium">Configuração inicial · envios desativados</p>
-        <p className="mt-2 text-white/60">
+        <p className="mt-2 text-muted-foreground">
           Cadastre contas independentes para esta oferta. Depois de conectar o Google, carregue as
           contas vinculadas, escolha a conta e valide com uma venda Google real já capturada. Salvar
           aqui não instala tags nem envia eventos.
         </p>
       </div>
       {connections.data && !connections.data.oauth_configured && (
-        <p className="text-sm text-white/60">
+        <p className="text-sm text-muted-foreground">
           Conexão Google aguardando a configuração do aplicativo OAuth no servidor. Você já pode
           salvar os destinos.
         </p>
       )}
       {connections.isError && (
-        <div role="alert" className="text-sm text-rose-200">
+        <div role="alert" className="text-sm text-danger">
           Não foi possível consultar a conexão Google.{' '}
           <Button onClick={() => void connections.refetch()}>Tentar novamente</Button>
         </div>
@@ -58,7 +58,7 @@ export function GoogleAdsDestinations({ offerId }: { offerId: string }) {
       {destinations.isPending || connections.isPending ? (
         <DataState className="min-h-64" variant="loading" title="Carregando destinos Google Ads…" />
       ) : destinations.isError ? (
-        <div role="alert" className="space-y-2 text-sm text-rose-200">
+        <div role="alert" className="space-y-2 text-sm text-danger">
           <p>
             Não foi possível carregar os destinos Google. Verifique se a API e a migração desta
             integração foram publicadas.
@@ -90,7 +90,7 @@ export function GoogleAdsDestinations({ offerId }: { offerId: string }) {
             edit,
           })}
           <form
-            className="space-y-4 rounded-xl border border-white/10 p-4"
+            className="glass-card space-y-4 rounded-xl border border-border p-4"
             onSubmit={(e) => {
               e.preventDefault();
               save.mutate();
@@ -132,14 +132,14 @@ export function GoogleAdsDestinations({ offerId }: { offerId: string }) {
                   placeholder="123-456-7890"
                 />
                 {lookupAccount.isPending && (
-                  <span className="text-xs text-cyan-200">Consultando conta no Google…</span>
+                  <span className="text-xs text-primary">Consultando conta no Google…</span>
                 )}
                 {selectedAccount &&
                   form.customer_id.replace(/-/g, '') === selectedAccount.customerId && (
-                    <span className="block text-xs text-emerald-200">✓ {selectedAccount.name}</span>
+                    <span className="block text-xs text-success">✓ {selectedAccount.name}</span>
                   )}
                 {lookupAccount.isError && (
-                  <span className="block text-xs text-rose-200">
+                  <span className="block text-xs text-danger">
                     ID não encontrado na autorização Google conectada.
                   </span>
                 )}
@@ -157,7 +157,7 @@ export function GoogleAdsDestinations({ offerId }: { offerId: string }) {
                 />
               </label>
             </div>
-            <p className="text-xs text-white/50">
+            <p className="text-xs text-muted-foreground">
               Use o ID da ação de conversão de importação. Ele é diferente do ID de tag AW e do
               rótulo da tag. O envio só é confirmado quando você salvar este destino.
             </p>
@@ -182,13 +182,13 @@ export function GoogleAdsDestinations({ offerId }: { offerId: string }) {
         </>
       )}
       {(save.isError || archive.isError) && (
-        <p role="alert" className="text-sm text-rose-200">
+        <p role="alert" className="text-sm text-danger">
           Não foi possível salvar a alteração. Confira os IDs, suas permissões e se a conta/ação já
           está cadastrada nesta oferta. {String((save.error || archive.error)?.message || '')}
         </p>
       )}
       {(connect.isError || disconnect.isError || attach.isError) && (
-        <p role="alert" className="text-sm text-rose-200">
+        <p role="alert" className="text-sm text-danger">
           Não foi possível alterar a conexão Google. Tente novamente.{' '}
           {String((connect.error || disconnect.error || attach.error)?.message || '')}
         </p>

@@ -55,13 +55,13 @@ export function SyzepayFeeForm({
     },
     onError: (error) => toast.error((error as Error).message),
   });
-  const input = 'mt-1.5 h-11 w-full rounded-md border border-white/15 bg-bg px-3 text-sm';
+  const input = 'mt-1.5 h-11 w-full rounded-md border border-border bg-bg px-3 text-sm';
   return (
-    <div className="mt-5 border-t border-white/10 pt-4">
+    <div className="mt-5 border-t border-border pt-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold">Taxas desta conexão {gatewayLabel}</h3>
-          <p className="mt-1 text-sm text-white/50">
+          <p className="mt-1 text-sm text-muted-foreground">
             {settings.fee_source === 'webhook'
               ? `Taxa real por transação recebida no webhook. Reserva configurada separadamente: ${settings.reserve_pct ?? 0}% (não confirmada pelo webhook).`
               : settings.fee_pct === undefined
@@ -82,7 +82,7 @@ export function SyzepayFeeForm({
           }}
         >
           {gatewayLabel === 'SyzePay' && (
-            <label className="block text-sm text-white/65">
+            <label className="block text-sm text-muted-foreground">
               Origem da taxa por transação
               <select
                 aria-label="Origem das taxas SyzePay"
@@ -100,7 +100,7 @@ export function SyzepayFeeForm({
             </label>
           )}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <label className="text-sm text-white/65">
+            <label className="text-sm text-muted-foreground">
               Taxa por transação (%)
               <input
                 aria-label="Taxa SyzePay por transação (%)"
@@ -115,7 +115,7 @@ export function SyzepayFeeForm({
                 className={input}
               />
             </label>
-            <label className="text-sm text-white/65">
+            <label className="text-sm text-muted-foreground">
               Tarifa fixa por transação
               <input
                 aria-label="Tarifa fixa SyzePay"
@@ -129,7 +129,7 @@ export function SyzepayFeeForm({
                 className={input}
               />
             </label>
-            <label className="text-sm text-white/65">
+            <label className="text-sm text-muted-foreground">
               Moeda das tarifas fixas
               <select
                 aria-label="Moeda das tarifas SyzePay"
@@ -143,7 +143,7 @@ export function SyzepayFeeForm({
                 <option>GBP</option>
               </select>
             </label>
-            <label className="text-sm text-white/65">
+            <label className="text-sm text-muted-foreground">
               Reserva retida (%)
               <input
                 aria-label="Reserva SyzePay (%)"
@@ -157,7 +157,7 @@ export function SyzepayFeeForm({
                 className={input}
               />
             </label>
-            <label className="text-sm text-white/65">
+            <label className="text-sm text-muted-foreground">
               Tarifa por chargeback
               <input
                 aria-label="Tarifa SyzePay por chargeback"
@@ -170,7 +170,7 @@ export function SyzepayFeeForm({
                 className={input}
               />
             </label>
-            <label className="text-sm text-white/65">
+            <label className="text-sm text-muted-foreground">
               Tarifa por reembolso
               <input
                 aria-label="Tarifa SyzePay por reembolso"
@@ -184,7 +184,7 @@ export function SyzepayFeeForm({
               />
             </label>
           </div>
-          <p className="text-xs leading-5 text-white/45">
+          <p className="text-xs leading-5 text-muted-foreground">
             Informe 0 quando não houver cobrança. Reserva é retenção temporária, não taxa. Estas
             configurações são exclusivas desta conexão.{' '}
             {gatewayLabel === 'SyzePay'

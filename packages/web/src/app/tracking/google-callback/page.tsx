@@ -1,5 +1,7 @@
 'use client';
 
+import { PublicSurface } from '@/components/hub/public-surface';
+
 import { apiClient } from '@/lib/api-client';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
@@ -40,12 +42,14 @@ export default function GoogleCallback() {
     })();
   }, []);
   return (
-    <main className="mx-auto max-w-xl space-y-6 p-8">
-      <h1 className="text-xl font-semibold">Conexão Google Ads</h1>
-      <output className="block">{message}</output>
-      <Link className="underline" href="/tracking">
-        Voltar ao tracking
-      </Link>
-    </main>
+    <PublicSurface>
+      <main className="mx-auto max-w-xl space-y-6 p-8">
+        <h1 className="text-xl font-semibold">Conexão Google Ads</h1>
+        <output className="block">{message}</output>
+        <Link className="underline" href="/tracking">
+          Voltar ao tracking
+        </Link>
+      </main>
+    </PublicSurface>
   );
 }

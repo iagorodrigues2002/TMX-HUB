@@ -48,10 +48,12 @@ export function renderLinksAndTests(context: TrackingContentContext) {
       }
     >
       {section === 'links' && (
-        <div className="mb-6 rounded-2xl border border-emerald-300/15 bg-emerald-300/[0.035] p-4">
-          <p className="hud-label text-emerald-200">Connect Rate · 100% TMX</p>
-          <h3 className="mt-2 text-base font-semibold text-white">Link de entrada do anúncio</h3>
-          <p className="mt-2 text-xs leading-5 text-white/55">
+        <div className="mb-6 rounded-2xl border border-success/30 bg-success/10 p-4">
+          <p className="hud-label text-success">Connect Rate · 100% TMX</p>
+          <h3 className="mt-2 text-base font-semibold text-foreground">
+            Link de entrada do anúncio
+          </h3>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">
             Use este link como destino no anúncio. O TMX registra o clique antes do
             redirecionamento, preserva todos os parâmetros e confirma a conexão quando o script
             envia o PageView.
@@ -88,14 +90,14 @@ export function renderLinksAndTests(context: TrackingContentContext) {
                   placeholder="https://..."
                 />
               </FormField>
-              <label className="text-xs text-white/60">
+              <label className="text-xs text-muted-foreground">
                 Fonte de tráfego deste link
                 <select
                   value={entryTrafficSource}
                   onChange={(event) =>
                     setEntryTrafficSource(event.target.value as typeof entryTrafficSource)
                   }
-                  className="mt-2 h-10 w-full rounded-md border border-white/[0.1] bg-[#06131d] px-3 text-sm text-white"
+                  className="mt-2 h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground"
                 >
                   <option value="meta">Meta / Facebook</option>
                   <option value="google">Google Ads</option>
@@ -133,12 +135,12 @@ export function renderLinksAndTests(context: TrackingContentContext) {
           <select
             value={kind}
             onChange={(e) => setKind(e.target.value as typeof kind)}
-            className="h-10 rounded-md border border-white/[0.1] bg-[#06131d] px-3 text-sm text-white"
+            className="h-10 rounded-md border border-border bg-background px-3 text-sm text-foreground"
           >
             <option value="checkout">No checkout</option>
             <option value="presell">Na presell</option>
           </select>
-          <label className="text-xs text-white/65">
+          <label className="text-xs text-muted-foreground">
             Tráfego da variante A: {trafficA}%
             <input
               className="mt-3 w-full accent-cyan-300"
@@ -162,9 +164,9 @@ export function renderLinksAndTests(context: TrackingContentContext) {
             onChange={(event) => setDestinationB(event.target.value)}
             placeholder="URL de destino da variante B"
           />
-          <div className="md:col-span-2 rounded-xl border border-cyan-300/15 bg-cyan-300/[0.04] p-4 text-xs leading-5 text-white/65">
+          <div className="glass-card md:col-span-2 rounded-xl border border-border bg-accent p-4 text-xs leading-5 text-muted-foreground">
             Cada visitante permanece na mesma variante. O TMX troca o destino dos botões de
-            checkout, preserva UTMs e <code className="text-cyan-200">src</code>, e mede visitantes,
+            checkout, preserva UTMs e <code className="text-primary">src</code>, e mede visitantes,
             checkouts, compras e receita.
           </div>
           <Button

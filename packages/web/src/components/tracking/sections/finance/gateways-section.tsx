@@ -199,10 +199,10 @@ export function GatewaysSection({ offerId, canManage }: GatewaysSectionProps) {
   };
 
   return (
-    <section className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-5 md:p-6">
+    <section className="glass-card rounded-lg border border-border bg-muted p-5 md:p-6">
       <p className="hud-label">Rastreamento avançado</p>
-      <h2 className="mt-2 text-2xl font-semibold text-white">Gateways e webhooks</h2>
-      <p className="mb-6 mt-2 max-w-2xl text-sm leading-6 text-white/50">
+      <h2 className="mt-2 text-2xl font-semibold text-foreground">Gateways e webhooks</h2>
+      <p className="mb-6 mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
         Cada provider aparece uma vez. As contas ficam agrupadas abaixo dele e preservam suas
         configurações específicas.
       </p>
@@ -222,7 +222,10 @@ export function GatewaysSection({ offerId, canManage }: GatewaysSectionProps) {
         (config.data.gateways ?? [])
           .filter((g) => g.provider !== 'vendepay')
           .map((g) => (
-            <section key={`fees-${g.id}`} className="rounded-lg border border-white/10 p-4">
+            <section
+              key={`fees-${g.id}`}
+              className="glass-card rounded-lg border border-border p-4"
+            >
               <h3 className="text-sm font-medium">
                 {g.name} · {g.provider}
               </h3>

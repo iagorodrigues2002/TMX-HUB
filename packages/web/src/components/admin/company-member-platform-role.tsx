@@ -21,7 +21,7 @@ export function CompanyMemberPlatformRole({
   const known = member.platform_role === 'admin' || member.platform_role === 'user';
   const changed = known && role !== member.platform_role;
   return (
-    <section className="mt-4 space-y-3 rounded-lg border border-border bg-bg-elevated p-4">
+    <section className="glass-card mt-4 space-y-3 rounded-lg border border-border bg-bg-elevated p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
           <p className="text-xs text-muted-foreground">Papel na plataforma</p>

@@ -1,4 +1,4 @@
-import { Bug, ChartNoAxesCombined, CodeXml, CreditCard, RadioTower, Route } from 'lucide-react';
+import { Bug, ChartNoAxesCombined, CodeXml, CreditCard, Radar, Route } from 'lucide-react';
 import type { NavItem } from './nav-config-nav-item';
 import { trackingTool } from './nav-config-tracking-tool';
 
@@ -6,7 +6,7 @@ export const nav_items_tracking: NavItem = {
   id: 'tracking',
   label: 'Rastreamento',
   href: '/tracking',
-  icon: RadioTower,
+  icon: Radar,
   group: 'Rastreamento',
   ...trackingTool,
   keywords: ['tracking', 'eventos', 'conversões'],

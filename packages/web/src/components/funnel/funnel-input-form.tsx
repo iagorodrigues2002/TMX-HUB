@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { apiClient } from '@/lib/api-client';
+import { useRouter } from '@/lib/motion-router';
 import { Gauge, Layers3, Loader2, Network, Route } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -81,17 +81,19 @@ export function FunnelInputForm() {
                 setMaxDepth(depth);
                 setMaxPages(pages);
               }}
-              className={`rounded-xl border p-3 text-left transition ${active ? 'border-cyan-300/35 bg-cyan-300/[0.08]' : 'border-white/[0.08] bg-white/[0.025] hover:border-white/20'}`}
+              className={`rounded-xl border p-3 text-left transition ${active ? 'border-border bg-accent' : 'border-border bg-muted hover:border-border'}`}
             >
-              <Icon className={`mb-2 h-4 w-4 ${active ? 'text-cyan-300' : 'text-white/45'}`} />
-              <span className="block text-sm font-medium text-white/85">{label}</span>
-              <span className="text-[10px] text-white/40">{hint}</span>
+              <Icon
+                className={`mb-2 h-4 w-4 ${active ? 'text-primary' : 'text-muted-foreground'}`}
+              />
+              <span className="block text-sm font-medium text-foreground">{label}</span>
+              <span className="text-[10px] text-muted-foreground">{hint}</span>
             </button>
           );
         })}
       </div>
 
-      <div className="grid gap-4 rounded-xl border border-white/[0.07] bg-black/15 p-4 md:grid-cols-2">
+      <div className="glass-card grid gap-4 rounded-xl border border-border bg-accent p-4 md:grid-cols-2">
         <div className="space-y-2">
           <Label className="hud-label">Profundidade máxima</Label>
           <Input
@@ -102,7 +104,7 @@ export function FunnelInputForm() {
             onChange={(e) => setMaxDepth(Number(e.target.value))}
             disabled={submitting}
           />
-          <p className="text-[11px] text-white/40">
+          <p className="text-[11px] text-muted-foreground">
             Quantos cliques de distância do front (1 = só front e upsells diretos).
           </p>
         </div>
@@ -116,7 +118,7 @@ export function FunnelInputForm() {
             onChange={(e) => setMaxPages(Number(e.target.value))}
             disabled={submitting}
           />
-          <p className="text-[11px] text-white/40">
+          <p className="text-[11px] text-muted-foreground">
             Trava de segurança. Máximo 30 pra evitar crawl infinito.
           </p>
         </div>

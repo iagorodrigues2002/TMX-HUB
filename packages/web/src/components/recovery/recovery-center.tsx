@@ -56,8 +56,10 @@ export function RecoveryCenter() {
   if (recovery.isError)
     return (
       <div className="glass-card flex min-h-64 flex-col items-center justify-center gap-4 p-6 text-center">
-        <p className="text-sm font-semibold text-white">Não foi possível carregar o TMX Recovery</p>
-        <p className="max-w-lg text-xs leading-5 text-white/45">
+        <p className="text-sm font-semibold text-foreground">
+          Não foi possível carregar o TMX Recovery
+        </p>
+        <p className="max-w-lg text-xs leading-5 text-muted-foreground">
           {recovery.error instanceof Error
             ? recovery.error.message
             : 'A API de recuperação não respondeu.'}
@@ -74,19 +76,19 @@ export function RecoveryCenter() {
     );
   return (
     <div className="space-y-6">
-      <header className="tmx-command-hero rounded-2xl border border-cyan-300/15 p-5 sm:p-7">
+      <header className="glass-card tmx-command-hero rounded-2xl border border-border p-5 sm:p-7">
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <p className="hud-label">TMX Revenue Recovery</p>
-              <span className="rounded-full border border-cyan-300/20 bg-cyan-300/[0.06] px-2.5 py-1 text-[8px] uppercase tracking-[0.18em] text-cyan-200">
+              <span className="rounded-full border border-border bg-accent px-2.5 py-1 text-[8px] uppercase tracking-[0.18em] text-primary">
                 E-mail only
               </span>
             </div>
-            <h1 className="mt-2 text-3xl font-bold tracking-tight text-white">
+            <h1 className="mt-2 text-3xl font-bold tracking-tight text-foreground">
               Recuperação de vendas
             </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/50">
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
               Transforme abandonos e pagamentos recusados em uma fila rastreável de receita
               recuperada.
             </p>
@@ -97,7 +99,7 @@ export function RecoveryCenter() {
                 aria-label="Selecionar oferta"
                 value={offerId}
                 onChange={(e) => setOfferId(e.target.value)}
-                className="h-11 w-full appearance-none rounded-lg border border-cyan-100/[0.14] bg-[#06151e] px-4 pr-10 text-sm text-white"
+                className="h-11 w-full appearance-none rounded-lg border border-border bg-background px-4 pr-10 text-sm text-foreground"
               >
                 {(offers.data ?? []).map((o) => (
                   <option key={o.id} value={o.id}>
@@ -105,7 +107,7 @@ export function RecoveryCenter() {
                   </option>
                 ))}
               </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-white/35" />
+              <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-muted-foreground" />
             </div>
             <Button
               variant="outline"
@@ -131,10 +133,10 @@ export function RecoveryCenter() {
         ].map(([label, value]) => (
           <div
             key={label}
-            className="tmx-kpi-card min-w-0 rounded-xl border border-white/[0.08] p-4"
+            className="glass-card tmx-kpi-card min-w-0 rounded-xl border border-border p-4"
           >
             <p className="hud-label text-[9px]">{label}</p>
-            <p className="mono-num mt-3 min-w-0 break-words text-base text-white xl:text-xl">
+            <p className="mono-num mt-3 min-w-0 break-words text-base text-foreground xl:text-xl">
               {value}
             </p>
           </div>
@@ -142,42 +144,42 @@ export function RecoveryCenter() {
       </section>
       <section className="glass-card p-5">
         <div className="flex items-center gap-3">
-          <Settings2 className="h-4 w-4 text-cyan-300" />
+          <Settings2 className="h-4 w-4 text-primary" />
           <div>
             <p className="hud-label">Fontes automáticas</p>
-            <p className="mt-1 text-xs text-white/40">
+            <p className="mt-1 text-xs text-muted-foreground">
               O Recovery cruza o clique de entrada com o webhook original da Vendepay e o checkout
               do teste A/B.
             </p>
           </div>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-3">
-          <div className="rounded-xl border border-white/[0.07] bg-black/10 p-4">
-            <div className="flex items-center gap-2 text-sm text-white/75">
-              <Webhook className="h-4 w-4 text-emerald-300" />
+          <div className="glass-card rounded-xl border border-border bg-accent p-4">
+            <div className="flex items-center gap-2 text-sm text-foreground">
+              <Webhook className="h-4 w-4 text-success" />
               Webhooks Vendepay
             </div>
-            <p className="mt-2 font-mono text-xs text-white/45">
+            <p className="mt-2 font-mono text-xs text-muted-foreground">
               {r?.sources.gateway_enabled
                 ? `${r.sources.vendepay_webhooks ?? 0} recebido(s) em 30 dias`
                 : 'Não conectado'}
             </p>
           </div>
-          <div className="rounded-xl border border-white/[0.07] bg-black/10 p-4">
-            <div className="flex items-center gap-2 text-sm text-white/75">
-              <GitBranch className="h-4 w-4 text-cyan-300" />
+          <div className="glass-card rounded-xl border border-border bg-accent p-4">
+            <div className="flex items-center gap-2 text-sm text-foreground">
+              <GitBranch className="h-4 w-4 text-primary" />
               Link de entrada + A/B
             </div>
-            <p className="mt-2 truncate font-mono text-xs text-white/45">{`${r?.sources.entry_clicks ?? 0} clique(s) · ${r?.sources.ab_test || `${r?.sources.checkout_destinations ?? r?.sources.ab_destinations ?? 0} checkout(s) detectado(s)`}`}</p>
+            <p className="mt-2 truncate font-mono text-xs text-muted-foreground">{`${r?.sources.entry_clicks ?? 0} clique(s) · ${r?.sources.ab_test || `${r?.sources.checkout_destinations ?? r?.sources.ab_destinations ?? 0} checkout(s) detectado(s)`}`}</p>
           </div>
-          <div className="rounded-xl border border-white/[0.07] bg-black/10 p-4">
-            <div className="flex items-center gap-2 text-sm text-white/75">
+          <div className="glass-card rounded-xl border border-border bg-accent p-4">
+            <div className="flex items-center gap-2 text-sm text-foreground">
               <CheckCircle2
-                className={`h-4 w-4 ${r?.sources.automatic ? 'text-emerald-300' : 'text-amber-300'}`}
+                className={`h-4 w-4 ${r?.sources.automatic ? 'text-success' : 'text-warning'}`}
               />
               Cruzamento
             </div>
-            <p className="mt-2 font-mono text-xs text-white/45">
+            <p className="mt-2 font-mono text-xs text-muted-foreground">
               {r?.sources.automatic ? 'Webhook + jornada + checkout' : 'Falta gateway ou destino'}
             </p>
           </div>
@@ -215,7 +217,7 @@ export function RecoveryCenter() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="hud-label">Performance de e-mail</p>
-            <p className="mt-1 text-xs text-white/40">
+            <p className="mt-1 text-xs text-muted-foreground">
               Entrega reconciliada com a Resend; abertura e clique medidos pelo TMX; conversão e
               receita confirmadas pela Vendepay.
             </p>
@@ -239,10 +241,10 @@ export function RecoveryCenter() {
           ].map(([label, value]) => (
             <div
               key={label}
-              className="min-w-0 rounded-xl border border-white/[0.07] bg-black/10 p-3"
+              className="glass-card min-w-0 rounded-xl border border-border bg-accent p-3"
             >
               <p className="hud-label text-[8px]">{label}</p>
-              <p className="mono-num mt-2 min-w-0 break-words text-base text-white xl:text-lg">
+              <p className="mono-num mt-2 min-w-0 break-words text-base text-foreground xl:text-lg">
                 {value}
               </p>
             </div>
@@ -260,12 +262,12 @@ export function RecoveryCenter() {
         emailOpportunities,
       })}
       {previewOpen && (
-        <div className="fixed inset-0 z-[100] grid place-items-center bg-black/80 p-4">
-          <div className="flex h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-cyan-300/20 bg-[#071720]">
-            <div className="flex items-center justify-between border-b border-white/10 p-4">
+        <div className="fixed inset-0 z-[100] grid place-items-center bg-background p-4">
+          <div className="glass-card flex h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-border bg-background">
+            <div className="flex items-center justify-between border-b border-border p-4">
               <div>
                 <p className="hud-label">Preview do e-mail</p>
-                <p className="mt-1 text-sm text-white/70">{emailSubject}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{emailSubject}</p>
               </div>
               <Button size="sm" variant="ghost" onClick={() => setPreviewOpen(false)}>
                 <X />
@@ -275,7 +277,7 @@ export function RecoveryCenter() {
             <iframe
               title="Pré-visualização do e-mail"
               sandbox=""
-              className="h-full w-full bg-white"
+              className="h-full w-full bg-background"
               srcDoc={emailMessage
                 .replaceAll('{{nome}}', 'Maria')
                 .replaceAll('{{link}}', 'https://theminex.com/recovery-preview')}

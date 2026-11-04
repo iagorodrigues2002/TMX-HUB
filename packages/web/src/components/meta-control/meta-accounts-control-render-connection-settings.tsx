@@ -13,12 +13,12 @@ export function renderConnectionSettings({
   'connectionForm' | 'setConnectionForm' | 'saveConnection'
 >) {
   return (
-    <section className="rounded-2xl border border-cyan-300/15 bg-bg-elevated/90 p-5 sm:p-6">
+    <section className="glass-card rounded-2xl border border-border bg-bg-elevated/90 p-5 sm:p-6">
       <div className="flex items-start gap-3">
-        <ShieldAlert className="mt-0.5 h-5 w-5 text-cyan-300" />
+        <ShieldAlert className="mt-0.5 h-5 w-5 text-primary" />
         <div>
-          <h2 className="font-semibold text-white">Criar dashboard independente</h2>
-          <p className="mt-1 text-xs leading-5 text-white/40">
+          <h2 className="font-semibold text-foreground">Criar dashboard independente</h2>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
             Defina um nome e conecte outro aplicativo Meta. As contas e campanhas ficarão isoladas
             dos demais dashboards.
           </p>
@@ -30,14 +30,14 @@ export function renderConnectionSettings({
           value={connectionForm.name}
           onChange={(event) => setConnectionForm({ ...connectionForm, name: event.target.value })}
           placeholder="Nome da conexão"
-          className="h-11 rounded-lg border border-white/10 bg-black/20 px-4 text-sm text-white outline-none focus:border-cyan-300/40"
+          className="h-11 rounded-lg border border-border bg-accent px-4 text-sm text-foreground outline-none focus:border-border"
         />
         <input
           aria-label="ID do aplicativo"
           value={connectionForm.app_id}
           onChange={(event) => setConnectionForm({ ...connectionForm, app_id: event.target.value })}
           placeholder="ID do aplicativo"
-          className="h-11 rounded-lg border border-white/10 bg-black/20 px-4 text-sm text-white outline-none focus:border-cyan-300/40"
+          className="h-11 rounded-lg border border-border bg-accent px-4 text-sm text-foreground outline-none focus:border-border"
         />
         <input
           type="password"
@@ -47,7 +47,7 @@ export function renderConnectionSettings({
             setConnectionForm({ ...connectionForm, app_secret: event.target.value })
           }
           placeholder="App Secret"
-          className="h-11 rounded-lg border border-white/10 bg-black/20 px-4 text-sm text-white outline-none focus:border-cyan-300/40"
+          className="h-11 rounded-lg border border-border bg-accent px-4 text-sm text-foreground outline-none focus:border-border"
         />
         <input
           type="password"
@@ -57,7 +57,7 @@ export function renderConnectionSettings({
             setConnectionForm({ ...connectionForm, access_token: event.target.value })
           }
           placeholder="Token de usuário do sistema"
-          className="h-11 rounded-lg border border-white/10 bg-black/20 px-4 text-sm text-white outline-none focus:border-cyan-300/40"
+          className="h-11 rounded-lg border border-border bg-accent px-4 text-sm text-foreground outline-none focus:border-border"
         />
       </div>
       <div className="mt-4 flex justify-end">

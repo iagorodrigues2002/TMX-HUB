@@ -1,5 +1,6 @@
 'use client';
 
+import { useDataPending } from '@/lib/data-pending';
 import { useCountUp } from '@/lib/hooks/use-count-up';
 import { cn } from '@/lib/utils';
 import type { ReactNode } from 'react';
@@ -46,11 +47,14 @@ export function Kpi({
   className,
 }: KpiProps) {
   const styles = toneStyles[tone];
+  const pending = useDataPending();
   const animatedValue = useCountUp(countUp?.value, countUp?.duration, label);
   const displayValue =
     countUp && animatedValue !== undefined ? countUp.format(animatedValue) : value;
 
-  const valueContent = countUp ? (
+  const valueContent = pending ? (
+    '—'
+  ) : countUp ? (
     <>
       <span className="sr-only">{value}</span>
       <span aria-hidden="true">{displayValue}</span>
@@ -73,12 +77,12 @@ export function Kpi({
       >
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-cyan-300/0 transition-colors duration-200 group-hover:bg-cyan-300/[0.035] motion-reduce:transition-none"
+          className="pointer-events-none absolute inset-0 bg-accent transition-colors duration-200 group-hover:bg-accent motion-reduce:transition-none"
         />
         {icon && (
           <span
             className={cn(
-              'relative z-[1] grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/[0.04]',
+              'relative z-[1] grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-muted',
               styles.icon,
             )}
           >
@@ -86,9 +90,11 @@ export function Kpi({
           </span>
         )}
         <div className="relative z-[1] min-w-0">
-          <p className="mono-num text-2xl font-semibold leading-tight text-white">{valueContent}</p>
-          <p className="mt-0.5 text-xs text-white/45">{label}</p>
-          {hint && <p className="mt-1 text-[11px] text-white/40">{hint}</p>}
+          <p className="mono-num text-2xl font-semibold leading-tight text-foreground">
+            {valueContent}
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{label}</p>
+          {hint && <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>}
         </div>
       </div>
     );
@@ -109,16 +115,18 @@ export function Kpi({
     >
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-cyan-300/0 transition-colors duration-200 group-hover:bg-cyan-300/[0.035] motion-reduce:transition-none"
+        className="pointer-events-none absolute inset-0 bg-accent transition-colors duration-200 group-hover:bg-accent motion-reduce:transition-none"
       />
-      <div className="relative z-[1] flex items-center justify-between gap-3">
+      <div className="tmx-kpi-heading relative z-[1] flex items-center justify-between gap-3">
         <p className="hud-label">{label}</p>
-        {icon && <span className={cn('shrink-0', styles.icon)}>{icon}</span>}
+        {icon && <span className={cn('tmx-kpi-icon shrink-0', styles.icon)}>{icon}</span>}
       </div>
-      <p className="mono-num relative z-[1] mt-3 min-w-0 break-words text-[clamp(1.25rem,3vw,1.75rem)] font-semibold leading-tight tracking-[-0.04em] text-white">
+      <p className="tmx-kpi-value mono-num relative z-[1] mt-3 min-w-0 break-words text-[clamp(1.25rem,3vw,1.75rem)] font-semibold leading-tight tracking-[-0.04em] text-foreground">
         {valueContent}
       </p>
-      {hint && <p className="relative z-[1] mt-1 text-[11px] text-white/45">{hint}</p>}
+      {hint && (
+        <p className="tmx-kpi-hint relative z-[1] mt-1 text-[11px] text-muted-foreground">{hint}</p>
+      )}
     </div>
   );
 }

@@ -1,9 +1,10 @@
 'use client';
 
 import { type OfferView, apiClient } from '@/lib/api-client';
+import { useRouter } from '@/lib/motion-router';
 import { readPersonalStorage, writePersonalStorage } from '@/lib/personal-storage';
 import { useQuery } from '@tanstack/react-query';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { type ReactNode, createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { TRACKING_DASHBOARD_STALE_TIME } from './tracking-query';
 

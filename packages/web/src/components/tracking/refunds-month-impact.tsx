@@ -60,7 +60,7 @@ export function RefundMonthImpact({
     <section className={`${panel} space-y-6`} aria-label="Impacto de compras de meses anteriores">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="max-w-2xl">
-          <p className="text-xs font-semibold uppercase tracking-wider text-cyan-200">
+          <p className="text-xs font-semibold uppercase tracking-wider text-primary">
             Impacto entre meses
           </p>
           <h2 className="mt-2 text-xl font-semibold text-foreground">
@@ -119,7 +119,7 @@ export function RefundMonthImpact({
         de {receiptLabel}.
       </p>
       {partialAmounts && (
-        <output className="block text-sm text-amber-200">
+        <output className="block text-sm text-warning">
           Valores parciais: {missingRefundAmounts} devoluções sem conversão BRL,{' '}
           {month.total.missing_fee_orders} multas sem cálculo completo e{' '}
           {month.missing_gross_orders} vendas sem conversão BRL. Percentuais sem base completa

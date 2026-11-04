@@ -37,10 +37,10 @@ export function StateToggle({
   };
   const cls =
     current === 'done'
-      ? 'border-emerald-300/40 bg-emerald-300/15 text-emerald-200'
+      ? 'border-success/30 bg-success/10 text-success'
       : current === 'na'
-        ? 'border-white/[0.15] bg-white/[0.04] text-white/45'
-        : 'border-white/[0.18] bg-white/[0.04] text-white/65';
+        ? 'border-border bg-muted text-muted-foreground'
+        : 'border-border bg-muted text-muted-foreground';
   const label = current === 'done' ? '✓' : current === 'na' ? '—' : ' ';
   return (
     <button
@@ -70,19 +70,19 @@ export function ProgressMini({
 }) {
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
   const barClass = {
-    cyan: 'bg-cyan-300/70',
-    emerald: 'bg-emerald-300/70',
-    amber: 'bg-amber-300/70',
+    cyan: 'bg-primary',
+    emerald: 'bg-success/10',
+    amber: 'bg-warning/10',
   }[tone];
   return (
     <div>
       <div className="flex items-baseline justify-between">
         <p className="hud-label">{label}</p>
-        <span className="font-mono text-[12px] text-white/65">
-          {done}/{total} <span className="text-white/35">· {pct}%</span>
+        <span className="font-mono text-[12px] text-muted-foreground">
+          {done}/{total} <span className="text-muted-foreground">· {pct}%</span>
         </span>
       </div>
-      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-accent">
         <div className={`h-full ${barClass}`} style={{ width: `${pct}%` }} />
       </div>
     </div>

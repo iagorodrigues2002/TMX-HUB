@@ -24,18 +24,18 @@ export function FilePicker(props: {
   return (
     <div className="space-y-2">
       <Label className="hud-label">{props.label}</Label>
-      <label className="flex cursor-pointer items-center gap-3 rounded-md border border-dashed border-white/[0.12] bg-white/[0.02] p-4 transition hover:border-cyan-300/40 hover:bg-cyan-300/[0.03]">
-        <Upload className="h-4 w-4 text-cyan-300/70" />
+      <label className="flex cursor-pointer items-center gap-3 rounded-md border border-dashed border-border bg-muted p-4 transition hover:border-border hover:bg-accent">
+        <Upload className="h-4 w-4 text-primary" />
         <div className="flex-1 text-[13px]">
           {props.fileName ? (
             <>
-              <p className="font-semibold text-white/85">{props.fileName}</p>
-              <p className="text-[11px] text-white/45">
+              <p className="font-semibold text-foreground">{props.fileName}</p>
+              <p className="text-[11px] text-muted-foreground">
                 {props.sheet?.rows.length ?? 0} linhas · {props.sheet?.columns.length ?? 0} colunas
               </p>
             </>
           ) : (
-            <p className="text-white/55">Clique para escolher arquivo</p>
+            <p className="text-muted-foreground">Clique para escolher arquivo</p>
           )}
         </div>
         <input

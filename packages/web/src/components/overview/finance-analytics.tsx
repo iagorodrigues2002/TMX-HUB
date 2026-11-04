@@ -287,7 +287,7 @@ export function FinanceAnalyticsView({
         <output className={`${panel} block`}>Calculando todo o histórico salvo…</output>
       ) : (
         <>
-          <div className="rounded-xl border border-border bg-bg-elevated p-4 text-sm text-muted-foreground">
+          <div className="glass-card rounded-xl border border-border bg-bg-elevated p-4 text-sm text-muted-foreground">
             <p>
               Fluxo observado, ainda não conciliado. Transferências entre contas podem aparecer nos
               dois provedores; não representa faturamento nem lucro. Conversões com duas pontas e
@@ -317,7 +317,7 @@ export function FinanceAnalyticsView({
               </div>
             ))}
           </div>
-          <div className="flex flex-wrap gap-6 rounded-xl border border-border p-4 text-sm">
+          <div className="glass-card flex flex-wrap gap-6 rounded-xl border border-border p-4 text-sm">
             <span>
               Custos fixos: <strong>{money(total.fixed)}</strong>
             </span>
@@ -342,8 +342,8 @@ export function FinanceAnalyticsView({
             <div className="mb-6 flex flex-wrap justify-between gap-3">
               <h3 className="font-semibold">{growth ? 'Evolução mensal' : 'Fluxo diário'}</h3>
               <p className="text-sm">
-                <span className="text-emerald-600 dark:text-emerald-400">● Entradas</span>{' '}
-                <span className="ml-3 text-rose-600 dark:text-rose-400">● Saídas</span>
+                <span className="text-success dark:text-success">● Entradas</span>{' '}
+                <span className="ml-3 text-danger dark:text-danger">● Saídas</span>
               </p>
             </div>
             {isPrivate ? (
@@ -363,11 +363,11 @@ export function FinanceAnalyticsView({
                         title={`${d.label} · Entradas ${money(d.incoming)} · Saídas ${money(d.outgoing)}`}
                       >
                         <div
-                          className="w-2/5 rounded-t bg-emerald-500 motion-safe:transition-transform motion-safe:duration-500 origin-bottom group-hover:brightness-110"
+                          className="w-2/5 rounded-t bg-success/10 motion-safe:transition-transform motion-safe:duration-500 origin-bottom group-hover:brightness-110"
                           style={{ height: '100%', transform: `scaleY(${d.incoming / max})` }}
                         />
                         <div
-                          className="w-2/5 rounded-t bg-rose-500 motion-safe:transition-transform motion-safe:duration-500 origin-bottom group-hover:brightness-110"
+                          className="w-2/5 rounded-t bg-danger/10 motion-safe:transition-transform motion-safe:duration-500 origin-bottom group-hover:brightness-110"
                           style={{ height: '100%', transform: `scaleY(${d.outgoing / max})` }}
                         />
                       </div>

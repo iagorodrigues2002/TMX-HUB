@@ -48,25 +48,25 @@ export function LinkEditor({ jobId, link }: LinkEditorProps) {
     >
       <header className="space-y-1">
         <p className="hud-label">Link Editor</p>
-        <h3 className="text-[14px] font-semibold text-white">Link</h3>
-        <p className="break-words text-[12px] text-white/55">
+        <h3 className="text-[14px] font-semibold text-foreground">Link</h3>
+        <p className="break-words text-[12px] text-muted-foreground">
           {link.text || '(sem texto visível)'}
         </p>
       </header>
 
       <div className="flex flex-wrap gap-1.5 text-[10px] uppercase tracking-[0.18em]">
         {link.isCta && (
-          <span className="rounded-sm border border-cyan-300/30 bg-cyan-300/10 px-1.5 py-0.5 text-cyan-100">
+          <span className="rounded-sm border border-border bg-accent px-1.5 py-0.5 text-primary">
             CTA
           </span>
         )}
         {link.isExternal && (
-          <span className="rounded-sm border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-white/60">
+          <span className="rounded-sm border border-border bg-muted px-1.5 py-0.5 text-muted-foreground">
             externo
           </span>
         )}
         {link.rel && (
-          <span className="rounded-sm border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-white/60">
+          <span className="rounded-sm border border-border bg-muted px-1.5 py-0.5 text-muted-foreground">
             rel: {link.rel}
           </span>
         )}

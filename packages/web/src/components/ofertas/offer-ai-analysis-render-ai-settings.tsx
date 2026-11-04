@@ -69,11 +69,11 @@ export function renderAiSettings({
   | 'canSave'
 > & { aiConfig: NonNullable<ReturnType<typeof useOfferAiAnalysisState>['configQuery']['data']> }) {
   return (
-    <details className="border-b border-white/[0.06]">
-      <summary className="cursor-pointer px-5 py-4 text-[12px] font-semibold text-cyan-100">
+    <details className="border-b border-border">
+      <summary className="cursor-pointer px-5 py-4 text-[12px] font-semibold text-primary">
         Configurar OpenCode Go, modelo e instruções
       </summary>
-      <div className="space-y-5 border-t border-white/[0.05] px-5 py-5">
+      <div className="space-y-5 border-t border-border px-5 py-5">
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="Chave API do OpenCode Go" htmlFor="ai-api-key">
             <Input
@@ -135,7 +135,7 @@ export function renderAiSettings({
           </Field>
           <label
             htmlFor={`${id}-include-ads`}
-            className="flex items-center gap-3 self-end rounded-md border border-white/[0.07] px-3 py-2.5 text-[12px] text-white/65"
+            className="flex items-center gap-3 self-end rounded-md border border-border px-3 py-2.5 text-[12px] text-muted-foreground"
           >
             <Checkbox
               id={`${id}-include-ads`}
@@ -146,10 +146,10 @@ export function renderAiSettings({
           </label>
         </div>
 
-        <section className="space-y-3 rounded-md border border-white/[0.07] bg-black/10 p-4">
+        <section className="space-y-3 rounded-md border border-border bg-accent p-4">
           <label
             htmlFor={`${id}-auto-generate`}
-            className="flex items-center gap-3 text-[12px] text-white/70"
+            className="flex items-center gap-3 text-[12px] text-muted-foreground"
           >
             <Checkbox
               id={`${id}-auto-generate`}
@@ -160,7 +160,7 @@ export function renderAiSettings({
           </label>
           {autoGenerate && (
             <div>
-              <p className="mb-2 text-[10px] uppercase tracking-[0.13em] text-white/40">
+              <p className="mb-2 text-[10px] uppercase tracking-[0.13em] text-muted-foreground">
                 Horários de geração · América/São Paulo
               </p>
               <div className="flex flex-wrap gap-2">
@@ -179,8 +179,8 @@ export function renderAiSettings({
                       }
                       className={`rounded-md border px-3 py-2 font-mono text-[11px] transition ${
                         selected
-                          ? 'border-cyan-300/35 bg-cyan-300/10 text-cyan-100'
-                          : 'border-white/[0.07] text-white/40 hover:text-white/70'
+                          ? 'border-border bg-accent text-primary'
+                          : 'border-border text-muted-foreground hover:text-muted-foreground'
                       }`}
                     >
                       {String(hour).padStart(2, '0')}:00
@@ -188,7 +188,7 @@ export function renderAiSettings({
                   );
                 })}
               </div>
-              <p className="mt-2 text-[10px] text-white/35">
+              <p className="mt-2 text-[10px] text-muted-foreground">
                 O sistema gera no máximo uma análise em cada horário selecionado.
               </p>
             </div>
@@ -213,7 +213,7 @@ export function renderAiSettings({
             className={`${textareaClass} font-mono text-[11px]`}
           />
         </Field>
-        <p className="text-[10px] text-white/35">
+        <p className="text-[10px] text-muted-foreground">
           Variáveis disponíveis: {'{{offer_name}}'}, {'{{date}}'}, {'{{time}}'}, {'{{responsible}}'}
           , {'{{currency}}'}, {'{{min_roas}}'}, {'{{spend}}'}, {'{{revenue}}'}, {'{{sales}}'},{' '}
           {'{{roas}}'}, {'{{cpa}}'}, {'{{ic}}'}, {'{{windows_json}}'}, {'{{ads_json}}'} e{' '}

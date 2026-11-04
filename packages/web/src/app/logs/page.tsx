@@ -26,32 +26,37 @@ const KIND_META = {
     label: 'Page Cloner',
     icon: Layers,
     href: (id: string) => `/tools/cloner/jobs/${id}`,
-    color: 'text-cyan-300',
+    color: 'text-primary',
   },
   vsl: {
     label: 'VSL Downloader',
     icon: Video,
     href: (id: string) => `/tools/vsl/jobs/${id}`,
-    color: 'text-cyan-300',
+    color: 'text-primary',
   },
   funnel: {
     label: 'Funnel Clone',
     icon: Network,
     href: (id: string) => `/tools/funnel-clone/jobs/${id}`,
-    color: 'text-cyan-300',
+    color: 'text-primary',
   },
-  inspect: { label: 'Inspect', icon: Search, href: () => '/tools/cloner', color: 'text-white/60' },
+  inspect: {
+    label: 'Inspect',
+    icon: Search,
+    href: () => '/tools/cloner',
+    color: 'text-muted-foreground',
+  },
   webhook: {
     label: 'Webhook Tester',
     icon: Webhook,
     href: () => '/tools/webhook-tester',
-    color: 'text-white/60',
+    color: 'text-muted-foreground',
   },
   'page-diff': {
     label: 'Page Diff',
     icon: GitCompare,
     href: () => '/tools/page-diff',
-    color: 'text-white/60',
+    color: 'text-muted-foreground',
   },
 } as const;
 
@@ -79,9 +84,9 @@ function formatRelative(iso: string): string {
 
 function statusColor(status: string): string {
   const s = status.toLowerCase();
-  if (s === 'ready' || s === 'inspected' || s.startsWith('http 2')) return 'text-emerald-300';
-  if (s === 'failed' || s.startsWith('http 4') || s.startsWith('http 5')) return 'text-red-300';
-  return 'text-amber-300';
+  if (s === 'ready' || s === 'inspected' || s.startsWith('http 2')) return 'text-success';
+  if (s === 'failed' || s.startsWith('http 4') || s.startsWith('http 5')) return 'text-danger';
+  return 'text-warning';
 }
 
 export default function LogsPage() {
@@ -100,11 +105,13 @@ export default function LogsPage() {
         <UpsellOperatorLogs />
         <header className="mb-6 space-y-3">
           <div className="flex items-center gap-2">
-            <ScrollText className="h-5 w-5 text-cyan-300" />
+            <ScrollText className="h-5 w-5 text-primary" />
             <p className="hud-label">Activity Log</p>
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-white">Sua atividade recente</h1>
-          <p className="max-w-xl text-[14px] text-white/55">
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">
+            Sua atividade recente
+          </h1>
+          <p className="max-w-xl text-[14px] text-muted-foreground">
             Histórico dos jobs e ações que você rodou em qualquer ferramenta. Só você vê isso — cada
             usuário tem seu próprio feed.
           </p>
@@ -121,7 +128,7 @@ export default function LogsPage() {
             >
               {opt.label}
               {opt.value !== 'all' && data && !isError && (
-                <span className="ml-1.5 text-[10px] text-white/45">
+                <span className="ml-1.5 text-[10px] text-muted-foreground">
                   {entries.filter((e) => e.kind === opt.value).length}
                 </span>
               )}
@@ -148,7 +155,7 @@ export default function LogsPage() {
         <div className="glass-card overflow-hidden">
           {isLoading ? (
             <div className="flex items-center justify-center p-12">
-              <Loader2 className="h-6 w-6 animate-spin text-cyan-300" />
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
             </div>
           ) : isError ? (
             <p role="alert" className="p-12 text-center text-sm text-destructive">
@@ -156,36 +163,36 @@ export default function LogsPage() {
               ambiente. Tente atualizar novamente.
             </p>
           ) : filtered.length === 0 ? (
-            <div className="p-12 text-center text-[13px] text-white/40">
+            <div className="p-12 text-center text-[13px] text-muted-foreground">
               Nenhuma atividade registrada {filter !== 'all' ? 'para esse filtro' : 'ainda'}.
             </div>
           ) : (
-            <ul className="divide-y divide-white/[0.04]">
+            <ul className="divide-y divide-border">
               {filtered.map((e) => {
                 const meta = KIND_META[e.kind];
                 const Icon = meta.icon;
                 return (
                   <li
                     key={`${e.kind}-${e.id}`}
-                    className="flex items-center gap-4 px-4 py-3 hover:bg-white/[0.02]"
+                    className="flex items-center gap-4 px-4 py-3 hover:bg-muted"
                   >
                     <span
-                      className={`grid h-8 w-8 shrink-0 place-items-center rounded border border-white/[0.06] bg-white/[0.03] ${meta.color}`}
+                      className={`grid h-8 w-8 shrink-0 place-items-center rounded border border-border bg-muted ${meta.color}`}
                     >
                       <Icon className="h-4 w-4" />
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline gap-2">
-                        <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-white/85">
+                        <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-foreground">
                           {meta.label}
                         </p>
                         <span className={`text-[11px] font-mono ${statusColor(e.status)}`}>
                           {e.status}
                         </span>
                       </div>
-                      <p className="mt-0.5 truncate text-[13px] text-white/65">{e.label}</p>
+                      <p className="mt-0.5 truncate text-[13px] text-muted-foreground">{e.label}</p>
                     </div>
-                    <span className="shrink-0 text-[11px] text-white/40">
+                    <span className="shrink-0 text-[11px] text-muted-foreground">
                       {formatRelative(e.createdAt)}
                     </span>
                     <Button asChild size="sm" variant="ghost">

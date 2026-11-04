@@ -13,8 +13,8 @@ export function renderUpsellIdentities(context: TrackingContentContext) {
           <col className="w-[20%]" />
           <col className="w-[38%]" />
         </colgroup>
-        <thead className="text-white/40">
-          <tr className="border-b border-white/[0.06]">
+        <thead className="text-muted-foreground">
+          <tr className="border-b border-border">
             <th className="px-4 py-3 font-medium">Identificador</th>
             <th className="px-4 py-3 font-medium">Compra aprovada</th>
             <th className="px-4 py-3 font-medium">Origem</th>
@@ -23,15 +23,15 @@ export function renderUpsellIdentities(context: TrackingContentContext) {
         </thead>
         <tbody>
           {filteredUpsellIdentities.map((identity) => (
-            <tr key={identity.id} className="border-b border-white/[0.05] last:border-0">
+            <tr key={identity.id} className="border-b border-border last:border-0">
               <td className="px-4 py-3">
-                <code className="select-all break-all text-cyan-100">{identity.vendid}</code>
+                <code className="select-all break-all text-primary">{identity.vendid}</code>
                 <span
                   className={cn(
                     'mt-1 block w-fit rounded-full border px-2 py-0.5 text-[9px]',
                     identity.vendid_confirmed
-                      ? 'border-emerald-300/20 bg-emerald-300/[0.07] text-emerald-200'
-                      : 'border-amber-300/20 bg-amber-300/[0.07] text-amber-200',
+                      ? 'border-success/30 bg-success/10 text-success'
+                      : 'border-warning/30 bg-warning/10 text-warning',
                   )}
                 >
                   {identity.validation_state === 'not_applicable'
@@ -49,13 +49,13 @@ export function renderUpsellIdentities(context: TrackingContentContext) {
                               : 'compra aprovada · validação na fila'}
                 </span>
               </td>
-              <td className="whitespace-nowrap px-4 py-3 text-white/55">
+              <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
                 {new Date(identity.approved_at).toLocaleString('pt-BR', {
                   timeZone: 'America/Sao_Paulo',
                 })}
               </td>
               <td className="whitespace-nowrap px-4 py-3">
-                <span className="rounded-full border border-cyan-300/20 bg-cyan-300/[0.06] px-2.5 py-1 text-cyan-100">
+                <span className="rounded-full border border-border bg-accent px-2.5 py-1 text-primary">
                   {identity.connection_name}
                 </span>
               </td>
@@ -79,7 +79,7 @@ export function renderUpsellIdentities(context: TrackingContentContext) {
                         ? 'alert'
                         : undefined
                     }
-                    className="text-amber-100/55"
+                    className="text-warning"
                     title={identity.validation_error ?? undefined}
                   >
                     {identity.validation_state === 'not_applicable'

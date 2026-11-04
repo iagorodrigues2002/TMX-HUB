@@ -20,11 +20,11 @@ const STATUS_LABEL: Record<DigiAuditView['status'], string> = {
 };
 
 const STATUS_CLASS: Record<DigiAuditView['status'], string> = {
-  draft: 'border-white/15 bg-white/[0.04] text-white/55',
-  in_review: 'border-cyan-300/30 bg-cyan-300/10 text-cyan-200',
-  approved: 'border-emerald-300/30 bg-emerald-300/10 text-emerald-200',
-  rejected: 'border-rose-300/30 bg-rose-300/10 text-rose-200',
-  abandoned: 'border-amber-300/30 bg-amber-300/10 text-amber-200',
+  draft: 'border-border bg-muted text-muted-foreground',
+  in_review: 'border-border bg-accent text-primary',
+  approved: 'border-success/30 bg-success/10 text-success',
+  rejected: 'border-danger/30 bg-danger/10 text-danger',
+  abandoned: 'border-warning/30 bg-warning/10 text-warning',
 };
 
 function progressOf(audit: DigiAuditView): {
@@ -85,7 +85,7 @@ export function AuditList() {
       <div className="flex items-baseline justify-between">
         <div>
           <p className="hud-label">Auditorias de produto</p>
-          <h2 className="mt-1 text-[16px] font-semibold text-white">
+          <h2 className="mt-1 text-[16px] font-semibold text-foreground">
             {audits.length} auditoria(s)
           </h2>
         </div>
@@ -128,10 +128,10 @@ export function AuditList() {
 
       {isLoading ? (
         <div className="glass-card flex items-center justify-center p-8">
-          <Loader2 className="h-5 w-5 animate-spin text-cyan-300" />
+          <Loader2 className="h-5 w-5 animate-spin text-primary" />
         </div>
       ) : audits.length === 0 ? (
-        <div className="glass-card p-8 text-center text-[13px] text-white/55">
+        <div className="glass-card p-8 text-center text-[13px] text-muted-foreground">
           Nenhuma auditoria ainda. Crie a primeira pra começar a aprovar um produto.
         </div>
       ) : (
@@ -147,7 +147,7 @@ export function AuditList() {
                   <div className="min-w-0 flex-1 space-y-1">
                     <Link
                       href={`/tools/digi-approval/${a.id}`}
-                      className="block truncate text-[15px] font-semibold text-white hover:text-cyan-200"
+                      className="block truncate text-[15px] font-semibold text-foreground hover:text-primary"
                     >
                       {a.productName}
                     </Link>
@@ -170,26 +170,26 @@ export function AuditList() {
                 </div>
                 <div className="space-y-2">
                   <div>
-                    <div className="mb-0.5 flex justify-between text-[10px] uppercase tracking-[0.14em] text-white/45">
+                    <div className="mb-0.5 flex justify-between text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
                       <span>Geral</span>
-                      <span className="font-mono text-white/65">
+                      <span className="font-mono text-muted-foreground">
                         {done}/{total}
                       </span>
                     </div>
-                    <div className="h-1 overflow-hidden rounded-full bg-white/[0.06]">
-                      <div className="h-full bg-cyan-300/70" style={{ width: `${pct}%` }} />
+                    <div className="h-1 overflow-hidden rounded-full bg-accent">
+                      <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
                     </div>
                   </div>
                   <div>
-                    <div className="mb-0.5 flex justify-between text-[10px] uppercase tracking-[0.14em] text-white/45">
+                    <div className="mb-0.5 flex justify-between text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
                       <span>Críticos</span>
-                      <span className="font-mono text-white/65">
+                      <span className="font-mono text-muted-foreground">
                         {critical.done}/{critical.total}
                       </span>
                     </div>
-                    <div className="h-1 overflow-hidden rounded-full bg-white/[0.06]">
+                    <div className="h-1 overflow-hidden rounded-full bg-accent">
                       <div
-                        className={`h-full ${critPct === 100 ? 'bg-emerald-300/70' : 'bg-amber-300/70'}`}
+                        className={`h-full ${critPct === 100 ? 'bg-success/10' : 'bg-warning/10'}`}
                         style={{ width: `${critPct}%` }}
                       />
                     </div>

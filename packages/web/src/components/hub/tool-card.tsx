@@ -18,14 +18,14 @@ export function ToolCard({ icon, title, description, href, disabled, badge }: To
     <>
       <div className="tool-card-icon">{icon}</div>
       <div className="flex items-center gap-2">
-        <h3 className="text-[16px] font-semibold leading-tight text-white">{title}</h3>
+        <h3 className="text-[16px] font-semibold leading-tight text-foreground">{title}</h3>
         {badge && (
           <span className="rounded-sm border border-primary/30 bg-primary/5 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-primary">
             {badge}
           </span>
         )}
       </div>
-      <p className="mt-1 text-[13px] leading-snug text-white/55">{description}</p>
+      <p className="mt-1 text-[13px] leading-snug text-muted-foreground">{description}</p>
       {!disabled && (
         <p className="mt-4 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-primary">
           Acessar

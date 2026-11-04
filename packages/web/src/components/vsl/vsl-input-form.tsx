@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { apiClient } from '@/lib/api-client';
+import { useRouter } from '@/lib/motion-router';
 import { Loader2, Video } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -47,7 +47,7 @@ export function VslInputForm() {
           URL da página com a VSL
         </Label>
         <div className="relative">
-          <Video className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30" />
+          <Video className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             id="vsl-url"
             type="url"
@@ -61,20 +61,21 @@ export function VslInputForm() {
           />
         </div>
         {urlError && (
-          <p id="vsl-url-error" className="text-[12px] text-red-300">
+          <p id="vsl-url-error" className="text-[12px] text-danger">
             {urlError}
           </p>
         )}
-        <div className="space-y-1 text-[12px] text-white/40">
+        <div className="space-y-1 text-[12px] text-muted-foreground">
           <p>
             Funciona com VTURB, Panda Video, Vimeo, Wistia, JW Player, Hotmart Player, vidalytics e
             qualquer player baseado em HLS/DASH/MP4.
           </p>
-          <p className="text-cyan-300/70">
+          <p className="text-primary">
             <strong>Dica:</strong> alguns players só carregam o vídeo quando vêem parâmetros de
-            tráfego pago. Cole a URL completa, com <code className="text-white/70">?fbclid=…</code>,{' '}
-            <code className="text-white/70">?utm_*</code> ou outros parâmetros que você usaria no
-            anúncio.
+            tráfego pago. Cole a URL completa, com{' '}
+            <code className="text-muted-foreground">?fbclid=…</code>,{' '}
+            <code className="text-muted-foreground">?utm_*</code> ou outros parâmetros que você
+            usaria no anúncio.
           </p>
         </div>
       </div>
