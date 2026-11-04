@@ -10,6 +10,7 @@ export const endpoints = {
     id: string,
     period?: string | TrackingPeriod,
     salesView: 'general' | 'natural' = 'general',
+    signal?: AbortSignal,
   ): Promise<{
     date: string;
     time_zone: string;
@@ -61,7 +62,7 @@ export const endpoints = {
     const params = trackingPeriodParams(period);
     if (salesView === 'natural') params.set('sales_view', salesView);
     const query = params.size ? `?${params.toString()}` : '';
-    return request(`/v1/offers/${id}/tracking/summary${query}`);
+    return request(`/v1/offers/${id}/tracking/summary${query}`, { signal });
   },
 
   async getTrackingFeeSettings(id: string): Promise<TrackingFeeSettings> {
@@ -120,6 +121,7 @@ export const endpoints = {
     from?: string,
     to?: string,
     salesView: 'general' | 'natural' = 'general',
+    signal?: AbortSignal,
   ): Promise<{
     from: string;
     to: string;
@@ -134,6 +136,6 @@ export const endpoints = {
     if (to) params.set('to', to);
     if (salesView === 'natural') params.set('sales_view', salesView);
     const query = params.toString();
-    return request(`/v1/tracking/overview${query ? `?${query}` : ''}`);
+    return request(`/v1/tracking/overview${query ? `?${query}` : ''}`, { signal });
   },
 };

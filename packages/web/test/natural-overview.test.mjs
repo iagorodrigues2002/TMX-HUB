@@ -8,7 +8,11 @@ test('natural switch preserves period state and existing general sources', () =>
   assert.match(s, /setSalesView/);
   assert.match(s, /aria-pressed/);
   assert.match(s, /Visão natural/);
-  assert.match(s, /apiClient.getTrackingOverview\(period.from, period.to, salesView\)/);
+  assert.match(
+    s,
+    /apiClient.getTrackingOverview\(queryPeriod.from, queryPeriod.to, queryView, signal\)/,
+  );
+  assert.match(s, /useSettledOverviewFilters\(period, salesView\)/);
   assert.match(s, /apiClient.getOfferSnapshots/);
   assert.match(s, /SalesComposition/);
 });
@@ -24,7 +28,7 @@ test('natural ARR respects privacy and excludes unauditable money and history ex
 test('both views share the existing dashboard renderer and ARPU is a KPI card', () => {
   const dashboard = source('overview-dashboard.tsx');
   assert.doesNotMatch(dashboard, /<SalesComposition/);
-  assert.match(dashboard, /salesView=\{salesView\}/);
+  assert.match(dashboard, /salesView=\{queryView\}/);
   const dataset = source('overview-dashboard-dataset.tsx');
   assert.match(dataset, /label="ARPU"/);
   assert.match(dataset, /dataset.arpu/);

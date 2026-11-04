@@ -136,6 +136,18 @@ export function accountOffers(accounts: DashboardAccountSummary[]): OfferDescrip
   );
 }
 
+export function selectedOverviewDataset<T extends { key: string }>(
+  datasets: T[],
+  selected: string,
+  userId: string | undefined,
+) {
+  return (
+    datasets.find((item) => item.key === selected) ??
+    datasets.find((item) => userId && item.key.startsWith(`${userId}:`)) ??
+    datasets[0]
+  );
+}
+
 export function shortDate(value: string) {
   return new Date(`${value}T12:00:00`).toLocaleDateString('pt-BR', {
     day: '2-digit',

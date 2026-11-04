@@ -93,17 +93,22 @@ export const endpoints = {
     return request(`/v1/offers/${id}/utmify-capabilities`);
   },
 
-  async getOfferIntraday(id: string, date?: string): Promise<IntradaySummaryView> {
+  async getOfferIntraday(
+    id: string,
+    date?: string,
+    signal?: AbortSignal,
+  ): Promise<IntradaySummaryView> {
     const query = date ? `?date=${encodeURIComponent(date)}` : '';
-    return request(`/v1/offers/${id}/intraday${query}`);
+    return request(`/v1/offers/${id}/intraday${query}`, { signal });
   },
 
   async getOfferIntradayRange(
     id: string,
     from: string,
     to: string,
+    signal?: AbortSignal,
   ): Promise<IntradayRangeSummaryView> {
     const params = new URLSearchParams({ from, to });
-    return request(`/v1/offers/${id}/intraday/range?${params.toString()}`);
+    return request(`/v1/offers/${id}/intraday/range?${params.toString()}`, { signal });
   },
 };

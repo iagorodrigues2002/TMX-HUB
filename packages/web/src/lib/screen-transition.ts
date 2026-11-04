@@ -16,10 +16,11 @@ export function cancelScreenAnimations(registry: Set<Animation>) {
   registry.clear();
 }
 
-function separateMaterial(panel: HTMLElement) {
+function prepareMaterial(panel: HTMLElement) {
   const existing = panel.querySelector<HTMLElement>(':scope > [data-dolly-material]');
-  if (existing) return { material: existing, restore: () => {} };
+  if (existing) return { material: existing, mount: () => {}, restore: () => {} };
   const computed = getComputedStyle(panel);
+  const needsPosition = computed.position === 'static';
   const material = document.createElement('div');
   material.dataset.dollyMaterial = '';
   material.setAttribute('aria-hidden', 'true');
@@ -48,16 +49,18 @@ function separateMaterial(panel: HTMLElement) {
     });
     panel.style.setProperty(property, value, 'important');
   };
-  if (computed.position === 'static') replace('position', 'relative');
-  replace('isolation', 'isolate');
-  replace('background', 'transparent');
-  replace('border-color', 'transparent');
-  replace('box-shadow', 'none');
-  replace('backdrop-filter', 'none');
-  replace('-webkit-backdrop-filter', 'none');
-  panel.prepend(material);
   return {
     material,
+    mount: () => {
+      if (needsPosition) replace('position', 'relative');
+      replace('isolation', 'isolate');
+      replace('background', 'transparent');
+      replace('border-color', 'transparent');
+      replace('box-shadow', 'none');
+      replace('backdrop-filter', 'none');
+      replace('-webkit-backdrop-filter', 'none');
+      panel.prepend(material);
+    },
     restore: () => {
       material.remove();
       for (const [property, entry] of saved) {
@@ -86,7 +89,19 @@ export function animateScreenPanels(
   const restores: (() => void)[] = [];
   const position = stage.style.position;
   const zIndex = stage.style.zIndex;
-  if (getComputedStyle(stage).position === 'static') stage.style.position = 'relative';
+  const needsPosition = getComputedStyle(stage).position === 'static';
+  // Read connected geometry/materials together; detached material preparation does not invalidate layout.
+  const measured = panels.map((panel) => {
+    const kind =
+      panel.dataset?.motionKind ?? (panel.matches?.('header, footer, p') ? 'text' : undefined);
+    return {
+      panel,
+      kind,
+      box: panel.getBoundingClientRect(),
+      separated: kind === 'text' || kind === 'chrome' ? undefined : prepareMaterial(panel),
+    };
+  });
+  if (needsPosition) stage.style.position = 'relative';
   stage.style.zIndex = '1';
   restores.push(() => {
     stage.style.position = position;
@@ -97,8 +112,7 @@ export function animateScreenPanels(
     registry.add(animation);
     promises.push(animation.finished.catch(() => {}));
   };
-  for (const [index, panel] of panels.entries()) {
-    const box = panel.getBoundingClientRect();
+  for (const [index, { panel, box, kind, separated }] of measured.entries()) {
     const origin = panel.style.transformOrigin;
     panel.style.transformOrigin = `${centerX - box.left}px ${centerY - box.top}px`;
     restores.push(() => {
@@ -107,8 +121,6 @@ export function animateScreenPanels(
     const delay = entering
       ? entranceDelay + index * SCREEN_TRANSITION.stagger
       : Math.min(index, 6) * SCREEN_TRANSITION.stagger * 0.8;
-    const kind =
-      panel.dataset?.motionKind ?? (panel.matches?.('header, footer, p') ? 'text' : undefined);
     if (kind === 'text' || kind === 'chrome') {
       panel.style.transformOrigin = kind === 'text' ? '0 50%' : '50% 50%';
       run(
@@ -157,7 +169,9 @@ export function animateScreenPanels(
         easing: entering ? 'linear' : 'cubic-bezier(.55,0,.75,.2)',
       },
     );
-    const { material, restore } = separateMaterial(panel);
+    if (!separated) continue;
+    const { material, mount, restore } = separated;
+    mount();
     restores.push(restore);
     run(material, entering ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 1 }, { opacity: 0 }], {
       duration: entering ? SCREEN_TRANSITION.enter * 0.9 : SCREEN_TRANSITION.exit,

@@ -4,6 +4,7 @@ import { TRACKING_DASHBOARD_STALE_TIME } from '@/components/tracking/tracking-qu
 import { DataState } from '@/components/ui/data-state';
 import { DateRangeFilter } from '@/components/ui/date-range-filter';
 import { apiClient } from '@/lib/api-client';
+import { useAuth } from '@/lib/auth-context';
 import { DataPendingContext } from '@/lib/data-pending';
 import {
   DASHBOARD_DATE_PRESETS,
@@ -17,7 +18,11 @@ import { useQueries, useQuery } from '@tanstack/react-query';
 import { LayoutGrid } from 'lucide-react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { GatewayOverview } from './gateway-overview';
-import { buildDatasets, hasCompleteOverviewScope } from './overview-dashboard-build-datasets';
+import {
+  buildDatasets,
+  hasCompleteOverviewScope,
+  overviewDetailOfferIds,
+} from './overview-dashboard-build-datasets';
 import { Dataset } from './overview-dashboard-dataset';
 import {
   type OfferDescriptor,
@@ -26,21 +31,29 @@ import {
 } from './overview-dashboard-support';
 import { periodArpu, useSalesComposition } from './sales-composition';
 import { SIGNAL_PREVIEW, SignalPreview } from './signal-preview';
+import { useSettledOverviewFilters } from './use-settled-overview-filters';
 
 export function OverviewDashboard(props: OverviewDashboardProps) {
   const { scope, initialPeriod } = props;
+  const { user } = useAuth();
   const [period, setPeriod] = useState<DateRange>(() => initialPeriod ?? rollingDateRange(7));
   const [salesView, setSalesView] = useState<'general' | 'natural'>('general');
   const [selectedDataset, setSelectedDataset] = useState('');
+  const {
+    period: queryPeriod,
+    salesView: queryView,
+    pending: filtersPending,
+  } = useSettledOverviewFilters(period, salesView);
   const financialQuery = useQuery({
-    queryKey: ['overview-financial', period.from, period.to, salesView],
-    queryFn: () => apiClient.getTrackingOverview(period.from, period.to, salesView),
+    queryKey: ['overview-financial', queryPeriod.from, queryPeriod.to, queryView],
+    queryFn: ({ signal }) =>
+      apiClient.getTrackingOverview(queryPeriod.from, queryPeriod.to, queryView, signal),
     staleTime: TRACKING_DASHBOARD_STALE_TIME,
     retry: false,
   });
   const dashboard = useQuery({
-    queryKey: ['dashboard-summary', period.from, period.to],
-    queryFn: () => apiClient.getDashboardSummary(period),
+    queryKey: ['dashboard-summary', queryPeriod.from, queryPeriod.to],
+    queryFn: ({ signal }) => apiClient.getDashboardSummary(queryPeriod, signal),
     enabled: scope === 'account',
     refetchOnWindowFocus: false,
     staleTime: TRACKING_DASHBOARD_STALE_TIME,
@@ -58,35 +71,53 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
         ]
       : accountOffers(dashboard.data?.accounts ?? []);
 
+  const detailOfferIds = overviewDetailOfferIds(
+    offers,
+    scope,
+    selectedDataset,
+    user?.id,
+    financialQuery.data?.offers,
+    !SIGNAL_PREVIEW || financialQuery.isError,
+  );
   const snapshotQueries = useQueries({
     queries: offers.map((offer) => ({
-      queryKey: ['overview-snapshots', offer.id, period.from, period.to],
-      queryFn: () => apiClient.getOfferSnapshots(offer.id, period),
+      queryKey: ['overview-snapshots', offer.id, queryPeriod.from, queryPeriod.to],
+      queryFn: ({ signal }) => apiClient.getOfferSnapshots(offer.id, queryPeriod, signal),
+      enabled: detailOfferIds.has(offer.id),
       refetchOnWindowFocus: false,
       staleTime: TRACKING_DASHBOARD_STALE_TIME,
     })),
   });
   const trackingQueries = useQueries({
     queries: offers.map((offer) => ({
-      queryKey: ['overview-tracking-summary', offer.id, period.from, period.to, salesView],
-      queryFn: () => apiClient.getTrackingSummary(offer.id, period, salesView),
+      queryKey: [
+        'overview-tracking-summary',
+        offer.id,
+        queryPeriod.from,
+        queryPeriod.to,
+        queryView,
+      ],
+      queryFn: ({ signal }) =>
+        apiClient.getTrackingSummary(offer.id, queryPeriod, queryView, signal),
+      enabled: detailOfferIds.has(offer.id),
       retry: false,
       staleTime: TRACKING_DASHBOARD_STALE_TIME,
     })),
   });
-  const intradayEnabled = salesView === 'general' && supportsIntradayRange(period);
+  const intradayEnabled = queryView === 'general' && supportsIntradayRange(queryPeriod);
   const intradayQueries = useQueries({
     queries: offers.map((offer) => ({
-      queryKey: ['overview-intraday', offer.id, period.from, period.to],
-      queryFn: () => apiClient.getOfferIntradayRange(offer.id, period.from, period.to),
-      enabled: intradayEnabled,
+      queryKey: ['overview-intraday', offer.id, queryPeriod.from, queryPeriod.to],
+      queryFn: ({ signal }) =>
+        apiClient.getOfferIntradayRange(offer.id, queryPeriod.from, queryPeriod.to, signal),
+      enabled: intradayEnabled && detailOfferIds.has(offer.id),
       retry: false,
       refetchOnWindowFocus: false,
       staleTime: TRACKING_DASHBOARD_STALE_TIME,
     })),
   });
 
-  const composition = useSalesComposition(period.from, period.to);
+  const composition = useSalesComposition(queryPeriod.from, queryPeriod.to);
   const datasets = buildDatasets(
     scope,
     offers,
@@ -96,26 +127,36 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
     financialQuery.data?.offers,
   ).map((dataset) => ({
     ...dataset,
-    arpu: periodArpu(composition.data, dataset.offerIds ?? [], salesView),
-    daily: salesView === 'general' ? dataset.daily : [],
+    arpu: periodArpu(composition.data, dataset.offerIds ?? [], queryView),
+    daily: queryView === 'general' ? dataset.daily : [],
     intradayUnavailableReason:
-      salesView === 'general' && !intradayEnabled ? INTRADAY_RANGE_LIMIT_MESSAGE : undefined,
+      queryView === 'general' && !intradayEnabled ? INTRADAY_RANGE_LIMIT_MESSAGE : undefined,
   }));
+  const requiredQuery = (_query: unknown, index: number) => {
+    const offer = offers[index];
+    return offer ? detailOfferIds.has(offer.id) : false;
+  };
+  const activeSnapshotQueries = snapshotQueries.filter(requiredQuery);
+  const activeIntradayQueries = intradayQueries.filter(requiredQuery);
   const detailQueries = [
-    ...snapshotQueries,
-    ...trackingQueries,
-    ...(intradayEnabled ? intradayQueries : []),
+    ...activeSnapshotQueries,
+    ...trackingQueries.filter(requiredQuery),
+    ...(intradayEnabled ? activeIntradayQueries : []),
     financialQuery,
     composition,
   ];
   const isLoading =
-    (scope === 'account' && dashboard.isLoading) || detailQueries.some((query) => query.isLoading);
-  const isFetching = dashboard.isFetching || detailQueries.some((query) => query.isFetching);
+    filtersPending ||
+    (scope === 'account' && dashboard.isLoading) ||
+    detailQueries.some((query) => query.isLoading);
+  const isFetching =
+    filtersPending || dashboard.isFetching || detailQueries.some((query) => query.isFetching);
   const hasPartialError =
     dashboard.isError || detailQueries.some((query) => query.isError && !query.data);
   const hasFatalError =
     (scope === 'account' && dashboard.isError && !dashboard.data) ||
-    (offers.length > 0 && snapshotQueries.every((query) => query.isError && !query.data));
+    (activeSnapshotQueries.length > 0 &&
+      activeSnapshotQueries.every((query) => query.isError && !query.data));
 
   const identity = `${getSessionGeneration()}:${scope}:${props.offerId ?? ''}`;
   const committed = useRef<{
@@ -228,16 +269,16 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
             )}
             {SIGNAL_PREVIEW ? (
               <SignalPreview
-                salesView={salesView}
+                salesView={queryView}
                 selected={selectedDataset}
                 onSelect={setSelectedDataset}
-                period={period}
+                period={queryPeriod}
                 datasets={presentedDatasets}
                 accounts={scope === 'account' ? presentedFinancial?.accounts : undefined}
               />
             ) : (
               presentedDatasets.map((dataset) => (
-                <Dataset key={dataset.key} dataset={dataset} salesView={salesView} />
+                <Dataset key={dataset.key} dataset={dataset} salesView={queryView} />
               ))
             )}
             {!SIGNAL_PREVIEW && scope === 'account' && presentedFinancial?.accounts && (

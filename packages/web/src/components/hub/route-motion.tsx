@@ -181,6 +181,17 @@ export function RouteMotion({ children }: { children: ReactNode }) {
     enter();
     // Only explicit identities enter again. Polling and metric text changes stay still.
     const observer = new MutationObserver((records) => {
+      // Count-up text replacements do not change the route or its panel structure.
+      if (
+        !records.some(
+          (record) =>
+            record.type === 'attributes' ||
+            [...record.addedNodes, ...record.removedNodes].some(
+              (node) => node instanceof HTMLElement,
+            ),
+        )
+      )
+        return;
       const nextSurface = routeSurface(root);
       if (nextSurface !== surface) {
         cancelAnimations();

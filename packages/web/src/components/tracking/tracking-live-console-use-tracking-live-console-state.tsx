@@ -25,7 +25,7 @@ export function useTrackingLiveConsoleState({
   const period = { from, to };
   const summary = useQuery({
     queryKey: ['tracking-summary', offerId, from, to],
-    queryFn: () => apiClient.getTrackingSummary(offerId, period),
+    queryFn: ({ signal }) => apiClient.getTrackingSummary(offerId, period, 'general', signal),
     enabled: activeView !== 'attribution' && activeView !== 'infrastructure',
     refetchInterval: 30_000,
     retry: false,

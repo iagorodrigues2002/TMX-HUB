@@ -43,7 +43,7 @@ export function useOfferListState() {
   });
   const summaryQuery = useQuery({
     queryKey: ['dashboard-summary', from, to],
-    queryFn: () => apiClient.getDashboardSummary({ from, to }),
+    queryFn: ({ signal }) => apiClient.getDashboardSummary({ from, to }, signal),
     refetchInterval: 60_000,
   });
   const offers = offersQuery.data ?? [];

@@ -53,7 +53,7 @@ export function useOfertaDetailPageState({ params }: { params: Promise<{ id: str
 
   const snapshotsQuery = useQuery({
     queryKey: ['offer-snapshots', id, from, to],
-    queryFn: () => apiClient.getOfferSnapshots(id, { from, to }),
+    queryFn: ({ signal }) => apiClient.getOfferSnapshots(id, { from, to }, signal),
     refetchOnWindowFocus: false,
   });
   const data = snapshotsQuery.data;
@@ -62,10 +62,10 @@ export function useOfertaDetailPageState({ params }: { params: Promise<{ id: str
   const intradayRangeSupported = supportsIntradayRange(intradayPeriod);
   const intradayQuery = useQuery<IntradaySummaryView | IntradayRangeSummaryView>({
     queryKey: ['offer-intraday', id, intradayFrom, intradayTo],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       isIntradayRange
-        ? apiClient.getOfferIntradayRange(id, intradayFrom, intradayTo)
-        : apiClient.getOfferIntraday(id, intradayFrom),
+        ? apiClient.getOfferIntradayRange(id, intradayFrom, intradayTo, signal)
+        : apiClient.getOfferIntraday(id, intradayFrom, signal),
     enabled: Boolean(offer?.utmifyConfigured) && intradayRangeSupported,
     refetchInterval: !isIntradayRange && intradayFrom === todayIso() ? 60_000 : false,
     refetchOnWindowFocus: false,

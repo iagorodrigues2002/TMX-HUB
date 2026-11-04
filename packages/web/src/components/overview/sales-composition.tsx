@@ -29,8 +29,10 @@ export function useSalesComposition(from: string, to: string) {
   const { user } = useAuth();
   return useQuery({
     queryKey: ['sales-composition', user?.id, user?.role, from, to],
-    queryFn: async () =>
-      response.parse(await request(`/v1/tracking/sales-composition?from=${from}&to=${to}`)),
+    queryFn: async ({ signal }) =>
+      response.parse(
+        await request(`/v1/tracking/sales-composition?from=${from}&to=${to}`, { signal }),
+      ),
     enabled: Boolean(user),
     staleTime: 30000,
     retry: false,

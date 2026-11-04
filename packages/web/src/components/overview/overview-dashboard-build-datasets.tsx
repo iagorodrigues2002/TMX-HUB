@@ -16,8 +16,47 @@ import {
   addMetrics,
   computedMetrics,
   emptyMetrics,
+  selectedOverviewDataset,
   shortDate,
 } from './overview-dashboard-support';
+
+function validFinancialRevenue(
+  financial: TrackingOverviewOffer | undefined,
+): financial is TrackingOverviewOffer {
+  const gross = Number(financial?.gross_revenue_brl_minor);
+  return Boolean(
+    financial &&
+      /^\d+$/.test(financial.gross_revenue_brl_minor) &&
+      Number.isSafeInteger(gross) &&
+      gross >= 0 &&
+      Number.isSafeInteger(financial.paid_orders) &&
+      financial.paid_orders >= 0,
+  );
+}
+
+/** Read other scopes on selection; missing financial rows still need their summary fallback. */
+export function overviewDetailOfferIds(
+  offers: OfferDescriptor[],
+  scope: OverviewDashboardProps['scope'],
+  selected: string,
+  userId: string | undefined,
+  finances: TrackingOverviewOffer[] | undefined,
+  includeAll = false,
+) {
+  const groups = offers.map((offer) => ({
+    key: scope === 'offer' ? offer.id : `${offer.ownerId}:${offer.currency}`,
+    offer,
+  }));
+  const active = selectedOverviewDataset(groups, selected, userId)?.key;
+  const covered = new Set(finances?.filter(validFinancialRevenue).map((row) => row.offer_id));
+  return new Set(
+    groups
+      .filter(
+        ({ key, offer }) => includeAll || key === active || (finances && !covered.has(offer.id)),
+      )
+      .map(({ offer }) => offer.id),
+  );
+}
 
 export function buildDatasets(
   scope: OverviewDashboardProps['scope'],
@@ -82,13 +121,7 @@ export function buildDatasets(
     const financial = finances?.find((row) => row.offer_id === descriptor.id);
     const financialGross = Number(financial?.gross_revenue_brl_minor);
     const summaryGross = Number(summary?.paid_revenue_brl_minor);
-    const financialValid =
-      financial &&
-      /^\d+$/.test(financial.gross_revenue_brl_minor) &&
-      Number.isSafeInteger(financialGross) &&
-      financialGross >= 0 &&
-      Number.isSafeInteger(financial.paid_orders) &&
-      financial.paid_orders >= 0;
+    const financialValid = validFinancialRevenue(financial);
     const summaryValid =
       summary &&
       /^\d+$/.test(summary.paid_revenue_brl_minor) &&

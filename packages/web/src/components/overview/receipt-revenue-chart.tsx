@@ -33,9 +33,10 @@ export function ReceiptRevenueChart({
     queries: scopedOffers.map((id) => ({
       queryKey: ['receipt-revenue', user?.id, user?.role, id, period.from, period.to, salesView],
       enabled: Boolean(user),
-      queryFn: () =>
+      queryFn: ({ signal }) =>
         request<ReceiptRevenue>(
           `/v1/offers/${id}/tracking/receipt-revenue?${new URLSearchParams({ from: period.from, to: period.to, sales_view: salesView })}`,
+          { signal },
         ),
       retry: false,
       staleTime: 60_000,

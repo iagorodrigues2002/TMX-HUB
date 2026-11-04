@@ -9,6 +9,7 @@ export const endpoints = {
   async getOfferSnapshots(
     id: string,
     range?: { from?: string; to?: string },
+    signal?: AbortSignal,
   ): Promise<OfferSnapshotsView> {
     const params = new URLSearchParams();
     if (range?.from) params.set('from', range.from);
@@ -16,16 +17,22 @@ export const endpoints = {
     const qs = params.toString();
     const wire = await request<OfferSnapshotsWire>(
       `/v1/offers/${id}/snapshots${qs ? `?${qs}` : ''}`,
+      { signal },
     );
     return fromOfferSnapshotsWire(wire);
   },
 
-  async getDashboardSummary(range?: { from?: string; to?: string }): Promise<DashboardSummary> {
+  async getDashboardSummary(
+    range?: { from?: string; to?: string },
+    signal?: AbortSignal,
+  ): Promise<DashboardSummary> {
     const params = new URLSearchParams();
     if (range?.from) params.set('from', range.from);
     if (range?.to) params.set('to', range.to);
     const qs = params.toString();
-    const wire = await request<DashboardSummaryWire>(`/v1/dashboard/summary${qs ? `?${qs}` : ''}`);
+    const wire = await request<DashboardSummaryWire>(`/v1/dashboard/summary${qs ? `?${qs}` : ''}`, {
+      signal,
+    });
     return fromDashboardSummaryWire(wire);
   },
 

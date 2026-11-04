@@ -38,10 +38,11 @@ test('both callers guard requests; overview excludes disabled queries from refre
   const detail = readFileSync('src/app/ofertas/[id]/page-use-oferta-detail-page-state.tsx', 'utf8');
   assert.match(
     overview,
-    /const intradayEnabled = salesView === 'general' && supportsIntradayRange\(period\)/,
+    /const intradayEnabled = queryView === 'general' && supportsIntradayRange\(queryPeriod\)/,
   );
   assert.match(overview, /enabled: intradayEnabled/);
-  assert.match(overview, /\.\.\.\(intradayEnabled \? intradayQueries : \[\]\)/);
+  assert.match(overview, /intradayQueries\.filter\(requiredQuery\)/);
+  assert.match(overview, /\.\.\.\(intradayEnabled \? activeIntradayQueries : \[\]\)/);
   assert.match(overview, /intradayUnavailableReason:/);
   assert.match(detail, /enabled: Boolean\(offer\?\.utmifyConfigured\) && intradayRangeSupported/);
   assert.match(detail, /const intraday = intradayRangeSupported \? intradayQuery.data : undefined/);

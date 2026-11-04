@@ -124,6 +124,8 @@ export async function request<T>(path: string, opts: RequestOptions = {}): Promi
       cache: 'no-store',
     });
   } catch (err) {
+    // Query cancellation is intentional, not a connection failure to log or retry.
+    if (opts.signal?.aborted) throw err;
     // The browser's "Failed to fetch" is opaque. Try to surface the real cause:
     // CORS, mixed content, DNS, offline, etc. — and always include the URL.
     const cause = (err as Error)?.message || 'unknown error';

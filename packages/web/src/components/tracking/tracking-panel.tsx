@@ -22,7 +22,7 @@ export function TrackingPanel({ offerId, canManage }: { offerId: string; canMana
   });
   const summary = useQuery({
     queryKey: ['tracking-summary', offerId],
-    queryFn: () => apiClient.getTrackingSummary(offerId),
+    queryFn: ({ signal }) => apiClient.getTrackingSummary(offerId, undefined, 'general', signal),
     enabled: Boolean(config.data?.configured),
     refetchInterval: 30_000,
     retry: false,

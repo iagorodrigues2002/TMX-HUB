@@ -76,9 +76,10 @@ function Activity({
   const queries = useQueries({
     queries: offerIds.map((id) => ({
       queryKey: ['country-activity', scope, id],
-      queryFn: () =>
+      queryFn: ({ signal }) =>
         request<Response>(
           `/v1/offers/${id}/tracking/country-activity?${new URLSearchParams({ from: period.from, to: period.to, sales_view: salesView })}`,
+          { signal },
         ),
       retry: false,
       staleTime: 30_000,

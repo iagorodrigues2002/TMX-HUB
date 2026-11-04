@@ -33,7 +33,11 @@ import { useEffect, useId, useState } from 'react';
 import { CountryActivityMap } from './country-activity-map';
 import { GatewayOverview } from './gateway-overview';
 import { Dataset } from './overview-dashboard-dataset';
-import { type OverviewDataset, formatConversionRate } from './overview-dashboard-support';
+import {
+  type OverviewDataset,
+  formatConversionRate,
+  selectedOverviewDataset,
+} from './overview-dashboard-support';
 import { ReceiptRevenueChart } from './receipt-revenue-chart';
 import styles from './signal-preview.module.css';
 
@@ -80,16 +84,14 @@ export function SignalPreview({
   const [hidden, setHidden] = useState(false);
   const { isPrivate } = usePrivacy();
   const { user } = useAuth();
-  const dataset =
-    datasets.find((item) => item.key === selected) ??
-    datasets.find((item) => item.key.startsWith(`${user?.id}:`)) ??
-    datasets[0];
+  const dataset = selectedOverviewDataset(datasets, selected, user?.id);
   const funnelQueries = useQueries({
     queries: [...new Set(dataset?.offerIds ?? [])].map((id) => ({
       queryKey: ['funnel-activity', user?.id, user?.role, id, period.from, period.to, salesView],
-      queryFn: () =>
+      queryFn: ({ signal }) =>
         request<{ version: string; entrants: number; checkouts: number; buyers: number }>(
           `/v1/offers/${id}/tracking/funnel-activity?${new URLSearchParams({ from: period.from, to: period.to, sales_view: salesView })}`,
+          { signal },
         ),
       staleTime: 60_000,
       refetchInterval: 60_000,

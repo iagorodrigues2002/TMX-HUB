@@ -70,7 +70,7 @@ export function TrackingOverviewDashboard() {
   const [displayCurrency] = useDisplayCurrency();
   const overview = useQuery({
     queryKey: ['tracking-overview', from, to],
-    queryFn: () => apiClient.getTrackingOverview(from, to),
+    queryFn: ({ signal }) => apiClient.getTrackingOverview(from, to, 'general', signal),
     retry: false,
     staleTime: TRACKING_DASHBOARD_STALE_TIME,
   });

@@ -57,3 +57,51 @@ test('tool copy exits before the next screen appears and waits through the enlar
     else Reflect.deleteProperty(globalThis, 'getComputedStyle');
   }
 });
+
+test('screen transitions measure every panel before mutating the connected layout', async () => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'getComputedStyle');
+  let mutated = false;
+  let readsAfterWrites = 0;
+  Object.defineProperty(globalThis, 'getComputedStyle', {
+    configurable: true,
+    value: () => {
+      if (mutated) readsAfterWrites++;
+      return { position: 'relative' };
+    },
+  });
+  const element = () => ({
+    style: new Proxy(
+      {},
+      {
+        set(target, property, value) {
+          mutated = true;
+          return Reflect.set(target, property, value);
+        },
+      },
+    ),
+    dataset: {},
+    children: [],
+    matches: () => false,
+    getBoundingClientRect: () => {
+      if (mutated) readsAfterWrites++;
+      return { left: 0, top: 0, width: 900, height: 700 };
+    },
+    animate: () => {
+      mutated = true;
+      return { finished: Promise.resolve(), cancel() {} };
+    },
+    querySelector: () => ({ animate: () => ({ finished: Promise.resolve(), cancel() {} }) }),
+  });
+  try {
+    await animateScreenPanels(
+      element() as unknown as HTMLElement,
+      Array.from({ length: 24 }, element) as unknown as HTMLElement[],
+      true,
+      new Set(),
+    );
+    assert.equal(readsAfterWrites, 0, 'batch geometry and material reads before animation writes');
+  } finally {
+    if (descriptor) Object.defineProperty(globalThis, 'getComputedStyle', descriptor);
+    else Reflect.deleteProperty(globalThis, 'getComputedStyle');
+  }
+});
