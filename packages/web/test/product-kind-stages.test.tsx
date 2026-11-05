@@ -127,3 +127,28 @@ for (const state of ['pending', 'error'] as const) {
     if (state === 'error') assert.match(html, /Tentar novamente/);
   });
 }
+
+test('legacy-supported default kinds remain available without configured funnel stages', () => {
+  const { context } = fixture();
+  context.upsellIntelligence.data!.stages = [];
+  const html = renderToStaticMarkup(renderProductKinds(context));
+  assert.match(html, /value="upsell_5">Upsell 5/);
+  assert.match(html, /value="upsell_9">Upsell 9/);
+  assert.doesNotMatch(html, /value="upsell_10"/);
+  assert.equal((html.match(/<option /g) ?? []).length, 10);
+});
+
+test('configured names supplement rather than hide the other supported upsells', () => {
+  const { context } = fixture();
+  context.upsellIntelligence.data!.stages[0].name = 'Oferta especial';
+  context.upsellIntelligence.data!.stages.splice(1);
+  context.upsellIntelligence.data!.stages.push({
+    ...context.upsellIntelligence.data!.stages[0],
+    stage_key: 'upsell_20',
+    name: 'Oferta avançada',
+  });
+  const html = renderToStaticMarkup(renderProductKinds(context));
+  assert.match(html, /value="upsell">Oferta especial/);
+  assert.match(html, /value="upsell_5">Upsell 5/);
+  assert.match(html, /value="upsell_20">Oferta avançada/);
+});

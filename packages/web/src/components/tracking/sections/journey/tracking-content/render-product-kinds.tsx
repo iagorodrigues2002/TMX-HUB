@@ -2,7 +2,7 @@
 import { Button } from '@/components/ui/button';
 import type { TrackingProductKind } from '@/lib/api-client';
 import type { TrackingContentContext } from './tracking-content-context';
-import { stageKeyToProductKind } from './tracking-helpers';
+import { UPSELL_STAGE_OPTIONS, stageKeyToProductKind, upsellStageLabel } from './tracking-helpers';
 export function renderProductKinds(context: TrackingContentContext) {
   const {
     productKinds,
@@ -15,6 +15,11 @@ export function renderProductKinds(context: TrackingContentContext) {
     reconcileUtmifyUpsells,
     removeProductKind,
   } = context;
+  // shortcut: default to single-digit kinds; extend after migrating legacy database constraints.
+  const stageKeys = new Set([
+    ...UPSELL_STAGE_OPTIONS.slice(0, 9),
+    ...(upsellIntelligence.data?.stages ?? []).map((stage) => stage.stage_key),
+  ]);
   return (
     <div className="mt-6">
       <p className="hud-label">Produtos: front ou upsell?</p>
@@ -54,9 +59,10 @@ export function renderProductKinds(context: TrackingContentContext) {
                     }
                   >
                     <option value="front">Front</option>
-                    {(upsellIntelligence.data?.stages ?? []).map((stage) => (
-                      <option key={stage.stage_key} value={stageKeyToProductKind(stage.stage_key)}>
-                        {stage.name}
+                    {[...stageKeys].map((key) => (
+                      <option key={key} value={stageKeyToProductKind(key)}>
+                        {upsellIntelligence.data?.stages.find((stage) => stage.stage_key === key)
+                          ?.name ?? upsellStageLabel(key)}
                       </option>
                     ))}
                   </select>
