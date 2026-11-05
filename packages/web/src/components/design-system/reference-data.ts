@@ -129,8 +129,8 @@ export const referenceMotion = [
   { name: 'Comparativos', value: '1.450 ms', detail: 'Interpolação e mudança de cor discretas.' },
   {
     name: 'Troca de telas',
-    value: '380 + 780 ms',
-    detail: 'Saída 500ms; entrada após 380ms, escalonada a cada 75ms.',
+    value: '220 + até 80 ms',
+    detail: 'Navegação imediata; entrada com transform e opacity, sem cópia ou desfoque.',
   },
 ] as const;
 

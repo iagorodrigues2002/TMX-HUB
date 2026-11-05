@@ -108,20 +108,23 @@ export function computedMetrics(parts: MetricParts): MetricsView {
   };
 }
 
+const compactNumber = new Intl.NumberFormat('pt-BR', {
+  notation: 'compact',
+  maximumFractionDigits: 1,
+});
+const conversionRate = new Intl.NumberFormat('pt-BR', {
+  style: 'percent',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
 export function formatCompactNumber(value: number) {
-  return new Intl.NumberFormat('pt-BR', {
-    notation: 'compact',
-    maximumFractionDigits: 1,
-  }).format(value);
+  return compactNumber.format(value);
 }
 
 export function formatConversionRate(value: number | null) {
   if (value === null || !Number.isFinite(value)) return '—';
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'percent',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
+  return conversionRate.format(value);
 }
 
 export function accountOffers(accounts: DashboardAccountSummary[]): OfferDescriptor[] {

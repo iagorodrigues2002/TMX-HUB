@@ -303,9 +303,9 @@ export function DesignSystemReference() {
                 <div className={styles.materialExample}>
                   <Layers3 aria-hidden />
                   <span>
-                    Vidro · blur 24px
+                    Vidro · blur até 12px nos menus
                     <br />
-                    <small>Fundo atravessa. A tinta do texto permanece opaca.</small>
+                    <small>Painéis usam gradientes; a tinta do texto permanece opaca.</small>
                   </span>
                 </div>
                 <div className={styles.chips}>
@@ -721,8 +721,7 @@ export function DesignSystemReference() {
               <CardHeader>
                 <CardTitle>Transição de telas</CardTitle>
                 <CardDescription>
-                  Transição completa do preview: saída, entrada escalonada, desfoque e números na
-                  ida e na volta.
+                  Entrada curta sem desfoque ou cópia da tela; números animados na ida e na volta.
                 </CardDescription>
               </CardHeader>
               <CardContent>

@@ -31,7 +31,7 @@ export function TrackingOfferProvider({ children }: { children: ReactNode }) {
   const [storedOfferId, setStoredOfferId] = useState('');
   const [hasReadStoredOffer, setHasReadStoredOffer] = useState(false);
   const offersQuery = useQuery({
-    queryKey: ['tracking-offers'],
+    queryKey: ['offers'],
     queryFn: () => apiClient.listOffers(),
     retry: false,
     staleTime: TRACKING_DASHBOARD_STALE_TIME,

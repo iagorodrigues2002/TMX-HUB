@@ -1,107 +1,48 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { SCREEN_TRANSITION, animateScreenPanels } from '../src/lib/screen-transition';
+import { animateScreenPanels, cancelScreenAnimations } from '../src/lib/screen-transition';
 
-test('tool copy exits before the next screen appears and waits through the enlarged card phase', async () => {
-  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'getComputedStyle');
-  Object.defineProperty(globalThis, 'getComputedStyle', {
-    configurable: true,
-    value: () => ({ position: 'relative' }),
-  });
-  const calls: { element: string; frames: Keyframe[]; options: KeyframeAnimationOptions }[] = [];
-  const element = (name: string, text = false) => ({
+test('transitions animate each panel once using only opacity and transform, with bounded staggering', async () => {
+  const calls: { frames: Keyframe[]; options: KeyframeAnimationOptions }[] = [];
+  const panels = Array.from({ length: 40 }, () => ({
     style: {},
-    dataset: {},
-    children: [] as unknown[],
-    matches: () => text,
-    getBoundingClientRect: () => ({ left: 0, top: 0, width: 900, height: 700 }),
-    animate: (frames: Keyframe[], options: KeyframeAnimationOptions) => {
-      calls.push({ element: name, frames, options });
+    getBoundingClientRect() {
+      throw new Error('transitions must not measure layout');
+    },
+    cloneNode() {
+      throw new Error('transitions must not copy content');
+    },
+    children: [{ animate: () => assert.fail('do not animate individual children') }],
+    animate(frames: Keyframe[], options: KeyframeAnimationOptions) {
+      calls.push({ frames, options });
       return { finished: Promise.resolve(), cancel() {} };
     },
-  });
-  const stage = element('stage');
-  const heading = element('heading', true);
-  const content = element('content');
-  const material = element('material');
-  const card = { ...element('card'), children: [material, content], querySelector: () => material };
-  try {
-    for (const entering of [false, true]) {
-      calls.length = 0;
-      await animateScreenPanels(
-        stage as unknown as HTMLElement,
-        [heading, card] as unknown as HTMLElement[],
-        entering,
-        new Set(),
-      );
-      for (const name of ['heading', 'content']) {
-        const animation = calls.find((call) => call.element === name);
-        assert.ok(animation);
-        if (entering && name === 'content') {
-          assert.equal(animation.frames[1].opacity, 0);
-          assert.equal(animation.frames[1].offset, 0.24);
-          assert.equal(animation.frames.at(-1)?.opacity, 1);
-        } else if (!entering) {
-          assert.equal(animation.frames[1].opacity, 0);
-          assert.ok(Number(animation.options.duration) * 0.4 < SCREEN_TRANSITION.overlap);
-        }
-      }
-      assert.ok(
-        !calls.some(
-          (call) => call.element === 'heading' && call.frames[0].transform === 'scale(1.5)',
-        ),
-      );
+  }));
+  for (const entering of [true, false]) {
+    calls.length = 0;
+    await animateScreenPanels(
+      panels[0] as unknown as HTMLElement,
+      panels as unknown as HTMLElement[],
+      entering,
+      new Set(),
+    );
+    assert.equal(calls.length, panels.length);
+    for (const call of calls) {
+      assert.ok(Number(call.options.delay) <= 80);
+      assert.ok(Number(call.options.delay) + Number(call.options.duration) <= 300);
+      for (const frame of call.frames)
+        assert.deepEqual(Object.keys(frame).sort(), ['opacity', 'transform']);
     }
-  } finally {
-    if (descriptor) Object.defineProperty(globalThis, 'getComputedStyle', descriptor);
-    else Reflect.deleteProperty(globalThis, 'getComputedStyle');
   }
 });
 
-test('screen transitions measure every panel before mutating the connected layout', async () => {
-  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'getComputedStyle');
-  let mutated = false;
-  let readsAfterWrites = 0;
-  Object.defineProperty(globalThis, 'getComputedStyle', {
-    configurable: true,
-    value: () => {
-      if (mutated) readsAfterWrites++;
-      return { position: 'relative' };
-    },
-  });
-  const element = () => ({
-    style: new Proxy(
-      {},
-      {
-        set(target, property, value) {
-          mutated = true;
-          return Reflect.set(target, property, value);
-        },
-      },
-    ),
-    dataset: {},
-    children: [],
-    matches: () => false,
-    getBoundingClientRect: () => {
-      if (mutated) readsAfterWrites++;
-      return { left: 0, top: 0, width: 900, height: 700 };
-    },
-    animate: () => {
-      mutated = true;
-      return { finished: Promise.resolve(), cancel() {} };
-    },
-    querySelector: () => ({ animate: () => ({ finished: Promise.resolve(), cancel() {} }) }),
-  });
-  try {
-    await animateScreenPanels(
-      element() as unknown as HTMLElement,
-      Array.from({ length: 24 }, element) as unknown as HTMLElement[],
-      true,
-      new Set(),
-    );
-    assert.equal(readsAfterWrites, 0, 'batch geometry and material reads before animation writes');
-  } finally {
-    if (descriptor) Object.defineProperty(globalThis, 'getComputedStyle', descriptor);
-    else Reflect.deleteProperty(globalThis, 'getComputedStyle');
-  }
+test('cancelling a transition releases its animations without changing panel styles', () => {
+  let cancelled = 0;
+  const registry = new Set([
+    { cancel: () => cancelled++ } as unknown as Animation,
+    { cancel: () => cancelled++ } as unknown as Animation,
+  ]);
+  cancelScreenAnimations(registry);
+  assert.equal(cancelled, 2);
+  assert.equal(registry.size, 0);
 });

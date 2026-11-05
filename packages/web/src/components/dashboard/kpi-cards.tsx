@@ -2,6 +2,7 @@
 
 import { Kpi } from '@/components/ui/kpi';
 import type { MetricsView } from '@/lib/api-client';
+import { formatCurrency, formatInt } from '@/lib/number-format';
 import {
   CircleDollarSign,
   CreditCard,
@@ -13,22 +14,10 @@ import {
   Zap,
 } from 'lucide-react';
 
-export function formatCurrency(n: number | null | undefined, currency = 'BRL'): string {
-  if (n === null || n === undefined || !Number.isFinite(n)) return '—';
-  return n.toLocaleString('pt-BR', {
-    style: 'currency',
-    currency,
-    maximumFractionDigits: 2,
-  });
-}
+export { formatCurrency, formatInt } from '@/lib/number-format';
 
 export function formatBRL(n: number | null | undefined): string {
   return formatCurrency(n, 'BRL');
-}
-
-export function formatInt(n: number | null | undefined): string {
-  if (n === null || n === undefined || !Number.isFinite(n)) return '—';
-  return Math.round(n).toLocaleString('pt-BR');
 }
 
 export function formatPercent(n: number | null | undefined): string {

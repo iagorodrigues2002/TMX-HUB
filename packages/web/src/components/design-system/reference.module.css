@@ -261,19 +261,16 @@
   position: fixed;
   inset: 88px 0 0;
   z-index: 34;
-  background: #020c1400;
-  backdrop-filter: blur(0);
+  background: #020c1438;
+  backdrop-filter: blur(2px);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 520ms var(--ds-ease), backdrop-filter 520ms var(--ds-ease), background-color
-    520ms var(--ds-ease);
+  transition: opacity 300ms var(--ds-ease);
 }
 .page:has(.sidebar:hover) .scrim,
 .page:has(.sidebar:focus-within) .scrim,
 .page:has(.sidebar[data-open="true"]) .scrim {
   opacity: 1;
-  background: #020c1438;
-  backdrop-filter: blur(2px);
 }
 .main {
   width: min(calc(100% - 148px), 1220px);
@@ -840,29 +837,17 @@
 @keyframes notifications-backdrop-in {
   from {
     opacity: 0;
-    background: #020c1400;
-    backdrop-filter: blur(0px);
-    -webkit-backdrop-filter: blur(0px);
   }
   to {
     opacity: 1;
-    background: #020c1438;
-    backdrop-filter: blur(2px);
-    -webkit-backdrop-filter: blur(2px);
   }
 }
 @keyframes notifications-backdrop-out {
   from {
     opacity: 1;
-    background: #020c1438;
-    backdrop-filter: blur(2px);
-    -webkit-backdrop-filter: blur(2px);
   }
   to {
     opacity: 0;
-    background: #020c1400;
-    backdrop-filter: blur(0px);
-    -webkit-backdrop-filter: blur(0px);
   }
 }
 .notificationsDrawer .notificationFrame {
@@ -964,7 +949,7 @@
   border: 1px solid var(--ds-border) !important;
   border-radius: var(--ds-radius-panel) !important;
   box-shadow: var(--ds-shadow) !important;
-  backdrop-filter: blur(var(--ds-blur));
+  backdrop-filter: none;
   color: var(--ds-text);
   min-width: 0;
 }
@@ -1469,7 +1454,7 @@
   border-radius: inherit;
   background: var(--ds-glass);
   box-shadow: var(--ds-shadow);
-  backdrop-filter: blur(var(--ds-blur));
+  backdrop-filter: none;
 }
 .dollyContent {
   padding: 16px;
@@ -1899,7 +1884,7 @@
   border-radius: 15px;
   background: var(--ds-glass);
   box-shadow: var(--ds-shadow);
-  backdrop-filter: blur(18px);
+  backdrop-filter: none;
   color: var(--ds-text);
   font-size: 11px;
   animation: reference-login-card-float 7s ease-in-out infinite;

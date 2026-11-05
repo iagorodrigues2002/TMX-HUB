@@ -6,10 +6,12 @@ import vm from 'node:vm';
 
 const ts = createRequire(import.meta.url)('typescript');
 
-test('count-up text updates do not rescan the route; new panels and tabs still do', () => {
+test('count-up text updates stay still; new tabs enter without stale completion callbacks', async () => {
   let queries = 0;
   const observers = [];
   const effects = [];
+  const frames = [];
+  const completions = [];
   class HTMLElement {
     dataset = {};
     parentElement = null;
@@ -44,19 +46,35 @@ test('count-up text updates do not rescan the route; new panels and tabs still d
       compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
     }).outputText;
   vm.runInNewContext(compile('../src/lib/route-motion-selection.ts'), { exports: selection });
-  const events = { addEventListener() {}, removeEventListener() {} };
+  const registeredEvents = [];
+  const eventHandlers = new Map();
+  const timers = new Map();
+  let timerId = 0;
+  const events = {
+    addEventListener: (name, callback) => {
+      registeredEvents.push(name);
+      eventHandlers.set(name, [...(eventHandlers.get(name) ?? []), callback]);
+    },
+    removeEventListener() {},
+  };
+  const fakeDocument = { ...events, documentElement: root, hidden: false };
   vm.runInNewContext(compile('../src/components/hub/route-motion.tsx'), {
     exports,
     HTMLElement,
-    document: { ...events, documentElement: root, hidden: false },
+    document: fakeDocument,
     window: {
       ...events,
-      location: { search: '' },
+      location: { search: '', pathname: '/' },
       matchMedia: () => ({ ...events, matches: false }),
     },
     URLSearchParams,
-    requestAnimationFrame: () => 1,
+    requestAnimationFrame: (callback) => frames.push(callback),
     cancelAnimationFrame() {},
+    setTimeout: (callback) => {
+      timers.set(++timerId, callback);
+      return timerId;
+    },
+    clearTimeout: (id) => timers.delete(id),
     MutationObserver: class {
       constructor(callback) {
         observers.push(callback);
@@ -77,20 +95,20 @@ test('count-up text updates do not rescan the route; new panels and tabs still d
       if (name.endsWith('session-data')) return { getSessionGeneration: () => 0 };
       if (name.endsWith('motion-session')) return { motionScreenKey: () => '/' };
       if (name.endsWith('route-motion-selection')) return selection;
-      if (name.endsWith('route-snapshot'))
-        return {
-          playRouteSnapshot: () => false,
-          registerRouteCapture: () => () => {},
-          clearRouteSnapshot() {},
-        };
       if (name.endsWith('screen-transition'))
-        return { setRouteEntranceDelay() {}, cancelScreenAnimations() {} };
+        return {
+          setRouteEntranceDelay() {},
+          cancelScreenAnimations() {},
+          animateScreenPanels: () => new Promise((resolve) => completions.push(resolve)),
+        };
       if (name.endsWith('.module.css')) return { default: {} };
       throw new Error(`Unexpected dependency ${name}`);
     },
   });
   exports.RouteMotion({ children: null });
-  for (const effect of effects) effect();
+  const cleanups = effects.map((effect) => effect());
+  assert.ok(!registeredEvents.includes('click'), 'navigation must not synchronously capture DOM');
+  assert.ok(!registeredEvents.includes('popstate'), 'history must use the native Next router');
   assert.equal(observers.length, 1);
   queries = 0;
   const textOnly = { type: 'childList', addedNodes: [{}], removedNodes: [{}] };
@@ -103,4 +121,37 @@ test('count-up text updates do not rescan the route; new panels and tabs still d
     { type: 'attributes', target: surface, attributeName: 'data-motion-screen', addedNodes: [] },
   ]);
   assert.ok(queries > 0, 'screen identity changes must still be handled');
+  frames.shift()();
+  surface.dataset.motionScreen = 'next-tab';
+  observers[0]([
+    { type: 'attributes', target: surface, attributeName: 'data-motion-screen', addedNodes: [] },
+  ]);
+  frames.shift()();
+  assert.equal(completions.length, 2);
+  completions[0]();
+  await Promise.resolve();
+  assert.equal(
+    surface.dataset.routeTransition,
+    'entering',
+    'old completions cannot finish a new tab',
+  );
+  completions[1]();
+  await Promise.resolve();
+  assert.equal(surface.dataset.routeTransition, 'entered');
+  const scroll = eventHandlers.get('scroll')?.[0];
+  assert.ok(scroll, 'scrolling must temporarily pause decorative CSS animations');
+  scroll();
+  scroll();
+  assert.equal(root.dataset.tmxMotionPaused, 'true');
+  assert.equal(timers.size, 1, 'a scroll burst keeps just one idle timer');
+  const resume = timers.values().next().value;
+  timers.clear();
+  resume();
+  assert.equal(root.dataset.tmxMotionPaused, 'false');
+  fakeDocument.hidden = true;
+  scroll();
+  timers.values().next().value();
+  assert.equal(root.dataset.tmxMotionPaused, 'true', 'scroll idle must not resume a hidden tab');
+  for (const cleanup of cleanups.reverse()) cleanup?.();
+  assert.equal(timers.size, 0, 'unmount clears the idle timer');
 });

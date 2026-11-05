@@ -60,6 +60,7 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
     queryKey: ['notification-center', user?.id],
     queryFn: notificationApi.list,
     enabled: !!user,
+    staleTime: 15000,
     refetchInterval: 15000,
     retry: false,
   });

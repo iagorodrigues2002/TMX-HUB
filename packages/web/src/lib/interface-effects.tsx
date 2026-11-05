@@ -13,7 +13,7 @@ import React, {
 function useEffectsState() {
   const [visual, setVisual] = useState(true);
   const [alerts, setAlerts] = useState(true);
-  const [ambient, setAmbient] = useState(true);
+  const [ambient, setAmbient] = useState(false);
   const [sound, setSound] = useState(true);
   const [soundPending, setSoundPending] = useState(true);
   const [soundError, setSoundError] = useState('');

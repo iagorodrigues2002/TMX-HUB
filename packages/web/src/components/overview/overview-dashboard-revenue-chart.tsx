@@ -53,6 +53,12 @@ export function RevenueChart({
     const values = JSON.parse(signature) as number[];
     const target = { values, ceiling: hourlyCeiling(values) };
     const from = current.current;
+    if (
+      from.ceiling === target.ceiling &&
+      from.values.length === values.length &&
+      from.values.every((value, index) => value === values[index])
+    )
+      return;
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
     let frame = 0;
     let start: number | undefined;

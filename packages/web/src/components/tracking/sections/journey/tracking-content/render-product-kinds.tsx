@@ -42,7 +42,9 @@ export function renderProductKinds(context: TrackingContentContext) {
               {canManage && (
                 <div className="flex items-center gap-2">
                   <select
+                    aria-label={`Tipo do produto ${product.product_name ?? product.product_id}`}
                     className="rounded border border-border bg-accent px-2 py-1 text-xs text-foreground"
+                    disabled={upsellIntelligence.isPending || upsellIntelligence.isError}
                     value={productKindSelection[product.product_id] ?? 'front'}
                     onChange={(event) =>
                       setProductKindSelection((prev) => ({
@@ -61,7 +63,11 @@ export function renderProductKinds(context: TrackingContentContext) {
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled={saveProductKind.isPending}
+                    disabled={
+                      saveProductKind.isPending ||
+                      upsellIntelligence.isPending ||
+                      upsellIntelligence.isError
+                    }
                     onClick={() =>
                       saveProductKind.mutate({
                         product_id: product.product_id,
@@ -71,6 +77,19 @@ export function renderProductKinds(context: TrackingContentContext) {
                     }
                   >
                     Classificar
+                  </Button>
+                </div>
+              )}
+              {canManage && upsellIntelligence.isPending && (
+                <output className="w-full text-muted-foreground">
+                  Carregando etapas de upsell…
+                </output>
+              )}
+              {canManage && upsellIntelligence.isError && (
+                <div className="flex w-full items-center gap-2 text-danger" role="alert">
+                  <p>Não foi possível carregar as etapas de upsell.</p>
+                  <Button size="sm" variant="outline" onClick={() => upsellIntelligence.refetch()}>
+                    Tentar novamente
                   </Button>
                 </div>
               )}

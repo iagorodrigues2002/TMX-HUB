@@ -1,6 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { setPersonalStorageOwner } from './personal-storage';
-import { clearRouteSnapshot } from './route-snapshot';
 import { useSelectionStore } from './selection-store';
 
 let sessionGeneration = 0;
@@ -18,7 +17,6 @@ export function resetSessionData(client: QueryClient): void {
   useSelectionStore.getState().clear();
   setPersonalStorageOwner(null);
   if (typeof window !== 'undefined') {
-    clearRouteSnapshot();
     try {
       window.sessionStorage.removeItem('tmx-google-oauth');
     } catch {

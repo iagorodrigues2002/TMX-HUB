@@ -14,8 +14,8 @@ test('screen identity changes on navigation and tabs, but not on data filters', 
   assert.equal(key('view=overview&offer=one'), key('view=overview&offer=two&from=2026-11-01'));
   assert.notEqual(key('view=overview'), key('view=upsell'));
   assert.notEqual(key('tab=members'), key('tab=finance'));
-  assert.equal(PANEL_ENTRANCE.duration, 480);
-  assert.equal(PANEL_ENTRANCE.stagger, 35);
+  assert.equal(PANEL_ENTRANCE.duration, 220);
+  assert.equal(PANEL_ENTRANCE.stagger, 16);
 });
 
 test('panel selection excludes hidden surfaces and never animates both ancestor and child', () => {
@@ -146,10 +146,10 @@ test('motion hooks retain explicit off, privacy, hidden-tab and reduced-motion g
     new URL('../src/components/hub/route-motion.tsx', import.meta.url),
     'utf8',
   );
-  assert.match(route, /!visual \|\| reduced\.matches \|\| document\.hidden/);
+  assert.match(route, /!visual\s*\|\|\s*reduced\.matches\s*\|\|\s*document\.hidden/);
   assert.match(route, /observer\.disconnect\(\)/);
   assert.match(route, /attributeFilter: \['data-motion-screen', 'data-state', 'hidden'\]/);
-  assert.doesNotMatch(route, /characterData: true|setInterval|setTimeout/);
+  assert.doesNotMatch(route, /characterData: true|setInterval/);
   assert.match(route, /animation\.cancel\(\)/);
   assert.doesNotMatch(route, /addEventListener\(['"]focus/);
   assert.doesNotMatch(route, /sessionStorage|localStorage/);

@@ -1,6 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { formatCurrency as money } from '@/lib/number-format';
 import { SCREEN_TRANSITION } from '@/lib/screen-transition';
 import { ArrowLeft, ArrowRight, Layers3 } from 'lucide-react';
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -110,20 +111,15 @@ function ScreenContent({
   );
 }
 
-const money = (value: number) =>
-  value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
 export function FullTransitionSpecimen({ motion }: { motion: boolean }) {
   const [screen, setScreen] = useState<Screen>('overview');
   const [requested, setRequested] = useState<Screen>('overview');
-  const [leaving, setLeaving] = useState<Screen | null>(null);
   const [visits, setVisits] = useState({ overview: 0, offers: 0 });
   const [factors, setFactors] = useState({ overview: 1, offers: 1 });
-  const [phase, setPhase] = useState<'idle' | 'leaving' | 'entering'>('entering');
+  const [phase, setPhase] = useState<'idle' | 'entering'>('entering');
   const [reduced, setReduced] = useState(false);
   const stages = useRef<Partial<Record<Screen, HTMLDivElement>>>({});
   const animations = useRef(new Set<Animation>());
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const revision = useRef(0);
   const current = useRef<Screen>('overview');
   const destination = useRef<Screen>('overview');
@@ -139,7 +135,6 @@ export function FullTransitionSpecimen({ motion }: { motion: boolean }) {
   useEffect(
     () => () => {
       revision.current++;
-      clearTimeout(timer.current);
       cancelReferenceTransition(animations.current);
     },
     [],
@@ -148,11 +143,9 @@ export function FullTransitionSpecimen({ motion }: { motion: boolean }) {
   useLayoutEffect(() => {
     if (motion && !reduced) return;
     revision.current++;
-    clearTimeout(timer.current);
     cancelReferenceTransition(animations.current);
     current.current = destination.current;
     setScreen(destination.current);
-    setLeaving(null);
     setPhase('idle');
   }, [motion, reduced]);
 
@@ -164,7 +157,6 @@ export function FullTransitionSpecimen({ motion }: { motion: boolean }) {
     void animateReferenceScreen(stage, true, animations.current).then(() => {
       if (id !== revision.current) return;
       cancelReferenceTransition(animations.current);
-      setLeaving(null);
       setPhase('idle');
       if (visits[screen] > 0)
         stage.querySelector<HTMLElement>('[data-screen-heading]')?.focus({ preventScroll: true });
@@ -174,29 +166,21 @@ export function FullTransitionSpecimen({ motion }: { motion: boolean }) {
   const go = (next: Screen) => {
     if (next === destination.current) return;
     const id = ++revision.current;
-    clearTimeout(timer.current);
     cancelReferenceTransition(animations.current);
     destination.current = next;
     setRequested(next);
-    setLeaving(null);
     if (next === current.current) {
       setPhase('idle');
       return;
     }
-    const outgoing = current.current;
-    const stage = stages.current[outgoing];
-    if (stage && motion && !reduced) void animateReferenceScreen(stage, false, animations.current);
-    setPhase('leaving');
     const enter = () => {
       if (id !== revision.current) return;
       current.current = next;
-      setLeaving(motion && !reduced ? outgoing : null);
       setScreen(next);
       setVisits((value) => ({ ...value, [next]: value[next] + 1 }));
       setPhase(motion && !reduced ? 'entering' : 'idle');
     };
-    if (motion && !reduced) timer.current = setTimeout(enter, SCREEN_TRANSITION.overlap);
-    else enter();
+    enter();
   };
 
   return (
@@ -222,12 +206,12 @@ export function FullTransitionSpecimen({ motion }: { motion: boolean }) {
         </Button>
       </nav>
       <p className={styles.caption}>
-        Saída 0,8× → espera de {SCREEN_TRANSITION.overlap}ms → entrada 1,5× / 1,4× / 1×, com
-        escalonamento e materiais separados.
+        Navegação imediata e entrada de {SCREEN_TRANSITION.enter}ms, com deslocamento suave e
+        transparência. Escalonamento limitado a 80ms, sem copiar a tela nem animar desfoque.
       </p>
       <div className={styles.fullTransition} aria-label="Prévia da transição completa">
         {(['overview', 'offers'] as const)
-          .filter((value) => value === screen || value === leaving)
+          .filter((value) => value === screen)
           .map((value) => (
             <div
               key={value}

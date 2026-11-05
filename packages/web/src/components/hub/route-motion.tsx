@@ -1,7 +1,6 @@
 'use client';
 
 import { useInterfaceEffects } from '@/lib/interface-effects';
-import { motionScreenKey } from '@/lib/motion-session';
 import {
   isActiveMotionTab,
   isVisible,
@@ -10,14 +9,6 @@ import {
   routeEntranceScreens,
 } from '@/lib/route-motion-selection';
 import {
-  captureRouteSnapshot,
-  clearRouteSnapshot,
-  playRouteSnapshot,
-  prepareRouteTransition,
-  registerRouteCapture,
-} from '@/lib/route-snapshot';
-import {
-  SCREEN_TRANSITION,
   animateScreenPanels,
   cancelScreenAnimations,
   setRouteEntranceDelay,
@@ -40,29 +31,49 @@ function routeSurface(root: HTMLElement) {
 export function RouteMotion({ children }: { children: ReactNode }) {
   const content = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
-  const { visual } = useInterfaceEffects();
   const generation = getSessionGeneration();
+  const { visual } = useInterfaceEffects();
 
   useLayoutEffect(() => {
     const root = document.documentElement;
     const preference = visual ? 'on' : 'off';
     if (root.dataset.tmxMotion !== preference) root.dataset.tmxMotion = preference;
+    let scrolling = false;
+    let resumeTimer: ReturnType<typeof setTimeout> | undefined;
     const updateVisibility = () => {
-      root.dataset.tmxMotionPaused = document.hidden ? 'true' : 'false';
+      root.dataset.tmxMotionPaused = document.hidden || scrolling ? 'true' : 'false';
+    };
+    const pauseDuringScroll = () => {
+      if (!scrolling) {
+        scrolling = true;
+        updateVisibility();
+      }
+      clearTimeout(resumeTimer);
+      resumeTimer = setTimeout(() => {
+        scrolling = false;
+        updateVisibility();
+      }, 180);
     };
     updateVisibility();
     document.addEventListener('visibilitychange', updateVisibility);
-    return () => document.removeEventListener('visibilitychange', updateVisibility);
+    document.addEventListener('scroll', pauseDuringScroll, { capture: true, passive: true });
+    return () => {
+      clearTimeout(resumeTimer);
+      document.removeEventListener('scroll', pauseDuringScroll, true);
+      document.removeEventListener('visibilitychange', updateVisibility);
+    };
   }, [visual]);
 
   useLayoutEffect(() => {
     const root = content.current;
     if (!root) return;
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const unavailable = () => !visual || reduced.matches || document.hidden;
-    const currentScreenKey = () =>
-      `${generation}:${motionScreenKey(pathname ?? '/', new URLSearchParams(window.location.search))}`;
-    let displayedKey = currentScreenKey();
+    const unavailable = () =>
+      !visual ||
+      reduced.matches ||
+      document.hidden ||
+      generation !== getSessionGeneration() ||
+      (pathname !== null && pathname !== window.location.pathname);
     let surface = routeSurface(root);
     const running = new Set<Animation>();
     const scheduled = new Map<HTMLElement, number>();
@@ -70,43 +81,14 @@ export function RouteMotion({ children }: { children: ReactNode }) {
     const animatedPanels = new WeakSet<HTMLElement>();
     const identities = new Set<string>();
     let fallback = false;
-    if (unavailable()) clearRouteSnapshot();
-    const outgoing = !unavailable() && playRouteSnapshot(currentScreenKey(), generation, surface);
-    root.dataset.routeTransitionOverlap = String(outgoing);
-    let entranceDelay = outgoing ? SCREEN_TRANSITION.overlap : 0;
-    setRouteEntranceDelay(entranceDelay);
+    let revision = 0;
+    setRouteEntranceDelay(0);
     const cancelAnimations = () => {
+      revision++;
       for (const frame of scheduled.values()) cancelAnimationFrame(frame);
       scheduled.clear();
       cancelScreenAnimations(running);
     };
-    const unregisterCapture = registerRouteCapture(() => {
-      if (!surface?.isConnected || unavailable() || generation !== getSessionGeneration()) return;
-      cancelAnimations();
-      captureRouteSnapshot(surface, routeEntrancePanels(surface), displayedKey, generation);
-    });
-    const beforeLink = (event: MouseEvent) => {
-      if (
-        event.defaultPrevented ||
-        event.button !== 0 ||
-        event.metaKey ||
-        event.ctrlKey ||
-        event.shiftKey ||
-        event.altKey
-      )
-        return;
-      const link = event.target instanceof Element ? event.target.closest('a[href]') : null;
-      if (
-        !(link instanceof HTMLAnchorElement) ||
-        link.hasAttribute('download') ||
-        (link.target && link.target !== '_self')
-      )
-        return;
-      prepareRouteTransition(link.href);
-    };
-    const beforeHistory = () => prepareRouteTransition();
-    document.addEventListener('click', beforeLink, true);
-    window.addEventListener('popstate', beforeHistory, true);
     const play = (scope: HTMLElement, reactivated = false, addedPanels?: HTMLElement[]) => {
       const identity = scope.dataset.motionScreen;
       if (
@@ -134,7 +116,9 @@ export function RouteMotion({ children }: { children: ReactNode }) {
           if (!panels.length) return;
           for (const panel of panels) animatedPanels.add(panel);
           scope.dataset.routeTransition = 'entering';
-          void animateScreenPanels(scope, panels, true, running, entranceDelay).then(() => {
+          const currentRevision = revision;
+          void animateScreenPanels(scope, panels, true, running).then(() => {
+            if (currentRevision !== revision || !scope.isConnected) return;
             scope.dataset.routeTransition = 'entered';
             for (const animation of running) {
               if (animation.playState === 'finished') {
@@ -156,12 +140,7 @@ export function RouteMotion({ children }: { children: ReactNode }) {
         return;
       if (reactivated) {
         cancelAnimations();
-        const leaving =
-          !unavailable() && playRouteSnapshot(currentScreenKey(), generation, surface);
-        displayedKey = currentScreenKey();
-        entranceDelay = leaving ? SCREEN_TRANSITION.overlap : 0;
-        root.dataset.routeTransitionOverlap = String(leaving);
-        setRouteEntranceDelay(entranceDelay);
+        setRouteEntranceDelay(0);
       }
       if (fallback) {
         cancelAnimations();
@@ -227,21 +206,15 @@ export function RouteMotion({ children }: { children: ReactNode }) {
     const stopWhenUnavailable = () => {
       if (unavailable()) {
         cancelAnimations();
-        clearRouteSnapshot();
       }
     };
     reduced.addEventListener('change', stopWhenUnavailable);
     document.addEventListener('visibilitychange', stopWhenUnavailable);
     return () => {
       cancelAnimations();
-      unregisterCapture();
-      document.removeEventListener('click', beforeLink, true);
-      window.removeEventListener('popstate', beforeHistory, true);
       observer.disconnect();
       reduced.removeEventListener('change', stopWhenUnavailable);
       document.removeEventListener('visibilitychange', stopWhenUnavailable);
-      // StrictMode rehearses cleanup while the route stays mounted; capture only navigation intent.
-      if (unavailable() || generation !== getSessionGeneration()) clearRouteSnapshot();
     };
   }, [generation, pathname, visual]);
   return (

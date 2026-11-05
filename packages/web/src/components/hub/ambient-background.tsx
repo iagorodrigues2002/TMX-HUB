@@ -49,7 +49,7 @@ export function AmbientBackground() {
             >
               <title>Rede decorativa TMX</title>
               {[0, 1].map((layer) => (
-                <g key={layer} className={layer === 0 ? styles.near : styles.far}>
+                <g key={layer} className={layer === 1 ? styles.far : undefined}>
                   {links.map(({ id, a, b, opacity }) => (
                     <path key={id} d={`M${a.x},${a.y}L${b.x},${b.y}`} strokeOpacity={opacity} />
                   ))}

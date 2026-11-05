@@ -11,7 +11,7 @@
   --ds-warning: #e7c794;
   --ds-border: #ffffff20;
   --ds-glass: radial-gradient(130% 70% at 0% 0%, #ffffff12, transparent 60%),
-    linear-gradient(145deg, #20394370, #0d222b60 58%, #152f3860);
+    linear-gradient(145deg, #203943a0, #0d222b90 58%, #152f3890);
   --ds-overlay: linear-gradient(150deg, #2d444ef2, #112a33fa);
   --ds-inset: #ffffff07;
   --ds-shadow: 0 34px 70px -28px #0006, 0 12px 28px -16px #0004, inset 0 1px 1px #ffffff1f;
@@ -20,7 +20,7 @@
   --ds-radius-control: 14px;
   --ds-radius-panel: 24px;
   --ds-radius-pill: 999px;
-  --ds-blur: 34px;
+  --ds-blur: 12px;
   --ds-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --ds-duration-open: 240ms;
   --ds-duration-close: 160ms;

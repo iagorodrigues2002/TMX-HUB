@@ -13,6 +13,10 @@
   stroke: #22c5d9;
   stroke-width: 0.8;
   opacity: 0.42;
+  transform-origin: center;
+}
+.background[data-animated="true"] .network {
+  animation: drift 22s ease-in-out infinite alternate;
 }
 .network circle {
   stroke: none;
@@ -26,17 +30,10 @@ html[data-theme="light"] .network {
   stroke: #087b89;
   opacity: 0.22;
 }
-.near,
-.far {
-  transform-origin: center;
-  animation: drift 18s ease-in-out infinite alternate;
-}
 .far {
   opacity: 0.25;
-  animation-direction: alternate-reverse;
-  animation-duration: 26s;
 }
-.background[data-animated="false"] g {
+html[data-tmx-motion-paused="true"] .background[data-animated="true"] .network {
   animation-play-state: paused;
 }
 @keyframes drift {
@@ -53,8 +50,7 @@ html[data-theme="light"] .network {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .near,
-  .far {
+  .background[data-animated="true"] .network {
     animation: none;
   }
 }

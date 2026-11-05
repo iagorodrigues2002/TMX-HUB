@@ -36,6 +36,24 @@ const toneStyles: Record<KpiTone, { surface: string; icon: string }> = {
 const cardInteractionStyles =
   'group hover:shadow-[0_24px_64px_rgba(0,0,0,0.48),0_0_28px_rgba(34,211,238,0.1)] motion-reduce:hover:transform-none';
 
+function KpiValue({ label, value, countUp }: Pick<KpiProps, 'label' | 'value' | 'countUp'>) {
+  const pending = useDataPending();
+  const animatedValue = useCountUp(countUp?.value, countUp?.duration, label);
+  const displayValue =
+    countUp && animatedValue !== undefined ? countUp.format(animatedValue) : value;
+
+  return pending ? (
+    '—'
+  ) : countUp ? (
+    <>
+      <span className="sr-only">{value}</span>
+      <span aria-hidden="true">{displayValue}</span>
+    </>
+  ) : (
+    value
+  );
+}
+
 export function Kpi({
   label,
   value,
@@ -47,21 +65,7 @@ export function Kpi({
   className,
 }: KpiProps) {
   const styles = toneStyles[tone];
-  const pending = useDataPending();
-  const animatedValue = useCountUp(countUp?.value, countUp?.duration, label);
-  const displayValue =
-    countUp && animatedValue !== undefined ? countUp.format(animatedValue) : value;
-
-  const valueContent = pending ? (
-    '—'
-  ) : countUp ? (
-    <>
-      <span className="sr-only">{value}</span>
-      <span aria-hidden="true">{displayValue}</span>
-    </>
-  ) : (
-    value
-  );
+  const valueContent = <KpiValue label={label} value={value} countUp={countUp} />;
 
   if (variant === 'compact') {
     return (

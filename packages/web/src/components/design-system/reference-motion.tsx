@@ -2,12 +2,10 @@
 
 import { Button } from '@/components/ui/button';
 import { interpolateCount } from '@/lib/motion-session';
+import { formatCurrency as money } from '@/lib/number-format';
 import { ArrowDown, ArrowUp, Eye, EyeOff, RotateCcw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import styles from './reference.module.css';
-
-const money = (value: number) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
 /** Isolado na referência: ainda não altera a política do useCountUp de produção. */
 export function useReferenceNumber(

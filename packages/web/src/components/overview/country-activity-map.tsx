@@ -68,11 +68,35 @@ function Activity({
   salesView: 'general' | 'natural';
 }) {
   const pending = useDataPending();
+  const panelRef = useRef<HTMLElement>(null);
+  const [visible, setVisible] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [paused, setPaused] = useState(false);
   const [pulses, setPulses] = useState<string[]>([]);
   const previous = useRef<Map<string, Row> | null>(null);
   const previousScope = useRef(scope);
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const bounds = panel.getBoundingClientRect();
+    let inViewport =
+      bounds.bottom > 0 &&
+      bounds.top < window.innerHeight &&
+      bounds.right > 0 &&
+      bounds.left < window.innerWidth;
+    const update = () => setVisible(inViewport && !document.hidden);
+    update();
+    const observer = new IntersectionObserver(([entry]) => {
+      inViewport = entry?.isIntersecting ?? false;
+      update();
+    });
+    observer.observe(panel);
+    document.addEventListener('visibilitychange', update);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener('visibilitychange', update);
+    };
+  }, []);
   const queries = useQueries({
     queries: offerIds.map((id) => ({
       queryKey: ['country-activity', scope, id],
@@ -165,11 +189,12 @@ function Activity({
   const picked = selected ? rows.get(selected) : null;
   return (
     <section
+      ref={panelRef}
       className={styles.panel}
       data-motion-panel
       data-glass-surface
       aria-label="Atividade global real"
-      data-paused={paused || !animated || pending}
+      data-paused={paused || !animated || pending || !visible}
     >
       <header className={styles.header}>
         <h3>

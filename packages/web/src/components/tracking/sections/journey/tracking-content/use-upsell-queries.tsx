@@ -39,7 +39,7 @@ export function useUpsellQueries({
 }) {
   // TODO: replace the shared advanced payload with section-specific API endpoints.
   const advanced = useQuery({
-    queryKey: ['tracking-advanced', offerId, section],
+    queryKey: ['tracking-advanced', offerId],
     queryFn: () => apiClient.getAdvancedTracking(offerId),
     enabled: ADVANCED_QUERY_SECTIONS.has(section),
     retry: false,
@@ -49,7 +49,7 @@ export function useUpsellQueries({
   const upsellIntelligence = useQuery({
     queryKey: ['tracking-upsells', offerId, trackingFrom, trackingTo],
     queryFn: () => apiClient.getTrackingUpsells(offerId, { from: trackingFrom, to: trackingTo }),
-    enabled: section === 'upsells',
+    enabled: section === 'upsells' || section === 'utmify',
     retry: false,
     staleTime: TRACKING_DASHBOARD_STALE_TIME,
     refetchOnWindowFocus: false,

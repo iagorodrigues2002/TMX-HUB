@@ -14,8 +14,8 @@ html[data-tmx-design="glass"] {
   --tmx-card-start: #253f4966;
   --tmx-card-end: #10252f60;
   --tmx-material: radial-gradient(130% 70% at 0% 0%, #ffffff12, transparent 60%),
-    linear-gradient(145deg, #20394370, #0d222b60 58%, #152f3860);
-  --tmx-glass-blur: 34px;
+    linear-gradient(145deg, #203943a0, #0d222b90 58%, #152f3890);
+  --tmx-glass-blur: 12px;
   --tmx-glass-saturation: 140%;
   --tmx-rim-top: #ffffff40;
   --tmx-rim-side: #ffffff20;
@@ -95,14 +95,14 @@ html[data-tmx-design="glass"] .glass-card {
   border: 1px solid var(--color-border);
   border-radius: 24px;
   box-shadow: var(--tmx-shadow);
-  backdrop-filter: blur(24px);
+  backdrop-filter: none;
 }
 /* Glassy Dashboard v7: smoked material, directional rim and a lighter nested surface. */
 html[data-tmx-design="glass"] :is(.glass-card, .tmx-kpi-card, [data-glass-surface])[class] {
   border-top-color: var(--tmx-rim-top);
   border-left-color: var(--tmx-rim-side);
-  -webkit-backdrop-filter: blur(var(--tmx-glass-blur)) saturate(var(--tmx-glass-saturation));
-  backdrop-filter: blur(var(--tmx-glass-blur)) saturate(var(--tmx-glass-saturation));
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 html[data-tmx-design="glass"] .glass-card :is(.glass-card, .tmx-kpi-card) {
   -webkit-backdrop-filter: none;
@@ -142,7 +142,7 @@ html[data-tmx-design="glass"] .tmx-kpi-card {
   border: 1px solid var(--color-border);
   border-radius: 24px;
   box-shadow: var(--tmx-shadow);
-  backdrop-filter: blur(24px);
+  backdrop-filter: none;
 }
 html[data-tmx-design="glass"] .tmx-kpi-card::after {
   display: none;
@@ -178,7 +178,7 @@ html[data-tmx-design="glass"] :is(.tmx-select-content, .tmx-dialog-content, [rol
   border-color: var(--color-border);
   border-radius: 20px;
   box-shadow: var(--tmx-shadow);
-  backdrop-filter: blur(24px);
+  backdrop-filter: blur(var(--tmx-glass-blur));
 }
 html[data-tmx-design="glass"] [role="combobox"] {
   background: var(--tmx-inset);
@@ -216,7 +216,7 @@ html[data-tmx-design="glass"] :is(.tool-card, .surface-panel, .tmx-command-hero)
   border: 1px solid var(--color-border);
   border-radius: 24px;
   box-shadow: var(--tmx-shadow);
-  backdrop-filter: blur(24px);
+  backdrop-filter: none;
 }
 html[data-tmx-design="glass"] .tool-card-icon {
   background: var(--tmx-inset);
@@ -243,11 +243,11 @@ html[data-tmx-design="glass"] .tmx-public-surface :is(article, form).border {
   border-color: var(--color-border);
   border-radius: 24px;
   box-shadow: var(--tmx-shadow);
-  backdrop-filter: blur(24px);
+  backdrop-filter: none;
 }
 html[data-tmx-design="glass"] [data-tmx-editor-pane] {
   background: var(--tmx-material);
-  backdrop-filter: blur(24px);
+  backdrop-filter: none;
 }
 html[data-tmx-design="glass"]
   .tmx-route-content
@@ -302,10 +302,9 @@ html[data-tmx-design="glass"] .tmx-route-content :is(label, .hud-label) {
   z-index: 20;
   pointer-events: none;
   opacity: 0;
-  background: #020c1400;
-  backdrop-filter: blur(0px);
-  transition: opacity 520ms var(--tmx-ease), background-color 520ms var(--tmx-ease), backdrop-filter
-    520ms var(--tmx-ease);
+  background: #020c1438;
+  backdrop-filter: blur(2px);
+  transition: opacity 300ms var(--tmx-ease);
 }
 html[data-tmx-design="glass"] [data-tmx-notification] {
   background: var(--tmx-inset);
@@ -360,21 +359,17 @@ html[data-tmx-design="glass"] .tmx-drawer-scrim[data-state="closed"] {
 @keyframes tmx-glass-scrim-in {
   from {
     opacity: 0;
-    backdrop-filter: blur(0px);
   }
   to {
     opacity: 1;
-    backdrop-filter: blur(2px);
   }
 }
 @keyframes tmx-glass-scrim-out {
   from {
     opacity: 1;
-    backdrop-filter: blur(2px);
   }
   to {
     opacity: 0;
-    backdrop-filter: blur(0px);
   }
 }
 @supports not (backdrop-filter: blur(1px)) {
@@ -415,11 +410,10 @@ html[data-tmx-design="glass"][data-tmx-motion="off"]
     .tmx-workspace:has(> .tmx-sidebar[data-collapsed="false"])
     > .tmx-nav-scrim {
     opacity: 1;
-    background: #020c1438;
-    backdrop-filter: blur(2px);
   }
 }
 html[data-tmx-design="glass"] .tmx-topbar {
+  backdrop-filter: blur(var(--tmx-glass-blur));
   min-height: 66px;
   margin: 12px 14px 10px;
   padding-inline: 14px;
@@ -429,6 +423,7 @@ html[data-tmx-design="glass"] .tmx-topbar {
   box-shadow: var(--tmx-shadow);
 }
 html[data-tmx-design="glass"] .tmx-sidebar {
+  backdrop-filter: blur(var(--tmx-glass-blur));
   margin: 0 0 14px 14px;
   border: 1px solid var(--color-border);
   border-radius: 24px;
@@ -737,7 +732,7 @@ html[data-tmx-design="glass"] [data-overview-dataset] {
   border-radius: 24px;
   border-color: var(--color-border);
   background: linear-gradient(145deg, #19303a66, #0c222a60);
-  backdrop-filter: blur(24px);
+  backdrop-filter: none;
 }
 html[data-tmx-design="glass"] .tmx-arpu-row {
   grid-column: 1 / -1;
