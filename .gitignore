@@ -20,3 +20,4 @@ playwright-report/
 test-results/
 .runtime/
 *.tsbuildinfo
+packages/api/scripts/traffic-meta-reader.mjs

@@ -5,9 +5,9 @@
   "type": "module",
   "main": "./dist/server.js",
   "scripts": {
-    "build": "tsup",
+    "build": "node scripts/build-traffic-reader.mjs && tsup",
     "dev": "tsx watch src/server.ts",
-    "start": "node scripts/migrate.mjs && node dist/server.js",
+    "start": "node --check scripts/traffic-meta-reader.mjs && node scripts/migrate.mjs && node scripts/traffic-sync-server.mjs",
     "migrate": "node scripts/migrate.mjs",
     "purge:tracking-events": "node scripts/purge-old-events.mjs",
     "test": "vitest run",
