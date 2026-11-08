@@ -26,7 +26,8 @@ COPY packages/shared ./packages/shared
 COPY packages/core ./packages/core
 COPY packages/api ./packages/api
 COPY docs ./docs
-RUN pnpm --filter @page-cloner/core build && pnpm --filter @page-cloner/api build
+RUN pnpm --filter @page-cloner/core build && pnpm --filter @page-cloner/api build \
+  && test -s packages/api/scripts/traffic-meta-reader.mjs
 
 # ---- runtime ----
 FROM base AS runtime
@@ -52,4 +53,4 @@ COPY --from=deps /ms-playwright /ms-playwright
 
 WORKDIR /app/packages/api
 EXPOSE 4000
-CMD ["sh", "-c", "node scripts/migrate.mjs && exec node dist/server.js"]
+CMD ["sh", "-c", "node --check scripts/traffic-meta-reader.mjs && node scripts/migrate.mjs && exec node scripts/traffic-sync-server.mjs"]
