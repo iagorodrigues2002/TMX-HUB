@@ -136,7 +136,7 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
         </DialogHeader>
         <div className="border-b border-border/60 bg-muted/20 px-5 py-3 sm:px-6">
           <Tabs value={filter} onValueChange={(value) => setFilter(value as Filter)}>
-            <TabsList className="grid grid-cols-3 sm:grid-cols-6 h-auto">
+            <TabsList className="grid h-auto grid-flow-row grid-cols-3 sm:grid sm:h-auto sm:grid-cols-3">
               {(
                 [
                   ['all', 'Todas'],
@@ -147,7 +147,7 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
                   ['traffic', 'Tráfego'],
                 ] as const
               ).map(([value, label]) => (
-                <TabsTrigger key={value} value={value}>
+                <TabsTrigger key={value} value={value} className="min-w-0 px-2">
                   {label}
                   <span className="ml-1 text-[10px] opacity-70">
                     {value === 'all'
