@@ -9,6 +9,38 @@ const member = (ids: string[]) => ({
   tools: ['ofertas', 'nav:scoped', ...ids.map((id) => `nav:${id}`)],
 });
 describe('navigation section permissions', () => {
+  it('does not expose finance or reports through contingency/settings grants', () => {
+    for (const id of ['traffic-contingency', 'traffic-settings'])
+      for (const path of ['attribution', 'finance', 'finance-overview', 'connection/report'])
+        expect(() =>
+          assertNavigationAccess(member([id]), `/v1/meta-control/traffic/${path}`, 'GET'),
+        ).toThrow();
+    for (const id of ['traffic-overview', 'traffic-campaigns', 'traffic-windows'])
+      for (const path of ['attribution', 'finance', 'finance-overview', 'connection/report'])
+        expect(() =>
+          assertNavigationAccess(member([id]), `/v1/meta-control/traffic/${path}`, 'GET'),
+        ).not.toThrow();
+  });
+  it('separates traffic view access from token configuration and inventory', () => {
+    const viewer = member(['traffic-campaigns']);
+    expect(() =>
+      assertNavigationAccess(viewer, '/v1/meta-control/campaigns/local-import', 'GET'),
+    ).not.toThrow();
+    expect(() =>
+      assertNavigationAccess(member(['offers-all']), '/v1/meta-control/traffic/status', 'GET'),
+    ).toThrow();
+    expect(() =>
+      assertNavigationAccess(viewer, '/v1/meta-control/traffic/connection', 'POST'),
+    ).toThrow();
+    expect(() =>
+      assertNavigationAccess(
+        member(['traffic-settings']),
+        '/v1/meta-control/traffic/connection',
+        'POST',
+      ),
+    ).not.toThrow();
+    expect(() => assertNavigationAccess(viewer, '/v1/meta-control/inventory', 'GET')).toThrow();
+  });
   it('requires the delegated activity grant for both report paths, separate from operating upsells', () => {
     for (const path of [
       '/v1/activity',

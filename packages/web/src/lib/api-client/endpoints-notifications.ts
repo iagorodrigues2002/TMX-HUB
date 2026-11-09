@@ -11,6 +11,21 @@ const common = {
 export const CenterNotificationSchema = z.discriminatedUnion('kind', [
   z.object({
     ...common,
+    kind: z.literal('traffic'),
+    traffic: z.object({
+      type: z.enum(['ad_rejected', 'account_disabled']),
+      ownerId: z.string(),
+      companyId: z.string().uuid().optional(),
+      accountId: z.string(),
+      accountName: z.string(),
+      campaignId: z.string().optional(),
+      campaignName: z.string().optional(),
+      adId: z.string().optional(),
+      adName: z.string().optional(),
+    }),
+  }),
+  z.object({
+    ...common,
     kind: z.literal('finance'),
     finance: z.object({
       companyId: z.string().uuid(),

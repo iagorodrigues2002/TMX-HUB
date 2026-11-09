@@ -22,7 +22,11 @@ async function appFor(
     reply.code(error instanceof HttpProblem ? error.status : 500).send({ error: error.message }),
   );
   app.decorate('db', db);
-  app.decorate('redis', { get: async () => null });
+  app.decorate('redis', {
+    get: async () => null,
+    smembers: async () => [],
+    lrange: async () => [],
+  });
   app.decorate('offerStore', {
     listAccessible: async (id: string) => [
       { id: id === 'member-1' ? 'offer-1' : 'offer-2', name: 'QA offer', userId: id },

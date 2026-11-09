@@ -10,9 +10,9 @@ import { saoPauloDayRange } from '../../services/utmify-sync.js';
 import { loadOverviewRows } from './load-overview-rows.js';
 import { OverviewRangeSchema, databaseUnavailable } from './overview-range-schema.js';
 
-export function registerGetTrackingOverviewRoutes(app: FastifyInstance) {
+export function registerGetTrackingOverviewRoutes(app: FastifyInstance, traffic = false) {
   app.get<{ Querystring: { date?: string; from?: string; to?: string } }>(
-    '/tracking/overview',
+    traffic ? '/meta-control/traffic/finance-overview' : '/tracking/overview',
     async (req, reply) => {
       if (!req.user) return reply.code(401).send({ error: 'unauthorized' });
       if (!app.db) return reply.code(503).send(databaseUnavailable);
@@ -29,12 +29,16 @@ export function registerGetTrackingOverviewRoutes(app: FastifyInstance) {
       const from = new Date(saoPauloDayRange(fromDate, now).from);
       const to = new Date(saoPauloDayRange(toDate, now).to);
 
-      const offers = await filterCompanyNavigationOffers(
+      const accessible = await filterCompanyNavigationOffers(
         app.db,
         req.user,
         await app.offerStore.listAccessible(req.user.sub, req.user.role === 'admin'),
-        '/tracking/overview',
+        traffic ? '/meta-control/traffic/finance-overview' : '/tracking/overview',
       );
+      const offers =
+        traffic && req.user.role === 'admin'
+          ? accessible.filter((offer) => offer.userId === req.user!.sub)
+          : accessible;
       if (offers.length === 0) {
         return reply.send({
           from: fromDate,

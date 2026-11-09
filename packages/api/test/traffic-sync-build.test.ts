@@ -1,8 +1,9 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { assertTrafficEntrypoints, buildTrafficReader } from '../scripts/build-traffic-reader.mjs';
 
 describe('permanent traffic integration deployment contract', () => {
@@ -23,9 +24,55 @@ describe('permanent traffic integration deployment contract', () => {
       expect(source).toContain('export async function readMetaTraffic');
       expect(source).not.toContain('startLocalMetaTrafficBridge');
       const compiled = await import(pathToFileURL(output).href);
+      const health = await import(pathToFileURL(join(folder, 'traffic-meta-alerts.mjs')).href);
+      expect(typeof health.readMetaTrafficHealth).toBe('function');
+      expect(typeof health.recordTrafficHealth).toBe('function');
       expect(compiled.validTrafficRange('2026-11-07', '2026-11-08')).toBe(true);
       expect(compiled.validTrafficRange('2026-02-30', '2026-03-01')).toBe(false);
+      const attributionSource = await readFile(
+        join(folder, 'traffic-attribution-reader.cjs'),
+        'utf8',
+      );
+      const bundled = { exports: {} as typeof import('../src/services/traffic-attribution.js') };
+      vi.stubEnv('JWT_SECRET', 'traffic-build-test-only-secret-32-chars');
+      new Function('require', 'module', 'exports', attributionSource)(
+        createRequire(import.meta.url),
+        bundled,
+        bundled.exports,
+      );
+      const order = {
+        id: 'front',
+        offer_id: 'offer',
+        source: { utm_id: '120123456789012', utm_campaign: 'Campaign name' },
+        paid: true,
+        is_natural: true,
+        is_clicked: false,
+        order_kind: 'front',
+        amount: '10000',
+        provider: 'vendepay',
+        settings: {},
+      };
+      const attributed = bundled.exports.aggregateTrafficAttribution(
+        [order, { ...order, id: 'upsell', order_kind: 'upsell_1' }],
+        new Map([['BRL', 1]]),
+      );
+      expect(attributed).toHaveLength(1);
+      expect(attributed[0]).toMatchObject({
+        campaignId: '120123456789012',
+        fronts: 1,
+        upsells: 1,
+        naturalUpsells: 1,
+        clickedUpsells: 0,
+        naturalGrossBrlMinor: '20000',
+        clickedGrossBrlMinor: '0',
+      });
+      const historical = bundled.exports.aggregateTrafficAttribution(
+        [{ ...order, source: {}, source_url: 'https://example.test/?utm_id=120123456789012' }],
+        new Map([['BRL', 1]]),
+      );
+      expect(historical[0]).toMatchObject({ campaignId: '120123456789012', fronts: 1 });
     } finally {
+      vi.unstubAllEnvs();
       await rm(folder, { recursive: true, force: true });
     }
   });

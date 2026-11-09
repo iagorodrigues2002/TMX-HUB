@@ -9,7 +9,7 @@ import shieldRoutes from '../src/routes/shield-jobs.js';
 import utmifyGlobalRoutes from '../src/routes/utmify-global-admin.js';
 import { NicheStore } from '../src/services/niche-store.js';
 
-vi.mock('../src/env.js', () => ({ env: {} }));
+vi.mock('../src/env.js', () => ({ env: { NODE_ENV: 'test', LOG_LEVEL: 'error' } }));
 
 describe('member tool isolation', () => {
   const nicheA = {

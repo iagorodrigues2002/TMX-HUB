@@ -11,7 +11,7 @@ import type { AuthUser } from '../src/lib/api-client/auth-types';
 test('permissions reuse sidebar labels and hierarchy, without exposing global admin as a grant', () => {
   assert.deepEqual(
     permissionGroups.map((group) => group.label),
-    ['Visão geral', 'Ofertas', 'Rastreamento', 'Empresa', 'Ferramentas', 'Integrações'],
+    ['Visão geral', 'Ofertas', 'Tráfego', 'Rastreamento', 'Empresa', 'Ferramentas', 'Integrações'],
   );
   assert.ok(
     permissionGroups
@@ -38,6 +38,14 @@ test('catalog does not enable intelligence or overview and selection survives se
     visible.find((group) => group.id === 'offers')?.children?.map((child) => child.id),
     ['offers-all'],
   );
+});
+test('traffic tabs can be granted and revoked individually without granting System User configuration', () => {
+  const tools = navigationTools(['traffic-campaigns'], []);
+  assert.deepEqual(selectedNavigation(tools), ['traffic-campaigns']);
+  assert.ok(tools.includes('ofertas'));
+  assert.ok(!tools.includes('nav:traffic-settings'));
+  assert.equal(permissionGroups.find((g) => g.label === 'Tráfego')?.entries.length, 5);
+  assert.deepEqual(selectedNavigation(navigationTools([], tools)), []);
 });
 test('empty selection is explicit and legacy offers selection is understood before editing', () => {
   assert.deepEqual(navigationTools([], ['ofertas']), ['nav:scoped']);

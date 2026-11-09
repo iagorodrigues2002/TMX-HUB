@@ -22,6 +22,7 @@ interface HubShellProps {
   onOpenNotifications?: () => void;
   /** When true, the children control their own scroll/layout (e.g. the editor). */
   fullBleed?: boolean;
+  previewNotice?: string;
 }
 
 export function HubShell({
@@ -31,6 +32,7 @@ export function HubShell({
   notificationCount,
   onOpenNotifications,
   fullBleed,
+  previewNotice,
 }: HubShellProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -113,11 +115,12 @@ export function HubShell({
                       role="note"
                       className="mb-4 rounded-md border border-warning/30 bg-card px-4 py-2 text-xs text-warning"
                     >
-                      {process.env.NEXT_PUBLIC_TMX_LOCAL_PREVIEW_KIND === 'synthetic'
-                        ? `Homologação local · base live ${process.env.NEXT_PUBLIC_TMX_LOCAL_BASE ?? 'não conferida'} · dados sintéticos · nenhuma gravação em produção.`
-                        : process.env.NEXT_PUBLIC_TMX_LOCAL_PREVIEW_KIND === 'live-copy'
-                          ? `Homologação isolada · cópia do live · base ${process.env.NEXT_PUBLIC_TMX_LOCAL_BASE ?? 'não conferida'} · alterações somente locais e envios externos bloqueados.`
-                          : 'Prévia local · dados reais · gravações e envios bloqueados. Fundo global e novo visual das visões gerais em avaliação.'}
+                      {previewNotice ??
+                        (process.env.NEXT_PUBLIC_TMX_LOCAL_PREVIEW_KIND === 'synthetic'
+                          ? `Homologação local · base live ${process.env.NEXT_PUBLIC_TMX_LOCAL_BASE ?? 'não conferida'} · dados sintéticos · nenhuma gravação em produção.`
+                          : process.env.NEXT_PUBLIC_TMX_LOCAL_PREVIEW_KIND === 'live-copy'
+                            ? `Homologação isolada · cópia do live · base ${process.env.NEXT_PUBLIC_TMX_LOCAL_BASE ?? 'não conferida'} · alterações somente locais e envios externos bloqueados.`
+                            : 'Prévia local · dados reais · gravações e envios bloqueados. Fundo global e novo visual das visões gerais em avaliação.')}
                     </div>
                   )}
                 <div

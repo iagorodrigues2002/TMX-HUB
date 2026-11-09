@@ -2,6 +2,24 @@ import type { ManagedTask } from './task-management.js';
 export type CenterNotification =
   | {
       id: string;
+      kind: 'traffic';
+      unread: true;
+      createdAt: string;
+      title: string;
+      traffic: {
+        type: 'ad_rejected' | 'account_disabled';
+        ownerId: string;
+        companyId?: string;
+        accountId: string;
+        accountName: string;
+        campaignId?: string;
+        campaignName?: string;
+        adId?: string;
+        adName?: string;
+      };
+    }
+  | {
+      id: string;
       kind: 'finance';
       unread: true;
       createdAt: string;

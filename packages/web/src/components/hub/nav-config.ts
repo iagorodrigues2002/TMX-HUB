@@ -6,10 +6,12 @@ import { nav_items_offers } from './nav-config-nav-items-offers';
 import { nav_items_overview } from './nav-config-nav-items-overview';
 import { nav_items_tools } from './nav-config-nav-items-tools';
 import { nav_items_tracking } from './nav-config-nav-items-tracking';
+import { nav_items_traffic } from './nav-config-nav-items-traffic';
 
 export const NAV_ITEMS: NavItem[] = [
   nav_items_overview,
   nav_items_offers,
+  nav_items_traffic,
   nav_items_tracking,
   nav_items_company,
   nav_items_tools,

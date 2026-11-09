@@ -32,6 +32,7 @@ import {
   ListTodo,
   MessageSquareText,
   RefreshCw,
+  ShieldAlert,
   ShoppingBag,
   Trash2,
   Wallet,
@@ -135,7 +136,7 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
         </DialogHeader>
         <div className="border-b border-border/60 bg-muted/20 px-5 py-3 sm:px-6">
           <Tabs value={filter} onValueChange={(value) => setFilter(value as Filter)}>
-            <TabsList className="grid grid-cols-3 sm:grid-cols-5 h-auto">
+            <TabsList className="grid grid-cols-3 sm:grid-cols-6 h-auto">
               {(
                 [
                   ['all', 'Todas'],
@@ -143,6 +144,7 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
                   ['sale', 'Vendas'],
                   ['call', 'Calls'],
                   ['finance', 'Financeiro'],
+                  ['traffic', 'Tráfego'],
                 ] as const
               ).map(([value, label]) => (
                 <TabsTrigger key={value} value={value}>
@@ -180,7 +182,11 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
                   () =>
                     notificationApi.read(notifications.filter((n) => n.unread).map((n) => n.id)),
                   notifications
-                    .filter((n) => (n.kind === 'sale' || n.kind === 'finance') && n.unread)
+                    .filter(
+                      (n) =>
+                        (n.kind === 'sale' || n.kind === 'finance' || n.kind === 'traffic') &&
+                        n.unread,
+                    )
                     .map((n) => n.id),
                 )
               }
@@ -258,6 +264,8 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
                         <ShoppingBag className="h-4 w-4 shrink-0 text-success" aria-hidden />
                       ) : item.kind === 'finance' ? (
                         <Wallet className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+                      ) : item.kind === 'traffic' ? (
+                        <ShieldAlert className="h-4 w-4 shrink-0 text-warning" aria-hidden />
                       ) : item.kind === 'call' ? (
                         <CalendarClock className="h-4 w-4 shrink-0 text-primary" aria-hidden />
                       ) : (
@@ -272,6 +280,26 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
                       {taskDate(item.createdAt)}
                     </time>
                   </div>
+                  {item.kind === 'traffic' && (
+                    <dl className="mt-3 space-y-2 text-sm">
+                      <div>
+                        <dt className="text-xs text-muted-foreground">Conta de anúncios</dt>
+                        <dd className="break-words">{item.traffic.accountName}</dd>
+                      </div>
+                      {item.traffic.campaignName && (
+                        <div>
+                          <dt className="text-xs text-muted-foreground">Campanha</dt>
+                          <dd className="break-words">{item.traffic.campaignName}</dd>
+                        </div>
+                      )}
+                      {item.traffic.adName && (
+                        <div>
+                          <dt className="text-xs text-muted-foreground">Anúncio</dt>
+                          <dd className="break-words">{item.traffic.adName}</dd>
+                        </div>
+                      )}
+                    </dl>
+                  )}
                   {item.kind === 'task' && (
                     <>
                       <div className="mt-3 flex flex-wrap gap-2">
@@ -401,7 +429,11 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
                         onClick={() =>
                           void mutate(
                             () => notificationApi.read([item.id]),
-                            item.kind === 'sale' || item.kind === 'finance' ? [item.id] : [],
+                            item.kind === 'sale' ||
+                              item.kind === 'finance' ||
+                              item.kind === 'traffic'
+                              ? [item.id]
+                              : [],
                           )
                         }
                       >

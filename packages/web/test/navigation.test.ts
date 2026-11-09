@@ -25,6 +25,26 @@ const active = (href: string) => {
   return resolveNavigation(path, query, tree);
 };
 
+test('traffic is available in production and each traffic tab selects its own navigation leaf', () => {
+  assert.equal(
+    tree.some((item) => item.id === 'traffic-preview'),
+    true,
+  );
+  const preview = visibleNavigation(admin, NAV_ITEMS, { syntheticPreview: true });
+  for (const [query, id] of [
+    ['', 'traffic-overview'],
+    ['view=overview', 'traffic-overview'],
+    ['view=campaigns', 'traffic-campaigns'],
+    ['view=contingency', 'traffic-contingency'],
+    ['view=windows', 'traffic-windows'],
+    ['view=settings', 'traffic-settings'],
+  ]) {
+    const item = resolveNavigation('/trafego', query!, preview);
+    assert.equal(item?.item.id, id);
+    assert.equal(item?.root.id, 'traffic-preview');
+  }
+});
+
 test('company management capability enables tasks without granting platform administration', () => {
   const items = navigationDestinations(
     visibleNavigation(user, NAV_ITEMS, { canManageTasks: true }),

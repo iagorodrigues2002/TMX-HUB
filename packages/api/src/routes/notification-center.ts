@@ -13,6 +13,7 @@ import { canReadNavigation } from '../lib/navigation-access.js';
 import { HttpProblem, zodToProblem } from '../lib/problem.js';
 import { changeNativeTaskStatus } from '../services/native-tasks.js';
 import { saleNoticeOffers } from '../services/sale-notice-preferences.js';
+import { trafficNotices } from '../services/traffic-notifications.js';
 const problem = (status: number, code: string, detail: string) =>
   new HttpProblem({ status, code, title: code, detail });
 const taskEventId = (t: ManagedTask) => `task:${t.id}:${t.updatedAt}`;
@@ -43,7 +44,7 @@ export async function notificationCenterRoutes(app: FastifyInstance) {
     const offers = await offersFor(user);
     const offerIds = offers.map((o) => o.id);
     const names = new Map(offers.map((o) => [o.id, o.name]));
-    const [tasks, calls, sales, finance] = await Promise.all([
+    const [tasks, calls, sales, finance, traffic] = await Promise.all([
       db`SELECT t.body,r.event_id AS read_id FROM managed_tasks t LEFT JOIN notification_center_reads r ON r.user_id=${user.sub} AND r.event_id='task:'||t.id||':'||(t.body->>'updatedAt') WHERE coalesce(t.body->>'managementMode','clickup')=${env.TASK_MANAGEMENT_MODE} AND t.body->>'status'<>'done' AND (${global} OR (t.body->>'companyId'=ANY(${activeCompanies}::text[])) OR (t.body->>'companyId' IS NULL AND ${legacyAllowed})) AND EXISTS(SELECT 1 FROM managed_task_people p WHERE p.body->>'userId'=${user.sub} AND t.body->'assignees' @> jsonb_build_array(jsonb_build_object('id',p.id))) ORDER BY t.updated_at DESC LIMIT 100`,
       db`SELECT c.id,c.body,r.event_id AS read_id FROM managed_calls c LEFT JOIN notification_center_reads r ON r.user_id=${user.sub} AND r.event_id='call:scheduled:'||c.id||':'||(c.body->>'revision') WHERE coalesce(c.body->>'managementMode','clickup')=ANY(${callModes}::text[]) AND c.body->>'status'='scheduled' AND (${global} OR (c.body->>'companyId'=ANY(${activeCompanies}::text[])) OR (c.body->>'companyId' IS NULL AND ${legacyAllowed})) AND EXISTS(SELECT 1 FROM managed_task_people p WHERE p.body->>'userId'=${user.sub} AND c.body->'participants' @> jsonb_build_array(jsonb_build_object('id',p.id))) ORDER BY (c.body->>'startsAt')::timestamptz ASC`,
       offerIds.length
@@ -60,6 +61,7 @@ export async function notificationCenterRoutes(app: FastifyInstance) {
           AND NOT EXISTS(SELECT 1 FROM notification_center_reads r WHERE r.user_id=${user.sub} AND r.event_id='finance:'||n.id::text)
           ORDER BY n.created_at DESC,n.id DESC LIMIT 200`
         : [],
+      trafficNotices(app, user),
     ]);
     const operatorIds = [...new Set(sales.map((s) => s.operator_id).filter(Boolean))];
     const operators = new Map(
@@ -70,6 +72,7 @@ export async function notificationCenterRoutes(app: FastifyInstance) {
       ),
     );
     const notifications: CenterNotification[] = [
+      ...traffic,
       ...finance.map((f) => ({
         id: `finance:${f.id}`,
         kind: 'finance' as const,
@@ -153,7 +156,7 @@ export async function notificationCenterRoutes(app: FastifyInstance) {
               .string()
               .min(1)
               .max(300)
-              .regex(/^(task|sale|call|finance):/),
+              .regex(/^(task|sale|call|finance|traffic):/),
           )
           .max(500),
       })

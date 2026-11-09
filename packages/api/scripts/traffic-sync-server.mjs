@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { createHmac, randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { readMetaTrafficHealth, recordTrafficHealth } from './traffic-meta-alerts.mjs';
 
 export const OWNER = '01KQSEXEWXZ9Y67V2HFK18JHJB';
 export const PREFIX = `traffic-sync:v1:${OWNER}:`;
@@ -193,6 +194,7 @@ export async function startWorker() {
     let locked = false;
     let renewal;
     try {
+      if (await redis.get(`traffic-user:v1:${OWNER}:connection`)) return;
       locked = (await redis.set(`${PREFIX}lock`, lock, 'PX', 12 * 60000, 'NX')) === 'OK';
       if (!locked) return;
       activeLock = lock;
@@ -224,6 +226,14 @@ export async function startWorker() {
         } catch {}
       }
       const date = days();
+      const healthAt = await redis.get(`traffic-alerts:v1:${OWNER}:state`);
+      if (!healthAt || Date.now() - Date.parse(parsed(healthAt)?.observedAt) > 300000) {
+        try {
+          await recordTrafficHealth(redis, OWNER, await readMetaTrafficHealth(token));
+        } catch {
+          /* Health failures preserve the last baseline and never imply an account block. */
+        }
+      }
       requests.push(
         { from: date.today, to: date.today, interval: 600000 },
         { from: date.yesterday, to: date.yesterday, interval: 3600000 },

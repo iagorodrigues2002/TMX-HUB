@@ -225,5 +225,10 @@
     "route": "/utmify-geral",
     "source": "packages/web/src/app/utmify-geral/page.tsx",
     "frame": "hub"
+  },
+  {
+    "route": "/trafego",
+    "source": "packages/web/src/app/trafego/page.tsx",
+    "frame": "hub"
   }
 ]

@@ -17,6 +17,25 @@ test('real center money formatting never guesses currency or formats unsafe amou
   ] as const)
     assert.equal(centerSaleAmount(amount, currency), 'Valor indisponível');
 });
+test('traffic rejection payload keeps ad account and campaign names', () => {
+  const event = CenterNotificationSchema.parse({
+    id: 'traffic:test',
+    kind: 'traffic',
+    title: 'Anúncio reprovado',
+    createdAt: '2026-11-08T13:00:00Z',
+    unread: true,
+    traffic: {
+      type: 'ad_rejected',
+      ownerId: 'owner',
+      accountId: 'act_1',
+      accountName: 'Conta A',
+      campaignName: 'Campanha A',
+      adName: 'Ad A',
+    },
+  });
+  assert.equal(event.kind, 'traffic');
+  if (event.kind === 'traffic') assert.equal(event.traffic.campaignName, 'Campanha A');
+});
 
 test('center rejects unknown movements and unsafe call links at the network boundary', () => {
   const common = {

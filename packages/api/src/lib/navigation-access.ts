@@ -5,6 +5,27 @@ import { HttpProblem } from './problem.js';
 export function navigationRequirements(rawPath: string, method: string): NavigationId[] | null {
   const path = rawPath.split('?')[0]!.replace(/^\/v1/, '');
   const read = method === 'GET' || method === 'HEAD';
+  if (
+    /^\/meta-control\/traffic\/(attribution|finance|finance-overview|connection\/(report|refresh))$/.test(
+      path,
+    )
+  )
+    return ['traffic-overview', 'traffic-campaigns', 'traffic-windows'];
+  if (
+    /^\/meta-control\/traffic\/connection\/inventory$/.test(path) ||
+    path === '/meta-control/inventory'
+  )
+    return ['traffic-contingency', 'traffic-settings'];
+  if (/^\/meta-control\/traffic\/connection$/.test(path) && !read) return ['traffic-settings'];
+  if (/^\/meta-control\/traffic\/alerts\//.test(path) && !read) return ['traffic-settings'];
+  if (/^\/meta-control\/(traffic(?:\/|$)|campaigns\/local-import)/.test(path))
+    return [
+      'traffic-overview',
+      'traffic-campaigns',
+      'traffic-windows',
+      'traffic-contingency',
+      'traffic-settings',
+    ];
   if (path === '/calls/notifications' || /^\/calls\/notifications\/[^/]+\/read$/.test(path))
     return null; // Personal participant notices are authorized by their handlers.
   if (/^\/(tasks|calls)(\/|$)/.test(path)) return ['task-management'];
