@@ -4,6 +4,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -15,7 +16,9 @@ import { monitorSources } from '@/lib/spy-monitor-sources';
 import type { spyAccessSchema } from '@/lib/spy-server-access';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  Activity,
   ArrowUpRight,
+  Copy,
   ExternalLink,
   FolderOpen,
   LayoutGrid,
@@ -24,7 +27,10 @@ import {
   Plus,
   Radar,
   Search,
+  Settings2,
   Star,
+  Tags,
+  Trash2,
 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -41,7 +47,6 @@ import {
   niches,
   parseSpySaved,
   safeSpyUrl,
-  spyPending,
   spySections,
   spyStageLabel,
   spyStageOptions,
@@ -140,6 +145,9 @@ export function SpyPreview() {
     setOpened(openedOffer);
   }, [openedOffer]);
   const [editing, setEditing] = useState<SpyOffer | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SpyOffer | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
   const [notice, setNotice] = useState('');
   const [drive, setDrive] = useState('');
   useEffect(() => {
@@ -213,6 +221,45 @@ export function SpyPreview() {
   function change(o: SpyOffer) {
     save(offers.map((x) => (x.id === o.id ? o : x)));
   }
+  const canDelete =
+    !fixture && (localPreview ? user?.role === 'admin' : catalog.data?.access.canEdit);
+  function requestDelete(offer: SpyOffer) {
+    setOpened(null);
+    setEditing(null);
+    setDeleteError('');
+    setDeleteTarget(offer);
+  }
+  async function confirmDelete() {
+    if (!deleteTarget || !canDelete || deleting) return;
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      const saved = await request<{ offers: SpyOffer[]; revision: string; drive: string }>(
+        '/api/spy-library',
+        {
+          method: 'POST',
+          body: {
+            action: 'delete_offer',
+            id: deleteTarget.id,
+            ...(!localPreview ? { baseRevision: catalog.data?.revision } : {}),
+          },
+        },
+      );
+      if (localPreview) save(saved.offers);
+      else client.setQueryData(['spy-catalog', user?.id, company], { ...catalog.data, ...saved });
+      setSelected((ids) => ids.filter((id) => id !== deleteTarget.id));
+      setDeleteTarget(null);
+      setNotice('Oferta excluída. Acompanhamento interrompido.');
+      void client.invalidateQueries({ queryKey: ['spy-library'] });
+    } catch {
+      setDeleteError(
+        'Não foi possível excluir. O catálogo pode ter sido atualizado; confira e tente novamente.',
+      );
+      if (!localPreview) void catalog.refetch();
+    } finally {
+      setDeleting(false);
+    }
+  }
   useEffect(() => {
     if (state.key !== key || !library.status.data) return;
     const next = syncSpyMonitoringStages(state.offers, library.status.data.jobs);
@@ -233,7 +280,6 @@ export function SpyPreview() {
         (!niche || o.niche === niche || (niche === '__missing' && !o.niche)) &&
         (!market || o.market === market) &&
         (scope !== 'favorites' || o.favorite) &&
-        (scope !== 'pending' || spyPending(o).length > 0) &&
         (scope !== 'selected' || selected.includes(o.id))
       );
     })
@@ -352,12 +398,15 @@ export function SpyPreview() {
             />
           )}
           <TabsTrigger value="offers" data-spy-tab="offers">
+            <Tags size={15} aria-hidden />
             Ofertas <span className={s.count}>{offers.length}</span>
           </TabsTrigger>
           <TabsTrigger value="monitor" data-spy-tab="monitor">
+            <Activity size={15} aria-hidden />
             Acompanhamento <span className={s.count}>{planning.length}</span>
           </TabsTrigger>
           <TabsTrigger value="cloning" data-spy-tab="cloning">
+            <Copy size={15} aria-hidden />
             Clonagem{' '}
             <span className={s.count}>
               {
@@ -368,6 +417,7 @@ export function SpyPreview() {
             </span>
           </TabsTrigger>
           <TabsTrigger value="settings" data-spy-tab="settings">
+            <Settings2 size={15} aria-hidden />
             Configurações
           </TabsTrigger>
         </TabsList>
@@ -428,7 +478,6 @@ export function SpyPreview() {
               {[
                 ['all', 'Todas'],
                 ['favorites', 'Favoritas'],
-                ['pending', 'Com pendências'],
               ].map(([id, label]) => (
                 <button
                   type="button"
@@ -437,9 +486,6 @@ export function SpyPreview() {
                   onClick={() => setScope(id!)}
                 >
                   {label}
-                  {id === 'pending' && (
-                    <span>{offers.filter((o) => spyPending(o).length).length}</span>
-                  )}
                 </button>
               ))}
             </div>
@@ -718,6 +764,15 @@ export function SpyPreview() {
                       <Pencil size={13} />
                       Editar
                     </button>
+                    {canDelete && (
+                      <button
+                        type="button"
+                        onClick={() => requestDelete(o)}
+                        aria-label={`Excluir ${o.name} ${o.id}`}
+                      >
+                        <Trash2 size={13} /> Excluir
+                      </button>
+                    )}
                   </footer>
                 </article>
               ))}
@@ -736,6 +791,7 @@ export function SpyPreview() {
                     <th>Última leitura válida</th>
                     <th>Domínios</th>
                     <th>Links</th>
+                    {canDelete && <th>Ações</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -762,6 +818,18 @@ export function SpyPreview() {
                       </td>
                       <td>{o.domains.length}</td>
                       <td>{o.links.length}</td>
+                      {canDelete && (
+                        <td>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => requestDelete(o)}
+                            aria-label={`Excluir ${o.name} ${o.id}`}
+                          >
+                            <Trash2 size={14} /> Excluir
+                          </Button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -920,8 +988,45 @@ export function SpyPreview() {
               library={library}
               onChange={change}
               onEdit={() => setEditing(structuredClone(current))}
+              onDelete={canDelete ? () => requestDelete(current) : undefined}
             />
           ) : null}
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setDeleteTarget(null);
+        }}
+      >
+        <DialogContent role="alertdialog" className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Excluir oferta?</DialogTitle>
+            <DialogDescription>
+              “{deleteTarget?.name}” será removida do catálogo e o acompanhamento será interrompido.
+              O histórico já coletado será preservado.
+            </DialogDescription>
+          </DialogHeader>
+          {deleteError && (
+            <p role="alert" className={s.error}>
+              {deleteError}
+            </p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" disabled={deleting} onClick={() => setDeleteTarget(null)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleting}
+              onClick={() => {
+                void confirmDelete();
+              }}
+            >
+              <Trash2 size={15} />
+              {deleting ? 'Excluindo…' : 'Excluir oferta'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </section>

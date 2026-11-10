@@ -1,4 +1,4 @@
-import { Radar } from 'lucide-react';
+import { Activity, Copy, Radar, Settings2, Tags } from 'lucide-react';
 import type { NavItem } from './nav-config-nav-item';
 import { nav_items_admin } from './nav-config-nav-items-admin';
 import { nav_items_company } from './nav-config-nav-items-company';
@@ -26,7 +26,7 @@ export const NAV_ITEMS: NavItem[] = [
         id: 'spy-offers',
         label: 'Ofertas',
         href: '/spy',
-        icon: Radar,
+        icon: Tags,
         group: 'Spy',
         requiresTool: 'ofertas',
       },
@@ -35,7 +35,7 @@ export const NAV_ITEMS: NavItem[] = [
         requiresTool: 'ofertas',
         label: 'Acompanhamento',
         href: '/spy?view=monitor',
-        icon: Radar,
+        icon: Activity,
         group: 'Spy',
       },
       {
@@ -43,7 +43,7 @@ export const NAV_ITEMS: NavItem[] = [
         requiresTool: 'ofertas',
         label: 'Clonagem',
         href: '/spy?view=cloning',
-        icon: Radar,
+        icon: Copy,
         group: 'Spy',
       },
       {
@@ -51,7 +51,7 @@ export const NAV_ITEMS: NavItem[] = [
         requiresTool: 'ofertas',
         label: 'Configurações',
         href: '/spy?view=settings',
-        icon: Radar,
+        icon: Settings2,
         group: 'Spy',
       },
     ],

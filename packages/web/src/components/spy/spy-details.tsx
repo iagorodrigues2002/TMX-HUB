@@ -1,7 +1,7 @@
 'use client';
 import { Button } from '@/components/ui/button';
 import { monitorSources } from '@/lib/spy-monitor-sources';
-import { CalendarDays, ExternalLink, Pencil } from 'lucide-react';
+import { CalendarDays, ExternalLink, Pencil, Trash2 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { SpyAdsList } from './spy-ads-list';
@@ -22,8 +22,15 @@ export function SpyDetails({
   offer,
   onChange,
   onEdit,
+  onDelete,
   library,
-}: { offer: SpyOffer; onChange: (o: SpyOffer) => void; onEdit: () => void; library: SpyLibrary }) {
+}: {
+  offer: SpyOffer;
+  onChange: (o: SpyOffer) => void;
+  onEdit: () => void;
+  onDelete?: () => void;
+  library: SpyLibrary;
+}) {
   const [demo, setDemo] = useState(false);
   const params = useSearchParams();
   const fixture =
@@ -56,6 +63,12 @@ export function SpyDetails({
           <Pencil size={14} />
           Editar cadastro
         </Button>
+        {onDelete && (
+          <Button variant="ghost" size="sm" onClick={onDelete}>
+            <Trash2 size={14} />
+            Excluir oferta
+          </Button>
+        )}
       </div>
       <div className={s.detailStats}>
         <div>

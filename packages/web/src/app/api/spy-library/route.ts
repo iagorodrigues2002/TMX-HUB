@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { parseSpySaved } from '@/components/spy/spy-model';
-import { saveSpyCatalog } from '@/lib/spy-catalog';
+import { deleteSpyOffer, saveSpyCatalog } from '@/lib/spy-catalog';
 import { spyHistoryFixture } from '@/lib/spy-history-fixture';
 import { LibraryFailure, normalizeLibrarySource } from '@/lib/spy-library-reader';
 import {
@@ -218,6 +218,11 @@ const offerSchema = z.object({
 });
 const inputSchema = z.discriminatedUnion('action', [
   z.object({
+    action: z.literal('delete_offer'),
+    id: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/),
+    baseRevision: z.string().max(100).optional(),
+  }),
+  z.object({
     action: z.literal('save_catalog'),
     offers: z.array(z.unknown()).max(200),
     baseRevision: z.string().max(100),
@@ -277,14 +282,21 @@ export async function POST(req: Request) {
     const access = spyServerEnabled() ? await spyServerAccess(req, true) : null;
     if (spyServerEnabled() && !access) return reply({ detail: 'Acesso não autorizado.' }, 403);
     if (access) {
-      const allowed =
-        input.action === 'save_catalog' || input.action === 'enroll'
-          ? access.canEdit
-          : ['configure', 'prepare_scrape', 'enable_browser'].includes(input.action)
-            ? access.canConfigure
-            : access.canMonitor;
+      const allowed = ['save_catalog', 'enroll', 'delete_offer'].includes(input.action)
+        ? access.canEdit
+        : ['configure', 'prepare_scrape', 'enable_browser'].includes(input.action)
+          ? access.canConfigure
+          : access.canMonitor;
       if (!allowed || input.action === 'enable_browser')
         return reply({ detail: 'Ação não liberada nesta empresa.' }, 403);
+    }
+    if (input.action === 'delete_offer') {
+      if (spyServerEnabled() && !input.baseRevision)
+        return reply({ detail: 'Atualize o catálogo antes de excluir.' }, 400);
+      const saved = await changeLibraryState(owner, (s) =>
+        deleteSpyOffer(s, input.id, input.baseRevision ?? s.catalogRevision),
+      );
+      return reply({ offers: saved.catalog, revision: saved.catalogRevision, drive: saved.drive });
     }
     if (input.action === 'save_catalog') {
       const users = access?.users ?? (await registeredUsers());
@@ -391,7 +403,7 @@ export async function POST(req: Request) {
     } else {
       await changeLibraryState(owner, (s) => {
         const job = s.jobs[input.id];
-        if (!job) throw Error('missing_job');
+        if (!job || job.deletedAt) throw Error('missing_job');
         if (
           input.action === 'refresh' &&
           job.checkedAt &&

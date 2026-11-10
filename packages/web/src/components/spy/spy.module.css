@@ -512,6 +512,7 @@
 }
 .card footer {
   margin: 0 -17px;
+  flex-wrap: wrap;
   padding: 11px 17px;
   background: var(--tmx-inset, transparent);
   border-top: 1px solid var(--color-border);

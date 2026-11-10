@@ -62,6 +62,7 @@ const partialSchema = z.object({
   creditsRemaining: z.number().int().nonnegative(),
 });
 const jobSchema = z.object({
+  deletedAt: z.string().datetime().optional(),
   id: z.string(),
   name: z.string(),
   responsibleId: z.string().nullable().default(null),
@@ -133,7 +134,7 @@ export function setSpyMonitoring(
   const jobs = { ...state.jobs };
   for (const id of new Set(ids)) {
     const job = jobs[id];
-    if (!job) throw Error('missing_job');
+    if (!job || job.deletedAt) throw Error('missing_job');
     if (enabled) {
       if (!job.sources.length) throw Error('missing_source');
       for (const source of job.sources) normalizeLibrarySource(source);
@@ -295,6 +296,7 @@ export function enrollLibraryOffers(
     jobs[offer.id] = old
       ? {
           ...old,
+          deletedAt: undefined,
           name: offer.name,
           responsibleId:
             input.responsibleId === undefined ? old.responsibleId : input.responsibleId,
@@ -378,7 +380,8 @@ export function prepareScrapeMonitoring(
   };
 }
 export function publicLibraryState(state: LibraryState) {
-  const jobs = Object.values(state.jobs);
+  const entries = Object.entries(state.jobs).filter(([, j]) => !j.deletedAt);
+  const jobs = entries.map(([, j]) => j);
   const verified = jobs.filter((j) => {
     const last = latestLibrarySnapshot(state, j.id);
     return (
@@ -416,7 +419,7 @@ export function publicLibraryState(state: LibraryState) {
           ? 'Library global via ScrapeCreators.'
           : 'API Meta; cobertura limitada.',
     jobs: Object.fromEntries(
-      Object.entries(state.jobs).map(([id, { partial, discoverySeen, ...j }]) => [
+      entries.map(([id, { partial, discoverySeen, ...j }]) => [
         id,
         {
           ...j,
@@ -460,7 +463,7 @@ export function publicLibraryState(state: LibraryState) {
 }
 function latestLibrarySnapshot(state: LibraryState, id: string) {
   const job = state.jobs[id];
-  if (!job) return undefined;
+  if (!job || job.deletedAt) return undefined;
   const scope = libraryScope(job.sources, state.countries, state.provider);
   return job.snapshots.filter((v) => v.scope === scope).at(-1) ?? job.snapshots.at(-1);
 }
@@ -692,6 +695,7 @@ export async function tickLibraryOwner(
   }
   if (state.retryAfter && Date.parse(state.retryAfter) > now.getTime()) return;
   for (const job of Object.values(state.jobs)) {
+    if (job.deletedAt) continue;
     if (options.jobIds && !options.jobIds.includes(job.id)) continue;
     if (
       !job.optedIn ||
