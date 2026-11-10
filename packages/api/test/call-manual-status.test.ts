@@ -30,7 +30,11 @@ describe.skipIf(!process.env.TASK_TEST_DATABASE_URL)(
     ) {
       const app = Fastify();
       app.decorate('db', db);
-      app.decorate('redis', { get: async () => null });
+      app.decorate('redis', {
+        get: async () => null,
+        smembers: async () => [],
+        lrange: async () => [],
+      });
       app.decorate('offerStore', { listAccessible: async () => [] });
       app.addHook('preHandler', async (req) => {
         req.user = { sub, role, email: `${sub}@example.test`, iat: 0, exp: 0 };

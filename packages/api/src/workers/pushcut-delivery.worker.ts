@@ -2,6 +2,7 @@ import { Worker } from 'bullmq';
 import postgres from 'postgres';
 import { env } from '../env.js';
 import { buildPushcutNotificationPayload } from '../integrations/pushcut/notification.js';
+import { isPushcutUpsell, pushcutOrderSelected } from '../integrations/pushcut/policy.js';
 import { logger } from '../lib/logger.js';
 import { makeRedis } from '../lib/redis.js';
 import { decryptSecret } from '../lib/secret-box.js';
@@ -23,6 +24,8 @@ export function createPushcutDeliveryWorker(): Worker<PushcutJobData> | null {
           front_notification_name: string;
           upsell_notification_name: string | null;
           devices: string[];
+          order_kinds: string[] | null;
+          show_amount: boolean;
           order_kind: string | null;
           buyer: { name?: string };
           amount_brl_minor: number | null;
@@ -34,7 +37,7 @@ export function createPushcutDeliveryWorker(): Worker<PushcutJobData> | null {
         }>
       >`
         SELECT d.id, pd.secret_encrypted, pd.front_notification_name,
-               pd.upsell_notification_name, pd.devices,
+               pd.upsell_notification_name, pd.devices, pd.order_kinds, pd.show_amount,
                o.order_kind,
                COALESCE(o.buyer, '{}'::jsonb) AS buyer,
                o.amount_brl_minor,
@@ -60,11 +63,14 @@ export function createPushcutDeliveryWorker(): Worker<PushcutJobData> | null {
           AND d.state <> 'delivered'
       `;
       if (!row) return;
+      if (!pushcutOrderSelected(row.order_kind, row.order_kinds)) {
+        await db`UPDATE tracking_delivery_outbox SET state='skipped',last_error='Tipo de venda desmarcado no perfil.' WHERE id=${row.id}`;
+        return;
+      }
       let responseStatus: number | null = null;
       let responseResult: Record<string, unknown> = {};
       try {
-        const kind =
-          row.order_kind && /^upsell(?:_[2-9][0-9]*)?$/.test(row.order_kind) ? 'upsell' : 'front';
+        const kind = isPushcutUpsell(row.order_kind) ? 'upsell' : 'front';
         const notificationName =
           kind === 'upsell' ? row.upsell_notification_name : row.front_notification_name;
         if (!notificationName) {
@@ -85,6 +91,7 @@ export function createPushcutDeliveryWorker(): Worker<PushcutJobData> | null {
         const payload = buildPushcutNotificationPayload(
           {
             kind,
+            showAmount: row.show_amount,
             buyerName: row.buyer.name,
             productName: row.product_name ?? undefined,
             amountBrlMinor: row.amount_brl_minor,

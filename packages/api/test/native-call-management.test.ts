@@ -23,7 +23,11 @@ describe.skipIf(!process.env.TASK_TEST_DATABASE_URL)('native calls in isolated P
   async function appFor(sub = 'admin', role: 'admin' | 'user' = 'admin') {
     const app = Fastify();
     app.decorate('db', db);
-    app.decorate('redis', { get: async () => null });
+    app.decorate('redis', {
+      get: async () => null,
+      smembers: async () => [],
+      lrange: async () => [],
+    });
     app.decorate('offerStore', { listAccessible: async () => [] });
     app.addHook('preHandler', async (req) => {
       req.user = { sub, role, email: 'qa@example.test', iat: 0, exp: 0 };

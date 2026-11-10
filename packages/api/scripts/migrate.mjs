@@ -123,6 +123,7 @@ const migrations = [
   '115_finance_classification.sql',
   '116_finance_card_ledger.sql',
   '117_finance_notifications.sql',
+  '118_pushcut_profiles.sql',
 ];
 
 await sql`

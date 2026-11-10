@@ -45,7 +45,11 @@ describe.skipIf(!process.env.TASK_TEST_DATABASE_URL)(
     async function appFor(user = admin as { sub: string; role: 'admin' | 'user' }) {
       const server = Fastify();
       server.decorate('db', db);
-      server.decorate('redis', { get: async () => null });
+      server.decorate('redis', {
+        get: async () => null,
+        smembers: async () => [],
+        lrange: async () => [],
+      });
       server.decorate('userStore', {
         getById: async (id: string) =>
           ['admin', 'member', 'other'].includes(id) ? { id, name: id } : null,

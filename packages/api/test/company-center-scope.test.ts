@@ -25,7 +25,11 @@ describe.skipIf(!process.env.TASK_TEST_DATABASE_URL)('company assigned notificat
   async function request(actor: string, change?: { id: string; key: string }) {
     const app = Fastify();
     app.decorate('db', db);
-    app.decorate('redis', { get: async () => null });
+    app.decorate('redis', {
+      get: async () => null,
+      smembers: async () => [],
+      lrange: async () => [],
+    });
     app.decorate('offerStore', { listAccessible: async () => [] });
     app.decorate('userStore', { maybeGetById: async () => null });
     app.addHook('preHandler', async (req) => {

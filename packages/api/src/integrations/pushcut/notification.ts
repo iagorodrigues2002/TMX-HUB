@@ -22,6 +22,7 @@ export interface PushcutOrderInput {
    * at webhook-ingestion time, since the delivery worker only has a
    * Postgres connection. */
   funnelName?: string;
+  showAmount?: boolean;
 }
 
 function money(brlMinor: number | null): string {
@@ -42,7 +43,9 @@ export function buildPushcutNotificationPayload(
   const platform = input.platformName?.trim();
   const kindLabel = input.kind === 'upsell' ? 'Upsell aprovado' : 'Venda aprovada';
   const title = funnel ? `${kindLabel} · ${funnel}` : kindLabel;
-  const details = product ? `${buyer} · ${product} · ${amount}` : `${buyer} · ${amount}`;
+  const details = [buyer, product, input.showAmount === false ? undefined : amount]
+    .filter(Boolean)
+    .join(' · ');
   const text = platform ? `${platform} · ${details}` : details;
   return {
     title,

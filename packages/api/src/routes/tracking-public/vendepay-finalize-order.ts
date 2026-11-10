@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { ulid } from 'ulid';
 import { env } from '../../env.js';
+import { isPushcutUpsell } from '../../integrations/pushcut/policy.js';
 import { encryptSecret } from '../../lib/secret-box.js';
 import type { VendepayTransaction } from './vendepay-ingestion-types.js';
 import type { upsertVendepayOrder } from './vendepay-upsert-order.js';
@@ -141,9 +142,10 @@ export async function finalizeVendepayOrder({
           SELECT id, front_notification_name, upsell_notification_name
           FROM tracking_pushcut_destinations
           WHERE project_id = ${connection.project_id} AND enabled = true
+            AND (order_kinds IS NULL OR ${order.order_kind}=ANY(order_kinds))
         `;
   const eligiblePushcutDestinations = pushcutDestinations.filter((destination) => {
-    const notificationName = /^upsell(?:_[2-9][0-9]*)?$/.test(order.order_kind)
+    const notificationName = isPushcutUpsell(order.order_kind)
       ? destination.upsell_notification_name
       : destination.front_notification_name;
     // Destination opted out of upsell alerts (upsell_notification_name

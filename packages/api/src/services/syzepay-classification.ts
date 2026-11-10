@@ -194,7 +194,7 @@ export async function classifySyzepayOrder(
     }
     const push = await sql<
       { id: string }[]
-    >`SELECT id FROM tracking_pushcut_destinations WHERE project_id=${p.id} AND enabled AND CASE WHEN ${args.kind}='front' THEN NULLIF(front_notification_name,'') IS NOT NULL ELSE NULLIF(upsell_notification_name,'') IS NOT NULL END`;
+    >`SELECT id FROM tracking_pushcut_destinations WHERE project_id=${p.id} AND enabled AND (order_kinds IS NULL OR ${args.kind}=ANY(order_kinds)) AND CASE WHEN ${args.kind}='front' THEN NULLIF(front_notification_name,'') IS NOT NULL ELSE NULLIF(upsell_notification_name,'') IS NOT NULL END`;
     for (const d of push) {
       const [r] = await sql<
         { id: string }[]

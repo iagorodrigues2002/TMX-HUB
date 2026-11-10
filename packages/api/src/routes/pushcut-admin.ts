@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { env } from '../env.js';
 import { buildPushcutNotificationPayload } from '../integrations/pushcut/notification.js';
 import { decryptSecret, encryptSecret } from '../lib/secret-box.js';
+import { registerPushcutProfiles } from './pushcut-profiles.js';
 
 const DestinationSchema = z.object({
   name: z.string().trim().min(1).max(80),
@@ -19,13 +20,14 @@ const databaseUnavailable = {
 };
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
+  registerPushcutProfiles(app);
   app.get<{ Params: { id: string } }>(
     '/offers/:id/tracking/pushcut-destinations',
     async (req, reply) => {
       await app.offerStore.assertAccess(req.params.id, req.user!.sub, req.user!.role === 'admin');
       if (!app.db) return reply.code(503).send({ destinations: [] });
       const destinations = await app.db`
-        SELECT pd.id, pd.name, pd.front_notification_name, pd.upsell_notification_name,
+        SELECT pd.id, pd.name, pd.profile_id, pd.front_notification_name, pd.upsell_notification_name,
                pd.devices, pd.enabled, pd.created_at, pd.updated_at
         FROM tracking_pushcut_destinations pd
         JOIN tracking_projects tp ON tp.id = pd.project_id
@@ -84,6 +86,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         FROM tracking_projects tp
         WHERE pd.id = ${req.params.destinationId}
           AND pd.project_id = tp.id
+          AND pd.profile_id IS NULL
           AND tp.offer_id = ${req.params.id}
         RETURNING pd.id, pd.enabled
       `;
@@ -102,6 +105,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         USING tracking_projects tp
         WHERE pd.id = ${req.params.destinationId}
           AND pd.project_id = tp.id
+          AND pd.profile_id IS NULL
           AND tp.offer_id = ${req.params.id}
       `;
       return reply.code(204).send();
@@ -123,9 +127,10 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           secret_encrypted: string;
           front_notification_name: string;
           devices: string[];
+          show_amount: boolean;
         }>
       >`
-        SELECT pd.secret_encrypted, pd.front_notification_name, pd.devices
+        SELECT pd.secret_encrypted, pd.front_notification_name, pd.devices, pd.show_amount
         FROM tracking_pushcut_destinations pd
         JOIN tracking_projects tp ON tp.id = pd.project_id
         WHERE pd.id = ${req.params.destinationId} AND tp.offer_id = ${req.params.id}
@@ -136,6 +141,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
       const payload = buildPushcutNotificationPayload(
         {
           kind: 'front',
+          showAmount: destination.show_amount,
           buyerName: 'Cliente Teste TMX',
           productName: 'Checkout de teste',
           amountBrlMinor: 100,
@@ -286,8 +292,9 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
           AND orders.status = 'paid'
           AND destination.project_id = ${project.id}
           AND destination.enabled = true
+          AND (destination.order_kinds IS NULL OR orders.order_kind=ANY(destination.order_kinds))
           AND CASE
-            WHEN orders.order_kind ~ '^upsell(_[2-9][0-9]*)?$'
+            WHEN orders.order_kind ~ '^(upsell|upsell_([2-9]|[1-9][0-9]+))$'
               THEN destination.upsell_notification_name IS NOT NULL
             ELSE destination.front_notification_name IS NOT NULL
           END
