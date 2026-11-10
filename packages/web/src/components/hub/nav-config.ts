@@ -1,4 +1,4 @@
-import { Activity, Copy, Radar, Settings2, Tags } from 'lucide-react';
+import { Activity, Copy, ScanEye, Settings2, Tags } from 'lucide-react';
 import type { NavItem } from './nav-config-nav-item';
 import { nav_items_admin } from './nav-config-nav-items-admin';
 import { nav_items_company } from './nav-config-nav-items-company';
@@ -17,7 +17,7 @@ export const NAV_ITEMS: NavItem[] = [
     id: 'spy-preview',
     label: 'Spy',
     href: '/spy',
-    icon: Radar,
+    icon: ScanEye,
     group: 'Spy',
     requiresTool: 'ofertas',
     keywords: ['pesquisa', 'biblioteca', 'clonagem'],

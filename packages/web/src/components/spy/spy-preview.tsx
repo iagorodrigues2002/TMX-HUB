@@ -26,6 +26,7 @@ import {
   Pencil,
   Plus,
   Radar,
+  ScanEye,
   Search,
   Settings2,
   Star,
@@ -341,7 +342,7 @@ export function SpyPreview() {
       <header className={s.header}>
         <div className={s.titleGroup}>
           <span className={s.logo}>
-            <Radar size={25} />
+            <ScanEye size={25} />
           </span>
           <div>
             <h1>Spy</h1>
