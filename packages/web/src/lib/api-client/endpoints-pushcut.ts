@@ -1,8 +1,44 @@
 import { request } from './request.js';
+export interface PushcutProfileInput {
+  name: string;
+  secret?: string;
+  source_destination_id?: string;
+  front_notification_name: string;
+  upsell_notification_name: string | null;
+  devices: string[];
+  offer_ids: string[];
+  order_kinds: string[];
+  show_amount: boolean;
+  enabled: boolean;
+}
+export type PushcutProfile = Omit<PushcutProfileInput, 'secret' | 'source_destination_id'> & {
+  id: string;
+};
 export const endpoints = {
+  async getPushcutProfiles(offerId: string): Promise<{
+    profiles: PushcutProfile[];
+    offers: Array<{ id: string; name: string }>;
+  }> {
+    return request(`/v1/offers/${offerId}/tracking/pushcut-profiles`);
+  },
+
+  async savePushcutProfile(
+    offerId: string,
+    body: PushcutProfileInput,
+    profileId?: string,
+  ): Promise<{ profile: { id: string } }> {
+    return request(
+      `/v1/offers/${offerId}/tracking/pushcut-profiles${profileId ? `/${profileId}` : ''}`,
+      {
+        method: profileId ? 'PATCH' : 'POST',
+        body,
+      },
+    );
+  },
   async getTrackingPushcutDestinations(id: string): Promise<{
     destinations: Array<{
       id: string;
+      profile_id: string | null;
       name: string;
       front_notification_name: string;
       upsell_notification_name: string | null;
