@@ -172,6 +172,7 @@ export async function classifySyzepayOrder(
     const orderId = inserted?.id ?? existing[0]!.id;
     for (const item of candidates)
       await sql`UPDATE syzepay_inbox_receipts SET state=${item.event.type === 'order.paid' ? 'processed' : 'ignored'},authenticity='signature_verified',tracking_order_id=${orderId},event_id=${item.event.id},order_id=${o.id},processed_at=now() WHERE id=${item.receipt.id}`;
+    await sql`SELECT reconcile_upsell_operator_sequences_after_order(${orderId})`;
     for (const item of candidates)
       await sql`UPDATE syzepay_inbox_receipts r SET dedupe_key=${`event:${item.event.id}`} WHERE r.id=${item.receipt.id} AND NOT EXISTS(SELECT 1 FROM syzepay_inbox_receipts other WHERE other.connection_id=r.connection_id AND other.dedupe_key=${`event:${item.event.id}`} AND other.id<>r.id)`;
     if (diagnosticIds.length)

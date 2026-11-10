@@ -33,6 +33,7 @@ type Approval = {
   currency: string | null;
   amount_brl_minor?: string | number | null;
   operator_id?: string | null;
+  credit_reason?: string | null;
 };
 type ApprovalCandidate = Approval & { receipt_payloads: unknown[] | null };
 type LogRequest = {
@@ -269,7 +270,7 @@ export function registerUpsellOperatorAudit(app: FastifyInstance) {
     // their own older click when someone else had the last qualifying one.
     const candidates = await app.db<ApprovalCandidate[]>`
         SELECT o.id AS order_id,CASE WHEN o.order_kind='upsell' THEN 'upsell_1' ELSE o.order_kind END AS stage_key,
-          o.provider,o.paid_at AS approved_at,o.amount_minor,o.currency,o.amount_brl_minor,credit.operator_id,
+          o.provider,o.paid_at AS approved_at,o.amount_minor,o.currency,o.amount_brl_minor,credit.operator_id,credit.reason AS credit_reason,
           CASE WHEN o.provider='vendepay' THEN (
             SELECT jsonb_agg(proof.payload) FROM (
               SELECT r.payload FROM webhook_receipts r
@@ -324,7 +325,9 @@ export function registerUpsellOperatorAudit(app: FastifyInstance) {
         ...row,
         amount_minor: row.amount_minor === null ? null : Number(row.amount_minor),
         operator_id: row.operator_id ?? null,
-        attribution: row.operator_id ? 'last_preapproval_click' : 'operator_not_determined',
+        attribution: row.operator_id
+          ? (row.credit_reason ?? 'last_preapproval_click')
+          : 'operator_not_determined',
       })),
       summary: summary.map((row) => ({
         ...row,
@@ -336,7 +339,7 @@ export function registerUpsellOperatorAudit(app: FastifyInstance) {
       date_basis: 'click',
       period: { from, to, time_zone: 'America/Sao_Paulo' },
       attribution_notice:
-        'Upsell aprovado atribuído ao último clique registrado antes da aprovação, na mesma compra de origem, etapa e gateway. É uma regra de crédito operacional, não prova de quem concluiu o pagamento. Valores brutos aprovados; devoluções não descontadas. Sem cruzamento único, fica sem operador. Valores sem conversão em reais permanecem na moeda original.',
+        'Crédito operacional por clique anterior à aprovação, reabertura seguida de novo pagamento ou continuação do mesmo funil e gateway. A data continua sendo a do clique real. Não é prova de quem concluiu o pagamento. Valores brutos aprovados; devoluções não descontadas. Sem vínculo seguro, fica sem operador. Valores sem conversão em reais permanecem na moeda original.',
     };
   };
   app.get<LogRequest>('/offers/:id/tracking/upsell-operator-logs', logsHandler);

@@ -91,6 +91,7 @@ describe.skipIf(!testUrl)('real central isolated Postgres', () => {
     await db`CREATE TABLE IF NOT EXISTS tracking_orders(id text PRIMARY KEY,project_id text,status text,provider text,amount_minor text,currency text,order_kind text,occurred_at timestamptz)`;
     await db`CREATE TABLE IF NOT EXISTS tracking_upsell_operator_credits(order_id text PRIMARY KEY,operator_id text)`;
     await db`ALTER TABLE tracking_upsell_operator_credits ADD COLUMN IF NOT EXISTS project_id text`;
+    await db`ALTER TABLE tracking_upsell_operator_credits ADD COLUMN IF NOT EXISTS reason text`;
     await db`CREATE TABLE IF NOT EXISTS browser_sale_events(order_id text PRIMARY KEY,created_at timestamptz NOT NULL DEFAULT now())`;
   });
   beforeEach(async () => {
@@ -200,6 +201,7 @@ describe.skipIf(!testUrl)('real central isolated Postgres', () => {
     await db`INSERT INTO tracking_orders(id,project_id,status,provider,amount_minor,currency,order_kind,occurred_at) VALUES('sale-1','p1','paid','vendepay','1000','BRL','front',now()),('sale-2','p2','paid','syzepay','2000','BRL','upsell',now()),('refund-1','p1','refunded','vendepay','1000','BRL','front',now())`;
     const one = await appFor(db, 'member-1');
     await db`INSERT INTO browser_sale_events(order_id) VALUES('sale-1'),('sale-2')`;
+    await db`INSERT INTO tracking_upsell_operator_credits(order_id,project_id,operator_id,reason) VALUES('sale-2','p2','douglas','same_front_paid_sequence')`;
     const two = await appFor(db, 'member-2');
     const admin = await appFor(db, 'admin', 'admin');
     const first = (await one.inject('/notifications')).json().notifications;
@@ -208,6 +210,9 @@ describe.skipIf(!testUrl)('real central isolated Postgres', () => {
     expect(
       (await two.inject('/notifications')).json().notifications.map((n: { id: string }) => n.id),
     ).toEqual(['sale:sale-2']);
+    expect(
+      (await two.inject('/notifications')).json().notifications[0].sale.lastClick,
+    ).toMatchObject({ operatorId: 'douglas', viaSequence: true });
     expect(
       (await admin.inject('/notifications'))
         .json()

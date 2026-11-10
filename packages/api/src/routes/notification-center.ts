@@ -48,7 +48,7 @@ export async function notificationCenterRoutes(app: FastifyInstance) {
       db`SELECT t.body,r.event_id AS read_id FROM managed_tasks t LEFT JOIN notification_center_reads r ON r.user_id=${user.sub} AND r.event_id='task:'||t.id||':'||(t.body->>'updatedAt') WHERE coalesce(t.body->>'managementMode','clickup')=${env.TASK_MANAGEMENT_MODE} AND t.body->>'status'<>'done' AND (${global} OR (t.body->>'companyId'=ANY(${activeCompanies}::text[])) OR (t.body->>'companyId' IS NULL AND ${legacyAllowed})) AND EXISTS(SELECT 1 FROM managed_task_people p WHERE p.body->>'userId'=${user.sub} AND t.body->'assignees' @> jsonb_build_array(jsonb_build_object('id',p.id))) ORDER BY t.updated_at DESC LIMIT 100`,
       db`SELECT c.id,c.body,r.event_id AS read_id FROM managed_calls c LEFT JOIN notification_center_reads r ON r.user_id=${user.sub} AND r.event_id='call:scheduled:'||c.id||':'||(c.body->>'revision') WHERE coalesce(c.body->>'managementMode','clickup')=ANY(${callModes}::text[]) AND c.body->>'status'='scheduled' AND (${global} OR (c.body->>'companyId'=ANY(${activeCompanies}::text[])) OR (c.body->>'companyId' IS NULL AND ${legacyAllowed})) AND EXISTS(SELECT 1 FROM managed_task_people p WHERE p.body->>'userId'=${user.sub} AND c.body->'participants' @> jsonb_build_array(jsonb_build_object('id',p.id))) ORDER BY (c.body->>'startsAt')::timestamptz ASC`,
       offerIds.length
-        ? db`SELECT o.id,o.provider,o.amount_minor,o.currency,o.order_kind,e.created_at AS occurred_at,p.offer_id,c.operator_id FROM tracking_orders o JOIN tracking_projects p ON p.id=o.project_id JOIN browser_sale_events e ON e.order_id=o.id LEFT JOIN tracking_upsell_operator_credits c ON c.order_id=o.id AND c.project_id=o.project_id WHERE p.offer_id=ANY(${offerIds}) AND o.status='paid' AND e.created_at<=now() AND NOT EXISTS(SELECT 1 FROM notification_center_reads r WHERE r.user_id=${user.sub} AND r.event_id='sale:'||o.id) ORDER BY e.created_at DESC,o.id DESC LIMIT 200`
+        ? db`SELECT o.id,o.provider,o.amount_minor,o.currency,o.order_kind,e.created_at AS occurred_at,p.offer_id,c.operator_id,c.reason AS credit_reason FROM tracking_orders o JOIN tracking_projects p ON p.id=o.project_id JOIN browser_sale_events e ON e.order_id=o.id LEFT JOIN tracking_upsell_operator_credits c ON c.order_id=o.id AND c.project_id=o.project_id WHERE p.offer_id=ANY(${offerIds}) AND o.status='paid' AND e.created_at<=now() AND NOT EXISTS(SELECT 1 FROM notification_center_reads r WHERE r.user_id=${user.sub} AND r.event_id='sale:'||o.id) ORDER BY e.created_at DESC,o.id DESC LIMIT 200`
         : [],
       canReadNavigation(user, 'company-finance')
         ? db`SELECT n.id,n.created_at,e.occurred_at,e.company_id,c.name AS company_name,p.provider,e.category,e.sent::text,e.sent_currency,e.received::text,e.received_currency
@@ -118,7 +118,15 @@ export async function notificationCenterRoutes(app: FastifyInstance) {
           currency: s.currency,
           orderKind: s.order_kind,
           lastClick: s.operator_id
-            ? { operatorId: s.operator_id, operatorName: operators.get(s.operator_id) ?? null }
+            ? {
+                operatorId: s.operator_id,
+                operatorName: operators.get(s.operator_id) ?? null,
+                ...(['same_front_paid_sequence', 'same_front_operator_flow'].includes(
+                  s.credit_reason,
+                )
+                  ? { viaSequence: true }
+                  : {}),
+              }
             : null,
         },
       })),

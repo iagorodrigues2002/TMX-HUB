@@ -55,6 +55,7 @@ export async function finalizeVendepayOrder({
           WHERE id = ${receiptId}
         `;
   if (order.status === 'paid') {
+    await sql`SELECT reconcile_upsell_operator_sequences_after_order(${order.id})`;
     const explicitMessageId = resolvedAttributionSource.tmx_recovery_message ?? null;
     const [recoveryMatch] = await sql<Array<{ id: string; message_id: string; channel: string }>>`
             SELECT ro.id,rm.id AS message_id,rc.kind AS channel
