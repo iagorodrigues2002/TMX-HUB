@@ -24,4 +24,11 @@ Não foi enviado um push real de teste ao dispositivo. Os testes do novo payload
 
 ## Estado da publicação
 
-Aguardando os deployments desta entrega.
+- API: commit `d3cabb8721893479a1bbdc8e573138f7057e1efd`, deployment `7df0fb10-4d9f-479a-81ef-efb06deb92cd`, SUCCESS.
+- Web: commit `4a574e087ebe6dcb980a6e9c38e8136b8f49cc35`, deployment `5b112f70-281d-4861-a526-21bff089419d`, SUCCESS.
+- Migração 118 confirmada no ledger de produção; health/readiness 200.
+- Consulta autenticada do novo endpoint retornou 200, zero perfis existentes e 24 ofertas gerenciáveis, sem campos de credenciais na resposta.
+- Pelo domínio normal: `/login` 200; sessão e perfis sem token retornaram 401 JSON, sem o bloqueio coletivo 429 ocorrido anteriormente.
+- Navegador autenticado de produção: tela “Perfis Pushcut” e formulário “Novo perfil” renderizados; checkboxes de front/upsells e valor visíveis. Nenhum formulário de produção foi salvo.
+- Após a publicação, os cinco destinos antigos permaneciam ativos e a tabela de perfis continuava vazia: nenhuma conversão ou alteração de destinatário foi feita implicitamente.
+- A cópia local do handler foi atualizada com a revisão de permissão por empresa e o serviço local de API reiniciado; as configurações do Railway foram preservadas.
