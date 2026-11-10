@@ -32,6 +32,7 @@ import pushcutAdminRoutes from './pushcut-admin.js';
 import recoveryAdminRoutes from './recovery-admin.js';
 import refundsDashboardRoutes from './refunds-dashboard.js';
 import shieldJobsRoutes from './shield-jobs.js';
+import { spyAccessRoutes } from './spy-access.js';
 import { syzepayAdminRoutes, syzepayPublicRoutes } from './syzepay.js';
 import { taskAutomationRoutes, taskManagementRoutes } from './task-management.js';
 import tiktokAdsAdminRoutes from './tiktok-ads-admin.js';
@@ -158,6 +159,7 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
         await protectedRoutes.register(pushcutAdminRoutes);
         await protectedRoutes.register(recoveryAdminRoutes);
         await protectedRoutes.register(usersRoutes);
+        await protectedRoutes.register(spyAccessRoutes);
         await protectedRoutes.register(taskManagementRoutes);
         await protectedRoutes.register(callManagementRoutes);
         await protectedRoutes.register(notificationCenterRoutes);

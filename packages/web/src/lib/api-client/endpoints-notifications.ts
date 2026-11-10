@@ -11,6 +11,17 @@ const common = {
 export const CenterNotificationSchema = z.discriminatedUnion('kind', [
   z.object({
     ...common,
+    kind: z.literal('spy'),
+    spy: z.object({
+      offerId: z.string(),
+      offerName: z.string(),
+      newAds: z.number().int().nonnegative(),
+      newPages: z.number().int().nonnegative(),
+      pageNames: z.array(z.string()),
+    }),
+  }),
+  z.object({
+    ...common,
     kind: z.literal('traffic'),
     traffic: z.object({
       type: z.enum(['ad_rejected', 'account_disabled']),
@@ -74,15 +85,34 @@ export type CenterNotification = z.infer<typeof CenterNotificationSchema>;
 
 export const notificationApi = {
   async list() {
-    return z
+    const base = z
       .object({ notifications: z.array(CenterNotificationSchema) })
       .parse(await request('/v1/notifications'));
+    const spy = z
+      .object({ notifications: z.array(CenterNotificationSchema) })
+      .parse(
+        await request(
+          `/api/spy-notifications${process.env.NEXT_PUBLIC_TMX_LOCAL_PREVIEW_KIND === 'synthetic' && typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('spy_notice_test') === '1' ? '?fixture=1' : ''}`,
+        ).catch(() => ({ notifications: [] })),
+      );
+    return {
+      notifications: [...base.notifications, ...spy.notifications].sort((a, b) =>
+        b.createdAt.localeCompare(a.createdAt),
+      ),
+    };
   },
   async read(ids: string[]) {
-    for (let offset = 0; offset < ids.length; offset += 500)
+    const local = ids.filter((id) => id.startsWith('spy:'));
+    for (let offset = 0; offset < local.length; offset += 500)
+      await request('/api/spy-notifications', {
+        method: 'POST',
+        body: { ids: local.slice(offset, offset + 500) },
+      });
+    const remoteIds = ids.filter((id) => !id.startsWith('spy:'));
+    for (let offset = 0; offset < remoteIds.length; offset += 500)
       await request('/v1/notifications/read', {
         method: 'POST',
-        body: { ids: ids.slice(offset, offset + 500) },
+        body: { ids: remoteIds.slice(offset, offset + 500) },
       });
   },
   async clearSales() {

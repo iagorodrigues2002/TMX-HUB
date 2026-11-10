@@ -31,6 +31,7 @@ import {
   ExternalLink,
   ListTodo,
   MessageSquareText,
+  Radar,
   RefreshCw,
   ShieldAlert,
   ShoppingBag,
@@ -136,7 +137,7 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
         </DialogHeader>
         <div className="border-b border-border/60 bg-muted/20 px-5 py-3 sm:px-6">
           <Tabs value={filter} onValueChange={(value) => setFilter(value as Filter)}>
-            <TabsList className="grid h-auto grid-flow-row grid-cols-3 sm:grid sm:h-auto sm:grid-cols-3">
+            <TabsList className={styles.filterTabs} aria-label="Filtrar notificações por categoria">
               {(
                 [
                   ['all', 'Todas'],
@@ -145,17 +146,26 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
                   ['call', 'Calls'],
                   ['finance', 'Financeiro'],
                   ['traffic', 'Tráfego'],
+                  ['spy', 'Spy'],
                 ] as const
-              ).map(([value, label]) => (
-                <TabsTrigger key={value} value={value} className="min-w-0 px-2">
-                  {label}
-                  <span className="ml-1 text-[10px] opacity-70">
-                    {value === 'all'
-                      ? notifications.length
-                      : notifications.filter((item) => item.kind === value).length}
-                  </span>
-                </TabsTrigger>
-              ))}
+              ).map(([value, label]) => {
+                const count =
+                  value === 'all'
+                    ? notifications.length
+                    : notifications.filter((item) => item.kind === value).length;
+                return (
+                  <TabsTrigger
+                    key={value}
+                    value={value}
+                    aria-label={`${label}, ${count} ${count === 1 ? 'notificação' : 'notificações'}`}
+                  >
+                    <span className={styles.filterLabel}>{label}</span>
+                    <span className={styles.filterCount} aria-hidden="true">
+                      {count}
+                    </span>
+                  </TabsTrigger>
+                );
+              })}
             </TabsList>
           </Tabs>
         </div>
@@ -230,10 +240,16 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
           {!query.isLoading && !query.error && !visible.length && (
             <div className="glass-card grid min-h-64 place-items-center rounded-xl border border-dashed border-border/70 bg-muted/10 px-6 text-center">
               <div>
-                <ListTodo className="mx-auto h-8 w-8 text-muted-foreground/50" aria-hidden />
+                {filter === 'spy' ? (
+                  <Radar className="mx-auto h-8 w-8 text-muted-foreground/50" aria-hidden />
+                ) : (
+                  <ListTodo className="mx-auto h-8 w-8 text-muted-foreground/50" aria-hidden />
+                )}
                 <p className="mt-3 text-sm font-medium">Nenhuma notificação por aqui</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Tarefas em aberto permanecem até a conclusão.
+                  {filter === 'spy'
+                    ? 'Novas páginas e anúncios são avisados ao responsável da oferta.'
+                    : 'Tarefas em aberto permanecem até a conclusão.'}
                 </p>
               </div>
             </div>
@@ -260,7 +276,9 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-start gap-2">
-                      {item.kind === 'sale' ? (
+                      {item.kind === 'spy' ? (
+                        <Radar className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+                      ) : item.kind === 'sale' ? (
                         <ShoppingBag className="h-4 w-4 shrink-0 text-success" aria-hidden />
                       ) : item.kind === 'finance' ? (
                         <Wallet className="h-4 w-4 shrink-0 text-primary" aria-hidden />
@@ -280,6 +298,26 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
                       {taskDate(item.createdAt)}
                     </time>
                   </div>
+                  {item.kind === 'spy' && (
+                    <div className="mt-3 space-y-3 text-sm">
+                      <p>
+                        {item.spy.newAds}{' '}
+                        {item.spy.newAds === 1 ? 'anúncio novo' : 'anúncios novos'} ·{' '}
+                        {item.spy.newPages}{' '}
+                        {item.spy.newPages === 1 ? 'página nova' : 'páginas novas'}
+                      </p>
+                      {item.spy.pageNames.length > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          {item.spy.pageNames.join(' · ')}
+                        </p>
+                      )}
+                      <Button asChild variant="outline" size="sm">
+                        <a href={`/spy?offer=${encodeURIComponent(item.spy.offerId)}`}>
+                          Abrir oferta <ExternalLink aria-hidden />
+                        </a>
+                      </Button>
+                    </div>
+                  )}
                   {item.kind === 'traffic' && (
                     <dl className="mt-3 space-y-2 text-sm">
                       <div>
@@ -442,9 +480,11 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
                       </Button>
                     ) : (
                       <span className="text-xs text-muted-foreground">
-                        {item.kind === 'call'
-                          ? 'Lida · permanece até concluir ou cancelar a call'
-                          : 'Lida · permanece até a conclusão'}
+                        {item.kind === 'spy'
+                          ? 'Lida · registrada no histórico'
+                          : item.kind === 'call'
+                            ? 'Lida · permanece até concluir ou cancelar a call'
+                            : 'Lida · permanece até a conclusão'}
                       </span>
                     )}
                   </div>

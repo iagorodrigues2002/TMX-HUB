@@ -1,5 +1,11 @@
 [
   {
+    "route": "/spy/anuncios",
+    "source": "packages/web/src/app/spy/anuncios/page.tsx",
+    "frame": "hub"
+  },
+  { "route": "/spy", "source": "packages/web/src/app/spy/page.tsx", "frame": "hub" },
+  {
     "route": "/admin",
     "source": "packages/web/src/app/admin/page.tsx",
     "frame": "hub"

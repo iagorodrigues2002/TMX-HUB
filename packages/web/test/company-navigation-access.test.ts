@@ -11,7 +11,16 @@ import type { AuthUser } from '../src/lib/api-client/auth-types';
 test('permissions reuse sidebar labels and hierarchy, without exposing global admin as a grant', () => {
   assert.deepEqual(
     permissionGroups.map((group) => group.label),
-    ['Visão geral', 'Ofertas', 'Tráfego', 'Rastreamento', 'Empresa', 'Ferramentas', 'Integrações'],
+    [
+      'Visão geral',
+      'Ofertas',
+      'Tráfego',
+      'Spy',
+      'Rastreamento',
+      'Empresa',
+      'Ferramentas',
+      'Integrações',
+    ],
   );
   assert.ok(
     permissionGroups

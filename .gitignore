@@ -23,3 +23,5 @@ test-results/
 packages/api/scripts/traffic-meta-reader.mjs
 packages/api/scripts/traffic-meta-alerts.mjs
 packages/api/scripts/traffic-attribution-reader.cjs
+packages/web/scripts/spy-server-worker.mjs
+packages/web/src/components/spy/spy-seed.json

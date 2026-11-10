@@ -31,7 +31,7 @@ ARG API_PROXY_TARGET
 ENV API_PROXY_TARGET=${API_PROXY_TARGET}
 ARG NEXT_PUBLIC_TMX_SIGNAL_PREVIEW=0
 ENV NEXT_PUBLIC_TMX_SIGNAL_PREVIEW=${NEXT_PUBLIC_TMX_SIGNAL_PREVIEW}
-RUN pnpm --filter @page-cloner/web build
+RUN cd packages/web && node scripts/build-spy-worker.mjs && pnpm build
 
 # ---- runtime stage ----
 FROM node:22-alpine AS runtime
@@ -43,8 +43,10 @@ WORKDIR /app
 COPY --from=build /app/packages/web/.next/standalone ./
 COPY --from=build /app/packages/web/.next/static ./packages/web/.next/static
 COPY --from=build /app/packages/web/public ./packages/web/public
+COPY --from=build /app/packages/web/scripts/start-server.mjs ./packages/web/scripts/start-server.mjs
+COPY --from=build /app/packages/web/scripts/spy-server-worker.mjs ./packages/web/scripts/spy-server-worker.mjs
 
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
-CMD ["node", "packages/web/server.js"]
+CMD ["node", "packages/web/scripts/start-server.mjs"]
