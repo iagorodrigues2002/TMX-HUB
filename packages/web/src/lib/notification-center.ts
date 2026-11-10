@@ -2,7 +2,11 @@ type CenterNotification =
   | { kind: 'sale'; unread: boolean }
   | { kind: 'task'; unread: boolean; status: string };
 
-export type ApprovedSaleClick = { operatorId: string; operatorName: string | null };
+export type ApprovedSaleClick = {
+  operatorId: string;
+  operatorName: string | null;
+  viaSequence?: boolean;
+};
 
 export function saleKindBadge(orderKind: string | null) {
   if (orderKind === 'upsell') return { label: 'Upsell', variant: 'warning' } as const;
@@ -14,7 +18,10 @@ export function saleKindBadge(orderKind: string | null) {
 
 export function saleClickDetail(click: ApprovedSaleClick | null) {
   return click
-    ? { label: 'Último clique', value: click.operatorName?.trim() || 'Usuário não identificado' }
+    ? {
+        label: click.viaSequence ? 'Sequência de upsell' : 'Último clique',
+        value: click.operatorName?.trim() || 'Usuário não identificado',
+      }
     : { label: 'Origem', value: 'Venda natural' };
 }
 

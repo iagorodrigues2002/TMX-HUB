@@ -62,7 +62,11 @@ export const CenterNotificationSchema = z.discriminatedUnion('kind', [
       currency: z.string().nullable(),
       orderKind: z.string().nullable(),
       lastClick: z
-        .object({ operatorId: z.string(), operatorName: z.string().nullable() })
+        .object({
+          operatorId: z.string(),
+          operatorName: z.string().nullable(),
+          viaSequence: z.boolean().optional(),
+        })
         .nullable(),
     }),
   }),

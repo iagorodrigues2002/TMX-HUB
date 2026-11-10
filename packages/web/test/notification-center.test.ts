@@ -35,6 +35,16 @@ test('sales disappear only after being read', () => {
   assert.equal(isActiveNotification({ kind: 'sale', unread: false }), false);
 });
 
+test('inherited funnel credit is identified without claiming a click on that stage', () => {
+  assert.deepEqual(
+    saleClickDetail({ operatorId: 'douglas', operatorName: 'Douglas Riti', viaSequence: true }),
+    {
+      label: 'Sequência de upsell',
+      value: 'Douglas Riti',
+    },
+  );
+});
+
 test('reading a task never removes it; completion removes even an unread task', () => {
   for (const unread of [true, false]) {
     for (const status of ['Pendente', 'Em progresso']) {
