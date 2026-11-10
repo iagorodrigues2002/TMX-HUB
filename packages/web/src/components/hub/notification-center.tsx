@@ -18,7 +18,7 @@ import {
 } from '@/lib/api-client/endpoints-notifications';
 import { useAuth } from '@/lib/auth-context';
 import { callDate, reminderLabel } from '@/lib/call-dashboard';
-import { saleClickDetail } from '@/lib/notification-center';
+import { saleClickDetail, saleKindBadge } from '@/lib/notification-center';
 import { animateNotificationExit } from '@/lib/notification-center-motion';
 import { usePrivacy } from '@/lib/privacy-context';
 import { taskDate, taskStatusLabel } from '@/lib/task-dashboard';
@@ -397,8 +397,8 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
                           : centerSaleAmount(item.sale.amountMinor, item.sale.currency)}
                       </p>
                       <div className="mt-3 flex flex-wrap gap-2">
-                        <Badge variant={item.sale.orderKind === 'upsell' ? 'warning' : 'success'}>
-                          {item.sale.orderKind === 'upsell' ? 'Upsell' : 'Venda principal'}
+                        <Badge variant={saleKindBadge(item.sale.orderKind).variant}>
+                          {saleKindBadge(item.sale.orderKind).label}
                         </Badge>
                         <Badge variant="outline">{item.sale.provider}</Badge>
                       </div>

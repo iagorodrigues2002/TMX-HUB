@@ -1,6 +1,22 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { isActiveNotification, saleClickDetail } from '../src/lib/notification-center';
+import {
+  isActiveNotification,
+  saleClickDetail,
+  saleKindBadge,
+} from '../src/lib/notification-center';
+
+test('sale badges recognize numbered upsells, including the reported Upsell 3', () => {
+  assert.deepEqual(saleKindBadge('front'), { label: 'Venda principal', variant: 'success' });
+  assert.deepEqual(saleKindBadge(null), { label: 'Venda principal', variant: 'success' });
+  assert.deepEqual(saleKindBadge('upsell'), { label: 'Upsell', variant: 'warning' });
+  for (const stage of [2, 3, 9, 10, 19, 20, 99]) {
+    assert.deepEqual(saleKindBadge(`upsell_${stage}`), {
+      label: `Upsell ${stage}`,
+      variant: 'warning',
+    });
+  }
+});
 
 test('sale cards show the credited operator, or natural sale only when no click is credited', () => {
   assert.deepEqual(saleClickDetail({ operatorId: 'operator-1', operatorName: 'Douglas Riti' }), {
