@@ -5,6 +5,7 @@ it('Spy access scopes workspaces, avoids people reads for images and rechecks su
   const app = Fastify();
   const id = '69706e9a-95ad-493e-b4ab-4a6de7541adc';
   let active = true;
+  let admin = false;
   let peopleReads = 0;
   app.decorate('db', (async (strings: TemplateStringsArray) => {
     if (strings.join('').includes('SELECT user_id')) {
@@ -13,9 +14,16 @@ it('Spy access scopes workspaces, avoids people reads for images and rechecks su
     }
     return [
       {
+        id: '11111111-1111-4111-8111-111111111111',
+        name: 'Alphabetically first',
+        role: null,
+        status: null,
+        tools: [],
+      },
+      {
         id,
         name: 'Company A',
-        role: 'member',
+        role: admin ? 'owner' : 'member',
         tools: ['ofertas', 'nav:scoped', 'nav:spy-offers'],
         status: active ? 'active' : 'suspended',
       },
@@ -26,7 +34,7 @@ it('Spy access scopes workspaces, avoids people reads for images and rechecks su
     maybeGetById: async () => ({ id: 'member', name: 'Member' }),
   } as never);
   app.addHook('preHandler', async (req) => {
-    req.user = { sub: 'member', role: 'user' } as never;
+    req.user = { sub: 'member', role: admin ? 'admin' : 'user' } as never;
   });
   await app.register(spyAccessRoutes);
   try {
@@ -45,6 +53,9 @@ it('Spy access scopes workspaces, avoids people reads for images and rechecks su
     ).toBe(403);
     active = false;
     expect((await app.inject(`/spy/access?company=${id}`)).statusCode).toBe(403);
+    active = true;
+    admin = true;
+    expect((await app.inject('/spy/access')).json().companyId).toBe(id);
   } finally {
     await app.close();
   }

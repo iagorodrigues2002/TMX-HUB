@@ -34,7 +34,9 @@ export async function spyAccessRoutes(app: FastifyInstance) {
     const companies = rows.filter((r) =>
       spyMembershipAllowed(req.user!, r as never, account.allowedTools),
     );
-    const selected = query.company ? companies.find((c) => c.id === query.company) : companies[0];
+    const selected = query.company
+      ? companies.find((c) => c.id === query.company)
+      : (companies.find((c) => c.role === 'owner' && c.status === 'active') ?? companies[0]);
     if (!selected)
       throw new HttpProblem({
         status: 403,
