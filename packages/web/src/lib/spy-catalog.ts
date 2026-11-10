@@ -7,28 +7,40 @@ export function deleteSpyOffer(
   baseRevision: string,
   now = new Date(),
 ): LibraryState {
+  return deleteSpyOffers(state, [id], baseRevision, now);
+}
+export function deleteSpyOffers(
+  state: LibraryState,
+  ids: string[],
+  baseRevision: string,
+  now = new Date(),
+): LibraryState {
   if (state.catalogRevision !== baseRevision) throw Error('catalog_conflict');
   const offers = parseSpySaved(JSON.stringify(state.catalog));
-  if (!offers.some((o) => o.id === id)) throw Error('missing_offer');
-  const job = state.jobs[id];
+  const selected = new Set(ids);
+  if (!ids.length || ids.length > 200 || selected.size !== ids.length)
+    throw Error('invalid_offers');
+  const existing = new Set(offers.map((o) => o.id));
+  if (ids.some((id) => !existing.has(id))) throw Error('missing_offer');
+  const jobs = { ...state.jobs };
+  for (const id of selected) {
+    const job = jobs[id];
+    if (job)
+      jobs[id] = {
+        ...job,
+        deletedAt: now.toISOString(),
+        enabled: false,
+        optedIn: false,
+        nextAt: null,
+        partial: null,
+        status: 'paused',
+      };
+  }
   return {
     ...state,
-    catalog: offers.filter((o) => o.id !== id),
+    catalog: offers.filter((o) => !selected.has(o.id)),
     catalogRevision: randomUUID(),
-    jobs: job
-      ? {
-          ...state.jobs,
-          [id]: {
-            ...job,
-            deletedAt: now.toISOString(),
-            enabled: false,
-            optedIn: false,
-            nextAt: null,
-            partial: null,
-            status: 'paused',
-          },
-        }
-      : state.jobs,
+    jobs,
   };
 }
 export function saveSpyCatalog(

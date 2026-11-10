@@ -7,7 +7,7 @@ import test from 'node:test';
 import { POST } from '../src/app/api/spy-library/route';
 import { NAV_ITEMS } from '../src/components/hub/nav-config';
 import { parseSpySaved } from '../src/components/spy/spy-model';
-import { deleteSpyOffer, saveSpyCatalog } from '../src/lib/spy-catalog';
+import { deleteSpyOffer, deleteSpyOffers, saveSpyCatalog } from '../src/lib/spy-catalog';
 import {
   changeLibraryState,
   initialLibraryState,
@@ -74,6 +74,35 @@ test('Deletion endpoint requires edit permission, same origin and current revisi
     assert.equal((await readLibraryState(`company:${a}`, dir)).catalog.length, 1);
     assert.equal((await send(state.catalogRevision)).status, 200);
     assert.equal((await readLibraryState(`company:${a}`, dir)).catalog.length, 0);
+    assert.equal((await readLibraryState(`company:${b}`, dir)).catalog.length, 1);
+    const batch = parseSpySaved(JSON.stringify(seed.slice(1, 3)));
+    const prepared = await changeLibraryState(
+      `company:${a}`,
+      (s) => saveSpyCatalog(s, batch, s.catalogRevision, []),
+      dir,
+    );
+    const sendBulk = (ids: string[]) =>
+      POST(
+        new Request('https://app.example.test/api/spy-library', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer synthetic', Origin: 'https://app.example.test' },
+          body: JSON.stringify({
+            action: 'delete_offers',
+            ids,
+            baseRevision: prepared.catalogRevision,
+          }),
+        }),
+      );
+    canEdit = false;
+    assert.equal((await sendBulk(batch.map((o) => o.id))).status, 403);
+    canEdit = true;
+    assert.equal((await sendBulk([])).status, 400);
+    assert.equal((await sendBulk([batch[0]!.id, 'unknown'])).status, 409);
+    assert.equal((await readLibraryState(`company:${a}`, dir)).catalog.length, 2);
+    assert.equal((await sendBulk(batch.map((o) => o.id))).status, 200);
+    const removed = await readLibraryState(`company:${a}`, dir);
+    assert.equal(removed.catalog.length, 0);
+    assert.ok(batch.every((o) => removed.jobs[o.id]?.deletedAt && !removed.jobs[o.id]?.enabled));
     assert.equal((await readLibraryState(`company:${b}`, dir)).catalog.length, 1);
   } finally {
     globalThis.fetch = original;
@@ -163,6 +192,27 @@ test('Deleting persists catalog removal, stops collection, hides counters and pr
     await rm(dir, { recursive: true, force: true });
   }
 });
+test('Bulk removal is atomic, preserves other offers and rejects stale or invalid selections', () => {
+  const offers = parseSpySaved(JSON.stringify(seed.slice(0, 3)));
+  const state = saveSpyCatalog(initialLibraryState('synthetic'), offers, '', []);
+  const ids = offers.slice(0, 2).map((o) => o.id);
+  assert.throws(
+    () => deleteSpyOffers(state, [ids[0]!, 'unknown'], state.catalogRevision),
+    /missing_offer/,
+  );
+  assert.throws(() => deleteSpyOffers(state, [], state.catalogRevision), /invalid_offers/);
+  assert.throws(
+    () => deleteSpyOffers(state, [ids[0]!, ids[0]!], state.catalogRevision),
+    /invalid_offers/,
+  );
+  assert.throws(() => deleteSpyOffers(state, ids, 'stale'), /catalog_conflict/);
+  assert.equal(state.catalog.length, 3);
+  const removed = deleteSpyOffers(state, ids, state.catalogRevision);
+  assert.equal(removed.catalog.length, 1);
+  assert.equal((removed.catalog[0] as { id: string }).id, offers[2]!.id);
+  assert.deepEqual(removed.jobs[offers[2]!.id], state.jobs[offers[2]!.id]);
+  assert.ok(ids.every((id) => removed.jobs[id]?.deletedAt && !removed.jobs[id]?.optedIn));
+});
 test('Spy navigation uses distinct section icons, removes pending filter and requires explicit deletion confirmation', () => {
   const children = NAV_ITEMS.find((n) => n.id === 'spy-preview')!.children!;
   assert.equal(new Set(children.map((n) => n.icon)).size, 4);
@@ -178,6 +228,8 @@ test('Spy navigation uses distinct section icons, removes pending filter and req
     new URL('../src/app/api/spy-library/route.ts', import.meta.url),
     'utf8',
   );
-  assert.match(route, /'save_catalog', 'enroll', 'delete_offer'/);
+  assert.match(route, /'delete_offers'/);
   assert.match(route, /access.canEdit/);
+  assert.match(ui, /Excluir selecionadas/);
+  assert.match(ui, /Excluir \$\{deleteTargets.length\} ofertas/);
 });

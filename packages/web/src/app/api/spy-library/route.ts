@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { parseSpySaved } from '@/components/spy/spy-model';
-import { deleteSpyOffer, saveSpyCatalog } from '@/lib/spy-catalog';
+import { deleteSpyOffers, saveSpyCatalog } from '@/lib/spy-catalog';
 import { spyHistoryFixture } from '@/lib/spy-history-fixture';
 import { LibraryFailure, normalizeLibrarySource } from '@/lib/spy-library-reader';
 import {
@@ -218,6 +218,14 @@ const offerSchema = z.object({
 });
 const inputSchema = z.discriminatedUnion('action', [
   z.object({
+    action: z.literal('delete_offers'),
+    ids: z
+      .array(z.string().regex(/^[A-Za-z0-9_-]{1,100}$/))
+      .min(1)
+      .max(200),
+    baseRevision: z.string().max(100).optional(),
+  }),
+  z.object({
     action: z.literal('delete_offer'),
     id: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/),
     baseRevision: z.string().max(100).optional(),
@@ -282,7 +290,9 @@ export async function POST(req: Request) {
     const access = spyServerEnabled() ? await spyServerAccess(req, true) : null;
     if (spyServerEnabled() && !access) return reply({ detail: 'Acesso não autorizado.' }, 403);
     if (access) {
-      const allowed = ['save_catalog', 'enroll', 'delete_offer'].includes(input.action)
+      const allowed = ['save_catalog', 'enroll', 'delete_offer', 'delete_offers'].includes(
+        input.action,
+      )
         ? access.canEdit
         : ['configure', 'prepare_scrape', 'enable_browser'].includes(input.action)
           ? access.canConfigure
@@ -290,11 +300,15 @@ export async function POST(req: Request) {
       if (!allowed || input.action === 'enable_browser')
         return reply({ detail: 'Ação não liberada nesta empresa.' }, 403);
     }
-    if (input.action === 'delete_offer') {
+    if (input.action === 'delete_offer' || input.action === 'delete_offers') {
       if (spyServerEnabled() && !input.baseRevision)
         return reply({ detail: 'Atualize o catálogo antes de excluir.' }, 400);
       const saved = await changeLibraryState(owner, (s) =>
-        deleteSpyOffer(s, input.id, input.baseRevision ?? s.catalogRevision),
+        deleteSpyOffers(
+          s,
+          input.action === 'delete_offer' ? [input.id] : input.ids,
+          input.baseRevision ?? s.catalogRevision,
+        ),
       );
       return reply({ offers: saved.catalog, revision: saved.catalogRevision, drive: saved.drive });
     }

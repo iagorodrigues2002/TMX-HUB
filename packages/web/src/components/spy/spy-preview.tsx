@@ -146,7 +146,7 @@ export function SpyPreview() {
     setOpened(openedOffer);
   }, [openedOffer]);
   const [editing, setEditing] = useState<SpyOffer | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<SpyOffer | null>(null);
+  const [deleteTargets, setDeleteTargets] = useState<SpyOffer[]>([]);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const [notice, setNotice] = useState('');
@@ -224,14 +224,14 @@ export function SpyPreview() {
   }
   const canDelete =
     !fixture && (localPreview ? user?.role === 'admin' : catalog.data?.access.canEdit);
-  function requestDelete(offer: SpyOffer) {
+  function requestDelete(offer: SpyOffer | SpyOffer[]) {
     setOpened(null);
     setEditing(null);
     setDeleteError('');
-    setDeleteTarget(offer);
+    setDeleteTargets(Array.isArray(offer) ? offer : [offer]);
   }
   async function confirmDelete() {
-    if (!deleteTarget || !canDelete || deleting) return;
+    if (!deleteTargets.length || !canDelete || deleting) return;
     setDeleting(true);
     setDeleteError('');
     try {
@@ -240,17 +240,22 @@ export function SpyPreview() {
         {
           method: 'POST',
           body: {
-            action: 'delete_offer',
-            id: deleteTarget.id,
+            action: 'delete_offers',
+            ids: deleteTargets.map((o) => o.id),
             ...(!localPreview ? { baseRevision: catalog.data?.revision } : {}),
           },
         },
       );
       if (localPreview) save(saved.offers);
       else client.setQueryData(['spy-catalog', user?.id, company], { ...catalog.data, ...saved });
-      setSelected((ids) => ids.filter((id) => id !== deleteTarget.id));
-      setDeleteTarget(null);
-      setNotice('Oferta excluída. Acompanhamento interrompido.');
+      const removed = new Set(deleteTargets.map((o) => o.id));
+      setSelected((ids) => ids.filter((id) => !removed.has(id)));
+      setDeleteTargets([]);
+      setNotice(
+        deleteTargets.length === 1
+          ? 'Oferta excluída. Acompanhamento interrompido.'
+          : `${deleteTargets.length} ofertas excluídas. Acompanhamento interrompido.`,
+      );
       void client.invalidateQueries({ queryKey: ['spy-library'] });
     } catch {
       setDeleteError(
@@ -606,6 +611,17 @@ export function SpyPreview() {
               <Button variant="ghost" size="sm" onClick={() => setSelected([])}>
                 Cancelar seleção
               </Button>
+              {canDelete && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={deleting}
+                  onClick={() => requestDelete(offers.filter((o) => selected.includes(o.id)))}
+                >
+                  <Trash2 size={15} />
+                  Excluir selecionadas
+                </Button>
+              )}
             </section>
           )}
           {layout === 'grid' ? (
@@ -995,26 +1011,42 @@ export function SpyPreview() {
         </DialogContent>
       </Dialog>
       <Dialog
-        open={!!deleteTarget}
+        open={deleteTargets.length > 0}
         onOpenChange={(open) => {
-          if (!open && !deleting) setDeleteTarget(null);
+          if (!open && !deleting) setDeleteTargets([]);
         }}
       >
         <DialogContent role="alertdialog" className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Excluir oferta?</DialogTitle>
+            <DialogTitle>
+              {deleteTargets.length > 1
+                ? `Excluir ${deleteTargets.length} ofertas?`
+                : 'Excluir oferta?'}
+            </DialogTitle>
             <DialogDescription>
-              “{deleteTarget?.name}” será removida do catálogo e o acompanhamento será interrompido.
+              {deleteTargets.length === 1
+                ? `“${deleteTargets[0]?.name}” será removida do catálogo e o acompanhamento será interrompido.`
+                : `As ${deleteTargets.length} ofertas selecionadas serão removidas do catálogo e seus acompanhamentos serão interrompidos.`}
               O histórico já coletado será preservado.
             </DialogDescription>
           </DialogHeader>
+          {deleteTargets.length > 1 && (
+            <ul className="max-h-40 list-disc overflow-y-auto pl-5 text-sm text-muted-foreground">
+              {deleteTargets.map((o) => (
+                <li key={o.id}>
+                  {o.name}
+                  <span className="block text-xs">{o.domains[0] || 'Sem domínio'}</span>
+                </li>
+              ))}
+            </ul>
+          )}
           {deleteError && (
             <p role="alert" className={s.error}>
               {deleteError}
             </p>
           )}
           <DialogFooter>
-            <Button variant="outline" disabled={deleting} onClick={() => setDeleteTarget(null)}>
+            <Button variant="outline" disabled={deleting} onClick={() => setDeleteTargets([])}>
               Cancelar
             </Button>
             <Button
@@ -1025,7 +1057,11 @@ export function SpyPreview() {
               }}
             >
               <Trash2 size={15} />
-              {deleting ? 'Excluindo…' : 'Excluir oferta'}
+              {deleting
+                ? 'Excluindo…'
+                : deleteTargets.length > 1
+                  ? `Excluir ${deleteTargets.length} ofertas`
+                  : 'Excluir oferta'}
             </Button>
           </DialogFooter>
         </DialogContent>
