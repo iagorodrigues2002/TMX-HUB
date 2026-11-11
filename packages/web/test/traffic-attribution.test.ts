@@ -4,6 +4,8 @@ import type { RealCampaignSnapshot } from '../src/components/traffic/real-campai
 import {
   type TrafficAttribution,
   attributeTrafficRows,
+  groupTrafficAttribution,
+  summarizeCreativeAttribution,
 } from '../src/components/traffic/traffic-attribution-model';
 import { type ReportRow, reportMetrics } from '../src/components/traffic/traffic-reports-model';
 const meta = {
@@ -39,6 +41,8 @@ const record = {
   netBrlMinor: '11800',
   grossUsdMinor: '3000',
   netUsdMinor: '2360',
+  upsellGrossBrlMinor: '6000',
+  upsellGrossUsdMinor: '1200',
 };
 const data: TrafficAttribution = {
   source: 'tmx-tracking',
@@ -48,6 +52,71 @@ const data: TrafficAttribution = {
   fetchedAt: '2026-11-09T00:00:00Z',
   rows: [record],
 };
+test('creative CPA, gross revenue, ARPU and gross ROAS use unique linked ads', () => {
+  const snapshot = {
+    ...meta,
+    insights: [...meta.insights, { ...meta.insights[0]!, adId: '101' }],
+  };
+  const report = {
+    ...data,
+    rows: [
+      record,
+      {
+        ...record,
+        adId: '101',
+        fronts: 0,
+        upsells: 1,
+        grossBrlMinor: '7000',
+        netBrlMinor: null,
+        upsellGrossBrlMinor: '7000',
+      },
+      { ...record, adId: null, grossBrlMinor: '999900' },
+    ],
+  };
+  const { groups } = groupTrafficAttribution(snapshot, report, 'ads');
+  const metrics = { spend: 50, metaPurchaseValue: 100 };
+  const totals = summarizeCreativeAttribution(
+    [{ adIds: ['100', '101', '100'] }],
+    groups,
+    'BRL',
+    metrics,
+  );
+  assert.equal(totals.tmxFronts, 1);
+  assert.equal(totals.upsells, 3);
+  assert.equal(totals.tmxCpa, 50);
+  assert.equal(totals.funnelArpu, 220);
+  assert.equal(totals.tmxGross, 220);
+  assert.equal(totals.tmxCreativeRoas, 4.6);
+  const upsellOnly = summarizeCreativeAttribution([{ adIds: ['101'] }], groups, 'USD', {
+    ...metrics,
+    spend: 0,
+  });
+  assert.equal(upsellOnly.tmxGross, 30);
+  assert.equal(upsellOnly.funnelArpu, null);
+  assert.equal(upsellOnly.tmxCreativeRoas, null);
+  const noMatch = summarizeCreativeAttribution([{ adIds: [] }], groups, 'BRL', metrics);
+  assert.equal(noMatch.tmxGross, null);
+  assert.equal(noMatch.tmxCreativeRoas, null);
+  assert.equal(
+    summarizeCreativeAttribution(
+      [{ adIds: ['100'] }],
+      new Map([['100', [{ ...record, upsellGrossBrlMinor: null }]]]),
+      'BRL',
+      metrics,
+    ).tmxCreativeRoas,
+    null,
+  );
+  const differentPeriod = groupTrafficAttribution(
+    snapshot,
+    { ...report, from: '2026-11-07' },
+    'ads',
+  );
+  assert.equal(
+    summarizeCreativeAttribution([{ adIds: ['100'] }], differentPeriod.groups, 'BRL', metrics)
+      .tmxCpa,
+    null,
+  );
+});
 test('TMX adds upsells, ARPU per front and net ROAS without changing any Meta metric', () => {
   const result = attributeTrafficRows([row], meta, data, 'BRL').rows[0]!;
   assert.equal(result.metrics.upsells, 2);

@@ -16,6 +16,8 @@ export interface TrafficAttributionRow {
   grossBrlMinor: string | null;
   netBrlMinor: string | null;
   grossUsdMinor: string | null;
+  upsellGrossBrlMinor: string | null;
+  upsellGrossUsdMinor: string | null;
   netUsdMinor: string | null;
   naturalUpsells: number;
   clickedUpsells: number;
@@ -126,6 +128,8 @@ export function aggregateTrafficAttribution(
     {
       result: TrafficAttributionRow;
       gross: number;
+      upsellGross: number;
+      upsellGrossMissing: boolean;
       naturalGross: number;
       clickedGross: number;
       naturalMissing: boolean;
@@ -181,6 +185,8 @@ export function aggregateTrafficAttribution(
       grossBrlMinor: null,
       netBrlMinor: null,
       grossUsdMinor: null,
+      upsellGrossBrlMinor: null,
+      upsellGrossUsdMinor: null,
       netUsdMinor: null,
     };
     const key = JSON.stringify([
@@ -193,6 +199,8 @@ export function aggregateTrafficAttribution(
     const g = groups.get(key) ?? {
       result,
       gross: 0,
+      upsellGross: 0,
+      upsellGrossMissing: false,
       naturalGross: 0,
       clickedGross: 0,
       naturalMissing: false,
@@ -202,15 +210,17 @@ export function aggregateTrafficAttribution(
       buckets: new Map<string, FeeBucket>(),
     };
     const amount = row.amount == null ? null : Number(row.amount);
-    if (amount == null || !Number.isSafeInteger(amount) || amount < 0) g.missing = true;
-    if (row.paid) {
-      g.gross += amount ?? 0;
-      g.result.fronts += row.order_kind === 'front' ? 1 : 0;
-      g.result.upsells += /^upsell(?:_\d+)?$/.test(row.order_kind ?? '') ? 1 : 0;
-    }
+    const missing = amount == null || !Number.isSafeInteger(amount) || amount < 0;
+    if (missing) g.missing = true;
     if (row.paid) {
       const upsell = /^upsell(?:_\d+)?$/.test(row.order_kind ?? '');
-      const missing = amount == null || !Number.isSafeInteger(amount) || amount < 0;
+      g.gross += amount ?? 0;
+      g.result.fronts += row.order_kind === 'front' ? 1 : 0;
+      if (upsell) {
+        g.result.upsells++;
+        g.upsellGross += amount ?? 0;
+        g.upsellGrossMissing ||= missing;
+      }
       if (row.is_natural === true && row.is_clicked !== true) {
         g.naturalGross += amount ?? 0;
         g.naturalMissing ||= missing;
@@ -294,6 +304,9 @@ export function aggregateTrafficAttribution(
       grossBrlMinor: g.missing ? null : money(g.gross),
       netBrlMinor: missingNet ? null : money(net),
       grossUsdMinor: g.missing || !usd ? null : money(Math.round(g.gross / usd)),
+      upsellGrossBrlMinor: g.upsellGrossMissing ? null : money(g.upsellGross),
+      upsellGrossUsdMinor:
+        g.upsellGrossMissing || !usd ? null : money(Math.round(g.upsellGross / usd)),
       netUsdMinor: missingNet || !usd ? null : money(Math.round(net / usd)),
     };
   });

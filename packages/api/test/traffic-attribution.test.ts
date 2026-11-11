@@ -42,6 +42,8 @@ it('counts paid upsells once and calculates attributed net using configured fees
     netBrlMinor: '11800',
     grossUsdMinor: '3000',
     netUsdMinor: '2360',
+    upsellGrossBrlMinor: '5000',
+    upsellGrossUsdMinor: '1000',
   });
 });
 it('does not invent identifiers or net revenue when fee settings or FX are missing', () => {
@@ -51,6 +53,7 @@ it('does not invent identifiers or net revenue when fee settings or FX are missi
   )[0]!;
   expect(result.campaignId).toBeNull();
   expect(result.grossBrlMinor).toBe('10000');
+  expect(result.upsellGrossBrlMinor).toBe('0');
   expect(result.netBrlMinor).toBeNull();
   expect(result.grossUsdMinor).toBeNull();
 });

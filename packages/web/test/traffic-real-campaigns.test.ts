@@ -503,7 +503,16 @@ test('hook e conversão LPV usam bases somadas, não médias de percentuais', ()
     range,
     filters,
   )[0]!.metrics;
-  assert.equal(unknown.hookRate, null);
+  assert.equal(unknown.hookRate, 0.4);
+  const [knownVideo, other] = source.insights;
+  const withUnknownDelivery = (impressions: string) =>
+    realCampaignRows(
+      { ...source, insights: [knownVideo!, { ...other!, video: null, impressions, actions: [] }] },
+      range,
+      filters,
+    )[0]!.metrics.hookRate;
+  assert.equal(withUnknownDelivery('200'), null);
+  assert.equal(withUnknownDelivery('0'), 0.3);
 });
 
 test('não perde conversões de anúncio ou hora sem gasto dentro de campanha elegível no dia', () => {

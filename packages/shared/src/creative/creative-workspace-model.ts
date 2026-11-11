@@ -149,7 +149,7 @@ export function creativeMetrics(ads: CreativeAd[]) {
 }
 export const creativeColumns = [
   ['spend', 'Investimento', 'money'],
-  ['frontSales', 'Vendas', 'count'],
+  ['frontSales', 'Vendas · Meta', 'count'],
   ['cpa', 'CPA', 'money'],
   ['metaRoas', 'ROAS Meta', 'ratio'],
   ['checkouts', 'IC', 'count'],

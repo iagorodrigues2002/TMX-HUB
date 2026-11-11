@@ -31,6 +31,8 @@ export const trafficAttributionResponse = z.object({
       grossBrlMinor: money,
       netBrlMinor: money,
       grossUsdMinor: money,
+      upsellGrossBrlMinor: money.optional(),
+      upsellGrossUsdMinor: money.optional(),
       netUsdMinor: money,
     }),
   ),
@@ -46,31 +48,14 @@ export const tmxAttributionColumns = [
   'clickedArpu',
   'tmxAttributedRoas',
 ] as const;
-export function attributeTrafficRows(
-  rows: ReportRow[],
+export function groupTrafficAttribution(
   meta: RealCampaignSnapshot,
   data: TrafficAttribution | undefined,
-  currency: 'BRL' | 'USD',
   level: ReportLevel = 'campaigns',
 ) {
+  const groups = new Map<string, TrafficAttribution['rows']>();
   if (!data || data.from !== meta.from || data.to !== meta.to)
-    return {
-      rows: rows.map((row) => ({
-        ...row,
-        metrics: {
-          ...row.metrics,
-          tmxFronts: null,
-          upsells: null,
-          funnelArpu: null,
-          naturalArpu: null,
-          clickedArpu: null,
-          naturalUpsells: null,
-          clickedUpsells: null,
-          tmxAttributedRoas: null,
-        },
-      })),
-      unmatchedUpsells: 0,
-    };
+    return { groups, unmatchedUpsells: 0 };
   const campaigns = new Map(meta.campaigns.map((c) => [c.id, c]));
   const ads = new Map<string, RealCampaignSnapshot['insights'][number]>();
   const ambiguous = new Set<string>();
@@ -81,7 +66,6 @@ export function attributeTrafficRows(
       ambiguous.add(row.adId);
     ads.set(row.adId, row);
   }
-  const groups = new Map<string, TrafficAttribution['rows']>();
   let unmatchedUpsells = 0;
   for (const record of data.rows) {
     const ad = record.adId && !ambiguous.has(record.adId) ? ads.get(record.adId) : undefined;
@@ -108,56 +92,98 @@ export function attributeTrafficRows(
     group.push(record);
     groups.set(key, group);
   }
+  return { groups, unmatchedUpsells };
+}
+
+export function summarizeTrafficAttribution(
+  records: TrafficAttribution['rows'] | undefined,
+  currency: 'BRL' | 'USD',
+  spend: number | null,
+) {
+  if (!records?.length)
+    return {
+      tmxFronts: null,
+      tmxCpa: null,
+      upsells: null,
+      tmxGross: null,
+      funnelArpu: null,
+      naturalArpu: null,
+      clickedArpu: null,
+      naturalUpsells: null,
+      clickedUpsells: null,
+      tmxAttributedRoas: null,
+    };
+  const fronts = records.reduce((sum, record) => sum + record.fronts, 0);
+  const grossKey = currency === 'BRL' ? 'grossBrlMinor' : 'grossUsdMinor';
+  const netKey = currency === 'BRL' ? 'netBrlMinor' : 'netUsdMinor';
+  const naturalKey = currency === 'BRL' ? 'naturalGrossBrlMinor' : 'naturalGrossUsdMinor';
+  const clickedKey = currency === 'BRL' ? 'clickedGrossBrlMinor' : 'clickedGrossUsdMinor';
+  const sumMoney = (
+    key: typeof grossKey | typeof netKey | typeof naturalKey | typeof clickedKey,
+  ) =>
+    records.some((record) => record[key] === null)
+      ? null
+      : records.reduce((sum, record) => sum + Number(record[key]), 0) / 100;
+  const arpu = (amount: number | null) => (amount === null || !fronts ? null : amount / fronts);
+  const net = sumMoney(netKey);
+  const gross = sumMoney(grossKey);
+  return {
+    tmxFronts: fronts,
+    tmxCpa: spend === null || !fronts ? null : spend / fronts,
+    upsells: records.reduce((sum, record) => sum + record.upsells, 0),
+    naturalUpsells: records.reduce((sum, record) => sum + record.naturalUpsells, 0),
+    clickedUpsells: records.reduce((sum, record) => sum + record.clickedUpsells, 0),
+    tmxGross: gross,
+    funnelArpu: arpu(gross),
+    naturalArpu: arpu(sumMoney(naturalKey)),
+    clickedArpu: arpu(sumMoney(clickedKey)),
+    tmxAttributedRoas: net === null || spend === null || spend <= 0 ? null : net / spend,
+  };
+}
+
+export function attributeTrafficRows(
+  rows: ReportRow[],
+  meta: RealCampaignSnapshot,
+  data: TrafficAttribution | undefined,
+  currency: 'BRL' | 'USD',
+  level: ReportLevel = 'campaigns',
+) {
+  const { groups, unmatchedUpsells } = groupTrafficAttribution(meta, data, level);
   return {
     unmatchedUpsells,
-    rows: rows.map((row) => {
-      const records = groups.get(row.id);
-      if (!records?.length)
-        return {
-          ...row,
-          metrics: {
-            ...row.metrics,
-            tmxFronts: null,
-            upsells: null,
-            funnelArpu: null,
-            naturalArpu: null,
-            clickedArpu: null,
-            naturalUpsells: null,
-            clickedUpsells: null,
-            tmxAttributedRoas: null,
-          },
-        };
-      const fronts = records.reduce((s, r) => s + r.fronts, 0);
-      const upsells = records.reduce((s, r) => s + r.upsells, 0);
-      const grossKey = currency === 'BRL' ? 'grossBrlMinor' : 'grossUsdMinor';
-      const netKey = currency === 'BRL' ? 'netBrlMinor' : 'netUsdMinor';
-      const naturalKey = currency === 'BRL' ? 'naturalGrossBrlMinor' : 'naturalGrossUsdMinor';
-      const clickedKey = currency === 'BRL' ? 'clickedGrossBrlMinor' : 'clickedGrossUsdMinor';
-      const sum = (key: typeof grossKey | typeof netKey | typeof naturalKey | typeof clickedKey) =>
-        records.some((r) => r[key] === null)
-          ? null
-          : records.reduce((s, r) => s + Number(r[key]), 0) / 100;
-      const gross = sum(grossKey);
-      const net = sum(netKey);
-      const natural = sum(naturalKey);
-      const clicked = sum(clickedKey);
-      return {
-        ...row,
-        metrics: {
-          ...row.metrics,
-          tmxFronts: fronts,
-          upsells,
-          naturalUpsells: records.reduce((s, r) => s + r.naturalUpsells, 0),
-          clickedUpsells: records.reduce((s, r) => s + r.clickedUpsells, 0),
-          funnelArpu: gross == null || !fronts ? null : gross / fronts,
-          naturalArpu: natural == null || !fronts ? null : natural / fronts,
-          clickedArpu: clicked == null || !fronts ? null : clicked / fronts,
-          tmxAttributedRoas:
-            net == null || row.unavailable || row.metrics.spend <= 0
-              ? null
-              : net / row.metrics.spend,
-        },
-      };
-    }),
+    rows: rows.map((row) => ({
+      ...row,
+      metrics: {
+        ...row.metrics,
+        ...summarizeTrafficAttribution(
+          groups.get(row.id),
+          currency,
+          row.unavailable ? null : row.metrics.spend,
+        ),
+      },
+    })),
+  };
+}
+
+export function summarizeCreativeAttribution(
+  creatives: readonly { adIds: string[] }[],
+  groups: ReadonlyMap<string, TrafficAttribution['rows']>,
+  currency: 'BRL' | 'USD',
+  { spend, metaPurchaseValue }: { spend: number | null; metaPurchaseValue: number | null },
+) {
+  const adIds = new Set(creatives.flatMap((creative) => creative.adIds));
+  const records = [...adIds].flatMap((adId) => groups.get(adId) ?? []);
+  const totals = summarizeTrafficAttribution(records, currency, spend);
+  const upsellKey = currency === 'BRL' ? 'upsellGrossBrlMinor' : 'upsellGrossUsdMinor';
+  const upsellGross =
+    records.length > 0 && records.every((record) => record[upsellKey] != null)
+      ? records.reduce((sum, record) => sum + Number(record[upsellKey]), 0) / 100
+      : null;
+  return {
+    ...totals,
+    tmxCreativeRoas:
+      metaPurchaseValue === null || upsellGross === null || spend === null || spend <= 0
+        ? null
+        : (metaPurchaseValue + upsellGross) / spend,
   };
 }

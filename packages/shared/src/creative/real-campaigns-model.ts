@@ -273,7 +273,14 @@ export function realCampaignRows(
                     0,
                   ) * 1e8,
                 ) / 1e8;
-          const videoRows = data.filter((row) => row.video === true);
+          const videoData = data.map((row) => {
+            const plays = Number(row.actions.find((action) => action.action_type === 'video_view')?.value ?? 0);
+            return { ...row, plays, video: row.video ?? (plays > 0 ? true : null) };
+          });
+          const videoRows = videoData.filter((row) => row.video === true);
+          const videoMissing =
+            videoData.some((row) => row.video == null && Number(row.impressions ?? -1) !== 0) ||
+            videoRows.some((row) => row.impressions === null);
           const landingViews = data.reduce(
             (sum, row) =>
               sum +
@@ -287,28 +294,15 @@ export function realCampaignRows(
             (sum, row) => sum + Number(row.impressions ?? 0),
             0,
           );
-          const videoViews = videoRows.reduce(
-            (sum, row) =>
-              sum +
-              Number(row.actions.find((action) => action.action_type === 'video_view')?.value ?? 0),
-            0,
-          );
+          const videoViews = videoRows.reduce((sum, row) => sum + row.plays, 0);
           const result: ReportMetrics = {
             ...reportMetrics([]),
             spend,
             impressions,
             clicks,
             checkouts,
-            videoImpressions:
-              data.some((row) => row.video == null) ||
-              videoRows.some((row) => row.impressions === null)
-                ? null
-                : videoImpressions,
-            videoViews:
-              data.some((row) => row.video == null) ||
-              videoRows.some((row) => row.impressions === null)
-                ? null
-                : videoViews,
+            videoImpressions: videoMissing ? null : videoImpressions,
+            videoViews: videoMissing ? null : videoViews,
             frontSales,
             fees: null,
             refunds: null,
@@ -318,13 +312,9 @@ export function realCampaignRows(
             afterMedia: null,
             roi: null,
             roas: null,
-            hookRate:
-              !data.some((row) => row.video == null) &&
-              !unavailable &&
-              videoImpressions &&
-              !videoRows.some((row) => row.impressions === null)
-                ? videoViews / videoImpressions
-                : null,
+            hookRate: !videoMissing && !unavailable && videoImpressions
+              ? videoViews / videoImpressions
+              : null,
             cpa: frontSales ? spend / frontSales : null,
             metaLandingViews: unavailable ? null : landingViews,
             connectRate: !unavailable && !clickMissing && clicks > 0 ? landingViews / clicks : null,

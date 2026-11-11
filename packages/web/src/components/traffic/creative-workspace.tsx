@@ -21,7 +21,7 @@ import { request } from '@/lib/api-client/request';
 import { useAuth } from '@/lib/auth-context';
 import type { CreativeDriveState } from '@/lib/creative-drive-store';
 import { creativeOffer, creativeStatuses } from '@/lib/creative-identity';
-import { creativeDrivePath } from '@/lib/creative-workspace-release';
+import { creativeDrivePath, creativeWorkspaceEnabled } from '@/lib/creative-workspace-release';
 import type { DateRange } from '@/lib/date-range';
 import { usePrivacy } from '@/lib/privacy-context';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -53,7 +53,9 @@ import {
   creativeMetrics,
 } from './creative-workspace-model';
 import styles from './creative-workspace.module.css';
+import { groupTrafficAttribution, summarizeCreativeAttribution } from './traffic-attribution-model';
 import type { LiveTraffic } from './use-live-traffic';
+import { useTrafficAttribution } from './use-traffic-attribution';
 
 const statusTones = new Map([
   ['Stand by', 'white'],
@@ -64,6 +66,16 @@ const statusTones = new Map([
 ]);
 const emptyMetadata: CreativeDriveState['metadata'] = {};
 const countFormatter = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
+const creativeTmxColumns = [
+  ['upsells', 'Upsells totais · TMX', 'count'],
+  ['tmxGross', 'Faturamento bruto · TMX', 'money'],
+  ['funnelArpu', 'ARPU do funil · TMX', 'money'],
+  ['tmxCreativeRoas', 'ROAS TMX', 'ratio'],
+] as const;
+const tableColumns = creativeWorkspaceEnabled
+  ? [...creativeColumns.slice(0, 4), ...creativeTmxColumns, ...creativeColumns.slice(4)]
+  : creativeColumns;
+type CreativeColumnKey = (typeof tableColumns)[number][0];
 
 function displayedStatus(row: CreativeRecord, metadata: CreativeDriveState['metadata'], complete: boolean) {
   const saved = metadata[row.id]?.status;
@@ -207,7 +219,10 @@ export function CreativeWorkspace({
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<CreativeMetricKey>('spend');
   const [showColumns, setShowColumns] = useState(false);
-  const [columns, setColumns] = useState<CreativeMetricKey[]>(creativeColumns.map((c) => c[0]));
+  const [columns, setColumns] = useState<CreativeColumnKey[]>(() => [
+    ...creativeColumns.map((column) => column[0]),
+    ...(creativeWorkspaceEnabled ? creativeTmxColumns.map((column) => column[0]) : []),
+  ]);
   const [pagination, setPagination] = useState({ key: '', page: 1 });
   const [detailId, setDetailId] = useState<string | null>(null);
   const complete =
@@ -263,6 +278,14 @@ export function CreativeWorkspace({
     [ads, drive.data?.catalog, drive.data?.metadata, drive.data?.reviewedAds],
   );
   const code = offer ? creativeOffer(offer) : '';
+  const attribution = useTrafficAttribution(range, creativeWorkspaceEnabled && !!code && complete);
+  const meta = live.data.data;
+  const attributionByAd = useMemo(
+    () => meta && attribution.data
+      ? groupTrafficAttribution(meta, attribution.data, 'ads').groups
+      : new Map(),
+    [meta, attribution.data],
+  );
   const offers = [
     ...new Set([
       ...(drive.data?.catalog?.offers.map((o) => o.code) ?? []),
@@ -283,8 +306,14 @@ export function CreativeWorkspace({
     a.localeCompare(b, 'pt-BR', { numeric: true }),
   );
   const metricsById = useMemo(
-    () => new Map(offerRows.map((row) => [row.id, creativeMetrics([row])])),
-    [offerRows],
+    () => new Map(offerRows.map((row) => {
+      const metrics = creativeMetrics([row]);
+      return [row.id, {
+        ...metrics,
+        ...summarizeCreativeAttribution([row], attributionByAd, currency, metrics),
+      }];
+    })),
+    [offerRows, attributionByAd, currency],
   );
   const rows = useMemo(
     () =>
@@ -315,7 +344,14 @@ export function CreativeWorkspace({
         }),
     [offerRows, onlyLowRoas, lowRoas, onlyActive, activeAdIds, batch, status, metadata, complete, search, metricsById, sort],
   );
-  const totals = useMemo(() => creativeMetrics(rows.filter((r) => r.adIds.length)), [rows]);
+  const totals = useMemo(() => {
+    const delivered = rows.filter((row) => row.adIds.length);
+    const metrics = creativeMetrics(delivered);
+    return {
+      ...metrics,
+      ...summarizeCreativeAttribution(delivered, attributionByAd, currency, metrics),
+    };
+  }, [rows, attributionByAd, currency]);
   const countedRows = onlyLowRoas || onlyActive ? rows : offerRows;
   const paginationKey = JSON.stringify([code, batch, status, query, sort, onlyLowRoas, onlyActive]);
   const page =
@@ -576,7 +612,7 @@ export function CreativeWorkspace({
                       <strong>{format(m.spend, 'money')}</strong>
                     </span>
                     <span>
-                      <small>Vendas</small>
+                      <small>Vendas · Meta</small>
                       <strong>{format(m.frontSales, 'count')}</strong>
                     </span>
                     <span>
@@ -604,7 +640,7 @@ export function CreativeWorkspace({
             {(
               [
                 ['Investimento', totals.spend, 'money'],
-                ['Vendas', totals.frontSales, 'count'],
+                ['Vendas · Meta', totals.frontSales, 'count'],
                 ['CPA', totals.cpa, 'money'],
                 ['ROAS Meta', totals.metaRoas, 'ratio'],
               ] as const
@@ -628,6 +664,11 @@ export function CreativeWorkspace({
           </div>
           <div className={styles.tableTools}>
             <span className={styles.sourceBadge}>Uma linha por criativo</span>
+            {creativeWorkspaceEnabled && !attribution.data && complete && (
+              <output className={styles.sourceBadge}>
+                {attribution.isError ? 'Atribuição TMX indisponível' : 'Consultando atribuição TMX…'}
+              </output>
+            )}
             <Choice
               label="Ordenar criativos"
               value={sort}
@@ -645,7 +686,7 @@ export function CreativeWorkspace({
           </div>
           {showColumns && (
             <div className={styles.columnPicker} aria-label="Colunas da tabela">
-              {creativeColumns.map(([key, title]) => (
+              {tableColumns.map(([key, title]) => (
                 <label key={key}>
                   <input
                     type="checkbox"
@@ -674,10 +715,16 @@ export function CreativeWorkspace({
                   <th scope="col">Criativo</th>
                   <th scope="col">Leva</th>
                   <th scope="col">Status do teste</th>
-                  {creativeColumns
+                  {tableColumns
                     .filter((c) => columns.includes(c[0]))
                     .map(([key, title]) => (
-                      <th scope="col" key={key}>
+                      <th
+                        scope="col"
+                        key={key}
+                        title={key === 'tmxCreativeRoas'
+                          ? '(Valor das compras da Meta + receita bruta dos upsells vinculados no TMX) ÷ investimento'
+                          : undefined}
+                      >
                         {title}
                       </th>
                     ))}
@@ -737,7 +784,7 @@ export function CreativeWorkspace({
                         />
                         {lowRoas.has(row.id) && <LowRoasWarning />}
                       </td>
-                      {creativeColumns
+                      {tableColumns
                         .filter((c) => columns.includes(c[0]))
                         .map(([key, , kind]) => (
                           <td key={key}>{format(m[key], kind)}</td>
@@ -756,7 +803,7 @@ export function CreativeWorkspace({
                   <th scope="row">Total dos criativos filtrados</th>
                   <td />
                   <td />
-                  {creativeColumns
+                  {tableColumns
                     .filter((c) => columns.includes(c[0]))
                     .map(([key, , kind]) => (
                       <td key={key}>{format(totals[key], kind)}</td>
@@ -932,6 +979,16 @@ export function CreativeWorkspace({
                   {detail.sources.map((a) => (
                     <p key={a.id}>
                       {a.name} · {a.status} · {a.campaign} · {a.account}
+                      {creativeWorkspaceEnabled && (
+                        <>
+                          {' · Faturamento bruto TMX: '}
+                          {format(
+                            summarizeCreativeAttribution([a], attributionByAd, currency, a.amounts)
+                              .tmxGross,
+                            'money',
+                          )}
+                        </>
+                      )}
                     </p>
                   ))}
                 </details>

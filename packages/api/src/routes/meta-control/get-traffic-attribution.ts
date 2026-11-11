@@ -37,6 +37,8 @@ export const trafficAttributionSchema = z.object({
       grossBrlMinor: money,
       netBrlMinor: money,
       grossUsdMinor: money,
+      upsellGrossBrlMinor: money.optional(),
+      upsellGrossUsdMinor: money.optional(),
       netUsdMinor: money,
     }),
   ),

@@ -7,12 +7,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { request } from '@/lib/api-client/request';
-import { useAuth } from '@/lib/auth-context';
 import type { DateRange } from '@/lib/date-range';
 import { supportsIntradayRange } from '@/lib/intraday-range';
 import { usePrivacy } from '@/lib/privacy-context';
-import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
 import { type Dispatch, type SetStateAction, useMemo, useState } from 'react';
 import {
@@ -23,11 +20,7 @@ import {
   tmxGeneralRoas,
   trafficTotals,
 } from './real-campaigns-model';
-import {
-  attributeTrafficRows,
-  tmxAttributionColumns,
-  trafficAttributionResponse,
-} from './traffic-attribution-model';
+import { attributeTrafficRows, tmxAttributionColumns } from './traffic-attribution-model';
 import { MetricColumnPicker, type MetricFormat, MetricsTable } from './traffic-metrics-table';
 import type { TrafficTab } from './traffic-model';
 import styles from './traffic-preview.module.css';
@@ -39,6 +32,7 @@ import {
 } from './traffic-reports-model';
 import { Panel } from './traffic-ui';
 import type { LiveTraffic } from './use-live-traffic';
+import { useTrafficAttribution } from './use-traffic-attribution';
 
 export interface TrafficFilters {
   currency: 'BRL' | 'USD';
@@ -79,22 +73,11 @@ export function RealCampaigns({
 }) {
   const { isPrivate } = usePrivacy();
   const [columns, setColumns] = useState<ReportMetricKey[]>(defaultColumns);
-  const { user } = useAuth();
   const [reportMode, setReportMode] = useState<'meta' | 'tmx'>('meta');
-  const attribution = useQuery({
-    queryKey: ['traffic-attribution', user?.id, range.from, range.to],
-    queryFn: async ({ signal }) =>
-      trafficAttributionResponse.parse(
-        await request(
-          `/v1/meta-control/traffic/attribution?${new URLSearchParams({ from: range.from, to: range.to })}`,
-          { signal },
-        ),
-      ),
-    enabled: !!user && reportMode === 'tmx' && ['overview', 'campaigns'].includes(view),
-    staleTime: 60000,
-    refetchInterval: 60000,
-    retry: false,
-  });
+  const attribution = useTrafficAttribution(
+    range,
+    reportMode === 'tmx' && ['overview', 'campaigns'].includes(view),
+  );
   function changeReportMode(mode: 'meta' | 'tmx') {
     setReportMode(mode);
     setColumns((current) => {
