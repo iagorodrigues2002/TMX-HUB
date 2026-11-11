@@ -278,7 +278,7 @@ export function CreativeWorkspace({
     [ads, drive.data?.catalog, drive.data?.metadata, drive.data?.reviewedAds],
   );
   const code = offer ? creativeOffer(offer) : '';
-  const attribution = useTrafficAttribution(range, creativeWorkspaceEnabled && !!code && complete);
+  const attribution = useTrafficAttribution(range, creativeWorkspaceEnabled && complete);
   const meta = live.data.data;
   const attributionByAd = useMemo(
     () => meta && attribution.data
@@ -573,8 +573,16 @@ export function CreativeWorkspace({
                 rows.some((r) => r.offer === o),
             )
             .map((o) => {
-              const items = records.filter((r) => r.offer === o),
-                m = creativeMetrics(items.filter((r) => r.adIds.length));
+              const items = records.filter((r) => r.offer === o);
+              const delivered = items.filter((r) => r.adIds.length);
+              const m = creativeMetrics(delivered);
+              const { tmxCreativeRoas } = summarizeCreativeAttribution(
+                delivered,
+                attributionByAd,
+                currency,
+                m,
+              );
+              const metricsId = `offer-metrics-${o}`;
               return (
                 <button
                   type="button"
@@ -582,6 +590,7 @@ export function CreativeWorkspace({
                   className={styles.folderCard}
                   onClick={() => openOffer(o)}
                   aria-label={'Abrir oferta ' + o}
+                  aria-describedby={metricsId}
                 >
                   <span className={styles.folderTab} aria-hidden="true" />
                   <span className={styles.folderTop}>
@@ -606,7 +615,7 @@ export function CreativeWorkspace({
                     ))}
                     <span className={styles.moreCreatives}>+{Math.max(0, items.length - 3)}</span>
                   </span>
-                  <span className={styles.folderMetrics}>
+                  <span className={styles.folderMetrics} id={metricsId}>
                     <span>
                       <small>Investimento</small>
                       <strong>{format(m.spend, 'money')}</strong>
@@ -618,6 +627,10 @@ export function CreativeWorkspace({
                     <span>
                       <small>ROAS Meta</small>
                       <strong>{format(m.metaRoas, 'ratio')}</strong>
+                    </span>
+                    <span>
+                      <small>ROAS TMX</small>
+                      <strong>{format(tmxCreativeRoas, 'ratio')}</strong>
                     </span>
                   </span>
                   <span className={styles.folderFoot}>
