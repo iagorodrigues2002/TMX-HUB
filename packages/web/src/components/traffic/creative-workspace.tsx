@@ -196,6 +196,7 @@ export function CreativeWorkspace({
 }) {
   const { user } = useAuth();
   const { isPrivate } = usePrivacy();
+  const shared = live.connection.data?.shared === true;
   const client = useQueryClient();
   const queryKey = ['creative-drive-local', user?.id];
   const drive = useQuery({
@@ -278,7 +279,7 @@ export function CreativeWorkspace({
     [ads, drive.data?.catalog, drive.data?.metadata, drive.data?.reviewedAds],
   );
   const code = offer ? creativeOffer(offer) : '';
-  const attribution = useTrafficAttribution(range, creativeWorkspaceEnabled && complete);
+  const attribution = useTrafficAttribution(range, creativeWorkspaceEnabled && complete, true);
   const meta = live.data.data;
   const attributionByAd = useMemo(
     () => meta && attribution.data
@@ -451,7 +452,7 @@ export function CreativeWorkspace({
             size="sm"
             variant="ghost"
             disabled={
-              live.refresh.isPending || live.connection.data?.busy || live.status.data?.busy
+              shared || live.refresh.isPending || live.connection.data?.busy || live.status.data?.busy
             }
             onClick={() => live.refresh.mutate()}
           >

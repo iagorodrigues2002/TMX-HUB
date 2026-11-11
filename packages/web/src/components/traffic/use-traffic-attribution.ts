@@ -6,14 +6,18 @@ import type { DateRange } from '@/lib/date-range';
 import { useQuery } from '@tanstack/react-query';
 import { trafficAttributionResponse } from './traffic-attribution-model';
 
-export function useTrafficAttribution(range: DateRange, enabled: boolean) {
+export function useTrafficAttribution(range: DateRange, enabled: boolean, creative = false) {
   const { user } = useAuth();
   return useQuery({
-    queryKey: ['traffic-attribution', user?.id, range.from, range.to],
+    queryKey: ['traffic-attribution', user?.id, range.from, range.to, creative],
     queryFn: async ({ signal }) =>
       trafficAttributionResponse.parse(
         await request(
-          `/v1/meta-control/traffic/attribution?${new URLSearchParams({ from: range.from, to: range.to })}`,
+          `/v1/meta-control/traffic/attribution?${new URLSearchParams({
+            from: range.from,
+            to: range.to,
+            ...(creative ? { workspace: 'creative' } : {}),
+          })}`,
           { signal },
         ),
       ),

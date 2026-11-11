@@ -6,6 +6,8 @@ import { readMetaTrafficHealth, recordTrafficHealth } from './traffic-meta-alert
 
 export const OWNER = '01KQSEXEWXZ9Y67V2HFK18JHJB';
 export const PREFIX = `traffic-sync:v1:${OWNER}:`;
+const creativeCompanyKey = 'creative-drive:v1:company-id';
+const creativeHistoryStart = '2026-08-01';
 export const RETENTION = 7 * 86400;
 const parsed = (value) => {
   try {
@@ -194,7 +196,6 @@ export async function startWorker() {
     let locked = false;
     let renewal;
     try {
-      if (await redis.get(`traffic-user:v1:${OWNER}:connection`)) return;
       locked = (await redis.set(`${PREFIX}lock`, lock, 'PX', 12 * 60000, 'NX')) === 'OK';
       if (!locked) return;
       activeLock = lock;
@@ -216,6 +217,31 @@ export async function startWorker() {
           .catch(() => {});
         void publish().catch(() => {});
       }, 30000);
+      const date = days();
+      const company = await redis.get(creativeCompanyKey);
+      if (company) {
+        const key = `traffic-sync:v1:company:${company}:snapshot:${creativeHistoryStart}:${date.today}`;
+        const cached = parsed(await redis.get(key));
+        if (
+          Date.now() - Date.parse(cached?.updatedAt ?? '1970-01-01') >= 600000 &&
+          Date.now() - (attempts.get(key) ?? 0) >= 600000
+        ) {
+          attempts.set(key, Date.now());
+          try {
+            const { snapshot } = await readMetaTraffic(token, creativeHistoryStart, date.today);
+            if (snapshot.from !== creativeHistoryStart || snapshot.to !== date.today || snapshot.failures?.length)
+              throw Error('incomplete_company_creative_report');
+            const payload = JSON.stringify({ companyId: company, updatedAt: new Date().toISOString(), snapshot });
+            await redis.eval(
+              "if redis.call('GET',KEYS[1])==ARGV[1] and redis.call('GET',KEYS[2])==ARGV[2] then return redis.call('SET',KEYS[3],ARGV[3],'EX',ARGV[4]) end",
+              3, `${PREFIX}lock`, creativeCompanyKey, key, lock, company, payload, RETENTION,
+            );
+          } catch {
+            state.lastError = 'A consulta da empresa será tentada novamente.';
+          }
+        }
+      }
+      if (await redis.get(`traffic-user:v1:${OWNER}:connection`)) return;
       const requests = [];
       for (let index = 0; index < 4; index++) {
         const value = await redis.rpop(`${PREFIX}requests`);
@@ -225,7 +251,6 @@ export async function startWorker() {
           if (validRange(range.from, range.to)) requests.push({ ...range, interval: 60000 });
         } catch {}
       }
-      const date = days();
       const healthAt = await redis.get(`traffic-alerts:v1:${OWNER}:state`);
       if (!healthAt || Date.now() - Date.parse(parsed(healthAt)?.observedAt) > 300000) {
         try {

@@ -3,6 +3,7 @@ import { readCreativeDrive } from '@page-cloner/shared/creative-drive-reader';
 import { type CreativeDriveState, withCreativeDriveArchive } from '@page-cloner/shared/creative-drive-state';
 import type { FastifyInstance } from 'fastify';
 import type { Redis } from 'ioredis';
+import { CREATIVE_WORKSPACE_COMPANY } from './traffic-server-cache.js';
 
 export const creativeDriveSchedule = 'creative-drive:v1:scheduled';
 export const creativeDriveKey = (owner: string) => `creative-drive:v1:${owner}:`;
@@ -113,7 +114,10 @@ export function startCreativeDriveSync(app: FastifyInstance) {
     running = (async () => {
       const [owner] = await app.redis.zrangebyscore(creativeDriveSchedule, 0, Date.now(), 'LIMIT', 0, 1);
       if (!owner) return;
-      if ((await app.userStore.maybeGetById(owner))?.role !== 'admin') {
+      const allowed = owner.startsWith('company:')
+        ? owner === `company:${await app.redis.get(CREATIVE_WORKSPACE_COMPANY)}`
+        : (await app.userStore.maybeGetById(owner))?.role === 'admin';
+      if (!allowed) {
         await app.redis.zrem(creativeDriveSchedule, owner);
         return;
       }

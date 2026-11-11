@@ -7,6 +7,7 @@ import { env } from '../../env.js';
 import { filterCompanyNavigationOffers } from '../../lib/company-navigation-access.js';
 import { validTrafficRange } from '../../services/meta-traffic-reader.js';
 import { loadTrafficAttribution } from '../../services/traffic-attribution.js';
+import { creativeWorkspaceCompany } from '../../services/traffic-server-cache.js';
 const id = z.string().regex(/^\d+$/).nullable();
 const money = z
   .string()
@@ -87,12 +88,18 @@ export function registerTrafficAttribution(app: FastifyInstance) {
       }
     }
     if (!app.db) return reply.code(503).send({ error: 'database_unavailable' });
-    const offers = await filterCompanyNavigationOffers(
-      app.db,
-      req.user,
-      await app.offerStore.listAccessible(req.user.sub, req.user.role === 'admin'),
-      '/meta-control/traffic/attribution',
-    );
+    const company = (req.query as { workspace?: string }).workspace === 'creative'
+      ? await creativeWorkspaceCompany(app.redis, app.db, req.user)
+      : null;
+    const offers = company
+      ? await app.db<{ id: string }[]>`
+          SELECT offer_id AS id FROM company_offers WHERE company_id::text=${company}`
+      : await filterCompanyNavigationOffers(
+          app.db,
+          req.user,
+          await app.offerStore.listAccessible(req.user.sub, req.user.role === 'admin'),
+          '/meta-control/traffic/attribution',
+        );
     const rows = await loadTrafficAttribution(
       app.db,
       offers.map((o) => o.id),

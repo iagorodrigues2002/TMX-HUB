@@ -1,11 +1,15 @@
 import Fastify from 'fastify';
+import { CREATIVE_HISTORY_START } from '@page-cloner/shared/creative-identity';
+import { todayIso } from '@page-cloner/shared/date-range';
 import { afterEach, expect, it, vi } from 'vitest';
 vi.mock('../src/env.js', () => ({ env: { NODE_ENV: 'test', LOG_LEVEL: 'error' } }));
 vi.mock('../src/services/intraday-store.js', () => ({
   saoPauloParts: () => ({ date: '2026-11-09' }),
 }));
 import { registerTrafficUserConnection } from '../src/routes/meta-control/traffic-user-connection.js';
+import { registerCreativeDriveRoutes } from '../src/routes/ads-intelligence/creative-drive.js';
 import {
+  CREATIVE_WORKSPACE_COMPANY,
   TRAFFIC_SERVER_OWNER,
   serverTrafficSnapshot,
 } from '../src/services/traffic-server-cache.js';
@@ -73,4 +77,62 @@ it('fails closed on a mismatched cached owner or date', async () => {
   await expect(
     serverTrafficSnapshot(redis as never, TRAFFIC_SERVER_OWNER, '2026-11-09', '2026-11-09'),
   ).rejects.toThrow('scope');
+});
+
+it('serves the company creative workspace to its active admins, isolated from other traffic', async () => {
+  vi.stubEnv('TMX_TRAFFIC_SYNC_ENABLED', '1');
+  const company = 'qa-company';
+  const from = CREATIVE_HISTORY_START;
+  const to = todayIso();
+  const params = `from=${from}&to=${to}`;
+  const reportPath = '/meta-control/traffic/connection/report';
+  const drivePath = '/ads-intelligence/creative-drive';
+  const rootUrl = 'https://drive.google.com/drive/folders/fixture-folder';
+  const stored = new Map([
+    [CREATIVE_WORKSPACE_COMPANY, company],
+    [`traffic-sync:v1:company:${company}:snapshot:${from}:${to}`, JSON.stringify({
+      companyId: company, snapshot: { from, to, hourly: [{ hour: 8 }], insights: [] },
+    })],
+    [`creative-drive:v1:company:${company}:config`, JSON.stringify({ rootUrl, requestedAt: 1 })],
+  ]);
+  const app = Fastify();
+  app.decorate('redis', {
+    get: async (key: string) => stored.get(key) ?? null,
+    mget: async (...keys: string[]) => keys.map((key) => stored.get(key) ?? null),
+  });
+  app.decorate('db', (_parts: TemplateStringsArray, companyId: string, user: string) =>
+    companyId === company && ['reader', 'owner', 'member'].includes(user)
+      ? [{ company_id: company }]
+      : [],
+  );
+  app.addHook('preHandler', async (req) => {
+    const sub = String(req.headers['x-user']);
+    req.user = { sub, role: sub === 'member' ? 'user' : 'admin' };
+  });
+  registerTrafficUserConnection(app);
+  registerCreativeDriveRoutes(app);
+  const reader = { 'x-user': 'reader' };
+  try {
+    const report = await app.inject({ url: `${reportPath}?${params}&workspace=creative`, headers: reader });
+    expect(report.statusCode).toBe(200);
+    expect(report.json()).not.toHaveProperty('hourly');
+    expect((await app.inject({ url: `${reportPath}?${params}`, headers: reader })).statusCode).toBe(404);
+    for (const user of ['another-admin', 'member']) {
+      expect((await app.inject({
+        url: `${reportPath}?${params}&workspace=creative`,
+        headers: { 'x-user': user },
+      })).statusCode).toBe(404);
+    }
+    for (const user of ['reader', 'owner'])
+      expect((await app.inject({ url: drivePath, headers: { 'x-user': user } })).json().rootUrl)
+        .toBe(rootUrl);
+    expect((await app.inject({
+      url: drivePath, headers: { 'x-user': 'another-admin' },
+    })).json().rootUrl).toBe('');
+    expect((await app.inject({
+      url: drivePath, headers: { 'x-user': 'member' },
+    })).statusCode).toBe(403);
+  } finally {
+    await app.close();
+  }
 });

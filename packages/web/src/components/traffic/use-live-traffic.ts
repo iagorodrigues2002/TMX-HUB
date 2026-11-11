@@ -17,10 +17,10 @@ export function useLiveTraffic(
   const client = useQueryClient();
   const attempted = useRef('');
   const connection = useQuery({
-    queryKey: ['traffic-user-connection', user?.id],
+    queryKey: ['traffic-user-connection', user?.id, requireCompleteReport],
     queryFn: () =>
-      request<{ connected: boolean; id?: string; name?: string; busy?: boolean; error?: string }>(
-        '/v1/meta-control/traffic/connection',
+      request<{ connected: boolean; id?: string; name?: string; busy?: boolean; error?: string; shared?: boolean }>(
+        '/v1/meta-control/traffic/connection' + (requireCompleteReport ? '?workspace=creative' : ''),
       ),
     enabled: !!user,
     retry: false,
@@ -74,7 +74,12 @@ export function useLiveTraffic(
     ],
     queryFn: async ({ signal }) => {
       const report = await request<RealCampaignSnapshot>(
-        `${reportPath}?${new URLSearchParams({ from: range.from, to: range.to, hourly: hourly ? '1' : '0' })}`,
+        `${reportPath}?${new URLSearchParams({
+          from: range.from,
+          to: range.to,
+          hourly: hourly ? '1' : '0',
+          ...(requireCompleteReport ? { workspace: 'creative' } : {}),
+        })}`,
         { signal },
       );
       if (requireCompleteReport && (report.from > range.from || report.to < range.to))
@@ -143,6 +148,7 @@ export function useLiveTraffic(
     const key = `${range.from}:${range.to}`;
     if (
       status.data?.connected &&
+      !connection.data?.shared &&
       !data.isPending &&
       !status.data.busy &&
       !refresh.isPending &&
@@ -156,6 +162,7 @@ export function useLiveTraffic(
     range.from,
     range.to,
     status.data?.connected,
+    connection.data?.shared,
     status.data?.busy,
     data.data?.from,
     data.data?.to,

@@ -20,7 +20,11 @@ import {
   updateCloudCreativeMetadata,
 } from '../../services/creative-drive.js';
 import { trafficUserKey } from '../../services/traffic-personal-sync.js';
-import { serverTrafficSnapshot } from '../../services/traffic-server-cache.js';
+import {
+  companyCreativeSnapshot,
+  creativeWorkspaceCompany,
+  serverTrafficSnapshot,
+} from '../../services/traffic-server-cache.js';
 import { assertAdmin } from '../meta-control/connection-schema.js';
 
 const path = '/ads-intelligence/creative-drive';
@@ -30,21 +34,25 @@ export function registerCreativeDriveRoutes(app: FastifyInstance) {
   app.get(path, async (req, reply) => {
     assertAdmin(req);
     reply.header('Cache-Control', 'private, no-store');
-    return cloudCreativeDriveState(app.redis, req.user!.sub);
+    const company = await creativeWorkspaceCompany(app.redis, app.db, req.user);
+    return cloudCreativeDriveState(app.redis, company ? `company:${company}` : req.user!.sub);
   });
   app.post(path, { bodyLimit: 65_536 }, async (req, reply) => {
     assertAdmin(req);
     reply.header('Cache-Control', 'private, no-store');
-    const owner = req.user!.sub;
     const parsed = creativeDriveAction.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ detail: 'Confira os dados enviados.' });
     const input = parsed.data;
+    const company = await creativeWorkspaceCompany(app.redis, app.db, req.user);
+    const owner = company ? `company:${company}` : req.user!.sub;
     if (input.action === 'classify') {
       const range = { from: CREATIVE_HISTORY_START, to: todayIso() };
       const prefix = trafficUserKey(owner);
-      const connection = await app.redis.get(prefix + 'connection');
+      const connection = company ? null : await app.redis.get(prefix + 'connection');
       let snapshot: RealCampaignSnapshot | null = null;
-      if (connection) {
+      if (company) {
+        snapshot = await companyCreativeSnapshot(app.redis, company, range.from, range.to);
+      } else if (connection) {
         const { revision } = JSON.parse(connection);
         const raw = await app.redis.get(`${prefix}${revision}:${range.from}:${range.to}`);
         if (raw) snapshot = JSON.parse(raw);

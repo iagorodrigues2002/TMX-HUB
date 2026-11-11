@@ -1,3 +1,5 @@
+import { CREATIVE_HISTORY_START } from '@page-cloner/shared/creative-identity';
+import { todayIso } from '@page-cloner/shared/date-range';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
@@ -11,6 +13,8 @@ import { validTrafficRange } from '../../services/meta-traffic-reader.js';
 import { createPersonalTrafficSync, trafficUserKey } from '../../services/traffic-personal-sync.js';
 export { trafficUserKey } from '../../services/traffic-personal-sync.js';
 import {
+  companyCreativeSnapshot,
+  creativeWorkspaceCompany,
   hasServerTraffic,
   serverTrafficInventory,
   serverTrafficSnapshot,
@@ -40,6 +44,18 @@ export function registerTrafficUserConnection(app: FastifyInstance) {
     const userId = req.user?.sub;
     if (!userId) return reply.code(401).send({ detail: 'Entre no TMX.' });
     reply.header('Cache-Control', 'private, no-store');
+    const company = (req.query as { workspace?: string }).workspace === 'creative'
+      ? await creativeWorkspaceCompany(app.redis, app.db, req.user)
+      : null;
+    if (company) {
+      return {
+        connected: true,
+        id: `creative-company:${company}`,
+        name: 'Operação TMX',
+        shared: true,
+        busy: false,
+      };
+    }
     const raw = await app.redis.get(`${trafficUserKey(userId)}connection`);
     if (!raw) {
       if (!hasServerTraffic(userId)) return { connected: false, busy: false };
@@ -153,6 +169,18 @@ export function registerTrafficUserConnection(app: FastifyInstance) {
     const range = z.object({ from: z.string(), to: z.string() }).safeParse(req.query);
     if (!range.success || !validTrafficRange(range.data.from, range.data.to))
       return reply.code(400).send({ detail: 'Período inválido.' });
+    const company = (req.query as { workspace?: string }).workspace === 'creative'
+      ? await creativeWorkspaceCompany(app.redis, app.db, req.user)
+      : null;
+    if (company) {
+      if (range.data.from !== CREATIVE_HISTORY_START || range.data.to !== todayIso())
+        return reply.code(400).send({ detail: 'Use o período do Ads Intelligence.' });
+      const report = await companyCreativeSnapshot(app.redis, company, range.data.from, range.data.to);
+      if (!report) return reply.code(409).send({ detail: 'Consulta da empresa em processamento.' });
+      reply.header('Cache-Control', 'private, no-store');
+      const { hourly: _hourly, ...daily } = report;
+      return daily;
+    }
     const prefix = trafficUserKey(userId);
     const raw = await app.redis.get(`${prefix}connection`);
     if (!raw) {

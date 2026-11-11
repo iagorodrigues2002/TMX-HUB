@@ -1,4 +1,5 @@
 import type { Redis } from 'ioredis';
+import type { Sql } from 'postgres';
 import { saoPauloParts } from './intraday-store.js';
 import { trafficInventorySnapshot } from './meta-inventory.js';
 import type { readMetaTraffic } from './meta-traffic-reader.js';
@@ -13,6 +14,36 @@ type ServerSnapshot = {
 };
 
 export const TRAFFIC_SERVER_OWNER = '01KQSEXEWXZ9Y67V2HFK18JHJB';
+export const CREATIVE_WORKSPACE_COMPANY = 'creative-drive:v1:company-id';
+
+export async function creativeWorkspaceCompany(
+  redis: Pick<Redis, 'get'>,
+  db: Sql | null | undefined,
+  user: { sub: string; role: string } | undefined,
+) {
+  if (!db || user?.role !== 'admin') return null;
+  const company = await redis.get(CREATIVE_WORKSPACE_COMPANY);
+  if (!company) return null;
+  const [membership] = await db<{ company_id: string }[]>`
+    SELECT company_id::text FROM company_memberships
+    WHERE company_id::text=${company} AND user_id=${user.sub}
+      AND status='active' AND role IN ('owner','admin')`;
+  return membership?.company_id ?? null;
+}
+
+export async function companyCreativeSnapshot(
+  redis: Redis,
+  company: string,
+  from: string,
+  to: string,
+): Promise<TrafficData['snapshot'] | null> {
+  const raw = await redis.get(`traffic-sync:v1:company:${company}:snapshot:${from}:${to}`);
+  if (!raw) return null;
+  const data = JSON.parse(raw);
+  if (data.companyId !== company || data.snapshot?.from !== from || data.snapshot?.to !== to)
+    throw Error('Invalid creative workspace scope');
+  return data.snapshot;
+}
 export function hasServerTraffic(userId: string) {
   return userId === TRAFFIC_SERVER_OWNER && process.env.TMX_TRAFFIC_SYNC_ENABLED === '1';
 }
