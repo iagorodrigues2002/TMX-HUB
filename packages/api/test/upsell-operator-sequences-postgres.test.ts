@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import postgres from 'postgres';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { reconcileOperator } from '../scripts/reconcile-upsell-operator.mjs';
+import { readCompanyCompensation } from '../src/routes/company-compensation.js';
 
 const url = process.env.ATTRIBUTION_REPORT_TEST_DATABASE_URL;
 describe.skipIf(!url)(
@@ -18,7 +19,10 @@ describe.skipIf(!url)(
       if (!['localhost', '127.0.0.1'].includes(new URL(url!).hostname))
         throw Error('Local disposable database required');
       await db.unsafe(`CREATE SCHEMA "${schema}";
-      CREATE TABLE tracking_projects(id text PRIMARY KEY);
+      CREATE TABLE tracking_projects(id text PRIMARY KEY,offer_id text DEFAULT 'offer');
+      CREATE TABLE company_memberships(company_id text,user_id text);
+      CREATE TABLE company_offers(company_id text,offer_id text);
+      CREATE TABLE company_member_compensation(company_id text,user_id text,month date,settings jsonb);
       CREATE TABLE tracking_orders(id text PRIMARY KEY,project_id text REFERENCES tracking_projects(id) ON DELETE CASCADE,provider text,order_kind text,paid_at timestamptz,status text DEFAULT 'paid',visitor_id text,buyer jsonb DEFAULT '{}',attribution_source jsonb DEFAULT '{}',vendepay_connection_id text,syzepay_connection_id text,amount_minor bigint DEFAULT 3500,amount_brl_minor bigint DEFAULT 3500,currency text DEFAULT 'USD');
       CREATE TABLE tracking_upsell_operator_attempts(id text PRIMARY KEY,project_id text,order_id text,stage_key text,provider text,operator_id text,opened_at timestamptz,view_only boolean DEFAULT false);
       CREATE TABLE webhook_receipts(order_id text,connection_id text,state text,payload jsonb);
@@ -66,6 +70,23 @@ describe.skipIf(!url)(
     };
     const credit = async (id: string) =>
       (await db`SELECT * FROM tracking_upsell_operator_credits WHERE order_id=${id}`)[0]!;
+
+    it('includes a confirmed reopen in the company commission count', async () => {
+      await db`INSERT INTO company_memberships VALUES ('company','douglas')`;
+      await db`INSERT INTO company_offers VALUES ('company','offer')`;
+      await click('reopen-for-pay', 'upsell_2', '2026-11-10T12:00:00Z', true);
+      await order('paid-reopen', 'upsell_2', '2026-11-10T12:00:10Z');
+      await db`INSERT INTO webhook_receipts VALUES
+        ('paid-reopen','main','processed','{"transaction_id":"paid-reopen","status":"paid"}')`;
+      await db`SELECT reconcile_upsell_operator_sequences_after_order('paid-reopen')`;
+      expect((await credit('paid-reopen')).reason).toBe('confirmed_reopen');
+      await click('test-click', 'upsell_3');
+      await order('test-order', 'upsell_3', '2026-11-10T12:00:11Z');
+      await db`INSERT INTO webhook_receipts VALUES
+        ('test-order','main','processed','{"transaction_id":"test-order","status":"paid","test":true}')`;
+      expect((await credit('test-order')).operator_id).toBe('douglas');
+      expect((await readCompanyCompensation(db, 'company', 'douglas', '2026-11')).upsells).toBe(1);
+    });
 
     it('recovers the screenshot: view-only stage 3 followed by a real new payment', async () => {
       await click('open-2');

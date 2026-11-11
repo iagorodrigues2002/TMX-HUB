@@ -29,6 +29,7 @@ export async function readCompanyCompensation(
   const [saved] =
     await sql`SELECT settings FROM company_member_compensation WHERE company_id=${company} AND user_id=${userId} AND month=${`${month}-01`}`;
   const settings = compensationSchema.parse(saved?.settings ?? defaultCompensation);
+  // The persisted credit and gateway proof establish eligibility, including paid reopens.
   const rows = await sql`
     SELECT o.id AS order_id,o.provider,o.paid_at AS approved_at,o.order_kind AS stage_key,o.amount_minor,o.currency,
       (SELECT jsonb_agg(r.payload) FROM webhook_receipts r WHERE r.order_id=o.id AND r.connection_id=o.vendepay_connection_id AND r.state='processed'
@@ -37,7 +38,7 @@ export async function readCompanyCompensation(
     JOIN company_offers co ON co.offer_id=p.offer_id AND co.company_id=${company}
     JOIN tracking_upsell_operator_credits c ON c.order_id=o.id AND c.project_id=o.project_id AND c.operator_id=${userId}
     JOIN tracking_upsell_operator_attempts a ON a.id=c.attempt_id AND a.project_id=o.project_id
-    WHERE o.paid_at IS NOT NULL AND NOT a.view_only AND a.opened_at<=o.paid_at
+    WHERE o.paid_at IS NOT NULL AND a.opened_at<=o.paid_at
       AND a.opened_at>=(${`${month}-01`}::date::timestamp AT TIME ZONE 'America/Sao_Paulo')
       AND a.opened_at<((${`${month}-01`}::date+interval '1 month') AT TIME ZONE 'America/Sao_Paulo')
       AND (o.order_kind='upsell' OR o.order_kind ~ '^upsell_[2-9][0-9]*$')
