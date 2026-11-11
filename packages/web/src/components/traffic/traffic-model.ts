@@ -5,7 +5,18 @@ export const trafficTabs = [
   ['contingency', 'Contingência'],
   ['settings', 'Configurações'],
 ] as const;
-export type TrafficTab = (typeof trafficTabs)[number][0];
+export type TrafficTab = (typeof trafficTabs)[number][0] | 'ads-intelligence';
+export function availableTrafficTabs(
+  localPreview = false,
+): readonly (readonly [TrafficTab, string])[] {
+  return localPreview
+    ? [
+        ...trafficTabs.slice(0, 2),
+        ['ads-intelligence', 'Ads Intelligence'],
+        ...trafficTabs.slice(2),
+      ]
+    : trafficTabs;
+}
 export function selectTrafficTab(
   requested: string | null,
   allowed: readonly TrafficTab[],

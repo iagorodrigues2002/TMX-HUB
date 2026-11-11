@@ -6,7 +6,14 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./creative-drive-reader": "./src/creative/creative-drive-reader.ts",
+    "./creative-drive-state": "./src/creative/creative-drive-state.ts",
+    "./creative-identity": "./src/creative/creative-identity.ts",
+    "./creative-workspace-model": "./src/creative/creative-workspace-model.ts",
+    "./traffic-campaigns-model": "./src/creative/real-campaigns-model.ts",
+    "./traffic-reports-model": "./src/creative/traffic-reports-model.ts",
+    "./date-range": "./src/creative/date-range.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

@@ -9,7 +9,7 @@ export default function TrafficPage() {
       breadcrumb={['TRÁFEGO']}
       previewNotice={
         process.env.NEXT_PUBLIC_TMX_LOCAL_PREVIEW_KIND === 'synthetic'
-          ? 'Prévia local · última consulta Meta + financeiro real TMX · nenhuma alteração de negócio em produção.'
+          ? 'Prévia local · sem publicação ou alterações em produção.'
           : undefined
       }
     >

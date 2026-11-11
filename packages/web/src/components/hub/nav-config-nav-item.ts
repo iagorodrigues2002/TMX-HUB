@@ -15,6 +15,6 @@ export interface NavItem {
   keywords?: string[];
   activeHrefs?: string[];
   hidden?: boolean;
-  localPreviewOnly?: boolean;
+  requiresCreativeWorkspace?: boolean;
   children?: NavItem[];
 }

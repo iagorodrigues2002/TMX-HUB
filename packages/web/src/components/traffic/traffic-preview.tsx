@@ -3,15 +3,18 @@ import { Button } from '@/components/ui/button';
 import { DateRangeFilter } from '@/components/ui/date-range-filter';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/lib/auth-context';
+import { CREATIVE_HISTORY_START } from '@/lib/creative-identity';
+import { creativeWorkspaceEnabled } from '@/lib/creative-workspace-release';
 import { DASHBOARD_DATE_PRESETS, type DateRange, singleDayRange, todayIso } from '@/lib/date-range';
 import { useRouter } from '@/lib/motion-router';
 import { hasNavigationAccess } from '@page-cloner/shared';
 import { useSearchParams } from 'next/navigation';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { ContingencyPreview } from './contingency-preview';
+import { CreativeWorkspace } from './creative-workspace';
 import { RealCampaigns, type TrafficFilters } from './real-campaigns';
 import { assignedOffer } from './real-campaigns-model';
-import { type TrafficTab, selectTrafficTab, trafficTabs } from './traffic-model';
+import { type TrafficTab, availableTrafficTabs, selectTrafficTab } from './traffic-model';
 import styles from './traffic-preview.module.css';
 import { TrafficSettings } from './traffic-settings';
 import { useLiveTraffic } from './use-live-traffic';
@@ -21,8 +24,10 @@ export function TrafficPreview() {
   const router = useRouter();
   const params = useSearchParams();
   const { user } = useAuth();
-  const allowedTabs = trafficTabs.filter(
-    ([id]) => user?.role === 'admin' || hasNavigationAccess(user?.allowedTools, `traffic-${id}`),
+  const allowedTabs = availableTrafficTabs(creativeWorkspaceEnabled).filter(
+    ([id]) =>
+      user?.role === 'admin' ||
+      (id !== 'ads-intelligence' && hasNavigationAccess(user?.allowedTools, `traffic-${id}`)),
   );
   const tab =
     selectTrafficTab(
@@ -63,14 +68,21 @@ export function TrafficPreview() {
   const [range, setRange] = useState<DateRange>(() => singleDayRange(0));
   const [filters, setFilters] = useState<TrafficFilters>({
     currency: 'BRL',
-    offer: '',
+    offer: params.get('offer') ?? '',
     account: '',
     business: '',
     status: '',
     query: '',
   });
   const reporting = allowedTabs.length > 0 && ['overview', 'campaigns', 'windows'].includes(tab);
-  const live = useLiveTraffic(range, tab === 'windows', reporting);
+  const creativeRange: DateRange = { from: CREATIVE_HISTORY_START, to: todayIso() };
+  const live = useLiveTraffic(
+    tab === 'ads-intelligence' ? creativeRange : range,
+    tab === 'windows',
+    reporting || tab === 'ads-intelligence',
+    tab !== 'ads-intelligence',
+    tab === 'ads-intelligence',
+  );
   const assets = useTrafficInventory(
     allowedTabs.some(([id]) => id === 'contingency' || id === 'settings'),
   );
@@ -90,22 +102,25 @@ export function TrafficPreview() {
   };
   return (
     <section className={styles.root}>
-      <header className={styles.workspaceHeader}>
-        <div>
-          <p className={styles.eyebrow}>TMX / Operação</p>
-          <h1>Tráfego</h1>
-        </div>
-        <span className={styles.localBadge}>
-          {live.status.data?.blocked
-            ? 'Acesso à API da Meta bloqueado'
-            : live.status.data?.connected
-              ? live.personal || live.service.data?.running
-                ? 'System User conectado · atualização automática'
-                : 'System User conectado · serviço local'
-              : 'Última consulta da Meta'}{' '}
-          {process.env.NEXT_PUBLIC_TMX_LOCAL_PREVIEW_KIND === 'synthetic' ? '· prévia local' : ''}
-        </span>
-      </header>
+      {tab === 'ads-intelligence' && <h1 className="sr-only">Ads Intelligence · Tráfego</h1>}
+      {tab !== 'ads-intelligence' && (
+        <header className={styles.workspaceHeader}>
+          <div>
+            <p className={styles.eyebrow}>TMX / Operação</p>
+            <h1>Tráfego</h1>
+          </div>
+          <span className={styles.localBadge}>
+            {live.status.data?.blocked
+              ? 'Acesso à API da Meta bloqueado'
+              : live.status.data?.connected
+                ? live.personal || live.service.data?.running
+                  ? 'System User conectado · atualização automática'
+                  : 'System User conectado · serviço local'
+                : 'Última consulta da Meta'}{' '}
+            {process.env.NEXT_PUBLIC_TMX_LOCAL_PREVIEW_KIND === 'synthetic' ? '· prévia local' : ''}
+          </span>
+        </header>
+      )}
       <Tabs value={tab} onValueChange={(value) => navigate(value as TrafficTab)}>
         <TabsList
           ref={tabList}
@@ -221,11 +236,30 @@ export function TrafficPreview() {
           <TabsContent value={tab}>
             <RealCampaigns
               range={range}
-              view={tab}
+              view={tab === 'ads-intelligence' ? 'overview' : tab}
               live={live}
               filters={filters}
               setFilters={setFilters}
               codes={codes}
+            />
+          </TabsContent>
+        )}
+        {allowedTabs.some(([id]) => id === 'ads-intelligence') && (
+          <TabsContent value="ads-intelligence">
+            <CreativeWorkspace
+              live={live}
+              range={creativeRange}
+              currency={filters.currency}
+              setCurrency={(currency) => setFilters((value) => ({ ...value, currency }))}
+              offer={filters.offer === '__unclassified' ? 'Sem oferta' : filters.offer}
+              selectOffer={(offer) => {
+                const code = offer === 'Sem oferta' ? '__unclassified' : offer;
+                setFilters((value) => ({ ...value, offer: code }));
+                const next = new URLSearchParams(params);
+                if (code) next.set('offer', code);
+                else next.delete('offer');
+                router.replace(`/trafego?${next}`, { scroll: false });
+              }}
             />
           </TabsContent>
         )}

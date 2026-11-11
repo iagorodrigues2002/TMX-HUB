@@ -1,4 +1,11 @@
-import { ChartNoAxesCombined, Clock3, Megaphone, Settings2, ShieldCheck } from 'lucide-react';
+import {
+  ChartNoAxesCombined,
+  Clapperboard,
+  Clock3,
+  Megaphone,
+  Settings2,
+  ShieldCheck,
+} from 'lucide-react';
 import type { NavItem } from './nav-config-nav-item';
 
 export const nav_items_traffic: NavItem = {
@@ -32,6 +39,17 @@ export const nav_items_traffic: NavItem = {
       href: '/trafego?view=windows',
       icon: Clock3,
       group: 'Tráfego',
+    },
+    {
+      id: 'traffic-ads-intelligence',
+      requiresTool: 'ofertas',
+      label: 'Ads Intelligence',
+      href: '/trafego?view=ads-intelligence',
+      icon: Clapperboard,
+      group: 'Tráfego',
+      roles: ['admin'],
+      requiresCreativeWorkspace: true,
+      keywords: ['criativos', 'levas', 'drive', 'anúncios'],
     },
     {
       id: 'traffic-contingency',

@@ -6,7 +6,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import type { NativeFinanceOffer, RealCampaignSnapshot } from './real-campaigns-model';
 
-export function useLiveTraffic(range: DateRange, hourly = false, reporting = true) {
+export function useLiveTraffic(
+  range: DateRange,
+  hourly = false,
+  reporting = true,
+  financial = true,
+  requireCompleteReport = false,
+) {
   const { user } = useAuth();
   const client = useQueryClient();
   const attempted = useRef('');
@@ -64,12 +70,18 @@ export function useLiveTraffic(range: DateRange, hourly = false, reporting = tru
       range.to,
       connection.data?.id ?? 'legacy',
       hourly,
+      requireCompleteReport,
     ],
-    queryFn: () =>
-      request<RealCampaignSnapshot>(
+    queryFn: async ({ signal }) => {
+      const report = await request<RealCampaignSnapshot>(
         `${reportPath}?${new URLSearchParams({ from: range.from, to: range.to, hourly: hourly ? '1' : '0' })}`,
-      ),
-    enabled: reporting && (legacy || personal),
+        { signal },
+      );
+      if (requireCompleteReport && (report.from > range.from || report.to < range.to))
+        throw Error('A consulta ainda não cobre o período completo.');
+      return report;
+    },
+    enabled: reporting && (legacy || personal) && (!requireCompleteReport || connection.isFetched),
     retry: false,
     staleTime: 60000,
     refetchInterval: (query) =>
@@ -199,7 +211,7 @@ export function useLiveTraffic(range: DateRange, hourly = false, reporting = tru
       );
       return { ...result, authorizedOffers: false as const };
     },
-    enabled: reporting && (legacy || personal),
+    enabled: financial && reporting && (legacy || personal),
     retry: false,
     staleTime: 60000,
   });

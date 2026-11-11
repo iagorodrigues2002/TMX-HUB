@@ -1,5 +1,6 @@
 import { resolveTrackingLocation } from '@/components/tracking/tracking-nav';
 import { type AuthUser, canAccessTool } from '@/lib/api-client/auth-types';
+import { creativeWorkspaceEnabled } from '@/lib/creative-workspace-release';
 import { NAVIGATION_IDS, hasNavigationAccess } from '@page-cloner/shared';
 import { NAV_ITEMS, type NavItem, flattenNavItems } from './nav-config';
 
@@ -29,16 +30,22 @@ export function canonicalNavigationLocation(pathname: string, search = '') {
 export function visibleNavigation(
   user: AuthUser | null,
   items: NavItem[] = NAV_ITEMS,
-  options: { includeDynamic?: boolean; syntheticPreview?: boolean; canManageTasks?: boolean } = {},
+  options: {
+    includeDynamic?: boolean;
+    syntheticPreview?: boolean;
+    creativeWorkspace?: boolean;
+    canManageTasks?: boolean;
+  } = {},
 ): NavItem[] {
-  const syntheticPreview =
-    options.syntheticPreview ?? process.env.NEXT_PUBLIC_TMX_LOCAL_PREVIEW_KIND === 'synthetic';
+  const creativeWorkspace =
+    options.creativeWorkspace ?? options.syntheticPreview ?? creativeWorkspaceEnabled;
   if (!user) return [];
   return items.flatMap((item) => {
     if (
       item.hidden ||
+      (item.id === 'ads-intelligence' && creativeWorkspace) ||
       (!options.includeDynamic && item.href.includes('[id]')) ||
-      (item.localPreviewOnly && !syntheticPreview) ||
+      (item.requiresCreativeWorkspace && !creativeWorkspace) ||
       (item.roles && !item.roles.includes(user.role)) ||
       (item.id === 'operator-activity' &&
         user.role !== 'admin' &&

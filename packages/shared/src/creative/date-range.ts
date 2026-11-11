@@ -1,0 +1,105 @@
+export const SAO_PAULO_TIME_ZONE = 'America/Sao_Paulo';
+
+export interface DateRange {
+  from: string;
+  to: string;
+}
+
+export interface DateRangePreset {
+  id: string;
+  label: string;
+  getRange: () => DateRange;
+}
+
+export function toIsoDateInTimeZone(
+  value: Date | string | number = new Date(),
+  timeZone = SAO_PAULO_TIME_ZONE,
+): string {
+  const date = value instanceof Date ? value : new Date(value);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+export function todayIso(): string {
+  return toIsoDateInTimeZone();
+}
+
+export function daysAgoIso(days: number, anchor = todayIso()): string {
+  const [year = 1970, month = 1, day = 1] = anchor.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day - days, 12));
+  return date.toISOString().slice(0, 10);
+}
+
+export function singleDayRange(daysAgo: number): DateRange {
+  const date = daysAgoIso(daysAgo);
+  return { from: date, to: date };
+}
+
+export function rollingDateRange(days: number): DateRange {
+  const safeDays = Math.max(1, Math.floor(days));
+  return { from: daysAgoIso(safeDays - 1), to: todayIso() };
+}
+
+export function currentMonthRange(anchor = todayIso()): DateRange {
+  return { from: `${anchor.slice(0, 7)}-01`, to: anchor };
+}
+
+export function previousMonthRange(anchor = todayIso()): DateRange {
+  const [year, month] = anchor.split('-').map(Number);
+  return {
+    from: new Date(Date.UTC(year!, month! - 2, 1, 12)).toISOString().slice(0, 10),
+    to: new Date(Date.UTC(year!, month! - 1, 0, 12)).toISOString().slice(0, 10),
+  };
+}
+
+export function selectedMonthRange(month: string, anchor = todayIso()): DateRange | null {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || month > anchor.slice(0, 7)) return null;
+  const [year, monthNumber] = month.split('-').map(Number);
+  return {
+    from: `${month}-01`,
+    to:
+      month === anchor.slice(0, 7)
+        ? anchor
+        : new Date(Date.UTC(year!, monthNumber!, 0, 12)).toISOString().slice(0, 10),
+  };
+}
+
+const MONTH_DATE_PRESETS: readonly DateRangePreset[] = [
+  { id: 'current-month', label: 'Este mês', getRange: () => currentMonthRange() },
+  { id: 'previous-month', label: 'Mês passado', getRange: () => previousMonthRange() },
+];
+
+export function isDateInRange(value: string, range: DateRange): boolean {
+  const date = toIsoDateInTimeZone(value);
+  return date >= range.from && date <= range.to;
+}
+
+export const DASHBOARD_DATE_PRESETS: readonly DateRangePreset[] = [
+  { id: 'today', label: 'Hoje', getRange: () => singleDayRange(0) },
+  { id: 'yesterday', label: 'Ontem', getRange: () => singleDayRange(1) },
+  { id: 'day-before-yesterday', label: 'Anteontem', getRange: () => singleDayRange(2) },
+  { id: 'last-7-days', label: 'Últimos 7 dias', getRange: () => rollingDateRange(7) },
+  { id: 'last-30-days', label: 'Últimos 30 dias', getRange: () => rollingDateRange(30) },
+  ...MONTH_DATE_PRESETS,
+  {
+    id: 'all-time',
+    label: 'Período total',
+    getRange: () => ({ from: '2026-07-26', to: todayIso() }),
+  },
+];
+
+export const PERIOD_DATE_PRESETS: readonly DateRangePreset[] = [
+  { id: 'today', label: 'Hoje', getRange: () => singleDayRange(0) },
+  { id: 'last-7-days', label: 'Últimos 7 dias', getRange: () => rollingDateRange(7) },
+  { id: 'last-14-days', label: 'Últimos 14 dias', getRange: () => rollingDateRange(14) },
+  { id: 'last-30-days', label: 'Últimos 30 dias', getRange: () => rollingDateRange(30) },
+  ...MONTH_DATE_PRESETS,
+];
+
+export const UPSELL_LOG_DATE_PRESETS = DASHBOARD_DATE_PRESETS.filter((preset) =>
+  ['today', 'yesterday', 'last-7-days', 'current-month'].includes(preset.id),
+);
