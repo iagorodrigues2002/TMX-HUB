@@ -55,6 +55,13 @@ export function registerGetUpsellIdentitiesRoutes(
           purchased_stage_keys: string[];
         }>
       >`
+          WITH buyer_page AS MATERIALIZED (
+            SELECT * FROM tracking_orders
+            WHERE project_id=${p.id} AND order_kind='front' AND paid_at IS NOT NULL
+              AND (${allHistory} OR (paid_at >= ${fromInstant} AND paid_at < ${toInstant}))
+            ORDER BY paid_at DESC,updated_at DESC,id DESC
+            LIMIT ${limit} OFFSET ${offset}
+          )
           SELECT o.id,o.visitor_id,o.external_id,o.paid_at,o.provider,o.attribution_source->>'syzepay_session_id' AS syzepay_session_id,
                  o.vendepay_connection_id AS connection_id,
                  CASE WHEN o.provider='vendepay' THEN vc.name
@@ -102,7 +109,7 @@ export function registerGetUpsellIdentitiesRoutes(
                        (o.visitor_id IS NOT NULL AND upsell.visitor_id=o.visitor_id)
                      )
                  ) AS purchased_stage_keys
-          FROM tracking_orders o
+          FROM buyer_page o
           LEFT JOIN vendepay_connections vc ON vc.id=o.vendepay_connection_id AND o.provider='vendepay'
           LEFT JOIN syzepay_company_connections sc ON sc.id=o.syzepay_connection_id AND o.provider='syzepay'
           LEFT JOIN tracking_gateway_connections gc ON gc.id=o.gateway_connection_id AND gc.provider=o.provider
@@ -114,10 +121,7 @@ export function registerGetUpsellIdentitiesRoutes(
             ORDER BY i.last_seen_at DESC
             LIMIT 1
           ) identity ON true
-          WHERE o.project_id=${p.id} AND o.order_kind='front' AND o.paid_at IS NOT NULL
-            AND (${allHistory} OR (o.paid_at >= ${fromInstant} AND o.paid_at < ${toInstant}))
-          ORDER BY o.paid_at DESC,o.updated_at DESC
-          LIMIT ${limit} OFFSET ${offset}
+          ORDER BY o.paid_at DESC,o.updated_at DESC,o.id DESC
         `,
       app.db<
         Array<{

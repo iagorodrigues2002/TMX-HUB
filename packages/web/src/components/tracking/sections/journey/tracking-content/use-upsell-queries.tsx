@@ -2,7 +2,7 @@
 import { TRACKING_DASHBOARD_STALE_TIME } from '@/components/tracking/tracking-query';
 import { apiClient } from '@/lib/api-client';
 import { useQuery } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { upsellStageLabel } from './tracking-helpers';
 import { UPSELL_STAGE_OPTIONS } from './tracking-helpers';
 import { ADVANCED_QUERY_SECTIONS } from './tracking-navigation';
@@ -55,7 +55,11 @@ export function useUpsellQueries({
     refetchOnWindowFocus: false,
   });
 
-  const upsellIdentities = useQuery({
+  const lastIdentities = useRef<{
+    offerId: string;
+    data: Awaited<ReturnType<typeof apiClient.getTrackingUpsellIdentities>>;
+  } | null>(null);
+  const identitiesQuery = useQuery({
     queryKey: [
       'tracking-upsell-identities',
       offerId,
@@ -76,6 +80,21 @@ export function useUpsellQueries({
     refetchOnWindowFocus: false,
     refetchInterval: section === 'upsells' ? 15_000 : false,
   });
+
+  useEffect(() => {
+    if (identitiesQuery.data && !identitiesQuery.isPlaceholderData) {
+      lastIdentities.current = { offerId, data: identitiesQuery.data };
+    } else if (lastIdentities.current?.offerId !== offerId) {
+      lastIdentities.current = null;
+    }
+  }, [offerId, identitiesQuery.data, identitiesQuery.isPlaceholderData]);
+  // React Query drops placeholderData on error; a failed page is not an empty history.
+  const upsellIdentities = {
+    ...identitiesQuery,
+    data:
+      identitiesQuery.data ??
+      (lastIdentities.current?.offerId === offerId ? lastIdentities.current.data : undefined),
+  };
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset pagination when the offer changes.
   useEffect(() => {

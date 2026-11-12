@@ -100,12 +100,38 @@ export function renderUpsellIdentityFilters(context: TrackingContentContext) {
           ))}
         </div>
       </div>
-      {renderUpsellIdentities(context)}
-      {!upsellIdentities.isLoading && !filteredUpsellIdentities.length && (
-        <p className="px-4 py-5 text-sm text-muted-foreground">
-          Nenhum comprador encontrado neste filtro.
+      {upsellIdentities.isError && (
+        <div role="alert" className="flex items-center gap-3 px-4 py-3 text-sm text-danger">
+          Não foi possível carregar esta página. A seleção foi mantida.
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={upsellIdentities.isFetching}
+            onClick={() => void upsellIdentities.refetch()}
+          >
+            Tentar novamente
+          </Button>
+        </div>
+      )}
+      {upsellIdentities.isFetching && (
+        <output className="block px-4 py-3 text-sm text-muted-foreground">
+          Carregando página {Math.floor(upsellIdentityOffset / upsellIdentityPageSize) + 1}…
+        </output>
+      )}
+      {upsellIdentities.data && upsellIdentities.data.offset !== upsellIdentityOffset && (
+        <p className="px-4 py-2 text-xs text-muted-foreground">
+          Exibindo os compradores da página anterior até concluir o carregamento.
         </p>
       )}
+      {renderUpsellIdentities(context)}
+      {!upsellIdentities.isFetching &&
+        !upsellIdentities.isError &&
+        !filteredUpsellIdentities.length && (
+          <p className="px-4 py-5 text-sm text-muted-foreground">
+            Nenhum comprador encontrado neste filtro.
+          </p>
+        )}
       <UpsellPagination
         total={upsellIdentities.data?.total ?? 0}
         offset={upsellIdentityOffset}
