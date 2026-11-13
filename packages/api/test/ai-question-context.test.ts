@@ -74,6 +74,11 @@ it('converts daily sales per offer, preserves kind and enforces upsell-only acce
   expect(d.byOffer[0]).toMatchObject({ name: 'PJR_ENG', amountMinor: 13000 });
   expect(d.dailyByOffer).toEqual([{ date: '2026-11-12', offerId: 'allowed', count: 3, amountMinor: 13000, missingCurrencies: [] }]);
   expect(questionContext(raw, c, 'em USD', now).salesAnalysis!.total.amountMinor).toBe(2600);
+  raw.exchangeRates!.USD.rate = 1.0003;
+  raw.exchangeRates!.PEN.rate = 1.0003;
+  const rounded = questionContext(raw, c, 'em reais', now).salesAnalysis!;
+  expect(rounded.total.amountMinor).toBe(rounded.byOffer.reduce((sum, o) => sum + o.byKind.reduce((n, k) => n + k.amountMinor!, 0), 0));
+  raw.exchangeRates!.USD.rate = 5; raw.exchangeRates!.PEN.rate = 1.5;
   c.availableAreas.sales = false;
   expect(questionContext(raw, c, 'faturamento', now).salesAnalysis!.total).toMatchObject({ count: 1, amountMinor: 3000 });
   c.availableAreas.upsells = false;

@@ -100,7 +100,7 @@ export function questionContext(raw: AiData, context: Context, question: string,
       count += r.count;
       const quote = rate(r.currency), minor = r.gross_minor === null ? null : Number(r.gross_minor);
       if (quote === null || minor === null || !Number.isSafeInteger(minor)) missing.add(r.currency);
-      else amount += minor * quote;
+      else amount += Math.round(minor * quote);
     }
     return { count, amountMinor: missing.size || !Number.isSafeInteger(Math.round(amount)) ? null : Math.round(amount), missingCurrencies: [...missing] };
   }
