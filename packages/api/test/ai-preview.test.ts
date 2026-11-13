@@ -413,7 +413,8 @@ it('sends only the sanitized company context, without action tools, and saves sc
         expect(body.instructions).toContain('somente leitura');
         const input = JSON.parse(body.input[0].content);
         expect(input.data.companyId).toBe(fixture().companyId);
-        expect(input.data.sales).toHaveLength(2);
+        expect(input.data.salesAnalysis.byOffer).toHaveLength(2);
+        expect(input.data.salesAnalysis.total.count).toBe(3);
         expect(body.service_tier).toBe('default');
         expect(body.prompt_cache_options).toEqual({ mode: 'explicit' });
         return new Response(
@@ -457,6 +458,14 @@ it('sends only the sanitized company context, without action tools, and saves sc
       ).json(),
     ).toEqual(result.json());
     expect(fetch).toHaveBeenCalledTimes(2);
+    const selected = { ...scope, from: '2026-11-11', to: '2026-11-11' };
+    const daily = await server.inject({ method: 'POST', url: '/meta-control/traffic/ai/chat', headers,
+      payload: { ...chatBody(), requestId: randomUUID(), scope: selected } });
+    expect(daily.statusCode).toBe(200);
+    const followup = await server.inject({ method: 'POST', url: '/meta-control/traffic/ai/chat', headers,
+      payload: { ...payload, requestId: randomUUID(), question: 'inclua o faturamento por oferta' } });
+    expect(followup.statusCode).toBe(200);
+    expect(followup.json().scope).toEqual(selected);
   } finally {
     await server.close();
   }

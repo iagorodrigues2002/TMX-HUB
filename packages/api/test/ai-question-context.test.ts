@@ -60,6 +60,25 @@ it('preserves values in compact metrics and excludes internal finance', () => {
   expect(d.metricColumns).toEqual(['spend', 'metaRoas']);
   expect(d.rows[0]?.metrics).toEqual([20, 1.5]);
 });
+it('converts daily sales per offer, preserves kind and enforces upsell-only access', () => {
+  const raw = fixture();
+  raw.sales = [
+    { offer_id: 'allowed', date: '2026-11-12', currency: 'USD', order_kind: 'front', count: 2, gross_minor: '2000' },
+    { offer_id: 'allowed', date: '2026-11-12', currency: 'PEN', order_kind: 'upsell_1', count: 1, gross_minor: '2000' },
+    { offer_id: 'allowed', date: '2026-11-11', currency: 'BRL', order_kind: 'front', count: 1, gross_minor: '99999' },
+    { offer_id: 'foreign', date: '2026-11-12', currency: 'BRL', order_kind: 'front', count: 1, gross_minor: '99999' },
+  ];
+  const c = context(raw); c.scope = { ...c.scope, from: '2026-11-12' };
+  const d = questionContext(raw, c, 'faturamento de hoje por oferta', now).salesAnalysis!;
+  expect(d.total).toMatchObject({ count: 3, amountMinor: 13000 });
+  expect(d.byOffer[0]).toMatchObject({ name: 'PJR_ENG', amountMinor: 13000 });
+  expect(d.dailyByOffer).toEqual([{ date: '2026-11-12', offerId: 'allowed', count: 3, amountMinor: 13000, missingCurrencies: [] }]);
+  expect(questionContext(raw, c, 'em USD', now).salesAnalysis!.total.amountMinor).toBe(2600);
+  c.availableAreas.sales = false;
+  expect(questionContext(raw, c, 'faturamento', now).salesAnalysis!.total).toMatchObject({ count: 1, amountMinor: 3000 });
+  c.availableAreas.upsells = false;
+  expect(questionContext(raw, c, 'faturamento', now).salesAnalysis).toBeNull();
+});
 it('learned evidence accumulates without double-counting retries or hiding contrary cases', () => {
   const observation = { eventId: 'one', offerId: 'allowed', action: 'increase_budget' as const, at: now.toISOString(), observedAt: now.toISOString(), beforeRoas: 1, afterRoas: 2, beforeSpend: 100, afterSpend: 200 };
   const result = learnedPatterns([observation, observation, { ...observation, eventId: 'two', afterRoas: .5 }, { ...observation, eventId: 'three', afterRoas: 1.5 }]);

@@ -91,6 +91,36 @@ export function questionContext(raw: AiData, context: Context, question: string,
     undatedExcludedCount: raw.reversals.filter(r => allowed.has(r.offer_id) && r.date === null).reduce((n,r) => n+r.count, 0),
     quotes: Object.fromEntries(quotes),
   } : null;
+  const salesRows = raw.sales.filter(r => allowed.has(r.offer_id) && r.date >= context.scope.from && r.date <= context.scope.to &&
+    (context.availableAreas.sales || (context.availableAreas.upsells && /^upsell(?:[_\s-]?\d+)?$/i.test(r.order_kind ?? ''))));
+  function salesTotal(selected: typeof salesRows) {
+    let count = 0, amount = 0;
+    const missing = new Set<string>();
+    for (const r of selected) {
+      count += r.count;
+      const quote = rate(r.currency), minor = r.gross_minor === null ? null : Number(r.gross_minor);
+      if (quote === null || minor === null || !Number.isSafeInteger(minor)) missing.add(r.currency);
+      else amount += minor * quote;
+    }
+    return { count, amountMinor: missing.size || !Number.isSafeInteger(Math.round(amount)) ? null : Math.round(amount), missingCurrencies: [...missing] };
+  }
+  const salesAnalysis = context.availableAreas.sales || context.availableAreas.upsells ? {
+    from: context.scope.from, to: context.scope.to, reportingDate: today, timeZone: 'America/Sao_Paulo', asOf: raw.fetchedAt,
+    currency: target, unit: 'minor units (100 = 1 monetary unit)',
+    basis: 'Vendas aprovadas registradas no TMX, pela data de aprovação em Brasília, até a consulta. Faturamento bruto convertido pelas cotações armazenadas atuais. Hoje é parcial; não é receita líquida nem câmbio histórico.',
+    total: salesTotal(salesRows),
+    byOffer: context.offers.map(o => {
+      const selected = salesRows.filter(r => r.offer_id === o.id);
+      return { offerId: o.id, name: o.name, ...salesTotal(selected),
+        byKind: [...new Set(selected.map(r => r.order_kind ?? 'unclassified'))].map(kind => ({ kind, ...salesTotal(selected.filter(r => (r.order_kind ?? 'unclassified') === kind)) })) };
+    }),
+    daily: [...new Set(salesRows.map(r => r.date))].sort().map(date => ({ date, ...salesTotal(salesRows.filter(r => r.date === date)) })),
+    dailyByOffer: [...new Set(salesRows.map(r => JSON.stringify([r.date, r.offer_id])))].sort().map(key => {
+      const [date, offerId] = JSON.parse(key) as [string, string];
+      return { date, offerId, ...salesTotal(salesRows.filter(r => r.date === date && r.offer_id === offerId)) };
+    }),
+    quotes: Object.fromEntries(quotes),
+  } : null;
   const cleanRows = context.rows.map(r => ({ ...r, metrics: permittedMetrics(r.metrics) }));
   const metricColumns = [...new Set(cleanRows.flatMap(r => Object.keys(r.metrics ?? {})))];
   return {
@@ -102,10 +132,10 @@ export function questionContext(raw: AiData, context: Context, question: string,
     metricColumns: reversalsOnly ? [] : metricColumns,
     metricEncoding: 'Each metrics array follows metricColumns, exactly; null means unavailable, never zero.',
     totals: reversalsOnly ? null : permittedMetrics(context.totals),
-    sales: reversalsOnly ? [] : context.sales,
+    sales: [], salesAnalysis: reversalsOnly ? null : salesAnalysis,
     reversals: [], undatedReversals: [], reversalAnalysis,
     history: reversalsOnly ? [] : context.history.map(e => ({ ...e, beforeMetrics: permittedMetrics(e.beforeMetrics), afterMetrics: permittedMetrics(e.afterMetrics) })),
-    warnings: [...context.warnings, 'Use reversalAnalysis para o total geral convertido; não apresente moedas originais como análises separadas. Cotação ausente deixa o valor consolidado indisponível, nunca zero.',
+    warnings: [...context.warnings, 'Use salesAnalysis para faturamento bruto e reversalAnalysis para devoluções, já convertidos; não alegue falta de recorte diário quando dailyByOffer está disponível. Datas e valores atuais prevalecem sobre respostas anteriores. Cotação ausente deixa o valor consolidado indisponível, nunca zero.',
       ...(reversalsOnly ? ['Pergunta sobre devoluções: métricas Meta, vendas e otimizações foram omitidas por irrelevância; isso não altera as permissões.'] : [])],
   };
 }

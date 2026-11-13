@@ -175,7 +175,7 @@ export function aiCompanyRuntime(app: FastifyInstance) {
     const events = access.optimizations
       ? await sql`SELECT event FROM company_ai_optimizations WHERE company_id::text=${company} ORDER BY occurred_at DESC LIMIT 100`
       : [];
-    const rates = access.reversals
+    const rates = access.reversals || access.sales || access.upsells
       ? await sql`SELECT base_currency,rate::text,fetched_at FROM exchange_rate_cache WHERE target_currency='BRL'`
       : [];
     const learning = access.optimizations && (access.campaigns || access.ads) && ids.length

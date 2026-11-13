@@ -88,6 +88,7 @@ describe.skipIf(!process.env.AI_TEST_DATABASE_URL)('isolated company AI integrat
       await readFile(new URL('../migrations/121_company_ai.sql', import.meta.url), 'utf8'),
     );
     await sql`CREATE TABLE exchange_rate_cache(base_currency text,target_currency text,rate numeric,fetched_at timestamptz)`;
+    await sql`INSERT INTO exchange_rate_cache VALUES('USD','BRL',5,now())`;
     await sql.unsafe(await readFile(new URL('../migrations/122_company_ai_learning.sql', import.meta.url), 'utf8'));
     directory = await mkdtemp('/tmp/tmx-ai-company-test-');
     child = spawn(
@@ -248,8 +249,10 @@ describe.skipIf(!process.env.AI_TEST_DATABASE_URL)('isolated company AI integrat
     expect(body.store).toBe(false);
     expect(body.tools).toBeUndefined();
     expect(data.offers).toEqual([{ id: 'PJR_ENG', name: 'PJR_ENG' }]);
-    expect(data.sales).toEqual([
-      { offerId: 'PJR_ENG', currency: 'USD', kind: 'upsell', count: 1, amountMinor: 3500 },
+    expect(data.salesAnalysis.currency).toBe('BRL');
+    expect(data.salesAnalysis.byOffer).toEqual([
+      { offerId: 'PJR_ENG', name: 'PJR_ENG', count: 1, amountMinor: 17500, missingCurrencies: [],
+        byKind: [{ kind: 'upsell', count: 1, amountMinor: 17500, missingCurrencies: [] }] },
     ]);
     expect(data.rows).toEqual([]);
     expect(data.reversals).toEqual([]);

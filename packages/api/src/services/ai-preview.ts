@@ -437,7 +437,13 @@ export function registerAiPreview(app: FastifyInstance) {
       if (!(await app.redis.set(requestKey, JSON.stringify({ fingerprint }), 'EX', 86400, 'NX')))
         return reply.code(409).send({ detail: 'Solicitação já recebida.' });
       ownRequest = true;
-      const requestedScope = input.data.scope ?? questionScope(input.data.question);
+      const memoryKey = `tmx-ai-preview:chat:${company}:${req.user!.sub}`;
+      const history = (await app.redis.lrange(memoryKey, 0, 3))
+        .reverse()
+        .map((v) => JSON.parse(v))
+        .filter((v) => permittedHistory(v, access));
+      const requestedScope = input.data.scope ?? questionScope(input.data.question) ??
+        aiScopeSchema.safeParse(history.at(-1)?.scope).data;
       const available = await data(access, requestedScope);
       const scope = requestedScope ?? {
         from: available.snapshot.from,
@@ -448,11 +454,6 @@ export function registerAiPreview(app: FastifyInstance) {
       };
       const d = questionContext(available, authorizedAiContext(available, scope, access), input.data.question);
       if (d.companyId !== company) throw Error('COMPANY_MISMATCH');
-      const memoryKey = `tmx-ai-preview:chat:${company}:${req.user!.sub}`;
-      const history = (await app.redis.lrange(memoryKey, 0, 3))
-        .reverse()
-        .map((v) => JSON.parse(v))
-        .filter((v) => permittedHistory(v, access));
       const body = {
         model: AI_MODEL,
         store: false,
