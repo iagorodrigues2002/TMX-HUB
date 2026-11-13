@@ -573,7 +573,10 @@ export function registerTrafficManagement(app: FastifyInstance) {
     reply.header('Cache-Control', 'private, no-store');
     if (req.user?.role !== 'admin')
       return reply.code(403).send({ detail: 'Acesso administrativo necessário.' });
-    return { batches: await app.redis.lrange(`${QUEUE}:recent:${req.user!.sub}`, 0, 9) };
+    const recent = await app.redis.lrange(`${QUEUE}:recent:${req.user!.sub}`, 0, 9);
+    const existing = await Promise.all(recent.map(async (id) =>
+      await app.redis.get(`${QUEUE}:plan:${id}`) ? id : null));
+    return { batches: existing.filter((id): id is string => id !== null) };
   });
   app.get(`${PREFIX}/operations/:batchId`, async (req, reply) => {
     if (req.user?.role !== 'admin')
@@ -595,9 +598,9 @@ export function registerTrafficManagement(app: FastifyInstance) {
         return {
           id: item.id,
           name: item.name,
-          state: job ? await job.getState() : 'waiting',
+          state: job ? await job.getState() : 'failed',
           result: job?.returnvalue ?? null,
-          error: job?.failedReason ?? null,
+          error: job?.failedReason ?? (job ? null : 'Registro da operação expirado. Confira o status atual na Meta antes de reenviar.'),
         };
       }),
     );

@@ -435,6 +435,17 @@ describe('management API and durable queue contracts', () => {
       (await app.inject({ url: '/meta-control/traffic/management/operations' })).json().batches,
     ).toEqual([planId]);
   });
+  it('does not keep controls waiting forever for expired jobs or plans', async () => {
+    const { app, prepare, submit, values } = await fixture();
+    const { planId } = (await prepare()).json();
+    await submit(planId, { status: 'PAUSED' });
+    harness.jobs.clear();
+    const progress = (await app.inject({ url: `/meta-control/traffic/management/operations/${planId}` })).json();
+    expect(progress.results[0].state).toBe('failed');
+    expect(progress.results[0].error).toContain('expirado');
+    values.delete(`traffic-management-v1:plan:${planId}`);
+    expect((await app.inject({ url: '/meta-control/traffic/management/operations' })).json().batches).toEqual([]);
+  });
   it('refuses foreign plans, revoked admin rights and changed connections', async () => {
     const { prepare, submit, values, user } = await fixture();
     const { planId } = (await prepare()).json();

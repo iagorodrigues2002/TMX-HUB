@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { request } from '@/lib/api-client/request';
+import { ApiError } from '@/lib/query-client';
 import { useAuth } from '@/lib/auth-context';
 import { type BudgetFx, convertBudget, freshBudgetFx } from '@page-cloner/shared/budget-fx';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -150,7 +151,8 @@ export function ManagedCampaignsTable({
     refetchOnWindowFocus: 'always',
     retry: 1,
   });
-  const running = !!activeBatch && (!progress.data || !done(progress.data.results));
+  const expired = progress.error instanceof ApiError && progress.error.status === 404;
+  const running = !!activeBatch && !expired && (!progress.data || !done(progress.data.results));
   const locked = busy || running;
   const checked = selected.filter((id) => rows.some((row) => row.id === id));
   const itemFor = (id: string) => {
@@ -379,6 +381,12 @@ export function ManagedCampaignsTable({
         </p>
       )}
       {notice && <output className="block text-sm text-muted-foreground">{notice}</output>}
+      {(busy || running) && (
+        <div role="status" className="glass-card flex items-center gap-3 rounded-xl border border-primary/30 bg-primary/10 p-3 text-sm">
+          <Loader2 className="size-4 shrink-0 animate-spin" />
+          <span>{busy ? 'Enviando alteração…' : 'Alteração na fila da Meta. Aguarde a confirmação para fazer outra alteração; há um intervalo de até 65 segundos entre comandos.'}</span>
+        </div>
+      )}
       {metadata.isError && (
         <p role="alert" className="text-sm text-destructive">
           Não foi possível atualizar status e orçamentos.{' '}
@@ -389,8 +397,8 @@ export function ManagedCampaignsTable({
       )}
       {progress.isError && (
         <p role="alert" className="text-sm text-destructive">
-          Não foi possível consultar a fila. A operação pode continuar no servidor; não envie
-          novamente.
+          {expired ? 'O histórico desta operação expirou. Confira o status atualizado na linha antes de alterar novamente.' : 'Não foi possível consultar a fila. A operação pode continuar no servidor; não envie novamente.'}
+          {!expired && <button type="button" className="ml-2 underline" onClick={() => progress.refetch()}>Consultar novamente</button>}
         </p>
       )}
       {progress.data && (
@@ -439,9 +447,12 @@ export function ManagedCampaignsTable({
                     type="button"
                     role="switch"
                     aria-checked={item?.status === 'ACTIVE'}
+                    aria-busy={busy || running}
                     aria-label={`Ativar ou pausar ${row.name}`}
                     title={
-                      item
+                      busy || running
+                        ? 'Aguarde a confirmação da alteração em andamento'
+                        : item
                         ? `Status configurado: ${labels[item.status] ?? item.status}`
                         : 'Aguardando status da Meta'
                     }
@@ -450,12 +461,12 @@ export function ManagedCampaignsTable({
                       item &&
                       direct(item, { status: item.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE' })
                     }
-                    className={`relative mr-3 inline-flex h-6 w-10 shrink-0 items-center rounded-full border align-middle transition-colors motion-reduce:transition-none disabled:opacity-50 ${item?.status === 'ACTIVE' ? 'border-success/30 bg-success/10' : 'border-border bg-muted'}`}
+                    className={`relative mr-3 inline-flex h-6 w-10 shrink-0 items-center rounded-full border align-middle transition-colors motion-reduce:transition-none disabled:cursor-wait disabled:opacity-70 ${item?.status === 'ACTIVE' ? 'border-success bg-success' : 'border-border bg-muted'}`}
                   >
                     <span
                       className={`inline-flex size-4 items-center justify-center rounded-full bg-background transition-transform motion-reduce:transition-none ${item?.status === 'ACTIVE' ? 'translate-x-5' : 'translate-x-1'}`}
                     >
-                      {pending && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
+                      {(pending || busy || running) && <Loader2 className="size-3 animate-spin text-foreground" />}
                     </span>
                   </button>
                 );
