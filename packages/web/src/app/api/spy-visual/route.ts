@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -11,13 +10,10 @@ import { readLibraryState, spyLibraryDirectory } from '@/lib/spy-library-store';
 import { spyScaling } from '@/lib/spy-scaling';
 import { spySameOrigin, spyServerAccess, spyServerEnabled } from '@/lib/spy-server-access';
 import { structureRecord } from '@/lib/spy-structure';
+import { spyStructureAssetKey as assetKey, savedSpyStructure } from '@/lib/spy-structure-cache';
 import { spyVisualFrames } from '@/lib/spy-visual-frames';
 import { recoveredReferencesSchema, resultSchema } from '@/lib/spy-visual-results';
 import { z } from 'zod';
-const assetKey = (ad: LibraryAd) =>
-  createHash('sha256')
-    .update(JSON.stringify(ad.creativeAssets?.map((a) => [a.kind, a.sha256 ?? a.url]) ?? []))
-    .digest('hex');
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 const root = join(homedir(), '.codex/local-data/tmx/ai-preview/spy-visual-source');
@@ -169,24 +165,29 @@ async function context(req: Request) {
     recovered,
   };
 }
+async function structureRecords(c: Awaited<ReturnType<typeof context>>) {
+  const response = await fetch(
+    `${c.api}/v1/meta-control/traffic/ai/spy-visual/results?companyId=${c.companyId}&offerId=${c.id}&kind=structure`,
+    {
+      headers: c.headers,
+      cache: 'no-store',
+      redirect: 'error',
+      signal: AbortSignal.timeout(10000),
+    },
+  );
+  if (!response.ok) throw Error('Não foi possível carregar o resumo salvo.');
+  return z
+    .object({ records: z.array(structureRecord) })
+    .parse(await response.json())
+    .records.filter((r) => r.companyId === c.companyId && r.offerId === c.id)
+    .sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+}
 export async function GET(req: Request) {
   try {
     const c = await context(req);
     if (new URL(req.url).searchParams.get('view') === 'structure') {
-      const response = await fetch(
-        `${c.api}/v1/meta-control/traffic/ai/spy-visual/results?companyId=${c.companyId}&offerId=${c.id}&kind=structure`,
-        {
-          headers: c.headers,
-          cache: 'no-store',
-          redirect: 'error',
-          signal: AbortSignal.timeout(10000),
-        },
-      );
-      if (!response.ok) throw Error('Não foi possível carregar o resumo salvo.');
-      const records = z
-        .object({ records: z.array(structureRecord) })
-        .parse(await response.json())
-        .records.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+      const records = await structureRecords(c);
+      const history = c.snapshots.flatMap((s) => s.ads);
       return send({
         at: c.snapshot.at,
         ads: [...new Map(c.snapshot.ads.map((a) => [a.id, a])).values()].map((a) => ({
@@ -194,13 +195,7 @@ export async function GET(req: Request) {
           name: a.pageName,
           available: a.creativeAssets?.length === 1,
           video: a.creativeAssets?.some((v) => v.kind === 'video') ?? false,
-          saved: records.find(
-            (r) =>
-              r.companyId === c.companyId &&
-              r.offerId === c.id &&
-              r.ads[0] === a.id &&
-              r.assetKey === assetKey(a),
-          ),
+          saved: savedSpyStructure(records, a, history),
         })),
       });
     }
@@ -284,6 +279,12 @@ export async function POST(req: Request) {
     if (action === 'structure') {
       if (referenceId) return send({ detail: 'Referência não se aplica ao resumo.' }, 400);
       const frames = await spyVisualFrames(join(c.cacheRoot, 'frames'), ad, fetch, true);
+      const saved = savedSpyStructure(
+        await structureRecords(c),
+        ad,
+        c.snapshots.flatMap((s) => s.ads),
+      );
+      if (saved) return send({ ...saved, cached: true, frames });
       let audioAnalysis = null;
       if (ad.creativeAssets?.some((a) => a.kind === 'video')) {
         let audio: Buffer | null = null;
