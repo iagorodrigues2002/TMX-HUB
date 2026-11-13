@@ -1,6 +1,8 @@
 'use client';
 import { HubShell } from '@/components/hub/hub-shell';
 import { SpyScalingPanel } from '@/components/spy/spy-scaling-panel';
+import { SpyStructurePanel } from '@/components/spy/spy-structure-panel';
+import { SpyTranscript } from '@/components/spy/spy-transcript';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { request } from '@/lib/api-client/request';
 import { useAuth } from '@/lib/auth-context';
@@ -8,7 +10,7 @@ import type { SpyScaling } from '@/lib/spy-scaling';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useState } from 'react';
+import { Suspense, useRef, useState } from 'react';
 import styles from './visual.module.css';
 type Ad = {
   id: string;
@@ -32,7 +34,12 @@ type Comparison = {
     differences: string[];
     limitations: string[];
   };
-  compared: { id: string; text: string; frames: { second: number; image: string }[] }[];
+  compared: {
+    id: string;
+    text: string;
+    hasAudio: boolean;
+    frames: { second: number; image: string }[];
+  }[];
 };
 const labels = {
   reused: 'Possível reutilização',
@@ -82,7 +89,10 @@ function SpyVisualPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [comparison, setComparison] = useState<Comparison>();
-  async function compare(ad: Ad) {
+  const resultRef = useRef<HTMLElement>(null);
+  const comparisonRequest = useRef(0);
+  async function compare(ad: Ad, generate = false) {
+    const ticket = ++comparisonRequest.current;
     setSelected(ad.id);
     setBusy(true);
     setError('');
@@ -92,19 +102,34 @@ function SpyVisualPage() {
       setBusy(false);
       return;
     }
+    if (!ad.saved && !generate) {
+      setBusy(false);
+      return;
+    }
     try {
-      setComparison(
-        await request<Comparison>(endpoint, {
-          method: 'POST',
-          body: { adId: ad.id, cachedOnly: !!ad.saved },
-        }),
-      );
+      const value = await request<Comparison>(endpoint, {
+        method: 'POST',
+        body: { adId: ad.id, cachedOnly: !!ad.saved },
+      });
+      if (ticket !== comparisonRequest.current) return;
+      setComparison(value);
       void query.refetch();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Não foi possível comparar.');
+      if (ticket === comparisonRequest.current)
+        setError(e instanceof Error ? e.message : 'Não foi possível comparar.');
     } finally {
-      setBusy(false);
+      if (ticket === comparisonRequest.current) setBusy(false);
     }
+  }
+  function selectFromRanking(id: string) {
+    const ad = query.data?.ads.find((a) => a.id === id);
+    if (!ad) return;
+    setFilter('all');
+    void compare(ad);
+    resultRef.current?.scrollIntoView({
+      block: 'start',
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+    });
   }
   return (
     <HubShell
@@ -131,6 +156,17 @@ function SpyVisualPage() {
             <TabsTrigger value="scaling">Escalando</TabsTrigger>
           </TabsList>
         </Tabs>
+        {section === 'visual' && query.data && user && (
+          <SpyStructurePanel
+            key={`${user.id}:${query.data.companyId}:${endpoint}`}
+            endpoint={endpoint}
+            companyId={query.data.companyId}
+            userId={user.id}
+            view="rankings"
+            selected={selected}
+            onSelect={selectFromRanking}
+          />
+        )}
         {section === 'scaling' && query.data && (
           <SpyScalingPanel
             key={`${user?.id}:${query.data.companyId}:${query.data.offerId}`}
@@ -192,126 +228,165 @@ function SpyVisualPage() {
             </div>
           </>
         )}
-        {section === 'visual' && <div className={styles.layout}>
-          <aside aria-label="Anúncios não confirmados">
-            <h2>{query.data?.ads.length ?? '—'} anúncios investigados</h2>
-            <p>Coleta {query.data ? new Date(query.data.at).toLocaleString('pt-BR') : '—'}</p>
-            <div className={styles.list}>
-              {query.data?.ads
-                .filter(
-                  (ad) =>
-                    filter === 'all' ||
-                    (filter === 'pending' ? !ad.saved : ad.saved?.classification === filter),
-                )
-                .map((ad) => (
-                  <button
-                    key={ad.id}
-                    type="button"
-                    aria-pressed={selected === ad.id}
-                    disabled={busy}
-                    onClick={() => void compare(ad)}
-                  >
-                    <strong>{ad.pageName}</strong>
-                    <span>ID {ad.id}</span>
-                    {ad.saved && (
-                      <small className={styles.saved}>
-                        {labels[ad.saved.classification]} · salva
+        {section === 'visual' && (
+          <div className={styles.layout}>
+            <aside aria-label="Anúncios da comparação visual">
+              <h2>{query.data?.ads.length ?? '—'} anúncios da coleta</h2>
+              <p>Coleta {query.data ? new Date(query.data.at).toLocaleString('pt-BR') : '—'}</p>
+              <div className={styles.list}>
+                {query.data?.ads
+                  .filter(
+                    (ad) =>
+                      filter === 'all' ||
+                      (filter === 'pending' ? !ad.saved : ad.saved?.classification === filter),
+                  )
+                  .map((ad) => (
+                    <button
+                      key={ad.id}
+                      type="button"
+                      aria-pressed={selected === ad.id}
+                      disabled={busy}
+                      onClick={() => void compare(ad)}
+                    >
+                      <strong>{ad.pageName}</strong>
+                      <span>ID {ad.id}</span>
+                      {ad.saved && (
+                        <small className={styles.saved}>
+                          {labels[ad.saved.classification]} · salva
+                        </small>
+                      )}
+                      <small>
+                        {ad.previous
+                          ? `${ad.recoveredReference ? 'Referência recuperada' : 'Referência'} ${ad.previous.id}`
+                          : 'Sem referência histórica suficiente'}
                       </small>
-                    )}
-                    <small>
-                      {ad.previous
-                        ? `${ad.recoveredReference ? 'Referência recuperada' : 'Referência'} ${ad.previous.id}`
-                        : 'Sem referência histórica suficiente'}
-                    </small>
-                  </button>
-                ))}
-            </div>
-          </aside>
-          <section aria-label="Resultado da comparação" aria-busy={busy}>
-            {!selected && (
-              <div className={styles.empty}>
-                <h2>Escolha um anúncio</h2>
-                <p>Veja as imagens lado a lado e o motivo da classificação sugerida.</p>
+                    </button>
+                  ))}
               </div>
-            )}
-            {busy && (
-              <output className={styles.empty}>
-                <h2>Preparando a comparação…</h2>
-                <p>Recuperando quadros e consultando a análise salva antes de usar a IA.</p>
-              </output>
-            )}
-            {error && (
-              <p className={styles.error} role="alert">
-                {error}
-              </p>
-            )}
-            {comparison && (
-              <>
-                <div className={styles.result}>
-                  <span className={styles.badge}>
-                    {comparison.cached ? 'Salva · sem nova chamada' : 'Nova análise salva'}
-                  </span>
-                  <h2>{labels[comparison.result.classification]}</h2>
-                  <p>{comparison.result.reason}</p>
-                  <small>
-                    {new Date(comparison.at).toLocaleString('pt-BR')} ·{' '}
-                    {comparison.costReserved ? 'Reserva de custo' : 'Custo da análise original'} US${' '}
-                    {(comparison.costMicros / 1000000).toFixed(4)}
-                  </small>
+            </aside>
+            <section ref={resultRef} aria-label="Resultado da comparação" aria-busy={busy}>
+              {!selected && (
+                <div className={styles.empty}>
+                  <h2>Escolha um anúncio</h2>
+                  <p>Veja as imagens lado a lado e o motivo da classificação sugerida.</p>
                 </div>
-                <div className={styles.pair}>
-                  {comparison.compared.map((ad, i) => (
-                    <article key={ad.id}>
-                      <h3>{i === 0 ? 'Anúncio investigado' : 'Referência do histórico'}</h3>
-                      <a
-                        href={`https://www.facebook.com/ads/library/?id=${ad.id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        ID {ad.id} ↗
-                      </a>
-                      <div className={styles.frames}>
-                        {ad.frames.map((frame) => (
-                          <figure key={frame.second}>
-                            <img
-                              src={frame.image}
-                              alt={`Quadro do anúncio ${ad.id} em ${frame.second} segundos`}
-                            />
-                            <figcaption>{frame.second.toFixed(2)}s</figcaption>
-                          </figure>
-                        ))}
-                      </div>
-                      <details>
-                        <summary>Texto coletado</summary>
-                        <p>{ad.text}</p>
-                      </details>
-                    </article>
-                  ))}
-                </div>
-                <div className={styles.evidence}>
-                  {(['similarities', 'differences', 'limitations'] as const).map((key) => (
-                    <section key={key}>
-                      <h3>
-                        {
+              )}
+              {busy && (
+                <output className={styles.empty}>
+                  <h2>Preparando a comparação…</h2>
+                  <p>Recuperando quadros e consultando a análise salva antes de usar a IA.</p>
+                </output>
+              )}
+              {error && (
+                <p className={styles.error} role="alert">
+                  {error}
+                </p>
+              )}
+              {selected &&
+                !busy &&
+                !comparison &&
+                query.data?.ads.find((a) => a.id === selected)?.previous && (
+                  <div className={styles.result}>
+                    <p>Comparação lado a lado ainda não gerada para este anúncio.</p>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void compare(query.data!.ads.find((a) => a.id === selected)!, true)
+                      }
+                    >
+                      Gerar comparação com IA
+                    </button>
+                  </div>
+                )}
+              {selected && query.data && user && (
+                <SpyStructurePanel
+                  endpoint={endpoint}
+                  companyId={query.data.companyId}
+                  userId={user.id}
+                  view="detail"
+                  selected={selected}
+                  onSelect={selectFromRanking}
+                />
+              )}
+              {comparison && (
+                <>
+                  <div className={styles.result}>
+                    <span className={styles.badge}>
+                      {comparison.cached ? 'Salva · sem nova chamada' : 'Nova análise salva'}
+                    </span>
+                    <h2>{labels[comparison.result.classification]}</h2>
+                    <p>{comparison.result.reason}</p>
+                    <small>
+                      {new Date(comparison.at).toLocaleString('pt-BR')} ·{' '}
+                      {comparison.costReserved ? 'Reserva de custo' : 'Custo da análise original'}{' '}
+                      US$ {(comparison.costMicros / 1000000).toFixed(4)}
+                    </small>
+                  </div>
+                  <div className={styles.pair}>
+                    {comparison.compared.map((ad, i) => (
+                      <article key={ad.id}>
+                        <h3>{i === 0 ? 'Anúncio investigado' : 'Referência do histórico'}</h3>
+                        <a
+                          href={`https://www.facebook.com/ads/library/?id=${ad.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          ID {ad.id} ↗
+                        </a>
+                        <div className={styles.frames}>
+                          {ad.frames.map((frame) => (
+                            <figure key={frame.second}>
+                              <img
+                                src={frame.image}
+                                alt={`Quadro do anúncio ${ad.id} em ${frame.second} segundos`}
+                              />
+                              <figcaption>{frame.second.toFixed(2)}s</figcaption>
+                            </figure>
+                          ))}
+                        </div>
+                        {i === 1 && (
+                          <SpyTranscript
+                            key={`${user!.id}:${query.data!.companyId}:${endpoint}:${ad.id}`}
+                            endpoint={endpoint}
+                            companyId={query.data!.companyId}
+                            userId={user!.id}
+                            adId={selected}
+                            referenceId={i === 1 ? ad.id : undefined}
+                            hasAudio={ad.hasAudio}
+                          />
+                        )}
+                        <details>
+                          <summary>Texto do anúncio na Library</summary>
+                          <p>{ad.text}</p>
+                        </details>
+                      </article>
+                    ))}
+                  </div>
+                  <div className={styles.evidence}>
+                    {(['similarities', 'differences', 'limitations'] as const).map((key) => (
+                      <section key={key}>
+                        <h3>
                           {
-                            similarities: 'Semelhanças',
-                            differences: 'Diferenças',
-                            limitations: 'Limites da análise',
-                          }[key]
-                        }
-                      </h3>
-                      <ul>
-                        {comparison.result[key].map((text) => (
-                          <li key={text}>{text}</li>
-                        ))}
-                      </ul>
-                    </section>
-                  ))}
-                </div>
-              </>
-            )}
-          </section>
-        </div>}
+                            {
+                              similarities: 'Semelhanças',
+                              differences: 'Diferenças',
+                              limitations: 'Limites da análise',
+                            }[key]
+                          }
+                        </h3>
+                        <ul>
+                          {comparison.result[key].map((text) => (
+                            <li key={text}>{text}</li>
+                          ))}
+                        </ul>
+                      </section>
+                    ))}
+                  </div>
+                </>
+              )}
+            </section>
+          </div>
+        )}
       </main>
     </HubShell>
   );

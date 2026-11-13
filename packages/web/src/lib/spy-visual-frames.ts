@@ -12,13 +12,34 @@ export const frameTimes = (duration: number) => {
     throw Error('Duração inválida.');
   return [0, 0.1, 0.25, 0.5, 0.75, 0.95].map((f) => Number((f * duration).toFixed(2)));
 };
-export async function spyVisualFrames(root: string, ad: LibraryAd, fetcher: typeof fetch = fetch) {
+export const storyFrameTimes = (duration: number) => {
+  frameTimes(duration);
+  const end = Math.max(0, duration - 0.15);
+  return [
+    ...new Set(
+      [
+        0,
+        Math.min(2, end),
+        Math.min(4.9, end),
+        Math.max(0, end - 4.85),
+        Math.max(0, end - 1.85),
+        end,
+      ].map((v) => Number(v.toFixed(2))),
+    ),
+  ].sort((a, b) => a - b);
+};
+export async function spyVisualFrames(
+  root: string,
+  ad: LibraryAd,
+  fetcher: typeof fetch = fetch,
+  story = false,
+) {
   const asset = ad.creativeAssets?.[0];
   // shortcut: only single-asset creatives; carousels remain inconclusive until all cards can be compared.
   if (!asset || ad.creativeAssets?.length !== 1 || !safeAdMedia(asset.url))
     throw Error('Mídia única indisponível para comparação.');
   const id = createHash('sha256')
-    .update(`frames-v1:${asset.kind}:${asset.sha256 ?? asset.url}`)
+    .update(`${story ? 'story-v1' : 'frames-v1'}:${asset.kind}:${asset.sha256 ?? asset.url}`)
     .digest('hex');
   await mkdir(root, { recursive: true, mode: 0o700 });
   const cache = join(root, `${id}.json`);
@@ -73,14 +94,19 @@ export async function spyVisualFrames(root: string, ad: LibraryAd, fetcher: type
           '-protocol_whitelist',
           'file',
           '-show_entries',
-          'format=duration',
+          'stream=duration:format=duration',
+          '-select_streams',
+          'v:0',
           '-of',
           'json',
           input,
         ],
         { timeout: 15000, maxBuffer: 10000 },
       );
-      times = frameTimes(Number(JSON.parse(probe.stdout).format.duration));
+      const metadata = JSON.parse(probe.stdout);
+      times = (story ? storyFrameTimes : frameTimes)(
+        Number(metadata.streams?.[0]?.duration ?? metadata.format.duration),
+      );
     }
     const frames = [];
     for (const [i, second] of times.entries()) {
@@ -100,7 +126,7 @@ export async function spyVisualFrames(root: string, ad: LibraryAd, fetcher: type
           '-frames:v',
           '1',
           '-vf',
-          'scale=512:512:force_original_aspect_ratio=decrease',
+          'scale=512:512:force_original_aspect_ratio=decrease,format=yuvj420p',
           '-q:v',
           '4',
           output,

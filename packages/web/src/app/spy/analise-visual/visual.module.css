@@ -195,6 +195,27 @@
   gap: 12px;
   margin-top: 18px;
 }
+.transcript {
+  margin: 18px 0;
+  padding: 16px;
+  border: 1px solid #9ee2d635;
+  border-radius: 12px;
+  background: #061c2580;
+}
+.transcript header, .transcript footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.transcript h3 { margin: 0; }
+.transcript p, .transcript small { color: #b8cdd2; line-height: 1.5; }
+.transcript small { display: block; margin-top: 8px; font-size: 11px; }
+.transcript button { border: 1px solid #9ee2d660; border-radius: 8px; padding: 8px 12px; color: #d3f5ed; background: #23504b; cursor: pointer; }
+.transcript button:disabled { opacity: .55; cursor: wait; }
+.transcript button:focus-visible, .transcriptText:focus-visible { outline: 2px solid #a6e5d6; outline-offset: 3px; }
+.transcriptText { width: 100%; max-height: 260px; resize: vertical; border: 0; color: inherit; background: transparent; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.75; font-size: 14px; padding: 12px 4px; margin: 10px 0; scrollbar-width: thin; }
 .evidence li {
   font-size: 14px;
   line-height: 1.6;
@@ -238,3 +259,17 @@
     transition: none;
   }
 }
+.structure { display: grid; gap: 20px; }
+.structure output { display: block; margin-top: 12px; }
+.structure .result h3 { margin-top: 18px; }
+.patterns { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; }
+.patterns > article { padding: 22px; border: 1px solid #34515b; border-radius: 18px; background: #102730; }
+.patterns h3 { margin: 0 0 12px; }
+.patterns small { display: block; color: #adc8ce; line-height: 1.5; }
+.pattern { padding: 16px 0; border-bottom: 1px solid #29464f; }
+.pattern > div { display: flex; justify-content: space-between; gap: 12px; }
+.pattern span { white-space: nowrap; color: #a5ded1; }
+.pattern meter { width: 100%; height: 12px; margin: 8px 0; accent-color: #8fe7bf; }
+.pattern details button { display: block; width: 100%; padding: 8px; margin-top: 6px; text-align: left; border: 1px solid #36545c; border-radius: 8px; background: #18343e; color: inherit; overflow-wrap: anywhere; }
+.pattern summary { cursor: pointer; color: #b7dfe2; font-size: 12px; }
+.pattern button:focus-visible { outline: 2px solid #b7dfe2; outline-offset: 2px; }
