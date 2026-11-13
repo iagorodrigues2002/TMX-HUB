@@ -25,6 +25,7 @@ function context(raw = fixture(), allowed = true) {
 }
 it('resolves both months from natural language, including year boundaries', () => {
   expect(questionScope(question, now)).toMatchObject({ from: '2026-10-01', to: '2026-11-12' });
+  expect(questionScope('veja se hoje estamos dentro da média de reembolsos. olhe o mes passado e olhe esse e me fale.', now)).toMatchObject({ from: '2026-10-01', to: '2026-11-12' });
   expect(questionScope('mês passado', new Date('2027-01-10T15:00:00Z'))).toMatchObject({ from: '2026-12-01', to: '2026-12-31' });
   expect(questionScope('analise a campanha PJR_ENG AD14')).toBeUndefined();
 });
