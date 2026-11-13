@@ -2,6 +2,10 @@ const record = (v: unknown): Record<string, unknown> =>
   v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
 const text = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 export function safeAdThumbnail(value: unknown) {
+  const safe = safeAdMedia(value);
+  return safe && !/\.(mp4|webm|mov)$/i.test(new URL(safe).pathname) ? safe : undefined;
+}
+export function safeAdMedia(value: unknown) {
   if (typeof value !== 'string' || value.length > 10000) return undefined;
   try {
     const url = new URL(value);
@@ -9,7 +13,7 @@ export function safeAdThumbnail(value: unknown) {
       url.protocol !== 'https:' ||
       url.username ||
       url.password ||
-      /\.(mp4|webm|mov)$/i.test(url.pathname)
+      (url.port && url.port !== '443')
     )
       return undefined;
     return ['fbcdn.net', 'fbsbx.com'].some(
@@ -20,6 +24,42 @@ export function safeAdThumbnail(value: unknown) {
   } catch {
     return undefined;
   }
+}
+export function adCreative(value: unknown) {
+  const snapshot = record(value);
+  const items = ['images', 'videos', 'cards', 'extra_images', 'extra_videos'].flatMap((key) =>
+    Array.isArray(snapshot[key]) ? (snapshot[key] as unknown[]).map(record) : [],
+  );
+  const assets = items.map((item) => {
+    const video = item.video_hd_url ?? item.video_sd_url;
+    const url = safeAdMedia(video ?? item.original_image_url);
+    return url ? { kind: video ? ('video' as const) : ('image' as const), url } : undefined;
+  });
+  const creativeAssets = assets.filter((a) => a !== undefined).slice(0, 30);
+  const body = record(snapshot.body).text ?? snapshot.body;
+  const copy =
+    typeof body === 'string' || (body === null && Object.hasOwn(snapshot, 'body'))
+      ? JSON.stringify([
+          body ?? '',
+          snapshot.title ?? '',
+          snapshot.link_description ?? '',
+          snapshot.cta_text ?? '',
+          snapshot.caption ?? '',
+          snapshot.link_url ?? '',
+          items.map((item) => [
+            item.body ?? '',
+            item.title ?? '',
+            item.link_description ?? '',
+            item.link_url ?? '',
+            item.cta_text ?? '',
+          ]),
+        ])
+      : undefined;
+  return {
+    ...(creativeAssets.length ? { creativeAssets } : {}),
+    creativeComplete: items.length > 0 && items.length <= 30 && assets.every(Boolean),
+    ...(copy && copy.length <= 100000 ? { creativeText: copy } : {}),
+  };
 }
 export function adPreview(value: unknown) {
   const snapshot = record(value);

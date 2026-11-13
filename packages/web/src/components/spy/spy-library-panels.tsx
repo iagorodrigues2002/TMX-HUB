@@ -1,6 +1,7 @@
 'use client';
 import { Button } from '@/components/ui/button';
 import { KeyRound, Radio } from 'lucide-react';
+import Link from 'next/link';
 import type { SpyOffer } from './spy-model';
 import s from './spy.module.css';
 import {
@@ -104,10 +105,10 @@ export function LibraryMonitoring({
     <>
       <div className={s.sectionHeading}>
         <div>
-          <h2>Acompanhamento automático de 7 dias</h2>
+          <h2>Radar de anúncios e criativos</h2>
           <p>
-            Todas as fontes de cada oferta, com IDs deduplicados. Uma coleta parcial nunca substitui
-            a última leitura completa.
+            Compare novos IDs com criativos realmente novos, reutilizações e variações. Os números
+            representam a última coleta completa de cada oferta.
           </p>
         </div>
         <span className={s.tag}>
@@ -130,7 +131,34 @@ export function LibraryMonitoring({
         Ofertas sem link da Library usam buscas pelos domínios cadastrados.
       </p>
       {library.status.isError && <p role="alert">Não foi possível consultar o monitor.</p>}
-      <div className={s.tableWrap}>
+      <div className={s.monitorMetrics}>
+        {(
+          [
+            ['Novos IDs', 'total'],
+            ['Criativos novos', 'new'],
+            ['Reutilizados', 'duplicate'],
+            ['Variações', 'variation'],
+            ['Não confirmados', 'unverified'],
+          ] as const
+        ).map(([label, key]) => (
+          <div key={key}>
+            <small>{label}</small>
+            <strong>
+              {tracked
+                .reduce(
+                  (sum, offer) => sum + (state?.jobs[offer.id]?.creativeSummary?.[key] ?? 0),
+                  0,
+                )
+                .toLocaleString('pt-BR')}
+            </strong>
+          </div>
+        ))}
+      </div>
+      <p className={s.footnote}>
+        Novo ID não significa novo criativo. “Criativo novo” exige mídia e histórico completos;
+        casos inconclusivos ficam separados. Clique em uma contagem para abrir a lista.
+      </p>
+      <div className={`${s.tableWrap} ${s.monitorTable}`}>
         <table>
           <caption className="sr-only">Acompanhamento real das ofertas</caption>
           <thead>
@@ -140,6 +168,10 @@ export function LibraryMonitoring({
               <th>Leituras válidas</th>
               <th>Anúncios coletados</th>
               <th>Novos IDs</th>
+              <th>Criativos novos</th>
+              <th>Reutilizados</th>
+              <th>Variações</th>
+              <th>Não confirmados</th>
               <th>Última leitura válida</th>
               <th>Próxima consulta</th>
             </tr>
@@ -173,7 +205,32 @@ export function LibraryMonitoring({
                   </td>
                   <td>{j?.currentReadings ?? 0} / 8</td>
                   <td>{last?.count ?? '—'}</td>
-                  <td>{last && !last.baseline ? last.added : '—'}</td>
+                  <td>
+                    {last && !last.baseline ? (
+                      <Link
+                        className={s.collectionLink}
+                        href={`/spy/anuncios?${new URLSearchParams({ id: o.id, at: last.at, creative: 'all-new' })}`}
+                      >
+                        {last.added} novos · ver links
+                      </Link>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
+                  {(['new', 'duplicate', 'variation', 'unverified'] as const).map((key) => (
+                    <td key={key}>
+                      {last && !last.baseline && j?.creativeSummary ? (
+                        <Link
+                          className={s.collectionLink}
+                          href={`/spy/anuncios?${new URLSearchParams({ id: o.id, at: last.at, creative: key })}`}
+                        >
+                          {j.creativeSummary[key]}
+                        </Link>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                  ))}
                   <td>{time(last?.at ?? null)}</td>
                   <td>
                     {state?.provider === 'scrapecreators' && !state.paidRequestsEnabled

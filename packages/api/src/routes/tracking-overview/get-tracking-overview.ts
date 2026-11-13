@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
+import { env } from '../../env.js';
 import { filterCompanyNavigationOffers } from '../../lib/company-navigation-access.js';
+import { creativeWorkspaceCompany } from '../../services/traffic-server-cache.js';
 import { getBrlRate } from '../../services/exchange-rate.js';
 import { loadGatewayFees, totalGatewayFees } from '../../services/gateway-fees.js';
 import { gatewayOverviewForOffers, mergeGatewayFees } from '../../services/gateway-overview.js';
@@ -35,8 +37,18 @@ export function registerGetTrackingOverviewRoutes(app: FastifyInstance, traffic 
         await app.offerStore.listAccessible(req.user.sub, req.user.role === 'admin'),
         traffic ? '/meta-control/traffic/finance-overview' : '/tracking/overview',
       );
-      const offers =
-        traffic && req.user.role === 'admin'
+      const company = traffic
+        ? await creativeWorkspaceCompany(app.redis, app.db, req.user, ['traffic-overview', 'traffic-campaigns', 'traffic-windows'])
+        : null;
+      if (traffic && !company && env.NODE_ENV !== 'test')
+        return reply.code(403).send({ error: 'company_forbidden' });
+      const companyOffers = company
+        ? await app.db<{ id: string }[]>`SELECT offer_id AS id FROM company_offers WHERE company_id::text=${company}`
+        : null;
+      const companyIds = companyOffers && new Set(companyOffers.map((offer) => offer.id));
+      const offers = companyIds
+        ? accessible.filter((offer) => companyIds.has(offer.id))
+        : traffic && req.user.role === 'admin'
           ? accessible.filter((offer) => offer.userId === req.user!.sub)
           : accessible;
       if (offers.length === 0) {

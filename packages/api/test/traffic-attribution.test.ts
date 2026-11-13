@@ -1,6 +1,20 @@
 import { expect, it, vi } from 'vitest';
 vi.mock('../src/env.js', () => ({ env: { NODE_ENV: 'test', LOG_LEVEL: 'silent' } }));
-import { aggregateTrafficAttribution } from '../src/services/traffic-attribution.js';
+import { aggregateTrafficAttribution, resolveTrafficNames } from '../src/services/traffic-attribution.js';
+it('links exact unique names within the offer without overriding IDs or guessing ambiguous ads', () => {
+  const row = { id: 'sale', offer_id: 'offer', provider: 'vendepay', source: { utm_campaign: 'Campaign', utm_content: 'Ad' } };
+  const ad = { offer_id: 'offer', campaign_name: 'Campaign', ad_name: 'Ad', campaign_id: '10', ad_id: '100', adset_id: '20', account_id: 'act_30' };
+  expect(resolveTrafficNames([row], [ad, ad])[0]?.source?.ad_id).toBe('100');
+  expect(resolveTrafficNames([row], [ad, { ...ad, ad_id: '101' }])[0]).toEqual(row);
+  expect(resolveTrafficNames([row], [{ ...ad, offer_id: 'other' }])[0]).toEqual(row);
+  expect(resolveTrafficNames([row], [{ ...ad, ad_name: 'Ad edited' }])[0]).toEqual(row);
+  const existing = { ...row, source: { ...row.source, ad_id: '999' } };
+  expect(resolveTrafficNames([existing], [ad])[0]).toEqual(existing);
+  const page = { ...row, page_source: { ad_id: '999' } };
+  expect(resolveTrafficNames([page], [ad])[0]).toEqual(page);
+  const conflict = { ...row, source: { ...row.source, campaign_id: '999' } };
+  expect(resolveTrafficNames([conflict], [ad])[0]).toEqual(conflict);
+});
 const settings = {
   fee_pct: 10,
   fixed_fee_minor: 100,

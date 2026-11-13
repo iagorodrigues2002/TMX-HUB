@@ -49,7 +49,6 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
     queryFn: ({ signal }) =>
       apiClient.getTrackingOverview(queryPeriod.from, queryPeriod.to, queryView, signal),
     staleTime: TRACKING_DASHBOARD_STALE_TIME,
-    retry: false,
   });
   const dashboard = useQuery({
     queryKey: ['dashboard-summary', queryPeriod.from, queryPeriod.to],
@@ -100,7 +99,6 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
       queryFn: ({ signal }) =>
         apiClient.getTrackingSummary(offer.id, queryPeriod, queryView, signal),
       enabled: detailOfferIds.has(offer.id),
-      retry: false,
       staleTime: TRACKING_DASHBOARD_STALE_TIME,
     })),
   });
@@ -111,7 +109,6 @@ export function OverviewDashboard(props: OverviewDashboardProps) {
       queryFn: ({ signal }) =>
         apiClient.getOfferIntradayRange(offer.id, queryPeriod.from, queryPeriod.to, signal),
       enabled: intradayEnabled && detailOfferIds.has(offer.id),
-      retry: false,
       refetchOnWindowFocus: false,
       staleTime: TRACKING_DASHBOARD_STALE_TIME,
     })),

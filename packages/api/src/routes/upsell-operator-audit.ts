@@ -339,7 +339,7 @@ export function registerUpsellOperatorAudit(app: FastifyInstance) {
       date_basis: 'click',
       period: { from, to, time_zone: 'America/Sao_Paulo' },
       attribution_notice:
-        'Crédito operacional por clique anterior à aprovação, reabertura seguida de novo pagamento ou continuação do mesmo funil e gateway. A data continua sendo a do clique real. Não é prova de quem concluiu o pagamento. Valores brutos aprovados; devoluções não descontadas. Sem vínculo seguro, fica sem operador. Valores sem conversão em reais permanecem na moeda original.',
+        'Crédito operacional por clique anterior à aprovação, reabertura seguida de novo pagamento ou continuação do mesmo funil e gateway. Quando há mais de uma compra inicial possível, os cliques recentes precisam apontar para o mesmo operador e incluir a etapa aprovada. O relatório usa a data do clique real. O crédito não comprova quem concluiu o pagamento. Valores brutos aprovados, antes de devoluções. Valores sem conversão em reais permanecem na moeda original.',
     };
   };
   app.get<LogRequest>('/offers/:id/tracking/upsell-operator-logs', logsHandler);

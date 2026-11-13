@@ -136,6 +136,9 @@ export const endpoints = {
     if (to) params.set('to', to);
     if (salesView === 'natural') params.set('sales_view', salesView);
     const query = params.toString();
-    return request(`/v1/tracking/overview${query ? `?${query}` : ''}`, { signal });
+    const timeout = AbortSignal.timeout(30_000);
+    return request(`/v1/tracking/overview${query ? `?${query}` : ''}`, {
+      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+    });
   },
 };

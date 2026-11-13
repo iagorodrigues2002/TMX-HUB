@@ -160,7 +160,10 @@ export function registerDeleteUpsellsStageIdRoutes(
                max(o.occurred_at) AS last_seen_at
         FROM tracking_orders o
         WHERE o.project_id = ${p.id}
-          AND o.order_kind = 'unknown'
+          AND NOT EXISTS (
+            SELECT 1 FROM tracking_product_kinds k
+            WHERE k.project_id=o.project_id AND k.product_id=o.product->>'id'
+          )
           AND NULLIF(o.product->>'id', '') IS NOT NULL
         GROUP BY o.product->>'id'
         ORDER BY max(o.occurred_at) DESC

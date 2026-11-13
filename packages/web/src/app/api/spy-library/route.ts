@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { parseSpySaved } from '@/components/spy/spy-model';
 import { deleteSpyOffers, saveSpyCatalog } from '@/lib/spy-catalog';
+import { hydrateSpyThumbnails } from '@/lib/spy-creative-media';
+import { hydrateSpyRecovery } from '@/lib/spy-creative-recovery';
 import { spyHistoryFixture } from '@/lib/spy-history-fixture';
 import { LibraryFailure, normalizeLibrarySource } from '@/lib/spy-library-reader';
 import {
@@ -13,6 +15,7 @@ import {
   enrollLibraryOffers,
   prepareScrapeMonitoring,
   publicLibraryAds,
+  publicLibraryNewLinks,
   publicLibraryPages,
   publicLibraryState,
   readLibraryState,
@@ -163,27 +166,49 @@ export async function GET(req: Request) {
     if (fixture && (!Number.isInteger(fixtureDay) || fixtureDay < 0 || fixtureDay > 3))
       return reply({ detail: 'Dia de teste inválido.' }, 400);
     const fixtureState = fixture ? spyHistoryFixture(fixtureDay) : null;
-    if (['ads', 'pages'].includes(url.searchParams.get('view') ?? '')) {
+    if (['ads', 'pages', 'links'].includes(url.searchParams.get('view') ?? '')) {
       const input = z
         .object({
           id: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/),
           offset: z.coerce.number().int().min(0).max(100000),
           at: z.string().min(1).max(100),
+          creative: z.enum(['all-new', 'new', 'duplicate', 'variation', 'unverified']).optional(),
         })
         .safeParse({
           id: url.searchParams.get('id'),
           offset: url.searchParams.get('offset') ?? '0',
           at: url.searchParams.get('at'),
+          creative: url.searchParams.get('creative') ?? undefined,
         });
       if (!input.success) return reply({ detail: 'Página de anúncios inválida.' }, 400);
-      const page = (
-        url.searchParams.get('view') === 'pages' ? publicLibraryPages : publicLibraryAds
-      )(
-        fixtureState ?? (await readLibraryState(owner)),
-        input.data.id,
-        input.data.offset,
-        url.searchParams.get('highlights') === '1',
-      );
+      const state = fixtureState ?? (await readLibraryState(owner));
+      if (url.searchParams.get('view') === 'links') {
+        const result = publicLibraryNewLinks(state, input.data.id);
+        if (!result) return reply({ detail: 'Nenhuma leitura salva.' }, 404);
+        if (result.at !== input.data.at)
+          return reply({ detail: 'A leitura foi atualizada. Reabra a oferta.' }, 409);
+        return reply(result);
+      }
+      const isPages = url.searchParams.get('view') === 'pages';
+      const job = state.jobs[input.data.id];
+      if (!isPages && job && !fixtureState) {
+        await hydrateSpyRecovery(spyLibraryDirectory(), owner, job);
+        await hydrateSpyThumbnails(
+          spyLibraryDirectory(),
+          owner,
+          job.snapshots.flatMap((reading) => reading.ads),
+        );
+      }
+      const page = isPages
+        ? publicLibraryPages(state, input.data.id, input.data.offset)
+        : publicLibraryAds(
+            state,
+            input.data.id,
+            input.data.offset,
+            url.searchParams.get('highlights') === '1',
+            input.data.creative,
+            url.searchParams.get('grouped') === '1',
+          );
       if (!page) return reply({ detail: 'Nenhuma leitura salva para esta oferta.' }, 404);
       if (page.at !== input.data.at)
         return reply({ detail: 'A leitura foi atualizada. Reabra a oferta.' }, 409);

@@ -8,7 +8,7 @@ export function SpyAllAds() {
   const at = params.get('at');
   return (
     <main style={{ padding: 24 }}>
-      <Link href="/spy">← Voltar às ofertas</Link>
+      <Link href="/spy?view=monitor">← Voltar ao acompanhamento</Link>
       {id && at ? (
         <SpyAdsList id={id} at={at} all />
       ) : (

@@ -128,6 +128,7 @@ const migrations = [
   '120_traffic_daily_archive.sql',
   '121_company_ai.sql',
   '122_company_ai_learning.sql',
+  '123_upsell_operator_ambiguous_front.sql',
 ];
 
 await sql`

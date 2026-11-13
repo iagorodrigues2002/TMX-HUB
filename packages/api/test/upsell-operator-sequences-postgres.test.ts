@@ -30,6 +30,7 @@ describe.skipIf(!url)(
       for (const file of [
         '100_upsell_operator_last_click.sql',
         '119_upsell_operator_sequences.sql',
+        '123_upsell_operator_ambiguous_front.sql',
       ])
         await db.unsafe(await readFile(new URL(`../migrations/${file}`, import.meta.url), 'utf8'));
     });
@@ -87,6 +88,70 @@ describe.skipIf(!url)(
       expect((await credit('test-order')).operator_id).toBe('douglas');
       expect((await readCompanyCompensation(db, 'company', 'douglas', '2026-11')).upsells).toBe(1);
     });
+
+    it('credits the operator agreed by both possible fronts without assigning a front', async () => {
+      await order('other-front', 'front', '2026-11-10T10:01:00Z');
+      await click('first');
+      await click('latest', 'upsell_2', '2026-11-10T12:00:04Z', true, 'douglas', 'other-front');
+      await order('up', 'upsell_2', '2026-11-10T12:00:10Z');
+      expect((await credit('up')).operator_id).toBeNull();
+      await proof('up');
+      expect(await credit('up')).toMatchObject({
+        front_order_id: null,
+        operator_id: 'douglas',
+        attempt_id: 'latest',
+        reason: 'confirmed_operator_ambiguous_front',
+      });
+      await proof('up');
+      expect(
+        (await db`SELECT count(*)::int AS n FROM tracking_upsell_operator_credit_revisions`)[0]!.n,
+      ).toBe(1);
+    });
+
+    it('previews ambiguous-front repair without changing the historical credit', async () => {
+      await order('other-front', 'front', '2026-11-10T10:01:00Z');
+      await click('opening');
+      await order('historical', 'upsell_2', '2026-11-10T12:00:10Z');
+      await db`INSERT INTO webhook_receipts VALUES ('historical','main','processed','{"status":"paid"}')`;
+      const preview = await reconcileOperator(db, {
+        operator: 'douglas',
+        from: '2026-11-10',
+        to: '2026-11-10',
+      });
+      expect(preview.changed).toBe(1);
+      expect(preview.changes[0]?.after).toMatchObject({
+        operator_id: 'douglas',
+        front_order_id: null,
+      });
+      expect((await credit('historical')).operator_id).toBeNull();
+    });
+
+    it.each(['conflict', 'different stage', 'expired', 'test payment'] as const)(
+      'leaves ambiguous fronts uncredited for %s',
+      async (scenario) => {
+        await order('other-front', 'front', '2026-11-10T10:01:00Z');
+        await click(
+          'opening',
+          scenario === 'different stage' ? 'upsell_1' : 'upsell_2',
+          scenario === 'expired' ? '2026-11-10T11:54:00Z' : '2026-11-10T12:00:00Z',
+        );
+        if (scenario === 'conflict')
+          await click(
+            'conflict',
+            'upsell_1',
+            '2026-11-10T12:00:01Z',
+            false,
+            'other',
+            'other-front',
+          );
+        await order('up', 'upsell_2', '2026-11-10T12:00:10Z');
+        await proof('up', scenario === 'test payment');
+        expect(await credit('up')).toMatchObject({
+          operator_id: null,
+          reason: 'ambiguous_front',
+        });
+      },
+    );
 
     it('recovers the screenshot: view-only stage 3 followed by a real new payment', async () => {
       await click('open-2');

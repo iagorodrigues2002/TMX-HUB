@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import { adPreview } from './spy-ad-preview';
+import { adCreative, adPreview } from './spy-ad-preview';
 import { type LibraryAd, LibraryFailure, normalizeLibrarySource } from './spy-library-reader';
 
 const pageSchema = z.object({
@@ -136,6 +136,7 @@ export async function readScrapeLibrary(
           startedAt: row.start_date_string ?? null,
           url: `https://www.facebook.com/ads/library/?id=${row.ad_archive_id}`,
           ...adPreview(row.snapshot),
+          ...adCreative(row.snapshot),
           ...(row.collation_count ? { collationCount: row.collation_count } : {}),
           ...(row.collation_id ? { collationId: row.collation_id } : {}),
         });

@@ -10,6 +10,7 @@ import {
   validateUpsellCandidates,
 } from '../services/upsell-identity-validation.js';
 import { collectVendaIdCandidates } from '../services/vendepay-venda-id.js';
+import { requeueConfiguredUpsells } from '../services/upsell-validation-requeue.js';
 
 /** Postgres-backed queue: survives Redis outages and leases work across replicas. */
 export function startUpsellIdentityWorker(app: Pick<FastifyInstance, 'db' | 'log'>) {
@@ -142,6 +143,7 @@ export function startUpsellIdentityWorker(app: Pick<FastifyInstance, 'db' | 'log
     }
   };
   const cycle = async () => {
+    await requeueConfiguredUpsells(sql);
     // Includes historical fronts and newly classified products; bounded backfill.
     await sql`
       INSERT INTO tracking_upsell_identity_validation(order_id)

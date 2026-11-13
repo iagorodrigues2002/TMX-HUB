@@ -3,6 +3,8 @@ import { mkdir, open, readFile, readdir, rename, stat, unlink, writeFile } from 
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
+import { type CreativeStatus, analyzeSpyCreatives } from './spy-creative-analysis';
+import { fingerprintSpyCreatives, hydrateSpyThumbnails } from './spy-creative-media';
 import { spyDiscoveryNotice, spyDiscoverySeen, spyNoticeSchema } from './spy-discovery-notices';
 import {
   type LibraryAd,
@@ -19,6 +21,26 @@ import { readScrapeLibrary } from './spy-scrapecreators-reader';
 
 const day = 86400000;
 const adSchema = z.object({
+  creativeRecoveredAt: z.string().datetime().optional(),
+  creativeAssets: z
+    .array(
+      z.object({
+        kind: z.enum(['image', 'video']),
+        url: z.string().max(10000),
+        sha256: z
+          .string()
+          .regex(/^[a-f0-9]{64}$/)
+          .optional(),
+      }),
+    )
+    .max(30)
+    .optional(),
+  creativeComplete: z.boolean().optional(),
+  creativeText: z.string().max(100000).optional(),
+  thumbnailDigest: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
   id: z.string(),
   pageId: z.string(),
   pageName: z.string(),
@@ -426,6 +448,9 @@ export function publicLibraryState(state: LibraryState) {
           currentReadings: j.snapshots.filter(
             (v) => v.scope === libraryScope(j.sources, state.countries, state.provider),
           ).length,
+          creativeSummary: latestLibrarySnapshot(state, id)
+            ? analyzeSpyCreatives(j.snapshots, latestLibrarySnapshot(state, id)!).summary
+            : null,
           progress: partial
             ? { count: partial.ads.length, pages: partial.pages, at: partial.at }
             : null,
@@ -590,9 +615,12 @@ export function publicLibraryAds(
   id: string,
   offset: number,
   highlights = false,
+  creativeFilter?: CreativeStatus | 'all-new',
+  grouped = false,
 ) {
   const snapshot = latestLibrarySnapshot(state, id);
   if (!snapshot) return null;
+  const creative = analyzeSpyCreatives(state.jobs[id]!.snapshots, snapshot);
   const earlier = new Set(
     state.jobs[id]!.snapshots.filter(
       (v) => v.scope === snapshot.scope && v.day < snapshot.day,
@@ -607,11 +635,30 @@ export function publicLibraryAds(
     groupCounts.set(key, ids);
   }
   const isNew = (ad: LibraryAd) => !snapshot.baseline && added.has(ad.id) && !earlier.has(ad.id);
-  const ordered = [...snapshot.ads].sort((a, b) =>
+  const filtered = creativeFilter
+    ? snapshot.ads.filter(
+        (ad) =>
+          creative.results.has(ad.id) &&
+          (creativeFilter === 'all-new' || creative.results.get(ad.id)?.status === creativeFilter),
+      )
+    : snapshot.ads;
+  const ordered = [...filtered].sort((a, b) =>
     highlights
       ? (b.collationCount ?? -1) - (a.collationCount ?? -1) || a.id.localeCompare(b.id)
       : Number(isNew(b)) - Number(isNew(a)),
   );
+  const mediaGroups = new Map<string, LibraryAd[]>();
+  const mediaKey = (ad: LibraryAd) =>
+    ad.creativeComplete && ad.creativeAssets?.length && ad.creativeAssets.every((a) => a.sha256)
+      ? ad.creativeAssets.map((a) => `${a.kind}:${a.sha256}`).join('|')
+      : `id:${ad.id}`;
+  for (const ad of ordered) {
+    const key = mediaKey(ad);
+    const members = mediaGroups.get(key) ?? [];
+    members.push(ad);
+    mediaGroups.set(key, members);
+  }
+  const display = grouped ? [...mediaGroups.values()].map((members) => members[0]!) : ordered;
   const seenGroups = new Set<string>();
   const selected = highlights
     ? ordered
@@ -622,10 +669,25 @@ export function publicLibraryAds(
           return true;
         })
         .slice(0, 12)
-    : ordered.slice(offset, offset + 50);
-  const previews = new Map(state.jobs[id]!.partial?.ads.map((ad) => [ad.id, ad]));
+    : display.slice(offset, offset + 50);
+  const previews = new Map(
+    state.jobs[id]!.partial?.ads.filter((ad) => !creative.results.has(ad.id)).map((ad) => [
+      ad.id,
+      ad,
+    ]),
+  );
   const ads = selected.map((ad) => ({
     ...ad,
+    creativeAnalysis: creative.results.get(ad.id),
+    ...(grouped
+      ? {
+          relatedAds: mediaGroups.get(mediaKey(ad))!.map((member) => ({
+            ...member,
+            isNew: isNew(member),
+            creativeAnalysis: creative.results.get(member.id),
+          })),
+        }
+      : {}),
     activeGroupCount: groupCounts.get(ad.collationId ?? ad.id)!.size,
     ...(previews.get(ad.id)?.thumbnailKey
       ? { thumbnailKey: previews.get(ad.id)!.thumbnailKey }
@@ -641,10 +703,22 @@ export function publicLibraryAds(
   return {
     at: snapshot.at,
     ads,
-    total: snapshot.ads.length,
+    total: grouped ? display.length : filtered.length,
+    creativeSummary: creative.summary,
     offset,
-    nextOffset:
-      !highlights && offset + ads.length < snapshot.ads.length ? offset + ads.length : null,
+    nextOffset: !highlights && offset + ads.length < display.length ? offset + ads.length : null,
+  };
+}
+export function publicLibraryNewLinks(state: LibraryState, id: string) {
+  const snapshot = latestLibrarySnapshot(state, id);
+  if (!snapshot) return null;
+  const { results } = analyzeSpyCreatives(state.jobs[id]!.snapshots, snapshot);
+  return {
+    at: snapshot.at,
+    links: [...results.keys()].map((adId) => ({
+      id: adId,
+      url: `https://www.facebook.com/ads/library/?id=${encodeURIComponent(adId)}`,
+    })),
   };
 }
 export type BrowserLibraryReader = (
@@ -659,6 +733,7 @@ export async function tickLibraryOwner(
     reader?: typeof readLibrary;
     browserReader?: BrowserLibraryReader;
     persistMedia?: (ads: LibraryAd[]) => Promise<LibraryAd[]>;
+    fingerprintMedia?: (ads: LibraryAd[]) => Promise<void>;
     jobIds?: string[];
   } = {},
 ) {
@@ -903,6 +978,7 @@ export async function tickLibraryOwner(
       ads = retainSpyMedia(ads, previousMedia);
       await Promise.all(mediaTasks);
       if (options.persistMedia) ads = await options.persistMedia(ads);
+      if (options.fingerprintMedia) await options.fingerprintMedia(ads);
       const at = new Date().toISOString();
       const timestamp = options.now ? now.getTime() : Date.now();
       await changeLibraryState(
@@ -1054,6 +1130,10 @@ export async function tickLibraryUsers(
               browserReader,
               jobIds: [id],
               persistMedia: (ads) => persistSpyMedia(dir, state.owner, ads),
+              fingerprintMedia: async (ads) => {
+                await hydrateSpyThumbnails(dir, state.owner, ads);
+                await fingerprintSpyCreatives(dir, state.owner, ads, fetch);
+              },
             });
           }
         }),

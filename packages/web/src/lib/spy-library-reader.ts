@@ -26,6 +26,13 @@ export interface LibrarySource {
   exact: boolean;
 }
 export interface LibraryAd {
+  creativeRecoveredAt?: string;
+  creativeAssets?: { kind: 'image' | 'video'; url: string; sha256?: string }[];
+  creativeComplete?: boolean;
+  creativeText?: string;
+  thumbnailDigest?: string;
+  creativeAnalysis?: import('./spy-creative-analysis').CreativeAnalysis;
+  relatedAds?: LibraryAd[];
   id: string;
   pageId: string;
   pageName: string;

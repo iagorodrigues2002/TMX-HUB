@@ -48,8 +48,10 @@ export async function reconcileOperator(
       for (const target of targets) {
         const [before] =
           await tx`SELECT to_jsonb(c) AS credit FROM tracking_upsell_operator_credits c WHERE order_id=${target.order_id}`;
-        const [result] =
-          await tx`SELECT reconcile_upsell_operator_sequence(${target.order_id},${operator}) AS changed`;
+        const [result] = await tx`SELECT CASE WHEN ${before.credit.reason} = 'ambiguous_front'
+            THEN reconcile_upsell_operator_ambiguous_front(${target.order_id},${operator})
+            ELSE reconcile_upsell_operator_sequence(${target.order_id},${operator})
+            END AS changed`;
         if (!result.changed) continue;
         const [after] =
           await tx`SELECT to_jsonb(c) AS credit FROM tracking_upsell_operator_credits c WHERE order_id=${target.order_id}`;

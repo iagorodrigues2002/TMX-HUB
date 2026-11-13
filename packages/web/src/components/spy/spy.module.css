@@ -351,9 +351,41 @@
   opacity: 0.6;
 }
 .gallery {
+  columns: 3;
+  column-gap: 15px;
+}
+.monitorMetrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 15px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 14px;
+  margin-block: 20px;
+}
+.monitorMetrics > div {
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-bg-elevated);
+}
+.monitorMetrics strong {
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
+}
+.monitorMetrics small {
+  color: var(--color-muted-foreground);
+}
+.monitorTable td {
+  font-variant-numeric: tabular-nums;
+}
+.monitorTable tbody tr:hover {
+  background: var(--color-muted);
+}
+.gallery > .card {
+  display: inline-block;
+  width: 100%;
+  break-inside: avoid;
+  margin-bottom: 15px;
 }
 .card {
   background: var(--color-bg-elevated);
@@ -847,15 +879,18 @@
 }
 @media (min-width: 1600px) {
   .gallery {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    columns: 4;
   }
 }
 @media (max-width: 1100px) {
   .gallery {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    columns: 2;
   }
 }
 @media (max-width: 640px) {
+  .gallery {
+    columns: 1;
+  }
   .gallery,
   .settings,
   .formGrid {
@@ -906,7 +941,15 @@
   background: var(--color-bg-elevated);
 }
 .adGrid {
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  display: block;
+  columns: 200px;
+  column-gap: 14px;
+}
+.adGrid > .adCard {
+  break-inside: avoid;
+  margin-bottom: 14px;
+  display: inline-block;
+  width: 100%;
 }
 .adThumb {
   display: grid;
@@ -1386,6 +1429,9 @@
   }
 }
 @media (max-width: 600px) {
+  .adGrid {
+    columns: 1;
+  }
   .adGrid,
   .pageGrid {
     grid-template-columns: minmax(0, 1fr);
@@ -1402,4 +1448,19 @@
   .card[data-selected="true"] .selectionOutline i {
     transform: none;
   }
+}
+.creativeEvidence {
+  padding: 12px;
+  margin-block: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.creativeEvidence p {
+  margin-block: 6px;
+}
+.creativeEvidence a {
+  display: block;
+  text-decoration: underline;
 }

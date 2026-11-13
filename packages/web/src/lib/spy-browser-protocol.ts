@@ -1,3 +1,4 @@
+import { adCreative, adPreview } from './spy-ad-preview';
 import type { LibraryAd } from './spy-library-reader';
 
 export interface BrowserLibraryPage {
@@ -48,6 +49,8 @@ export function browserLibraryPages(payload: unknown): BrowserLibraryPage[] {
           if (!row.is_active) continue;
           ads.push({
             id: row.ad_archive_id,
+            ...adPreview(row.snapshot),
+            ...adCreative(row.snapshot),
             pageId: row.page_id,
             pageName: typeof row.page_name === 'string' ? row.page_name : '',
             startedAt:
