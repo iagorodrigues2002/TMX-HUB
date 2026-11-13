@@ -127,7 +127,7 @@ export function aiCompanyRuntime(app: FastifyInstance) {
       }
     }
   }
-  async function loadData(access: AiAccess, selected = range()) {
+  async function loadData(access: AiAccess, selected = range(), includeUpsellIntelligence = false) {
     const sql = db();
     const company = access.companyId;
     const names = await offers(company);
@@ -172,6 +172,23 @@ export function aiCompanyRuntime(app: FastifyInstance) {
       FROM tracking_orders o JOIN tracking_projects p ON p.id=o.project_id JOIN company_offers c ON c.offer_id=p.offer_id
       WHERE c.company_id::text=${company} AND p.offer_id=ANY(${ids}::text[]) AND (o.refunded_at IS NOT NULL OR o.chargeback_at IS NOT NULL OR o.status IN ('refunded','chargeback')) GROUP BY 1,2,3,4`
         : [];
+    const upsellIntelligence = includeUpsellIntelligence && access.upsells && ids.length
+      ? await sql`SELECT p.offer_id AS "offerId",o.id AS "orderId",o.paid_at AS "paidAt",s.stage_key AS "stageKey",s.name AS "stageName",
+          mr.result AS "manualResult",mr.checked_at AS "checkedAt",
+          EXISTS(SELECT 1 FROM tracking_orders u WHERE u.project_id=o.project_id AND u.provider=o.provider
+            AND u.paid_at IS NOT NULL AND (CASE WHEN u.order_kind='upsell' THEN 'upsell_1' ELSE u.order_kind END)=s.stage_key
+            AND ((NULLIF(lower(trim(o.buyer->>'email')),'') IS NOT NULL AND lower(trim(u.buyer->>'email'))=lower(trim(o.buyer->>'email')))
+              OR (NULLIF(regexp_replace(o.buyer->>'phone','[^0-9]','','g'),'') IS NOT NULL AND regexp_replace(u.buyer->>'phone','[^0-9]','','g')=regexp_replace(o.buyer->>'phone','[^0-9]','','g'))
+              OR (o.visitor_id IS NOT NULL AND u.visitor_id=o.visitor_id))) AS purchased
+        FROM tracking_orders o JOIN tracking_projects p ON p.id=o.project_id
+        JOIN company_offers c ON c.offer_id=p.offer_id
+        JOIN tracking_upsell_stages s ON s.project_id=o.project_id AND s.enabled=true
+        LEFT JOIN tracking_upsell_manual_test_results mr ON mr.project_id=o.project_id AND mr.order_id=o.id AND mr.stage_id=s.id
+        WHERE c.company_id::text=${company} AND p.offer_id=ANY(${ids}::text[]) AND o.order_kind='front' AND o.paid_at IS NOT NULL
+          AND ((o.paid_at>=(${selected.from}::date::timestamp AT TIME ZONE 'America/Sao_Paulo') AND o.paid_at<(((${selected.to}::date)+1)::timestamp AT TIME ZONE 'America/Sao_Paulo'))
+            OR (mr.checked_at>=(${selected.from}::date::timestamp AT TIME ZONE 'America/Sao_Paulo') AND mr.checked_at<(((${selected.to}::date)+1)::timestamp AT TIME ZONE 'America/Sao_Paulo')))
+        ORDER BY o.paid_at DESC,o.id,s.stage_key`
+      : undefined;
     const events = access.optimizations
       ? await sql`SELECT event FROM company_ai_optimizations WHERE company_id::text=${company} ORDER BY occurred_at DESC LIMIT 100`
       : [];
@@ -192,6 +209,7 @@ export function aiCompanyRuntime(app: FastifyInstance) {
         reversals,
         exchangeRates: Object.fromEntries(rates.map(r => [r.base_currency, { rate: Number(r.rate), fetchedAt: new Date(r.fetched_at).toISOString() }])),
         learning: learning.map(l => l.observation),
+        upsellIntelligence: upsellIntelligence?.map(r => ({ ...r, paidAt: new Date(r.paidAt).toISOString(), checkedAt: r.checkedAt ? new Date(r.checkedAt).toISOString() : null })),
         optimizations: events.map((e) => e.event).reverse(),
         classification: config ? JSON.parse(config).value : { campaigns: {}, links: {} },
       }),

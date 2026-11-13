@@ -320,8 +320,8 @@ export function registerAiPreview(app: FastifyInstance) {
       settingsBusy = false;
     }
   });
-  async function data(access: AiAccess, scope?: { from: string; to: string }) {
-    if (runtime) return runtime.loadData(access, scope);
+  async function data(access: AiAccess, scope?: { from: string; to: string }, includeUpsellIntelligence = false) {
+    if (runtime) return runtime.loadData(access, scope, includeUpsellIntelligence);
     const company = await companyId();
     const d = aiDataSchema
       .extend({ trafficStale: z.boolean().default(false) })
@@ -442,9 +442,10 @@ export function registerAiPreview(app: FastifyInstance) {
         .reverse()
         .map((v) => JSON.parse(v))
         .filter((v) => permittedHistory(v, access));
+      const operationalUpsells = /intellig|intelig|marca|funcion|pendente|updates/i.test(input.data.question + ' ' + (history.at(-1)?.question ?? ''));
       const requestedScope = input.data.scope ?? questionScope(input.data.question) ??
-        aiScopeSchema.safeParse(history.at(-1)?.scope).data;
-      const available = await data(access, requestedScope);
+        aiScopeSchema.safeParse(history.at(-1)?.scope).data ?? (operationalUpsells ? questionScope('hoje') : undefined);
+      const available = await data(access, requestedScope, operationalUpsells);
       const scope = requestedScope ?? {
         from: available.snapshot.from,
         to: available.snapshot.to,

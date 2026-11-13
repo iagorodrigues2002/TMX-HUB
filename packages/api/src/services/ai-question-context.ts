@@ -123,8 +123,25 @@ export function questionContext(raw: AiData, context: Context, question: string,
   } : null;
   const cleanRows = context.rows.map(r => ({ ...r, metrics: permittedMetrics(r.metrics) }));
   const metricColumns = [...new Set(cleanRows.flatMap(r => Object.keys(r.metrics ?? {})))];
+  const intelligenceRows = (context.upsellIntelligence ?? []).map(r => ({ ...r,
+    frontInPeriod: day(new Date(r.paidAt)) >= context.scope.from && day(new Date(r.paidAt)) <= context.scope.to,
+    updatedInPeriod: !!r.checkedAt && day(new Date(r.checkedAt)) >= context.scope.from && day(new Date(r.checkedAt)) <= context.scope.to,
+    status: r.purchased ? 'venda realizada' : r.manualResult === 'failed' ? 'não funcionou' : r.manualResult === 'worked' ? 'funcionou' : 'sem marcação',
+  })).filter(r => r.frontInPeriod || r.updatedInPeriod);
   return {
     ...context,
+    upsellIntelligence: context.availableAreas.upsells && context.upsellIntelligence !== undefined ? {
+      from: context.scope.from, to: context.scope.to, asOf: raw.fetchedAt, timeZone: 'America/Sao_Paulo',
+      basis: 'Estado atual por compra de front e etapa cadastrada, não quantidade de vendas de upsell. frontInPeriod seleciona a aprovação do front; updatedInPeriod seleciona a última marcação manual no período, inclusive em fronts antigos. Não é um histórico completo de edições. Venda realizada usa o mesmo vínculo de comprador, provedor e etapa da tela, podendo ser posterior ao front. Ausência de marcação não comprova falha; não garante disponibilidade do link de compra.',
+      byOffer: context.offers.map(o => {
+        const selected = intelligenceRows.filter(r => r.offerId === o.id);
+        return { offerId: o.id, name: o.name,
+          fronts: new Set(selected.filter(r => r.frontInPeriod).map(r => r.orderId)).size,
+          stages: selected.filter(r => r.frontInPeriod).length,
+          statuses: Object.fromEntries(['venda realizada', 'não funcionou', 'funcionou', 'sem marcação'].map(s => [s, selected.filter(r => r.frontInPeriod && r.status === s).length])),
+          updatedStages: selected.filter(r => r.updatedInPeriod).length };
+      }), items: intelligenceRows,
+    } : null,
     learning: undefined,
     learnedPatterns: reversalsOnly ? [] : learnedPatterns(context.learning),
     learningPolicy: 'Use learnedPatterns como experiência acumulada da empresa para fundamentar recomendações da oferta correspondente. Informe casos favoráveis e contrários; amostra insuficiente não valida uma regra. Não afirme treinamento dos pesos, aprendizado fora do TMX ou resultados ainda não observados.',

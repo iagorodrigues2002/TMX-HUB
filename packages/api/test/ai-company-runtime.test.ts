@@ -89,6 +89,9 @@ describe.skipIf(!process.env.AI_TEST_DATABASE_URL)('isolated company AI integrat
     );
     await sql`CREATE TABLE exchange_rate_cache(base_currency text,target_currency text,rate numeric,fetched_at timestamptz)`;
     await sql`INSERT INTO exchange_rate_cache VALUES('USD','BRL',5,now())`;
+    await sql.unsafe(`ALTER TABLE tracking_orders ADD COLUMN id text, ADD COLUMN provider text, ADD COLUMN buyer jsonb, ADD COLUMN visitor_id text;
+      CREATE TABLE tracking_upsell_stages(id text,project_id text,stage_key text,name text,enabled boolean);
+      CREATE TABLE tracking_upsell_manual_test_results(project_id text,order_id text,stage_id text,result text,checked_at timestamptz);`);
     await sql.unsafe(await readFile(new URL('../migrations/122_company_ai_learning.sql', import.meta.url), 'utf8'));
     directory = await mkdtemp('/tmp/tmx-ai-company-test-');
     child = spawn(
@@ -116,7 +119,7 @@ describe.skipIf(!process.env.AI_TEST_DATABASE_URL)('isolated company AI integrat
   }, 15000);
   beforeEach(async () => {
     await sql.unsafe(
-      'TRUNCATE company_ai_optimizations,company_ai_settings,companies,company_memberships,company_offers,company_offer_grants,tracking_projects,tracking_orders CASCADE',
+      'TRUNCATE tracking_upsell_stages,tracking_upsell_manual_test_results,company_ai_optimizations,company_ai_settings,companies,company_memberships,company_offers,company_offer_grants,tracking_projects,tracking_orders CASCADE',
     );
     await redis.flushdb();
     await sql`INSERT INTO companies VALUES(${a},'A'),(${b},'B')`;
@@ -128,7 +131,7 @@ describe.skipIf(!process.env.AI_TEST_DATABASE_URL)('isolated company AI integrat
     await sql`INSERT INTO company_offers VALUES(${a},'PJR_ENG'),(${a},'PJR_FR'),(${b},'FOREIGN')`;
     await sql`INSERT INTO company_offer_grants VALUES(${a},'PJR_ENG','douglas'),(${a},'PJR_ENG','colleague')`;
     await sql`INSERT INTO tracking_projects VALUES('p1','PJR_ENG'),('p2','PJR_FR'),('p3','FOREIGN')`;
-    await sql`INSERT INTO tracking_orders VALUES('p1','paid','2026-11-12T12:00:00Z','USD','upsell',3500,null,null),('p2','paid','2026-11-12T12:00:00Z','USD','front',99999,null,null),('p3','paid','2026-11-12T12:00:00Z','USD','front',88888,null,null)`;
+    await sql`INSERT INTO tracking_orders(project_id,status,paid_at,currency,order_kind,amount_minor,refunded_at,chargeback_at) VALUES('p1','paid','2026-11-12T12:00:00Z','USD','upsell',3500,null,null),('p2','paid','2026-11-12T12:00:00Z','USD','front',99999,null,null),('p3','paid','2026-11-12T12:00:00Z','USD','front',88888,null,null)`;
     provider.mockReset();
     provider.mockImplementation(
       async (url: string) =>
@@ -258,6 +261,23 @@ describe.skipIf(!process.env.AI_TEST_DATABASE_URL)('isolated company AI integrat
     expect(data.reversals).toEqual([]);
     expect(data.history).toEqual([]);
     expect(JSON.stringify(data)).not.toMatch(/99999|88888|FOREIGN|PJR_FR/);
+  });
+  it('reads upsell intelligence marks and buyer matches without exposing buyers or other offers', async () => {
+    await sql`INSERT INTO tracking_upsell_stages VALUES('s1','p1','upsell_1','Etapa 1',true),('s2','p1','upsell_2','Etapa 2',true),('s3','p1','upsell_3','Etapa 3',true),('foreign','p2','upsell_1','Secret stage',true)`;
+    await sql`INSERT INTO tracking_orders(project_id,status,paid_at,currency,order_kind,amount_minor,id,provider,buyer) VALUES('p1','paid','2026-11-12T12:00:00Z','USD','front',1000,'f1','vendepay','{"phone":"+55 (11) 999"}'),('p1','paid','2026-11-10T12:00:00Z','USD','front',1000,'old','vendepay','{}')`;
+    await sql`UPDATE tracking_orders SET provider='vendepay',buyer='{"phone":"5511999"}' WHERE project_id='p1' AND order_kind='upsell'`;
+    await sql`INSERT INTO tracking_upsell_manual_test_results VALUES('p1','f1','s1','failed','2026-11-12T12:30:00Z'),('p1','f1','s2','worked','2026-11-12T12:30:00Z'),('p1','old','s3','failed','2026-11-12T12:30:00Z')`;
+    const data = await aiCompanyRuntime(app).loadData(await aiAccess(app,a,'douglas'),{...scope,from:'2026-11-12',to:'2026-11-12'},true);
+    expect(data.upsellIntelligence).toHaveLength(4);
+    expect(data.upsellIntelligence!.find(r => r.orderId==='f1' && r.stageKey==='upsell_1')).toMatchObject({purchased:true,manualResult:'failed'});
+    expect(data.upsellIntelligence!.find(r => r.orderId==='old')).toMatchObject({manualResult:'failed'});
+    expect(JSON.stringify(data.upsellIntelligence)).not.toMatch(/Secret stage|5511999|buyer/);
+    await settings();
+    const reply = await app.inject({method:'POST',url:base+'/chat',headers:headers('douglas'),payload:{companyId:a,requestId:randomUUID(),question:'Quais itens do Upsell Intelligence estão sem marcação hoje?',scope:{...scope,from:'2026-11-12',to:'2026-11-12'}}});
+    expect(reply.statusCode,reply.body).toBe(200);
+    const sent=JSON.parse(JSON.parse(provider.mock.calls.at(-1)![1].body).input[0].content).data.upsellIntelligence;
+    expect(sent.byOffer[0]).toMatchObject({stages:3,updatedStages:3,statuses:{'venda realizada':1,'funcionou':1,'sem marcação':1}});
+    expect(JSON.stringify(sent)).not.toMatch(/Secret stage|5511999|buyer/);
   });
   it('separates conversations by user and company and deduplicates retries', async () => {
     await settings();

@@ -114,7 +114,7 @@ export function renderUpsellIdentityFilters(context: TrackingContentContext) {
           </Button>
         </div>
       )}
-      {upsellIdentities.isFetching && (
+      {upsellIdentities.isFetching && !upsellIdentities.data && (
         <output className="block px-4 py-3 text-sm text-muted-foreground">
           Carregando página {Math.floor(upsellIdentityOffset / upsellIdentityPageSize) + 1}…
         </output>
@@ -125,7 +125,7 @@ export function renderUpsellIdentityFilters(context: TrackingContentContext) {
         </p>
       )}
       {renderUpsellIdentities(context)}
-      {!upsellIdentities.isFetching &&
+      {!!upsellIdentities.data &&
         !upsellIdentities.isError &&
         !filteredUpsellIdentities.length && (
           <p className="px-4 py-5 text-sm text-muted-foreground">

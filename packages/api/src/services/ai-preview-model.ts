@@ -60,6 +60,10 @@ export const aiDataSchema = z.object({
     }),
   ),
   optimizations: z.array(optimizationSchema),
+  upsellIntelligence: z.array(z.object({
+    offerId: z.string(), orderId: z.string(), paidAt: z.string(), stageKey: z.string(), stageName: z.string(),
+    purchased: z.boolean(), manualResult: z.enum(['worked', 'failed']).nullable(), checkedAt: z.string().nullable(),
+  })).optional(),
   exchangeRates: z.record(z.string(), z.object({ rate: z.number().positive().finite(), fetchedAt: z.string() })).optional(),
   learning: z.array(z.object({
     eventId: z.string(), offerId: z.string(), action: z.enum(['increase_budget', 'decrease_budget', 'activate', 'pause']),

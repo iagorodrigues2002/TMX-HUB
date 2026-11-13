@@ -20,7 +20,7 @@ function fixture() {
     ] });
 }
 function context(raw = fixture(), allowed = true) {
-  return { ...buildAiContext(raw, questionScope(question, now)!), learning: [], permissionNotice: '',
+  return { ...buildAiContext(raw, questionScope(question, now)!), learning: [], upsellIntelligence: [] as NonNullable<typeof raw.upsellIntelligence>, permissionNotice: '',
     availableAreas: { media: true, sales: true, upsells: true, reversals: allowed, optimizations: true } };
 }
 it('resolves both months from natural language, including year boundaries', () => {
@@ -59,6 +59,17 @@ it('preserves values in compact metrics and excludes internal finance', () => {
   const d = questionContext(raw, c, 'analise a campanha', now);
   expect(d.metricColumns).toEqual(['spend', 'metaRoas']);
   expect(d.rows[0]?.metrics).toEqual([20, 1.5]);
+});
+it('distinguishes front cohort status from manual updates on older fronts', () => {
+  const raw=fixture(), c=context(raw); c.scope={...c.scope,from:'2026-11-12',to:'2026-11-12'};
+  const row={offerId:'allowed',orderId:'front',paidAt:now.toISOString(),stageKey:'upsell_1',stageName:'Etapa 1',purchased:false,manualResult:null,checkedAt:null};
+  c.upsellIntelligence=[row,{...row,orderId:'sold',purchased:true,manualResult:'failed',checkedAt:now.toISOString()},
+    {...row,orderId:'old',paidAt:'2026-11-10T12:00:00Z',manualResult:'worked',checkedAt:now.toISOString()}];
+  const d=questionContext(raw,c,'quais upsells estão sem marcação hoje?',now).upsellIntelligence!;
+  expect(d.byOffer[0]).toMatchObject({fronts:2,stages:2,updatedStages:2,statuses:{'sem marcação':1,'venda realizada':1}});
+  expect(d.items.find(r=>r.orderId==='old')?.frontInPeriod).toBe(false);
+  c.availableAreas.upsells=false;
+  expect(questionContext(raw,c,'upsells',now).upsellIntelligence).toBeNull();
 });
 it('converts daily sales per offer, preserves kind and enforces upsell-only access', () => {
   const raw = fixture();

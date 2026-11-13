@@ -123,6 +123,7 @@ export function authorizedAiContext(
   );
   return {
     ...result,
+    upsellIntelligence: access.upsells ? raw.upsellIntelligence?.filter(r => ids.has(r.offerId) && result.offers.some(o => o.id === r.offerId)) : undefined,
     learning: access.optimizations && media ? (raw.learning ?? []).filter(l => ids.has(l.offerId) &&
       (!scope.offer || result.offers.some(o => o.id === l.offerId))) : [],
     incomplete: media ? result.incomplete : null,
