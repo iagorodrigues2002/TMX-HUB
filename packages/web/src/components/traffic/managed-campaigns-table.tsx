@@ -384,7 +384,7 @@ export function ManagedCampaignsTable({
       {(busy || running) && (
         <div role="status" className="glass-card flex items-center gap-3 rounded-xl border border-primary/30 bg-primary/10 p-3 text-sm">
           <Loader2 className="size-4 shrink-0 animate-spin" />
-          <span>{busy ? 'Enviando alteração…' : 'Alteração na fila da Meta. Aguarde a confirmação para fazer outra alteração; há um intervalo de até 65 segundos entre comandos.'}</span>
+          <span>{busy ? 'Enviando alteração…' : 'Alteração na fila da Meta. Aguarde a confirmação para fazer outra alteração; há um intervalo mínimo de 65 segundos entre comandos.'}</span>
         </div>
       )}
       {metadata.isError && (
