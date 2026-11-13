@@ -47,6 +47,7 @@ export const aiDataSchema = z.object({
       order_kind: z.string().nullable(),
       count: z.number(),
       gross_minor: amount.nullable(),
+      country: z.string().regex(/^[A-Z]{2}$/).default('ZZ'),
     }),
   ),
   reversals: z.array(

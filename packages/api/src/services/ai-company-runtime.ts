@@ -161,10 +161,25 @@ export function aiCompanyRuntime(app: FastifyInstance) {
     };
     const sales =
       (access.sales || access.upsells) && ids.length
-        ? await sql`SELECT p.offer_id,(o.paid_at AT TIME ZONE 'America/Sao_Paulo')::date::text AS date,o.currency,o.order_kind,count(*)::int AS count,sum(o.amount_minor)::text AS gross_minor
+        ? await sql`SELECT p.offer_id,(o.paid_at AT TIME ZONE 'America/Sao_Paulo')::date::text AS date,o.currency,o.order_kind,count(*)::int AS count,sum(o.amount_minor)::text AS gross_minor,
+          COALESCE(original.country,CASE WHEN upper(o.buyer->>'country') ~ '^[A-Z]{2}$' AND upper(o.buyer->>'country') NOT IN ('XX','ZZ') THEN upper(o.buyer->>'country') ELSE 'ZZ' END) AS country
       FROM tracking_orders o JOIN tracking_projects p ON p.id=o.project_id JOIN company_offers c ON c.offer_id=p.offer_id
+      LEFT JOIN LATERAL (
+        SELECT e.journey_id FROM tracking_events e WHERE e.project_id=o.project_id AND e.visitor_id=o.visitor_id
+          AND e.event_name='InitiateCheckout' AND e.received_at<=o.paid_at AND e.received_at>=o.paid_at-interval '30 days'
+        ORDER BY e.received_at DESC,e.id DESC LIMIT 1
+      ) checkout ON true
+      LEFT JOIN LATERAL (
+        SELECT upper(e.source->>'country') country FROM tracking_events e
+        WHERE e.project_id=o.project_id AND e.visitor_id=o.visitor_id
+          AND (checkout.journey_id IS NULL OR e.journey_id=checkout.journey_id)
+          AND e.event_name IN ('AdClick','PageView','InitiateCheckout')
+          AND e.received_at<=o.paid_at AND e.received_at>=o.paid_at-interval '30 days'
+          AND upper(e.source->>'country') ~ '^[A-Z]{2}$' AND upper(e.source->>'country') NOT IN ('XX','ZZ')
+        ORDER BY e.received_at ASC,e.id ASC LIMIT 1
+      ) original ON true
       WHERE c.company_id::text=${company} AND p.offer_id=ANY(${ids}::text[]) AND o.status='paid'
-      AND o.paid_at>=(${selected.from}::date::timestamp AT TIME ZONE 'America/Sao_Paulo') AND o.paid_at<(((${selected.to}::date)+1)::timestamp AT TIME ZONE 'America/Sao_Paulo') GROUP BY 1,2,3,4`
+      AND o.paid_at>=(${selected.from}::date::timestamp AT TIME ZONE 'America/Sao_Paulo') AND o.paid_at<(((${selected.to}::date)+1)::timestamp AT TIME ZONE 'America/Sao_Paulo') GROUP BY 1,2,3,4,7`
         : [];
     const reversals =
       access.reversals && ids.length

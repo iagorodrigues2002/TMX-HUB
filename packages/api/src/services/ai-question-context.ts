@@ -109,6 +109,13 @@ export function questionContext(raw: AiData, context: Context, question: string,
     currency: target, unit: 'minor units (100 = 1 monetary unit)',
     basis: 'Vendas aprovadas registradas no TMX, pela data de aprovação em Brasília, até a consulta. Faturamento bruto convertido pelas cotações armazenadas atuais. Hoje é parcial; não é receita líquida nem câmbio histórico.',
     total: salesTotal(salesRows),
+    countryBasis: 'País do primeiro evento anterior à compra na jornada de checkout (até 30 dias), depois país cadastrado do comprador. Mesmo critério de country-activity do TMX. ZZ = não informado. Nunca inferido pela moeda, idioma ou IP do webhook. Quantidades são compras, não pessoas únicas.',
+    byCountry: [...new Set(salesRows.map(r => r.country))].map(country => ({ country, ...salesTotal(salesRows.filter(r => r.country === country)) })),
+    byCountryOffer: [...new Set(salesRows.map(r => JSON.stringify([r.country, r.offer_id])))].map(key => {
+      const [country, offerId] = JSON.parse(key) as [string, string];
+      const selected = salesRows.filter(r => r.country === country && r.offer_id === offerId);
+      return { country, offerId, ...salesTotal(selected), byKind: [...new Set(selected.map(r => r.order_kind ?? 'unclassified'))].map(kind => ({kind,...salesTotal(selected.filter(r => (r.order_kind ?? 'unclassified') === kind))})) };
+    }),
     byOffer: context.offers.map(o => {
       const selected = salesRows.filter(r => r.offer_id === o.id);
       return { offerId: o.id, name: o.name, ...salesTotal(selected),

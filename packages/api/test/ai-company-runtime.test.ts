@@ -92,6 +92,7 @@ describe.skipIf(!process.env.AI_TEST_DATABASE_URL)('isolated company AI integrat
     await sql.unsafe(`ALTER TABLE tracking_orders ADD COLUMN id text, ADD COLUMN provider text, ADD COLUMN buyer jsonb, ADD COLUMN visitor_id text;
       CREATE TABLE tracking_upsell_stages(id text,project_id text,stage_key text,name text,enabled boolean);
       CREATE TABLE tracking_upsell_manual_test_results(project_id text,order_id text,stage_id text,result text,checked_at timestamptz);`);
+    await sql`CREATE TABLE tracking_events(id text,project_id text,visitor_id text,journey_id text,event_name text,received_at timestamptz,source jsonb)`;
     await sql.unsafe(await readFile(new URL('../migrations/122_company_ai_learning.sql', import.meta.url), 'utf8'));
     directory = await mkdtemp('/tmp/tmx-ai-company-test-');
     child = spawn(
@@ -119,7 +120,7 @@ describe.skipIf(!process.env.AI_TEST_DATABASE_URL)('isolated company AI integrat
   }, 15000);
   beforeEach(async () => {
     await sql.unsafe(
-      'TRUNCATE tracking_upsell_stages,tracking_upsell_manual_test_results,company_ai_optimizations,company_ai_settings,companies,company_memberships,company_offers,company_offer_grants,tracking_projects,tracking_orders CASCADE',
+      'TRUNCATE tracking_events,tracking_upsell_stages,tracking_upsell_manual_test_results,company_ai_optimizations,company_ai_settings,companies,company_memberships,company_offers,company_offer_grants,tracking_projects,tracking_orders CASCADE',
     );
     await redis.flushdb();
     await sql`INSERT INTO companies VALUES(${a},'A'),(${b},'B')`;
@@ -278,6 +279,16 @@ describe.skipIf(!process.env.AI_TEST_DATABASE_URL)('isolated company AI integrat
     const sent=JSON.parse(JSON.parse(provider.mock.calls.at(-1)![1].body).input[0].content).data.upsellIntelligence;
     expect(sent.byOffer[0]).toMatchObject({stages:3,updatedStages:3,statuses:{'venda realizada':1,'funcionou':1,'sem marcação':1}});
     expect(JSON.stringify(sent)).not.toMatch(/Secret stage|5511999|buyer/);
+  });
+  it('locates sales using pre-purchase journey country and keeps unknown countries explicit', async () => {
+    await sql`UPDATE tracking_orders SET visitor_id='v-country',buyer='{"country":"US"}' WHERE project_id='p1'`;
+    await sql`INSERT INTO tracking_events VALUES('e1','p1','v-country','j1','AdClick','2026-11-12T10:00:00Z','{"country":"PE"}'),('e2','p1','v-country','j1','InitiateCheckout','2026-11-12T11:00:00Z','{"country":"PE"}'),('late','p1','v-country','j1','PageView','2026-11-12T13:00:00Z','{"country":"DE"}'),('foreign','p3','v-country','j1','AdClick','2026-11-12T09:00:00Z','{"country":"FR"}')`;
+    const runtime=aiCompanyRuntime(app), access=await aiAccess(app,a,'douglas');
+    expect((await runtime.loadData(access,scope)).sales[0].country).toBe('PE');
+    await sql`DELETE FROM tracking_events`;
+    expect((await runtime.loadData(access,scope)).sales[0].country).toBe('US');
+    await sql`UPDATE tracking_orders SET buyer='{}' WHERE project_id='p1'`;
+    expect((await runtime.loadData(access,scope)).sales[0].country).toBe('ZZ');
   });
   it('separates conversations by user and company and deduplicates retries', async () => {
     await settings();
