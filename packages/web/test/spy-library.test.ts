@@ -94,6 +94,9 @@ test('ScrapeCreators page history detects new, renamed, missing and returning ad
           now: new Date(start.getTime() + index * 86400000),
         });
         const state = await readLibraryState('alice', directory);
+        const savedAd = state.jobs.offer.snapshots.at(-1)!.ads[0]!;
+        assert.equal(savedAd.isActive, true);
+        assert.equal(state.jobs.offer.snapshots.at(-1)!.activity?.[savedAd.id].isActive, true);
         const pages = publicLibraryPages(state, 'offer', 0)!;
         assert.equal(calls, index + 1, 'Grouping saved pages must never fetch page details');
         if (index === 0) assert.ok(pages.pages.every((p) => p.change === 'baseline'));

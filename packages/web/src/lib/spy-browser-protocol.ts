@@ -49,6 +49,8 @@ export function browserLibraryPages(payload: unknown): BrowserLibraryPage[] {
           if (!row.is_active) continue;
           ads.push({
             id: row.ad_archive_id,
+            isActive: row.is_active,
+            activityCheckedAt: new Date().toISOString(),
             ...adPreview(row.snapshot),
             ...adCreative(row.snapshot),
             pageId: row.page_id,

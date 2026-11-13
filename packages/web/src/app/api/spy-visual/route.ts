@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { spyAdActivity } from '@/lib/spy-ad-activity';
 import { spyAudio } from '@/lib/spy-audio';
 import { analyzeSpyCreatives } from '@/lib/spy-creative-analysis';
 import { hydrateSpyThumbnails } from '@/lib/spy-creative-media';
@@ -214,11 +215,13 @@ export async function GET(req: Request) {
       .parse(await response.json())
       .records.filter((r) => r.companyId === c.companyId && r.offerId === c.id)
       .sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+    const latest = [...c.snapshots].sort((a, b) => Date.parse(a.at) - Date.parse(b.at)).at(-1)!;
     const ads = c.snapshot.ads.map((a) => {
       const previous = c.references.get(a.id);
       const record = saved.find((r) => r.ads[0] === a.id && r.ads[1] === previous?.id);
       return {
         id: a.id,
+        activity: spyAdActivity(c.snapshots, latest.scope, a.id),
         pageName: a.pageName,
         title: a.title,
         previous,
@@ -236,6 +239,22 @@ export async function GET(req: Request) {
       companyId: c.companyId,
       offerId: c.id,
       at: c.snapshot.at,
+      readings: c.snapshots.map((s) => ({
+        at: s.at,
+        ads: s.ads.length,
+        analyzed: s.ads.filter((a) => saved.some((r) => r.ads[0] === a.id)).length,
+      })),
+      activeAt: latest.at,
+      activeAds: latest.ads
+        .filter((a) => spyAdActivity(c.snapshots, latest.scope, a.id).status === 'active')
+        .map((a) => ({
+          id: a.id,
+          pageName: a.pageName,
+          title: a.title,
+          thumbnailUrl: a.thumbnailUrl,
+          thumbnailKey: a.thumbnailKey,
+          activity: spyAdActivity(c.snapshots, latest.scope, a.id),
+        })),
       scaling: spyScaling(c.snapshots, c.snapshot.scope),
       ads,
       summary: {

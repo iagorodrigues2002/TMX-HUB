@@ -1,16 +1,18 @@
 'use client';
 import { HubShell } from '@/components/hub/hub-shell';
 import { SpyScalingPanel } from '@/components/spy/spy-scaling-panel';
+import { SpySelect } from '@/components/spy/spy-select';
 import { SpyStructurePanel } from '@/components/spy/spy-structure-panel';
 import { SpyTranscript } from '@/components/spy/spy-transcript';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { request } from '@/lib/api-client/request';
 import { useAuth } from '@/lib/auth-context';
+import { safeAdThumbnail } from '@/lib/spy-ad-preview';
 import type { SpyScaling } from '@/lib/spy-scaling';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import styles from './visual.module.css';
 type Ad = {
   id: string;
@@ -20,6 +22,7 @@ type Ad = {
   recoveredReference?: boolean;
   recoveryNote?: string;
   saved?: { classification: keyof typeof labels; reason: string; at: string };
+  activity: { status: 'active' | 'inactive' | 'unknown'; checkedAt?: string };
 };
 type Comparison = {
   cached: boolean;
@@ -57,8 +60,12 @@ export default function SpyVisualRoute() {
 function SpyVisualPage() {
   const { user } = useAuth();
   const params = useSearchParams();
+  const [reading, setReading] = useState<string>();
+  const [activeLimit, setActiveLimit] = useState(24);
   const selection = new URLSearchParams();
-  for (const key of ['id', 'at']) if (params.get(key)) selection.set(key, params.get(key)!);
+  if (params.get('id')) selection.set('id', params.get('id')!);
+  const at = reading ?? params.get('at');
+  if (at) selection.set('at', at);
   const endpoint = `/api/spy-visual${selection.size ? `?${selection}` : ''}`;
   const query = useQuery({
     queryKey: ['spy-visual-preview', user?.id, endpoint],
@@ -70,6 +77,9 @@ function SpyVisualPage() {
         scaling: SpyScaling | null;
         at: string;
         ads: Ad[];
+        readings: { at: string; ads: number; analyzed: number }[];
+        activeAt?: string;
+        activeAds: (Ad & { thumbnailUrl?: string; thumbnailKey?: string })[];
         summary: {
           analyzed: number;
           withReference: number;
@@ -91,6 +101,17 @@ function SpyVisualPage() {
   const [comparison, setComparison] = useState<Comparison>();
   const resultRef = useRef<HTMLElement>(null);
   const comparisonRequest = useRef(0);
+  const previousEndpoint = useRef(endpoint);
+  useEffect(() => {
+    if (previousEndpoint.current === endpoint) return;
+    previousEndpoint.current = endpoint;
+    comparisonRequest.current++;
+    setSelected('');
+    setComparison(undefined);
+    setBusy(false);
+    setError('');
+    setActiveLimit(24);
+  }, [endpoint]);
   async function compare(ad: Ad, generate = false) {
     const ticket = ++comparisonRequest.current;
     setSelected(ad.id);
@@ -153,9 +174,79 @@ function SpyVisualPage() {
         <Tabs value={section} onValueChange={setSection}>
           <TabsList aria-label="Análises desta oferta">
             <TabsTrigger value="visual">Comparação visual</TabsTrigger>
+            <TabsTrigger value="active">
+              Anúncios ativos · {query.data?.activeAds.length ?? '—'}
+            </TabsTrigger>
             <TabsTrigger value="scaling">Escalando</TabsTrigger>
           </TabsList>
         </Tabs>
+        {section === 'visual' && query.data && (
+          <div className={styles.history}>
+            <div>
+              <strong>Histórico de coletas</strong>
+              <p>
+                As análises ficam salvas na coleta original. Troque a data para consultar o
+                histórico.
+              </p>
+            </div>
+            <SpySelect
+              label="Coleta da comparação visual"
+              value={query.data.at}
+              onChange={setReading}
+              options={[...query.data.readings].reverse().map((s) => ({
+                value: s.at,
+                label: `${new Date(s.at).toLocaleString('pt-BR')} · ${s.ads} ads · ${s.analyzed} com análise no histórico`,
+              }))}
+            />
+          </div>
+        )}
+        {section === 'active' && query.data && (
+          <section aria-label="Anúncios ativos na Library">
+            <h2>{query.data.activeAds.length} anúncios ativos encontrados</h2>
+            <p className={styles.note}>
+              Status informado pela Library na última coleta concluída:{' '}
+              {query.data.activeAt
+                ? new Date(query.data.activeAt).toLocaleString('pt-BR')
+                : 'sem coleta'}
+              . O status pode mudar depois desse horário.
+            </p>
+            <div className={styles.activeGrid}>
+              {query.data.activeAds.slice(0, activeLimit).map((ad) => {
+                const image = ad.thumbnailKey
+                  ? `/api/spy-library?view=image&key=${ad.thumbnailKey}`
+                  : safeAdThumbnail(ad.thumbnailUrl);
+                return (
+                  <a
+                    className={styles.activeCard}
+                    key={ad.id}
+                    href={`https://www.facebook.com/ads/library/?id=${ad.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {image && (
+                      <img
+                        src={image}
+                        alt={`Anúncio de ${ad.pageName}`}
+                        loading="lazy"
+                        decoding="async"
+                        referrerPolicy="no-referrer"
+                      />
+                    )}
+                    <span className={styles.saved}>● Ativo na última consulta</span>
+                    <strong>{ad.pageName}</strong>
+                    <span>{ad.title ?? `Anúncio ${ad.id}`}</span>
+                    <small>ID {ad.id} · Abrir na Library ↗</small>
+                  </a>
+                );
+              })}
+            </div>
+            {query.data.activeAds.length > activeLimit && (
+              <button type="button" onClick={() => setActiveLimit((n) => n + 24)}>
+                Mostrar mais anúncios
+              </button>
+            )}
+          </section>
+        )}
         {section === 'visual' && query.data && user && (
           <SpyStructurePanel
             key={`${user.id}:${query.data.companyId}:${endpoint}`}
@@ -250,6 +341,13 @@ function SpyVisualPage() {
                     >
                       <strong>{ad.pageName}</strong>
                       <span>ID {ad.id}</span>
+                      <small>
+                        {ad.activity.status === 'active'
+                          ? 'Ativo na última consulta'
+                          : ad.activity.status === 'inactive'
+                            ? 'Inativo na Library'
+                            : 'Status atual não confirmado'}
+                      </small>
                       {ad.saved && (
                         <small className={styles.saved}>
                           {labels[ad.saved.classification]} · salva

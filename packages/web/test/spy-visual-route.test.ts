@@ -70,7 +70,15 @@ test('live visual route binds Spy and AI company, rejects foreign offer/origin, 
                 at: '2026-11-12T12:00:00Z',
                 scope: 'test',
                 countries: ['ALL'],
-                ads: [],
+                ads: [
+                  {
+                    id: '123',
+                    pageId: '1',
+                    pageName: 'Historical',
+                    startedAt: null,
+                    url: 'https://www.facebook.com/ads/library/?id=123',
+                  },
+                ],
                 added: [],
                 missing: [],
                 baseline: true,
@@ -82,6 +90,44 @@ test('live visual route binds Spy and AI company, rejects foreign offer/origin, 
       dir,
     );
     assert.equal((await GET(req())).status, 200);
+    await changeLibraryState(
+      `company:${company}`,
+      (s) => {
+        s.jobs[id]!.snapshots.push({
+          day: 1,
+          at: '2026-11-13T12:00:00Z',
+          scope: 'test',
+          countries: ['ALL'],
+          ads: [
+            {
+              id: '456',
+              pageId: '1',
+              pageName: 'Current',
+              startedAt: null,
+              url: 'https://www.facebook.com/ads/library/?id=456',
+              isActive: true,
+            },
+          ],
+          activity: { '123': { isActive: false, checkedAt: '2026-11-13T12:00:00Z' } },
+          added: ['456'],
+          missing: ['123'],
+          baseline: false,
+        });
+        return s;
+      },
+      dir,
+    );
+    const latest = await (await GET(req())).json();
+    const historical = await (await GET(req(`id=${id}&at=2026-11-12T12:00:00Z`))).json();
+    assert.equal(latest.readings.length, 2);
+    assert.deepEqual(
+      latest.activeAds.map((a: { id: string }) => a.id),
+      ['456'],
+    );
+    assert.equal(historical.ads[0].id, '123');
+    assert.equal(historical.ads[0].activity.status, 'inactive');
+    assert.deepEqual(historical.activeAds, latest.activeAds);
+    assert.equal(historical.activeAt, '2026-11-13T12:00:00Z');
     assert.equal((await GET(req('id=00000000-0000-4000-8000-000000000000'))).status, 403);
     assert.equal((await POST(req(`id=${id}`, 'POST', 'https://evil.test'))).status, 422);
     aiCompany = '69706e9a-95ad-493e-b4ab-4a6de7541add';

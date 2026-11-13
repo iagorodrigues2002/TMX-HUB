@@ -32,6 +32,7 @@ export interface ScrapeCheckpoint {
   cursor: string;
   seenCursors: string[];
   ads: LibraryAd[];
+  activity?: Record<string, { isActive: boolean; checkedAt: string }>;
   pages: number;
   creditsRemaining: number;
 }
@@ -60,6 +61,7 @@ export async function readScrapeLibrary(
     }),
   );
   const ads = new Map<string, LibraryAd>(checkpoint?.ads.map((ad) => [ad.id, ad]));
+  const activity = { ...checkpoint?.activity };
   let creditsRemaining = checkpoint?.creditsRemaining ?? 0;
   let pages = checkpoint?.pages ?? 0;
   const sourcesList = [...unique.values()];
@@ -127,9 +129,18 @@ export async function readScrapeLibrary(
       creditsRemaining = parsed.data.credits_remaining;
       pages++;
       for (const row of parsed.data.searchResults) {
-        if (!row.is_active) continue;
+        activity[row.ad_archive_id] = {
+          isActive: row.is_active,
+          checkedAt: new Date().toISOString(),
+        };
+        if (!row.is_active) {
+          ads.delete(row.ad_archive_id);
+          continue;
+        }
         ads.set(row.ad_archive_id, {
           id: row.ad_archive_id,
+          isActive: row.is_active,
+          activityCheckedAt: new Date().toISOString(),
           detailsVersion: 1,
           pageId: row.page_id,
           pageName: row.page_name,
@@ -151,6 +162,7 @@ export async function readScrapeLibrary(
         cursor: next ?? '',
         seenCursors: next ? [...seen] : [],
         ads: [...ads.values()],
+        activity,
         pages,
         creditsRemaining,
       });
@@ -163,5 +175,5 @@ export async function readScrapeLibrary(
     }
     if (!complete) throw new LibraryFailure('incomplete');
   }
-  return { ads: [...ads.values()], creditsRemaining };
+  return { ads: [...ads.values()], activity, creditsRemaining };
 }

@@ -21,6 +21,8 @@ import { readScrapeLibrary } from './spy-scrapecreators-reader';
 
 const day = 86400000;
 const adSchema = z.object({
+  isActive: z.boolean().optional(),
+  activityCheckedAt: z.string().datetime().optional(),
   destinationDomains: z.array(z.string().max(253)).max(100).optional(),
   creativeRecoveredAt: z.string().datetime().optional(),
   creativeAssets: z
@@ -63,7 +65,14 @@ const adSchema = z.object({
     .regex(/^[a-f0-9]{64}$/)
     .optional(),
 });
+const activitySchema = z
+  .record(
+    z.string().regex(/^\d+$/),
+    z.object({ isActive: z.boolean(), checkedAt: z.string().datetime() }),
+  )
+  .optional();
 const snapshotSchema = z.object({
+  activity: activitySchema,
   day: z.number().int().min(0).max(7),
   at: z.string(),
   scope: z.string(),
@@ -74,6 +83,7 @@ const snapshotSchema = z.object({
   baseline: z.boolean(),
 });
 const partialSchema = z.object({
+  activity: activitySchema,
   scope: z.string(),
   revision: z.string(),
   at: z.string(),
@@ -841,6 +851,7 @@ export async function tickLibraryOwner(
       const token =
         state.provider === 'browser' ? '' : await decryptLibraryToken(state.encrypted!, dir);
       let ads: LibraryAd[];
+      let activity: LibrarySnapshot['activity'];
       if (state.provider === 'browser') {
         if (!options.browserReader) throw new LibraryFailure('unavailable');
         ads = await options.browserReader(job.sources, async (ads, pages, sourceIndex) => {
@@ -963,6 +974,7 @@ export async function tickLibraryOwner(
           },
         );
         ads = result.ads;
+        activity = result.activity;
         await changeLibraryState(
           owner,
           (s) =>
@@ -1012,6 +1024,7 @@ export async function tickLibraryOwner(
                 ),
               ],
               ads,
+              activity,
               ...delta,
             },
           ].sort((a, b) => a.day - b.day);

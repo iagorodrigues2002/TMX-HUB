@@ -73,6 +73,8 @@ test('ScrapeCreators passes the former 60-page limit and filters inactive varian
   assert.equal(calls, 285);
   assert.equal(result.ads.length, 285);
   assert.ok(!result.ads.some((a) => a.id === '99999'));
+  assert.equal(result.activity['99999'].isActive, false);
+  assert.equal(result.activity['1'].isActive, true);
 });
 test('ScrapeCreators preserves global scope, paginates by POST and deduplicates Library IDs', async () => {
   let calls = 0;

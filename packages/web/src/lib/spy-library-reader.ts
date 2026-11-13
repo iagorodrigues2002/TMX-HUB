@@ -26,6 +26,8 @@ export interface LibrarySource {
   exact: boolean;
 }
 export interface LibraryAd {
+  isActive?: boolean;
+  activityCheckedAt?: string;
   destinationDomains?: string[];
   creativeRecoveredAt?: string;
   creativeAssets?: { kind: 'image' | 'video'; url: string; sha256?: string }[];
@@ -246,6 +248,8 @@ export async function readLibrary(
       for (const row of parsed.data.data)
         ads.set(row.id, {
           id: row.id,
+          isActive: true,
+          activityCheckedAt: new Date().toISOString(),
           pageId: row.page_id,
           pageName: row.page_name ?? '',
           startedAt: row.ad_delivery_start_time ?? null,
