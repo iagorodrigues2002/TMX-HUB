@@ -2,7 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { LibraryAd } from '../src/lib/spy-library-reader';
 import type { StructureRecord } from '../src/lib/spy-structure';
-import { savedSpyStructure, spyStructureAssetKey } from '../src/lib/spy-structure-cache';
+import {
+  savedSpyStructure,
+  savedSpyStructureSource,
+  spyStructureAssetKey,
+} from '../src/lib/spy-structure-cache';
 
 test('saved patterns reuse exact media and copy across IDs, never unverified or changed content', () => {
   const old = {
@@ -41,4 +45,42 @@ test('saved patterns reuse exact media and copy across IDs, never unverified or 
     undefined,
   );
   assert.equal(savedSpyStructure([record], old, [old]), record);
+});
+
+test('new readings recover saved patterns from their original media, explicitly as history', () => {
+  const old = {
+    id: '1',
+    creativeAssets: [
+      { kind: 'video', url: 'https://video.fbcdn.net/old.mp4', sha256: 'a'.repeat(64) },
+    ],
+  } as LibraryAd;
+  const record = { ads: ['1'], assetKey: spyStructureAssetKey(old) } as StructureRecord;
+  const selected = { at: '2026-11-13T12:00:00Z', scope: 'offer' };
+  const snapshot = { at: '2026-11-12T12:00:00Z', scope: 'offer', ads: [old] };
+  const current = { id: '1' } as LibraryAd;
+  const recovered = savedSpyStructureSource([record], current, [snapshot], selected);
+  assert.equal(recovered?.saved, record);
+  assert.equal(recovered?.source, old);
+  assert.equal(recovered?.historicalAt, snapshot.at);
+  assert.equal(
+    savedSpyStructureSource([record], old, [snapshot], selected)?.historicalAt,
+    undefined,
+  );
+  assert.equal(
+    savedSpyStructureSource([record], { id: '2' } as LibraryAd, [snapshot], selected),
+    undefined,
+  );
+  assert.equal(
+    savedSpyStructureSource([record], current, [{ ...snapshot, scope: 'other' }], selected),
+    undefined,
+  );
+  assert.equal(
+    savedSpyStructureSource(
+      [record],
+      current,
+      [{ ...snapshot, at: '2026-11-14T12:00:00Z' }],
+      selected,
+    ),
+    undefined,
+  );
 });

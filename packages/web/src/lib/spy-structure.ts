@@ -36,6 +36,7 @@ export type StructureAd = {
   available: boolean;
   video?: boolean;
   saved?: StructureRecord;
+  historicalAt?: string;
 };
 export const structureLabels: Record<string, string> = {
   presenter: 'Pessoa falando',

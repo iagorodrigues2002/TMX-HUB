@@ -119,7 +119,12 @@ export function SpyStructurePanel({
                 <strong>
                   {analyzed.length}/{ads.length}
                 </strong>
-                <span>Anúncios analisados</span>
+                <span>Hooks, finais e áudio analisados</span>
+                {!!analyzed.filter((a) => a.historicalAt).length && (
+                  <small>
+                    {analyzed.filter((a) => a.historicalAt).length} recuperados do histórico
+                  </small>
+                )}
               </div>
               <div>
                 <strong>{ads.filter((a) => !a.available).length}</strong>
@@ -228,6 +233,12 @@ export function SpyStructurePanel({
       )}
       {view === 'detail' && selected && (
         <section className={styles.result} aria-busy={busy}>
+          {current?.historicalAt && (
+            <p className={styles.note}>
+              Análise histórica · coleta de {new Date(current.historicalAt).toLocaleString('pt-BR')}
+              . Quadros e áudio da coleta original; nenhuma nova cobrança.
+            </p>
+          )}
           {(error || query.error) && <p role="alert">{error || query.error?.message}</p>}
           {!current ? (
             <>
@@ -295,7 +306,11 @@ export function SpyStructurePanel({
               )}
               <SpyTranscript
                 key={`${companyId}:${current.id}`}
-                endpoint={endpoint}
+                endpoint={
+                  current.historicalAt
+                    ? `${endpoint.split('?')[0]}?${new URLSearchParams({ ...Object.fromEntries(new URLSearchParams(endpoint.split('?')[1])), at: current.historicalAt })}`
+                    : endpoint
+                }
                 companyId={companyId}
                 userId={userId}
                 adId={current.id}

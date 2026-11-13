@@ -18,6 +18,7 @@ type Ad = {
   id: string;
   pageName: string;
   title?: string;
+  historicalAt?: string;
   previous?: { id: string };
   recoveredReference?: boolean;
   recoveryNote?: string;
@@ -82,6 +83,7 @@ function SpyVisualPage() {
         activeAds: (Ad & { thumbnailUrl?: string; thumbnailKey?: string })[];
         summary: {
           analyzed: number;
+          historical: number;
           withReference: number;
           recovered: number;
           withoutReference: number;
@@ -113,6 +115,10 @@ function SpyVisualPage() {
     setActiveLimit(24);
   }, [endpoint]);
   async function compare(ad: Ad, generate = false) {
+    if (ad.historicalAt && !generate) {
+      setReading(ad.historicalAt);
+      return;
+    }
     const ticket = ++comparisonRequest.current;
     setSelected(ad.id);
     setBusy(true);
@@ -281,7 +287,10 @@ function SpyVisualPage() {
                 <strong>
                   {query.data.summary.analyzed}/{query.data.ads.length}
                 </strong>
-                <span>Analisados e salvos</span>
+                <span>Comparações desta coleta</span>
+                {!!query.data.summary.historical && (
+                  <small>+{query.data.summary.historical} com comparação salva no histórico</small>
+                )}
               </div>
               <div>
                 <strong>{query.data.summary.recovered}</strong>
@@ -351,6 +360,11 @@ function SpyVisualPage() {
                       {ad.saved && (
                         <small className={styles.saved}>
                           {labels[ad.saved.classification]} · salva
+                        </small>
+                      )}
+                      {ad.historicalAt && (
+                        <small className={styles.saved}>
+                          Comparação salva · abrir coleta original
                         </small>
                       )}
                       <small>

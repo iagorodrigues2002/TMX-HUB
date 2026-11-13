@@ -11,7 +11,10 @@ import { readLibraryState, spyLibraryDirectory } from '@/lib/spy-library-store';
 import { spyScaling } from '@/lib/spy-scaling';
 import { spySameOrigin, spyServerAccess, spyServerEnabled } from '@/lib/spy-server-access';
 import { structureRecord } from '@/lib/spy-structure';
-import { spyStructureAssetKey as assetKey, savedSpyStructure } from '@/lib/spy-structure-cache';
+import {
+  spyStructureAssetKey as assetKey,
+  savedSpyStructureSource,
+} from '@/lib/spy-structure-cache';
 import { spyVisualFrames } from '@/lib/spy-visual-frames';
 import { recoveredReferencesSchema, resultSchema } from '@/lib/spy-visual-results';
 import { z } from 'zod';
@@ -188,16 +191,19 @@ export async function GET(req: Request) {
     const c = await context(req);
     if (new URL(req.url).searchParams.get('view') === 'structure') {
       const records = await structureRecords(c);
-      const history = c.snapshots.flatMap((s) => s.ads);
       return send({
         at: c.snapshot.at,
-        ads: [...new Map(c.snapshot.ads.map((a) => [a.id, a])).values()].map((a) => ({
-          id: a.id,
-          name: a.pageName,
-          available: a.creativeAssets?.length === 1,
-          video: a.creativeAssets?.some((v) => v.kind === 'video') ?? false,
-          saved: savedSpyStructure(records, a, history),
-        })),
+        ads: [...new Map(c.snapshot.ads.map((a) => [a.id, a])).values()].map((a) => {
+          const match = savedSpyStructureSource(records, a, c.snapshots, c.snapshot);
+          return {
+            id: a.id,
+            name: a.pageName,
+            available: a.creativeAssets?.length === 1,
+            video: a.creativeAssets?.some((v) => v.kind === 'video') ?? false,
+            saved: match?.saved,
+            historicalAt: match?.historicalAt,
+          };
+        }),
       });
     }
     const response = await fetch(
@@ -219,11 +225,24 @@ export async function GET(req: Request) {
     const ads = c.snapshot.ads.map((a) => {
       const previous = c.references.get(a.id);
       const record = saved.find((r) => r.ads[0] === a.id && r.ads[1] === previous?.id);
+      const historicalRecord = !record && saved.find((r) => r.ads[0] === a.id);
+      const historicalAt = historicalRecord
+        ? [...c.snapshots]
+            .reverse()
+            .find(
+              (s) =>
+                s.scope === c.snapshot.scope &&
+                Date.parse(s.at) < Date.parse(c.snapshot.at) &&
+                Date.parse(s.at) <= Date.parse(historicalRecord.at) &&
+                s.ads.some((old) => old.id === a.id),
+            )?.at
+        : undefined;
       return {
         id: a.id,
         activity: spyAdActivity(c.snapshots, latest.scope, a.id),
         pageName: a.pageName,
         title: a.title,
+        historicalAt,
         previous,
         reason: c.analysis.results.get(a.id)?.reason,
         recoveredReference:
@@ -260,6 +279,7 @@ export async function GET(req: Request) {
       summary: {
         total: ads.length,
         analyzed: ads.filter((a) => a.saved).length,
+        historical: ads.filter((a) => a.historicalAt).length,
         withReference: ads.filter((a) => a.previous).length,
         recovered: ads.filter((a) => a.recoveredReference).length,
         withoutReference: ads.filter((a) => !a.previous).length,
@@ -297,13 +317,15 @@ export async function POST(req: Request) {
       c.snapshots.find((s) => s.at === previous.at)?.ads.find((a) => a.id === previous.id);
     if (action === 'structure') {
       if (referenceId) return send({ detail: 'Referência não se aplica ao resumo.' }, 400);
-      const frames = await spyVisualFrames(join(c.cacheRoot, 'frames'), ad, fetch, true);
-      const saved = savedSpyStructure(
-        await structureRecords(c),
-        ad,
-        c.snapshots.flatMap((s) => s.ads),
+      const match = savedSpyStructureSource(await structureRecords(c), ad, c.snapshots, c.snapshot);
+      const frames = await spyVisualFrames(
+        join(c.cacheRoot, 'frames'),
+        match?.source ?? ad,
+        fetch,
+        true,
       );
-      if (saved) return send({ ...saved, cached: true, frames });
+      if (match)
+        return send({ ...match.saved, historicalAt: match.historicalAt, cached: true, frames });
       let audioAnalysis = null;
       if (ad.creativeAssets?.some((a) => a.kind === 'video')) {
         let audio: Buffer | null = null;

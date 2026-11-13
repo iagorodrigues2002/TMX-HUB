@@ -107,7 +107,7 @@ export function SpyPreview() {
       query.set('fixture', 'page-history');
       query.set('day', params.get('day') ?? '0');
     }
-    router.push(`/spy${query.size ? `?${query}` : ''}`);
+    window.history.pushState(null, '', `/spy${query.size ? `?${query}` : ''}`);
   };
   const tabsRef = useRef<HTMLDivElement>(null);
   const [pill, setPill] = useState<{
