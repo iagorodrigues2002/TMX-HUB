@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import type { LibraryJob, LibrarySnapshot } from './spy-library-store';
+import { spyAdDomains } from './spy-domains';
 export const spyNoticeSchema = z.object({
   id: z.string(),
   recipientId: z.string(),
@@ -14,6 +15,8 @@ export const spyNoticeSchema = z.object({
     newAds: z.number().int().nonnegative(),
     newPages: z.number().int().nonnegative(),
     pageNames: z.array(z.string()),
+    newDomains: z.number().int().nonnegative().optional(),
+    domains: z.array(z.string()).optional(),
   }),
 });
 export type SpyDiscoveryNotice = z.infer<typeof spyNoticeSchema>;
@@ -27,6 +30,7 @@ export function spyDiscoverySeen(owner: string, job: LibraryJob, snapshot: Libra
         v.ads.flatMap((ad) => [
           entityKey(owner, job.id, v.scope, 'ad', ad.id),
           entityKey(owner, job.id, v.scope, 'page', ad.pageId),
+          ...spyAdDomains(ad).map((host) => entityKey(owner, job.id, v.scope, 'domain', host)),
         ]),
       ),
     ]),
@@ -43,6 +47,7 @@ export function spyDiscoveryNotice(
   if (!history.length) return null;
   const oldAds = new Set(history.flatMap((v) => v.ads.map((a) => a.id)));
   const oldPages = new Set(history.flatMap((v) => v.ads.map((a) => a.pageId)));
+  const oldDomains = new Set(history.flatMap((v) => v.ads.flatMap(spyAdDomains)));
   const delivered = new Set([...job.discoverySeen, ...notices.flatMap((n) => n.entityKeys)]);
   const key = (kind: string, id: string) => entityKey(owner, job.id, snapshot.scope, kind, id);
   const newAds = [
@@ -57,10 +62,12 @@ export function spyDiscoveryNotice(
       .filter((a) => !oldPages.has(a.pageId) && !delivered.has(key('page', a.pageId)))
       .map((a) => [a.pageId, a.pageName]),
   );
-  if (!newAds.length && !pages.size) return null;
+  const domains = [...new Set(snapshot.ads.flatMap(spyAdDomains))].filter((host) => !oldDomains.has(host) && !delivered.has(key('domain', host)));
+  if (!newAds.length && !pages.size && !domains.length) return null;
   const entityKeys = [
     ...newAds.map((id) => key('ad', id)),
     ...[...pages.keys()].map((id) => key('page', id)),
+    ...domains.map((host) => key('domain', host)),
   ].sort();
   return {
     id: `spy:${createHash('sha256').update(entityKeys.join(':')).digest('hex')}`,
@@ -75,6 +82,8 @@ export function spyDiscoveryNotice(
       newAds: newAds.length,
       newPages: pages.size,
       pageNames: [...pages.values()].slice(0, 10),
+      newDomains: domains.length,
+      domains,
     },
   };
 }

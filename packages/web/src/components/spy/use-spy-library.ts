@@ -49,7 +49,9 @@ export function useSpyLibrary(offers: SpyOffer[], ready: boolean, scope = '') {
     queryFn: () => request<LibraryView>(`/api/spy-library${fixtureQuery}`),
     enabled: ready && !!user,
     retry: false,
-    refetchInterval: 15000,
+    staleTime: 30000,
+    refetchOnWindowFocus: false,
+    refetchInterval: 60000,
   });
   const payload = JSON.stringify({
     catalog: offers,
@@ -92,9 +94,15 @@ export function useSpyLibrary(offers: SpyOffer[], ready: boolean, scope = '') {
       if (fixture) throw Error('Teste simulado não altera o monitor real.');
       return request<LibraryView>('/api/spy-library', { method: 'POST', body });
     },
-    onSuccess: () => setError(''),
-    onError: () => setError('Não foi possível concluir. Confira o diagnóstico e tente novamente.'),
-    onSettled: () => client.invalidateQueries({ queryKey: ['spy-library', user?.id] }),
+    onSuccess: (data) => {
+      setError('');
+      // The mutation already returns the saved state; don't block every button on a second GET.
+      client.setQueryData(queryKey, data);
+    },
+    onError: () => {
+      setError('Não foi possível concluir. Confira o diagnóstico e tente novamente.');
+      void client.invalidateQueries({ queryKey });
+    },
   });
   return { status, action, error };
 }

@@ -187,6 +187,7 @@ export function LibraryMonitoring({
                       {o.name}
                     </button>
                     <small className={s.muted}> · {j?.sources.length ?? 0} fontes</small>
+                    {last && <Link className={s.collectionLink} href={`/spy/analise-visual?${new URLSearchParams({ id: o.id, at: last.at })}`}>Análise visual com IA</Link>}
                   </th>
                   <td>
                     {j ? libraryStatusText[j.status] : 'Registrando fontes…'}

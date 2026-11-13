@@ -18,6 +18,7 @@ test('dashboard reads forward cancellation without changing periods or sales vie
     vm.runInNewContext(compile(file), {
       exports,
       URLSearchParams,
+      AbortSignal,
       require(name) {
         if (name === './request.js')
           return {
@@ -37,7 +38,8 @@ test('dashboard reads forward cancellation without changing periods or sales vie
   const dashboard = load('endpoints-dashboard.ts');
   const offers = load('endpoints-offers.ts');
   const finance = load('endpoints-tracking-finance.ts');
-  const signal = new AbortController().signal;
+  const controller = new AbortController();
+  const signal = controller.signal;
   const period = { from: '2026-11-01', to: '2026-11-03' };
   await dashboard.getOfferSnapshots('offer', period, signal);
   await dashboard.getDashboardSummary(period, signal);
@@ -46,7 +48,9 @@ test('dashboard reads forward cancellation without changing periods or sales vie
   await finance.getTrackingSummary('offer', period, 'natural', signal);
   await finance.getTrackingOverview(period.from, period.to, 'natural', signal);
   assert.equal(calls.length, 6);
-  for (const call of calls) assert.equal(call.options.signal, signal);
+  for (const call of calls) assert.equal(call.options.signal.aborted, false);
+  controller.abort();
+  for (const call of calls) assert.equal(call.options.signal.aborted, true);
   for (const call of calls.filter((call) => call.path.includes('tracking/'))) {
     const params = new URL(call.path, 'http://localhost').searchParams;
     assert.equal(params.get('from'), period.from);

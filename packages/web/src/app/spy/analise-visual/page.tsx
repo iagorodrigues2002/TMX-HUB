@@ -1,7 +1,10 @@
 'use client';
 import { HubShell } from '@/components/hub/hub-shell';
+import { SpyScalingPanel } from '@/components/spy/spy-scaling-panel';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { request } from '@/lib/api-client/request';
 import { useAuth } from '@/lib/auth-context';
+import type { SpyScaling } from '@/lib/spy-scaling';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -55,6 +58,9 @@ function SpyVisualPage() {
     queryFn: () =>
       request<{
         name: string;
+        companyId: string;
+        offerId: string;
+        scaling: SpyScaling | null;
         at: string;
         ads: Ad[];
         summary: {
@@ -71,6 +77,7 @@ function SpyVisualPage() {
     refetchInterval: 30000,
   });
   const [filter, setFilter] = useState<string>('all');
+  const [section, setSection] = useState('visual');
   const [selected, setSelected] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -109,22 +116,38 @@ function SpyVisualPage() {
       }
     >
       <main className={styles.page}>
-        <Link href="/spy?view=monitor">← Acompanhamento</Link>
+        <Link href="/spy?view=analysis">← Ofertas em análise com IA</Link>
         <header>
           <div>
             <span className={styles.eyebrow}>SPY · ANÁLISE VISUAL</span>
-            <h1>Comparação visual com IA</h1>
+            <h1>Análise com IA</h1>
             <p>{query.data?.name ?? 'Anúncios não confirmados'}</p>
           </div>
           <span className={styles.badge}>Análises salvas por empresa</span>
         </header>
-        <p className={styles.note}>
-          A IA compara quadros do anúncio com uma referência do histórico. A sugestão não altera a
-          confirmação técnica. Reabrir a mesma análise usa o resultado salvo.
-        </p>
+        <Tabs value={section} onValueChange={setSection}>
+          <TabsList aria-label="Análises desta oferta">
+            <TabsTrigger value="visual">Comparação visual</TabsTrigger>
+            <TabsTrigger value="scaling">Escalando</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        {section === 'scaling' && query.data && (
+          <SpyScalingPanel
+            key={`${user?.id}:${query.data.companyId}:${query.data.offerId}`}
+            companyId={query.data.companyId}
+            offer={{ id: query.data.offerId, name: query.data.name, domains: [] }}
+            evidence={query.data.scaling}
+          />
+        )}
+        {section === 'visual' && (
+          <p className={styles.note}>
+            A IA compara quadros do anúncio com uma referência do histórico. A sugestão não altera a
+            confirmação técnica. Reabrir a mesma análise usa o resultado salvo.
+          </p>
+        )}
         {query.isPending && <output>Carregando anúncios…</output>}
         {query.error && <p role="alert">{query.error.message}</p>}
-        {query.data?.summary && (
+        {section === 'visual' && query.data?.summary && (
           <>
             <div className={styles.summary}>
               <div>
@@ -169,7 +192,7 @@ function SpyVisualPage() {
             </div>
           </>
         )}
-        <div className={styles.layout}>
+        {section === 'visual' && <div className={styles.layout}>
           <aside aria-label="Anúncios não confirmados">
             <h2>{query.data?.ads.length ?? '—'} anúncios investigados</h2>
             <p>Coleta {query.data ? new Date(query.data.at).toLocaleString('pt-BR') : '—'}</p>
@@ -288,7 +311,7 @@ function SpyVisualPage() {
               </>
             )}
           </section>
-        </div>
+        </div>}
       </main>
     </HubShell>
   );

@@ -10,6 +10,7 @@ import { spySameOrigin, spyServerAccess, spyServerEnabled } from '@/lib/spy-serv
 import { spyVisualFrames } from '@/lib/spy-visual-frames';
 import { recoveredReferencesSchema, resultSchema } from '@/lib/spy-visual-results';
 import { z } from 'zod';
+import { spyScaling } from '@/lib/spy-scaling';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 const root = join(homedir(), '.codex/local-data/tmx/ai-preview/spy-visual-source');
@@ -61,7 +62,7 @@ async function context(req: Request) {
   let source: Source;
   if (server) {
     if (tenant!.companyId !== companyId) throw Error('Empresa inválida.');
-    const id = z.string().uuid().parse(new URL(req.url).searchParams.get('id'));
+    const id = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/).parse(new URL(req.url).searchParams.get('id'));
     const state = await readLibraryState(tenant!.owner);
     const job = state.jobs[id];
     if (!job || job.deletedAt) throw Error('Oferta não encontrada nesta empresa.');
@@ -72,7 +73,22 @@ async function context(req: Request) {
       job.snapshots.flatMap((s) => s.ads),
     );
     source = { companyId, job };
-  } else source = JSON.parse(await readFile(join(root, companyId, 'source.json'), 'utf8'));
+  } else {
+    source = JSON.parse(await readFile(join(root, companyId, 'source.json'), 'utf8'));
+    const id = new URL(req.url).searchParams.get('id');
+    if (id && id !== source.job.id) {
+      if (!/^[A-Za-z0-9_-]{1,100}$/.test(id)) throw Error('Oferta inválida.');
+      const me = await fetch(`${api}/v1/auth/me`, { headers, cache:'no-store', redirect:'error', signal:AbortSignal.timeout(5000) });
+      if (!me.ok) throw Error('Entre no TMX.');
+      const owner = z.object({ user:z.object({ id:z.string().min(1),role:z.literal('admin') }) }).parse(await me.json()).user.id;
+      const state = await readLibraryState(owner);
+      const job = state.jobs[id];
+      if (!job || job.deletedAt) throw Error('Oferta não encontrada.');
+      await hydrateSpyRecovery(spyLibraryDirectory(), owner, job);
+      await hydrateSpyThumbnails(spyLibraryDirectory(), owner, job.snapshots.flatMap((s) => s.ads));
+      source = { companyId,job };
+    }
+  }
   if (source.companyId !== companyId) throw Error('Empresa inválida.');
   const at = new URL(req.url).searchParams.get('at');
   const snapshot = at ? source.job.snapshots.find((s) => s.at === at) : source.job.snapshots.at(-1);
@@ -171,8 +187,10 @@ export async function GET(req: Request) {
       });
     return send({
       name: c.name,
+      companyId: c.companyId,
       offerId: c.id,
       at: c.snapshot.at,
+      scaling: spyScaling(c.snapshots, c.snapshot.scope),
       ads,
       summary: {
         total: ads.length,

@@ -3,6 +3,7 @@ export const funnelTypes = ['Não informado', 'Quiz', 'TSL', 'VSL'] as const;
 export const spySections = [
   ['offers', 'Ofertas'],
   ['monitor', 'Acompanhamento'],
+  ['analysis', 'Análise com IA'],
   ['cloning', 'Clonagem'],
   ['settings', 'Configurações'],
 ] as const;

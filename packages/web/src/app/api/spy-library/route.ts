@@ -120,9 +120,12 @@ async function output(owner: string) {
   } catch {}
   const parsed = z.object({ at: z.string(), running: z.boolean() }).safeParse(worker);
   const state = await readLibraryState(owner);
-  for (const job of Object.values(state.jobs)) {
-    await hydrateSpyRecovery(spyLibraryDirectory(), owner, job);
-    await hydrateSpyThumbnails(spyLibraryDirectory(), owner, job.snapshots.flatMap((reading) => reading.ads));
+  const jobs = Object.values(state.jobs);
+  for (let index = 0; index < jobs.length; index += 4) {
+    await Promise.all(jobs.slice(index, index + 4).map(async (job) => {
+      await hydrateSpyRecovery(spyLibraryDirectory(), owner, job);
+      await hydrateSpyThumbnails(spyLibraryDirectory(), owner, job.snapshots.flatMap((reading) => reading.ads));
+    }));
   }
   return {
     ...publicLibraryState(state),

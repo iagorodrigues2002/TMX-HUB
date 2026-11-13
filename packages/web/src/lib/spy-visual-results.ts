@@ -4,7 +4,7 @@ import { z } from 'zod';
 export const resultSchema = z.object({
   status: z.literal('complete'),
   companyId: z.string().uuid(),
-  offerId: z.string().uuid(),
+  offerId: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/),
   version: z.literal('spy-frames-v1'),
   at: z.string().datetime(),
   ads: z.array(z.string().regex(/^\d+$/)).length(2),

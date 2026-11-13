@@ -34,6 +34,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { z } from 'zod';
 import { SpyCardReading } from './spy-card-reading';
@@ -411,6 +412,9 @@ export function SpyPreview() {
             <Activity size={15} aria-hidden />
             Acompanhamento <span className={s.count}>{planning.length}</span>
           </TabsTrigger>
+          <TabsTrigger value="analysis" data-spy-tab="analysis">
+            <ScanEye size={15} aria-hidden /> Análise com IA
+          </TabsTrigger>
           <TabsTrigger value="cloning" data-spy-tab="cloning">
             <Copy size={15} aria-hidden />
             Clonagem{' '}
@@ -773,7 +777,7 @@ export function SpyPreview() {
                       }
                     >
                       <Radar size={13} />
-                      {library.status.data?.jobs[o.id]?.optedIn
+                      {!library.status.data ? 'Carregando monitor…' : library.action.isPending && library.action.variables?.id === o.id ? 'Salvando…' : library.status.data?.jobs[o.id]?.optedIn
                         ? 'Deixar de acompanhar'
                         : 'Acompanhar'}
                     </button>
@@ -869,6 +873,20 @@ export function SpyPreview() {
       {tab === 'monitor' && (
         <LibraryMonitoring offers={filtered} library={library} onOpen={setOpened} />
       )}
+      {tab === 'analysis' && <section className={s.analysisSection}>
+        <div className={s.analysisHeading}><div><h2>Análise com IA</h2><p>Compare criativos e acompanhe sinais de crescimento por oferta.</p></div><span className={s.tag}>{filtered.filter((offer) => library.status.data?.jobs[offer.id]?.optedIn).length} em acompanhamento</span></div>
+        {library.status.isPending && <output>Carregando ofertas com histórico…</output>}
+        {!library.status.isPending && !filtered.some((offer) => library.status.data?.jobs[offer.id]?.optedIn) && <p>Nenhuma oferta em acompanhamento neste filtro.</p>}
+        <div className={s.analysisGrid}>{filtered.filter((offer) => library.status.data?.jobs[offer.id]?.optedIn).map((offer) => {
+          const job = library.status.data?.jobs[offer.id];
+          const last = job?.snapshots.at(-1);
+          return <article key={offer.id} className={s.analysisCard}>
+            <div className={s.analysisCardTitle}><span className={s.analysisIcon}><ScanEye size={22} aria-hidden="true" /></span><div><h3>{offer.name}</h3><small>Em acompanhamento</small></div></div>
+            <div className={s.analysisReading}><strong>{last ? last.count.toLocaleString('pt-BR') : '—'}</strong><span>anúncios encontrados<small>{last ? `Última leitura · ${new Date(last.at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : 'Aguardando primeira coleta'}</small></span></div>
+            {last ? <Link className={s.analysisOpen} href={`/spy/analise-visual?${new URLSearchParams({ id: offer.id, at: last.at })}`} aria-label={`Abrir análise com IA de ${offer.name}`}><span>Abrir análise com IA</span><ArrowUpRight size={17} aria-hidden="true" /></Link> : <span className={s.muted}>Disponível após a primeira coleta</span>}
+          </article>;
+        })}</div>
+      </section>}
       {tab === 'cloning' && (
         <>
           <div className={s.sectionHeading}>

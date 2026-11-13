@@ -311,6 +311,7 @@ export function NotificationCenter({ open, onOpenChange, onUnreadCountChange }: 
                           {item.spy.pageNames.join(' · ')}
                         </p>
                       )}
+                      {!!item.spy.newDomains && <p>{item.spy.newDomains} domínio(s) novo(s): {item.spy.domains?.join(' · ')}</p>}
                       <Button asChild variant="outline" size="sm">
                         <a href={`/spy?offer=${encodeURIComponent(item.spy.offerId)}`}>
                           Abrir oferta <ExternalLink aria-hidden />

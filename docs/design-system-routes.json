@@ -7,6 +7,7 @@
     "frame": "hub"
   },
   { "route": "/spy", "source": "packages/web/src/app/spy/page.tsx", "frame": "hub" },
+  { "route": "/spy/analise-visual", "source": "packages/web/src/app/spy/analise-visual/page.tsx", "frame": "hub" },
   {
     "route": "/admin",
     "source": "packages/web/src/app/admin/page.tsx",

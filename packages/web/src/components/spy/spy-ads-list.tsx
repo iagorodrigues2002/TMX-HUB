@@ -252,8 +252,8 @@ export function SpyAdsList({
         `/api/spy-library?${new URLSearchParams({ view: kind, id, at, offset: String(offset), ...(!isPages && all ? { grouped: '1' } : {}), ...(!isPages && all && creative ? { creative } : {}), ...(!isPages && !all ? { highlights: '1' } : {}), ...(fixture ? { fixture: 'page-history', day: fixtureDay } : {}) })}`,
       ),
     enabled: !!user,
-    staleTime: 15000,
-    refetchInterval: 15000,
+    staleTime: 60000,
+    refetchOnWindowFocus: false,
     retry: false,
   });
   return (
@@ -265,7 +265,7 @@ export function SpyAdsList({
         {isPages ? 'Páginas encontradas' : all ? 'Todos os anúncios' : 'Destaques por volume'}
       </h4>
       {!isPages && (
-        <Link href={`/spy/analise-visual?${new URLSearchParams({ id, at })}`}>Comparação visual com IA</Link>
+        <Link className={s.collectionLink} href={`/spy/analise-visual?${new URLSearchParams({ id, at })}`}>✨ Abrir análise visual com IA · comparação e justificativa</Link>
       )}
       {!isPages && !all && (
         <p className={s.muted}>

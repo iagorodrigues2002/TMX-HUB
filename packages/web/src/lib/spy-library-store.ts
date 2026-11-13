@@ -21,6 +21,7 @@ import { readScrapeLibrary } from './spy-scrapecreators-reader';
 
 const day = 86400000;
 const adSchema = z.object({
+  destinationDomains: z.array(z.string().max(253)).max(100).optional(),
   creativeRecoveredAt: z.string().datetime().optional(),
   creativeAssets: z
     .array(

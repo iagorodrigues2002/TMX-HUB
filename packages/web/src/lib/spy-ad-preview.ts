@@ -1,3 +1,4 @@
+import { spyDomain } from './spy-domains';
 const record = (v: unknown): Record<string, unknown> =>
   v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
 const text = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
@@ -56,6 +57,7 @@ export function adCreative(value: unknown) {
         ])
       : undefined;
   return {
+    destinationDomains: [...new Set([snapshot.link_url, ...items.map((item) => item.link_url)].map(spyDomain).filter((v): v is string => !!v))],
     ...(creativeAssets.length ? { creativeAssets } : {}),
     creativeComplete: items.length > 0 && items.length <= 30 && assets.every(Boolean),
     ...(copy && copy.length <= 100000 ? { creativeText: copy } : {}),

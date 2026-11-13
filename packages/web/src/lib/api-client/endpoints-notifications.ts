@@ -18,6 +18,8 @@ export const CenterNotificationSchema = z.discriminatedUnion('kind', [
       newAds: z.number().int().nonnegative(),
       newPages: z.number().int().nonnegative(),
       pageNames: z.array(z.string()),
+      newDomains: z.number().int().nonnegative().optional(),
+      domains: z.array(z.string()).optional(),
     }),
   }),
   z.object({

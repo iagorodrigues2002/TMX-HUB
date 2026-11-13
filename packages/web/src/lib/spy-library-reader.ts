@@ -26,6 +26,7 @@ export interface LibrarySource {
   exact: boolean;
 }
 export interface LibraryAd {
+  destinationDomains?: string[];
   creativeRecoveredAt?: string;
   creativeAssets?: { kind: 'image' | 'video'; url: string; sha256?: string }[];
   creativeComplete?: boolean;
