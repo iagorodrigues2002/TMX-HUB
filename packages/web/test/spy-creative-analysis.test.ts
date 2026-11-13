@@ -151,6 +151,29 @@ test('Creative extraction preserves full video reference and missing assets rema
   ])
     assert.equal(safeAdMedia(url), undefined);
 });
+test('Recovered history produces matching radar totals, filtered ads and new links', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'spy-recovered-radar-'));
+  try {
+    const state = spyHistoryFixture(1);
+    const job = state.jobs['sheet-34']!;
+    job.snapshots[0]!.ads = [ad('1')];
+    job.snapshots[1]!.ads = [ad('2'), ad('3')];
+    job.snapshots[1]!.added = ['2', '3'];
+    const dir = join(root, 'creative-recovery', createHash('sha256').update(state.owner).digest('hex'), job.id);
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, 'enriched.json'), JSON.stringify(Object.fromEntries(['1', '2', '3'].map(id => [id, { ...full, creativeRecoveredAt: '2026-11-13T06:00:00.000Z' }]))));
+    assert.equal(publicLibraryState(state).jobs[job.id]!.creativeSummary!.unverified, 2);
+    await hydrateSpyRecovery(root, state.owner, job);
+    const radar = publicLibraryState(state).jobs[job.id]!.creativeSummary!;
+    const filtered = publicLibraryAds(state, job.id, 0, false, 'duplicate')!;
+    assert.equal(radar.duplicate, 2);
+    assert.deepEqual(filtered.creativeSummary, radar);
+    assert.equal(filtered.total, 2);
+    assert.deepEqual(job.snapshots[1]!.added, ['2', '3']);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 test('Recovered evidence is scoped to owner and offer and records when it was retrieved', async () => {
   const root = await mkdtemp(join(tmpdir(), 'spy-recovery-'));
   try {

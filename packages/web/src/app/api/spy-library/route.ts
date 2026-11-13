@@ -119,8 +119,13 @@ async function output(owner: string) {
     worker = JSON.parse(await readFile(join(spyLibraryDirectory(), 'worker-status.json'), 'utf8'));
   } catch {}
   const parsed = z.object({ at: z.string(), running: z.boolean() }).safeParse(worker);
+  const state = await readLibraryState(owner);
+  for (const job of Object.values(state.jobs)) {
+    await hydrateSpyRecovery(spyLibraryDirectory(), owner, job);
+    await hydrateSpyThumbnails(spyLibraryDirectory(), owner, job.snapshots.flatMap((reading) => reading.ads));
+  }
   return {
-    ...publicLibraryState(await readLibraryState(owner)),
+    ...publicLibraryState(state),
     workerRunning:
       parsed.success && parsed.data.running && Date.now() - Date.parse(parsed.data.at) < 90000,
   };
@@ -182,6 +187,11 @@ export async function GET(req: Request) {
         });
       if (!input.success) return reply({ detail: 'Página de anúncios inválida.' }, 400);
       const state = fixtureState ?? (await readLibraryState(owner));
+      const job = state.jobs[input.data.id];
+      if (job && !fixtureState && url.searchParams.get('view') !== 'pages') {
+        await hydrateSpyRecovery(spyLibraryDirectory(), owner, job);
+        await hydrateSpyThumbnails(spyLibraryDirectory(), owner, job.snapshots.flatMap((reading) => reading.ads));
+      }
       if (url.searchParams.get('view') === 'links') {
         const result = publicLibraryNewLinks(state, input.data.id);
         if (!result) return reply({ detail: 'Nenhuma leitura salva.' }, 404);
@@ -190,15 +200,6 @@ export async function GET(req: Request) {
         return reply(result);
       }
       const isPages = url.searchParams.get('view') === 'pages';
-      const job = state.jobs[input.data.id];
-      if (!isPages && job && !fixtureState) {
-        await hydrateSpyRecovery(spyLibraryDirectory(), owner, job);
-        await hydrateSpyThumbnails(
-          spyLibraryDirectory(),
-          owner,
-          job.snapshots.flatMap((reading) => reading.ads),
-        );
-      }
       const page = isPages
         ? publicLibraryPages(state, input.data.id, input.data.offset)
         : publicLibraryAds(
