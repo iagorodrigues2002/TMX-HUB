@@ -55,8 +55,8 @@ export function questionContext(raw: AiData, context: Context, question: string,
     if (value !== null) quotes.set(currency, { rate: value, fetchedAt: raw.snapshot.fx?.fetchedAt ?? '' });
     return value;
   }
-  function summarize(from: string, to: string, kind: 'refund' | 'chargeback') {
-    const selected = rows.filter(r => r.kind === kind && r.date! >= from && r.date! <= to);
+  function summarize(from: string, to: string, kind: 'refund' | 'chargeback' | 'all') {
+    const selected = rows.filter(r => (kind === 'all' || r.kind === kind) && r.date! >= from && r.date! <= to);
     let amount = 0, count = 0;
     const missing = new Set<string>();
     for (const row of selected) {
@@ -75,7 +75,12 @@ export function questionContext(raw: AiData, context: Context, question: string,
   }
   const reversalAnalysis = context.availableAreas.reversals ? {
     currency: target, unit: 'minor units (100 = 1 monetary unit)',
+    reportingDate: today, timeZone: 'America/Sao_Paulo',
+    interpretation: 'Na visão geral TMX, devoluções incluem reembolsos e chargebacks. Para uma pergunta geral sobre a média de reembolsos, apresente combined com o rótulo "reembolsos e chargebacks", identificando a composição. Só restrinja a refund ou chargeback quando solicitado explicitamente. Datas fetchedAt são instantes UTC: hoje é reportingDate no fuso informado, não o dia UTC da coleta.',
     basis: 'Todos os reembolsos autorizados somados após conversão pela cotação armazenada atual; não é taxa histórica de cada venda. Dias sem registros entram no divisor. Hoje é parcial e não entra na média dos dias completos.',
+    combined: { previousMonth: summarize(previous, shift(current, -1), 'all'),
+      currentMonthClosedDays: summarize(current, shift(today, -1), 'all'),
+      today: summarize(today, today, 'all'), period: summarize(context.scope.from, context.scope.to, 'all') },
     refund: { previousMonth: summarize(previous, shift(current, -1), 'refund'),
       currentMonthClosedDays: summarize(current, shift(today, -1), 'refund'),
       today: summarize(today, today, 'refund'), period: summarize(context.scope.from, context.scope.to, 'refund') },

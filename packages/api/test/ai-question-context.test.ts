@@ -43,6 +43,16 @@ it('does not turn missing rates into zero or expose reversals without permission
   expect(questionContext(raw, context(raw), question, now).reversalAnalysis?.refund.previousMonth).toMatchObject({ amountMinor: null, missingCurrencies: ['PEN'] });
   expect(questionContext(raw, context(raw, false), question, now).reversalAnalysis).toBeNull();
 });
+it('includes chargebacks in the general TMX reversal comparison without relabeling them', () => {
+  const raw = fixture();
+  raw.reversals.push({ offer_id: 'allowed', date: '2026-11-12', currency: 'USD', kind: 'chargeback', count: 2, amount_minor: '4000' });
+  const d = questionContext(raw, context(raw), question, now).reversalAnalysis!;
+  expect(d.combined.today).toMatchObject({ count: 3, amountMinor: 35000 });
+  expect(d.refund.today.count).toBe(1);
+  expect(d.chargeback.today.count).toBe(2);
+  expect(d.reportingDate).toBe('2026-11-12');
+  expect(d.timeZone).toBe('America/Sao_Paulo');
+});
 it('preserves values in compact metrics and excludes internal finance', () => {
   const raw = fixture(), c = context(raw);
   c.rows = [{ id: 'test', name: 'campaign', unavailable: false, missingMetrics: [], metrics: { spend: 20, metaRoas: 1.5, reserve: 999, fees: 888 } as any }];
