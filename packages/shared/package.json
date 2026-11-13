@@ -13,6 +13,7 @@
     "./creative-workspace-model": "./src/creative/creative-workspace-model.ts",
     "./traffic-campaigns-model": "./src/creative/real-campaigns-model.ts",
     "./traffic-reports-model": "./src/creative/traffic-reports-model.ts",
+    "./budget-fx": "./src/creative/budget-fx.ts",
     "./date-range": "./src/creative/date-range.ts"
   },
   "scripts": {

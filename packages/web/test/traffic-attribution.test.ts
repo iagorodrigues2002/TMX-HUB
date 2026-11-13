@@ -52,6 +52,15 @@ const data: TrafficAttribution = {
   fetchedAt: '2026-11-09T00:00:00Z',
   rows: [record],
 };
+test('campaign gross revenue and ROAS add Meta front value and TMX upsells exactly once', () => {
+  const source = { ...row, metrics: { ...row.metrics, metaPurchaseValue: 200 } };
+  const result = attributeTrafficRows([source], meta, data, 'BRL').rows[0]!;
+  assert.equal(result.metrics.upsells, 2);
+  assert.equal(result.metrics.tmxGross, 260);
+  assert.equal(result.metrics.tmxGrossRoas, 5.2);
+  assert.equal(result.metrics.metaPurchaseValue, 200);
+  assert.equal(attributeTrafficRows([source], meta, undefined, 'BRL').rows[0]!.metrics.tmxGross, null);
+});
 test('creative CPA, gross revenue, ARPU and gross ROAS use unique linked ads', () => {
   const snapshot = {
     ...meta,
@@ -86,6 +95,7 @@ test('creative CPA, gross revenue, ARPU and gross ROAS use unique linked ads', (
   assert.equal(totals.tmxCpa, 50);
   assert.equal(totals.funnelArpu, 220);
   assert.equal(totals.tmxGross, 220);
+  assert.equal(totals.tmxGrossRoas, 4.4);
   assert.equal(totals.tmxCreativeRoas, 4.6);
   const upsellOnly = summarizeCreativeAttribution([{ adIds: ['101'] }], groups, 'USD', {
     ...metrics,

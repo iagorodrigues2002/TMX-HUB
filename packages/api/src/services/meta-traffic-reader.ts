@@ -38,7 +38,7 @@ export async function readMetaTraffic(
       throw Error(
         'A credencial da Meta expirou ou foi revogada (código 190). Reconecte o System User. O relatório anterior foi preservado.',
       );
-    if ([4, 17, 32, 613].includes(body.error?.code))
+    if ([4, 17, 32, 613, 80004].includes(body.error?.code))
       throw Error(
         'A Meta limitou temporariamente as consultas. Aguarde antes de atualizar novamente. O relatório anterior foi preservado.',
       );

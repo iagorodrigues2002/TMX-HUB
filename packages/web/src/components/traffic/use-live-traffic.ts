@@ -5,6 +5,8 @@ import type { DateRange } from '@/lib/date-range';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import type { NativeFinanceOffer, RealCampaignSnapshot } from './real-campaigns-model';
+import { useCompanyTrafficSettings } from './use-company-traffic-settings';
+import type { ImportedInventory } from './traffic-model';
 
 export function useLiveTraffic(
   range: DateRange,
@@ -24,9 +26,11 @@ export function useLiveTraffic(
       ),
     enabled: !!user,
     retry: false,
-    refetchInterval: 3000,
+    refetchInterval: (query) => query.state.data?.busy ? 3000 : 60000,
   });
   const personal = connection.data?.connected === true;
+  const companySettings = useCompanyTrafficSettings<{ campaigns: Record<string, string>; links: Record<string, string> }>('classification', !!connection.data?.shared);
+  const [classificationError, setClassificationError] = useState('');
   const legacy =
     !personal &&
     user?.id === 'admin' &&
@@ -34,6 +38,16 @@ export function useLiveTraffic(
   const reportPath = personal
     ? '/v1/meta-control/traffic/connection/report'
     : '/v1/meta-control/campaigns/local-import';
+  const accountInventory = useQuery({
+    queryKey: ['traffic-account-health', user?.id, connection.data?.id],
+    enabled: reporting && (personal || legacy),
+    queryFn: () => request<ImportedInventory>(personal
+      ? '/v1/meta-control/traffic/connection/inventory'
+      : '/v1/meta-control/inventory?connection_id=local-import'),
+    staleTime: 60000,
+    refetchInterval: 60000,
+    retry: false,
+  });
   const service = useQuery({
     queryKey: ['traffic-background-service', user?.id],
     queryFn: () =>
@@ -253,8 +267,8 @@ export function useLiveTraffic(
     } catch {}
     setSaved({ userId: user.id, campaigns, links });
   }, [user?.id]);
-  const mappings = saved.userId === user?.id ? saved.campaigns : {};
-  const links = saved.userId === user?.id ? saved.links : {};
+  const mappings = connection.data?.shared ? companySettings.data?.value?.campaigns ?? {} : saved.userId === user?.id ? saved.campaigns : {};
+  const links = connection.data?.shared ? companySettings.data?.value?.links ?? {} : saved.userId === user?.id ? saved.links : {};
   function saveClassification(kind: 'campaigns' | 'links', id: string, value: string) {
     if (!user?.id) return;
     const entries = { ...(kind === 'campaigns' ? mappings : links) };
@@ -266,6 +280,12 @@ export function useLiveTraffic(
       links,
       ...{ [kind]: entries },
     };
+    if (connection.data?.shared) {
+      setClassificationError('');
+      void companySettings.save({ campaigns: next.campaigns, links: next.links })
+        .catch(() => setClassificationError('Não foi possível salvar a classificação da empresa. Atualize e tente novamente.'));
+      return;
+    }
     setSaved(next);
     try {
       localStorage.setItem(
@@ -280,6 +300,7 @@ export function useLiveTraffic(
     finance.data?.general.offers.map((offer) => ({ id: offer.offer_id, name: offer.offer_name })) ??
     [];
   return {
+    accountInventory,
     connection,
     personal,
     service,
@@ -307,6 +328,7 @@ export function useLiveTraffic(
     mappings,
     links,
     saveClassification,
+    classificationError,
     userId: finance.data?.ownerId,
   };
 }

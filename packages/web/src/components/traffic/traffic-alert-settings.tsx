@@ -19,6 +19,7 @@ export function TrafficAlertSettings() {
     queryFn: () =>
       request<{
         companyId: string | null;
+        shared?: boolean;
         intervalMinutes: number;
         lastCheckedAt: string | null;
         accounts: number;
@@ -65,7 +66,7 @@ export function TrafficAlertSettings() {
         Reprovação de anúncio e conta desabilitada na central. Recebem os membros ativos com acesso
         a Tráfego nesta empresa.
       </p>
-      <div className={styles.toolbar}>
+      {!settings.data?.shared && <div className={styles.toolbar}>
         <label className={styles.field}>
           Empresa dos alertas
           <select
@@ -86,12 +87,12 @@ export function TrafficAlertSettings() {
         <Button disabled={settings.isPending || busy} onClick={() => void save()}>
           {busy ? 'Salvando…' : 'Salvar destinatários'}
         </Button>
-      </div>
+      </div>}
       <output aria-live="polite" className={styles.subtle}>
         {notice}
       </output>
       <small className={styles.subtle}>
-        Verificação a cada 5 minutos. A primeira leitura cria a referência, sem disparar reprovações
+        Verificação a cada {settings.data?.intervalMinutes ?? 20} minutos. A primeira leitura cria a referência, sem disparar reprovações
         antigas.
       </small>
     </Panel>

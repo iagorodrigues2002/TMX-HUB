@@ -41,6 +41,17 @@ export async function buildTrafficReader(
   const require = createRequire(import.meta.url);
   const { build } = createRequire(require.resolve('tsup'))('esbuild');
   await build({
+    entryPoints: [join(apiRoot, 'src/lib/secret-box.ts')],
+    outfile: join(dirname(output), 'traffic-secret-box.mjs'),
+    bundle: true, platform: 'node', format: 'esm', target: 'node22',
+  });
+  await build({
+    entryPoints: [join(apiRoot, 'src/services/traffic-daily-store.ts')],
+    outfile: join(dirname(output), 'traffic-daily-store.mjs'),
+    bundle: true, platform: 'node', format: 'esm', target: 'node22',
+    external: ['postgres'],
+  });
+  await build({
     entryPoints: [join(apiRoot, 'src/services/traffic-attribution.ts')],
     outfile: join(dirname(output), 'traffic-attribution-reader.cjs'),
     bundle: true,

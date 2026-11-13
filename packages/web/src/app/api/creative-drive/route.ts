@@ -77,13 +77,20 @@ export async function POST(req: NextRequest) {
       if (!hasCreativeDeliveryCoverage(snapshot, range))
         return json({ detail: 'Aguardando os dados completos para atualizar os alertas.' }, 409);
       let lowRoas: string[] = [];
-      await classifyCreativeMetadata(owner, (state) => {
-        const assessment = creativeDeliveryAssessment(snapshot, range, state, input.mappings);
-        lowRoas = assessment.lowRoas;
-        return assessment.statuses;
-      });
+      const delivering = new Set<string>();
+      await classifyCreativeMetadata(
+        owner,
+        (state) => {
+          const assessment = creativeDeliveryAssessment(snapshot, range, state, input.mappings);
+          lowRoas = assessment.lowRoas;
+          for (const key of assessment.delivering) delivering.add(key);
+          return assessment.statuses;
+        },
+        delivering,
+      );
       return json({ lowRoas });
-    } else if (input.action === 'metadata')
+    }
+    if (input.action === 'metadata')
       await updateCreativeMetadata(owner, input.key, {
         ...(input.status !== undefined ? { status: input.status } : {}),
         ...(input.principalId ? { principalId: input.principalId } : {}),

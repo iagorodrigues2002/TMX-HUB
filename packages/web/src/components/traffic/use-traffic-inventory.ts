@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { type ImportedInventory, type Inventory, mergeImportedInventory } from './traffic-model';
+import { useCompanyTrafficSettings } from './use-company-traffic-settings';
 
 export function useTrafficInventory(enabled: boolean) {
   const { user } = useAuth();
@@ -19,12 +20,14 @@ export function useTrafficInventory(enabled: boolean) {
   const personal = useQuery({
     queryKey: ['traffic-user-connection', user?.id],
     queryFn: () =>
-      request<{ connected: boolean; id?: string }>('/v1/meta-control/traffic/connection'),
+      request<{ connected: boolean; id?: string; shared?: boolean; companyId?: string }>('/v1/meta-control/traffic/connection'),
     enabled: !!user,
     retry: false,
     refetchInterval: 3000,
   });
   const isPersonal = personal.data?.connected === true;
+  const shared = !!personal.data?.shared;
+  const companySettings = useCompanyTrafficSettings<Inventory>('inventory', enabled && shared);
   const inventoryConnection = isPersonal ? personal.data?.id : 'local-import';
   const connections = useQuery({
     queryKey: ['traffic-meta-connections', user?.id],
@@ -51,19 +54,25 @@ export function useTrafficInventory(enabled: boolean) {
   useEffect(() => {
     if (!local.data || !inventoryConnection) return;
     let previous: Inventory = { bms: [], accounts: [] };
+    if (shared) {
+      if (!companySettings.data) return;
+      previous = companySettings.data.value ?? previous;
+    } else {
     try {
       previous = JSON.parse(
         localStorage.getItem(`tmx:traffic-inventory:${user?.id}`) ?? '{"bms":[],"accounts":[]}',
       );
     } catch {}
+    }
     setInventory(mergeImportedInventory(previous, local.data, inventoryConnection));
     setInventoryOwner(user?.id ?? '');
     setFetchedAt(local.data.fetchedAt);
     setOrigin('meta');
-  }, [local.data, inventoryConnection, user?.id]);
-  function saveInventory(next: Inventory) {
+  }, [local.data, inventoryConnection, user?.id, shared, companySettings.data]);
+  async function saveInventory(next: Inventory) {
+    if (shared) await companySettings.save(next);
     setInventory(next);
-    try {
+    if (!shared) try {
       localStorage.setItem(`tmx:traffic-inventory:${user?.id}`, JSON.stringify(next));
     } catch {}
   }
@@ -96,6 +105,8 @@ export function useTrafficInventory(enabled: boolean) {
     inventory: inventoryOwner === user?.id ? inventory : { bms: [], accounts: [] },
     setInventory: saveInventory,
     userId: user?.id ?? '',
+    shared,
+    companyId: personal.data?.companyId,
     connections,
     connectionId,
     busy,

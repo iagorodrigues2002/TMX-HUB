@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import styles from './traffic-preview.module.css';
 import { Panel, StatusPill } from './traffic-ui';
 import type { useTrafficInventory } from './use-traffic-inventory';
+import { useCompanyTrafficSettings } from './use-company-traffic-settings';
 
 interface StructureItem {
   id: string;
@@ -20,7 +21,8 @@ export function TrafficStructure({ assets }: { assets: ReturnType<typeof useTraf
   });
   const [editing, setEditing] = useState<StructureItem | null>(null);
   const [error, setError] = useState('');
-  const items = saved.user === assets.userId ? saved.items : [];
+  const companySettings = useCompanyTrafficSettings<StructureItem[]>('structure', assets.shared);
+  const items = assets.shared ? companySettings.data?.value ?? [] : saved.user === assets.userId ? saved.items : [];
   useEffect(() => {
     setEditing(null);
     let items: StructureItem[] = [];
@@ -42,7 +44,7 @@ export function TrafficStructure({ assets }: { assets: ReturnType<typeof useTraf
     } catch {}
     setSaved({ user: assets.userId, items });
   }, [assets.userId]);
-  function save() {
+  async function save() {
     if (!editing || !editing.name.trim()) {
       setError('Informe o nome.');
       return;
@@ -52,9 +54,10 @@ export function TrafficStructure({ assets }: { assets: ReturnType<typeof useTraf
       { ...editing, name: editing.name.trim() },
     ];
     try {
-      localStorage.setItem(`tmx:traffic-structure:${assets.userId}`, JSON.stringify(next));
+      if (assets.shared) await companySettings.save(next);
+      else localStorage.setItem(`tmx:traffic-structure:${assets.userId}`, JSON.stringify(next));
     } catch {
-      setError('Armazenamento local indisponível. Dados não salvos.');
+      setError('Não foi possível salvar. Atualize e tente novamente; os dados anteriores foram preservados.');
       return;
     }
     setSaved({ user: assets.userId, items: next });

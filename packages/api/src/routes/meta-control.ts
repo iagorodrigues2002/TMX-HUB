@@ -1,5 +1,7 @@
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { registerAiPreview } from '../services/ai-preview.js';
+import { registerTrafficManagement } from '../services/traffic-management.js';
+import { registerTrafficCompanySettings } from '../services/traffic-company-settings.js';
 import { registerTrafficAlerts } from '../services/traffic-notifications.js';
 import { registerLocalMetaCampaignRoutes } from './meta-control/get-local-meta-campaigns.js';
 import { registerLocalTrafficFinanceRoutes } from './meta-control/get-local-traffic-finance.js';
@@ -12,6 +14,8 @@ import { registerGetTrackingOverviewRoutes } from './tracking-overview/get-track
 
 const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   registerAiPreview(app);
+  registerTrafficManagement(app);
+  registerTrafficCompanySettings(app);
   registerGetTrackingOverviewRoutes(app, true);
   registerTrafficAttribution(app);
   registerTrafficAlerts(app);

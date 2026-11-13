@@ -74,7 +74,10 @@ export interface ReportRecord {
   amounts: ReportAmounts;
 }
 export interface ReportMetrics {
+  tmxGross: number | null;
+  tmxGrossRoas: number | null;
   tmxFronts: number | null;
+  tmxCpa: number | null;
   upsells: number | null;
   funnelArpu: number | null;
   naturalArpu: number | null;
@@ -264,6 +267,9 @@ export function reportMetrics(records: Pick<ReportRecord, 'amounts'>[]): ReportM
     denominator > 0 ? numerator / denominator : null;
   return {
     tmxFronts: null,
+    tmxCpa: null,
+    tmxGross: null,
+    tmxGrossRoas: null,
     upsells: null,
     funnelArpu: null,
     naturalArpu: null,
@@ -394,9 +400,15 @@ export const reportColumns: {
 }[] = [
   {
     key: 'tmxFronts',
-    label: 'Fronts · TMX',
+    label: 'Vendas · TMX',
     kind: 'count',
     hint: 'Fronts pagos no TMX com atribuição confirmada; denominador do ARPU do funil',
+  },
+  {
+    key: 'tmxCpa',
+    label: 'CPA front · TMX',
+    kind: 'money',
+    hint: 'Investimento ÷ fronts pagos com atribuição confirmada no TMX',
   },
   {
     key: 'upsells',
@@ -433,6 +445,18 @@ export const reportColumns: {
     label: 'Upsells com clique registrado · TMX',
     kind: 'count',
     hint: 'Upsells com clique de recuperação registrado, classificados pelo rastreamento e vinculados à campanha pelo front',
+  },
+  {
+    key: 'tmxGross',
+    label: 'Faturamento · TMX',
+    kind: 'money',
+    hint: 'Valor de compras de front informado pela Meta + faturamento dos upsells vinculados no TMX.',
+  },
+  {
+    key: 'tmxGrossRoas',
+    label: 'ROAS · TMX',
+    kind: 'ratio',
+    hint: '(Valor de compras da Meta + faturamento dos upsells vinculados no TMX) ÷ investimento.',
   },
   {
     key: 'tmxAttributedRoas',

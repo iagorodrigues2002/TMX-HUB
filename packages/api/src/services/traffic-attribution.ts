@@ -55,6 +55,43 @@ function sourceIds(source: Record<string, string>) {
     accountId: metaId(s.ad_account_id) ?? metaId(s.account_id),
   };
 }
+interface NamedTrafficAd {
+  offer_id: string;
+  campaign_name: string;
+  ad_name: string;
+  campaign_id: string;
+  ad_id: string;
+  adset_id: string;
+  account_id: string;
+}
+
+export function resolveTrafficNames(rows: AttributionInputRow[], candidates: NamedTrafficAd[]) {
+  const names = new Map<string, NamedTrafficAd[]>();
+  for (const ad of candidates) {
+    const key = JSON.stringify([ad.offer_id, ad.campaign_name, ad.ad_name]);
+    const group = names.get(key) ?? [];
+    group.push(ad);
+    names.set(key, group);
+  }
+  return rows.map((row) => {
+    const source = normalizeAdAttribution(row.source ?? {});
+    const ids = sourceIds(source);
+    if (ids.adId || !source.utm_campaign || !source.utm_content) return row;
+    if (sourceIds(row.page_source ?? {}).adId) return row;
+    try {
+      if (sourceIds(Object.fromEntries(new URL(row.source_url ?? '').searchParams)).adId) return row;
+    } catch {}
+    const matches = (names.get(JSON.stringify([row.offer_id, source.utm_campaign, source.utm_content])) ?? []).filter((ad) =>
+      (!ids.campaignId || ids.campaignId === ad.campaign_id) &&
+      (!ids.adsetId || ids.adsetId === ad.adset_id) &&
+      (!ids.accountId || ids.accountId === ad.account_id.replace(/^act_/, '')));
+    const unique = new Map(matches.map((ad) => [JSON.stringify([ad.account_id, ad.campaign_id, ad.adset_id, ad.ad_id]), ad]));
+    if (unique.size !== 1) return row;
+    const ad = [...unique.values()][0]!;
+    return { ...row, source: { ...source, ad_id: ad.ad_id, campaign_id: ad.campaign_id,
+      adset_id: ad.adset_id, ad_account_id: ad.account_id.replace(/^act_/, '') } };
+  });
+}
 export async function loadTrafficAttribution(
   db: Sql,
   offerIds: string[],
@@ -105,11 +142,23 @@ export async function loadTrafficAttribution(
     WHERE p.enabled AND p.offer_id=ANY(${offerIds}) AND ((o.paid_at>=${from} AND o.paid_at<${to})
       OR o.id=ANY(${reversals.refunded}) OR o.id=ANY(${reversals.chargeback})) LIMIT 200001`;
   if (rows.length > 200000) throw Error('Attribution report too large');
+  const named = rows.map((row) => normalizeAdAttribution(row.source ?? {}))
+    .filter((source) => !sourceIds(source).adId && source.utm_campaign && source.utm_content);
+  const candidates = named.length ? await db<NamedTrafficAd[]>`
+    SELECT DISTINCT co.offer_id,c->>'name' AS campaign_name,i->>'adName' AS ad_name,
+      i->>'campaignId' AS campaign_id,i->>'adId' AS ad_id,i->>'adsetId' AS adset_id,i->>'accountId' AS account_id
+    FROM traffic_daily_archive a JOIN company_offers co ON co.company_id=a.company_id
+    CROSS JOIN LATERAL jsonb_array_elements(a.snapshot->'insights') i
+    JOIN LATERAL jsonb_array_elements(a.snapshot->'campaigns') c ON c->>'id'=i->>'campaignId'
+    WHERE co.offer_id=ANY(${offerIds}) AND a.day BETWEEN ${from.toISOString().slice(0,10)}::date AND ${new Date(to.getTime()-1).toISOString().slice(0,10)}::date
+      AND c->>'name'=ANY(${[...new Set(named.map((source) => source.utm_campaign!))]})
+      AND i->>'adName'=ANY(${[...new Set(named.map((source) => source.utm_content!))]})
+  ` : [];
   const rates = await db<
     { base_currency: string; rate: string }[]
   >`SELECT base_currency,rate::text FROM exchange_rate_cache WHERE target_currency='BRL'`;
   return aggregateTrafficAttribution(
-    rows,
+    resolveTrafficNames(rows, candidates),
     new Map([
       ['BRL', 1],
       ...rates

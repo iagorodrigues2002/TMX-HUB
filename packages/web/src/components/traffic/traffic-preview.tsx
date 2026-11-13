@@ -13,6 +13,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { ContingencyPreview } from './contingency-preview';
 import { CreativeWorkspace } from './creative-workspace';
 import { RealCampaigns, type TrafficFilters } from './real-campaigns';
+import { TrafficFilterSelect } from './traffic-filter-select';
 import { assignedOffer } from './real-campaigns-model';
 import { type TrafficTab, availableTrafficTabs, selectTrafficTab } from './traffic-model';
 import styles from './traffic-preview.module.css';
@@ -75,10 +76,13 @@ export function TrafficPreview() {
     query: '',
   });
   const reporting = allowedTabs.length > 0 && ['overview', 'campaigns', 'windows'].includes(tab);
-  const creativeRange: DateRange = { from: CREATIVE_HISTORY_START, to: todayIso() };
+  const [creativeRange, setCreativeRange] = useState<DateRange>(() => ({
+    from: CREATIVE_HISTORY_START,
+    to: todayIso(),
+  }));
   const live = useLiveTraffic(
     tab === 'ads-intelligence' ? creativeRange : range,
-    tab === 'windows',
+    tab === 'windows' || tab === 'campaigns',
     reporting || tab === 'ads-intelligence',
     tab !== 'ads-intelligence',
     tab === 'ads-intelligence',
@@ -146,6 +150,15 @@ export function TrafficPreview() {
           ))}
         </TabsList>
         {reporting && (
+          <TabsContent value={tab}>
+            <RealCampaigns
+              range={range}
+              view={tab === 'ads-intelligence' ? 'overview' : tab}
+              live={live}
+              filters={filters}
+              setFilters={setFilters}
+              codes={codes}
+              filterPanel={
           <section
             className={styles.filterWorkbench}
             aria-label="Filtros compartilhados do tráfego"
@@ -156,32 +169,23 @@ export function TrafficPreview() {
             <div className={styles.compactSources}>
               <label className={styles.field}>
                 Oferta
-                <select
-                  aria-label="Oferta do tráfego"
-                  className={styles.control}
+                <TrafficFilterSelect
+                  label="Oferta do tráfego"
                   value={filters.offer}
-                  onChange={(event) => setFilters({ ...filters, offer: event.target.value })}
-                >
-                  <option value="">Todas as ofertas</option>
-                  {codes.map((code) => (
-                    <option key={code}>{code}</option>
-                  ))}
-                  <option value="__unclassified">Não classificado</option>
-                </select>
+                  onChange={(value) => setFilters({ ...filters, offer: value })}
+                  options={[{ value: '', label: 'Todas as ofertas' }, ...codes.map(code => ({ value: code, label: code })), { value: '__unclassified', label: 'Não classificado' }]}
+                />
               </label>
               <label className={styles.field}>
                 Exibir valores em
-                <select
-                  aria-label="Moeda de exibição do tráfego"
-                  className={styles.control}
+                <TrafficFilterSelect
+                  label="Moeda de exibição do tráfego"
                   value={filters.currency}
-                  onChange={(event) =>
-                    setFilters({ ...filters, currency: event.target.value as 'BRL' | 'USD' })
+                  onChange={(value) =>
+                    setFilters({ ...filters, currency: value as 'BRL' | 'USD' })
                   }
-                >
-                  <option value="BRL">Real · R$</option>
-                  <option value="USD">Dólar · US$</option>
-                </select>
+                  options={[{ value: 'BRL', label: 'Real · R$' }, { value: 'USD', label: 'Dólar · US$' }]}
+                />
               </label>
               <Button
                 size="sm"
@@ -191,6 +195,7 @@ export function TrafficPreview() {
                     ...filters,
                     offer: '',
                     account: '',
+                    accountStatus: '',
                     business: '',
                     status: '',
                     query: '',
@@ -231,22 +236,36 @@ export function TrafficPreview() {
               }
             />
           </section>
-        )}
-        {reporting && (
-          <TabsContent value={tab}>
-            <RealCampaigns
-              range={range}
-              view={tab === 'ads-intelligence' ? 'overview' : tab}
-              live={live}
-              filters={filters}
-              setFilters={setFilters}
-              codes={codes}
+              }
             />
           </TabsContent>
         )}
         {allowedTabs.some(([id]) => id === 'ads-intelligence') && (
           <TabsContent value="ads-intelligence">
             <CreativeWorkspace
+              dateFilter={
+                <DateRangeFilter
+                  value={creativeRange}
+                  onChange={setCreativeRange}
+                  presets={DASHBOARD_DATE_PRESETS.filter(
+                    (preset) => preset.id !== 'previous-month',
+                  ).map((preset) =>
+                    preset.id === 'all-time'
+                      ? {
+                          ...preset,
+                          getRange: () => ({ from: CREATIVE_HISTORY_START, to: todayIso() }),
+                        }
+                      : preset,
+                  )}
+                  max={todayIso()}
+                  className={styles.dateWorkbench}
+                  status={
+                    <span className={styles.subtle}>
+                      Métricas do período selecionado · período total desde {CREATIVE_HISTORY_START}
+                    </span>
+                  }
+                />
+              }
               live={live}
               range={creativeRange}
               currency={filters.currency}

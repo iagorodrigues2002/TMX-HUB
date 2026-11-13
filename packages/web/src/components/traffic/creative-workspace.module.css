@@ -19,6 +19,7 @@
   width: 160px;
 }
 .notice {
+  display: block;
   padding: 12px 16px;
   margin-bottom: 16px;
   border: 1px solid var(--color-border);
@@ -231,25 +232,37 @@
   transition-property: transform;
 }
 .filterToggle[aria-pressed="true"] svg {
-  animation: creative-check-in 160ms cubic-bezier(.2, .75, .3, 1);
+  animation: creative-check-in 160ms cubic-bezier(0.2, 0.75, 0.3, 1);
 }
 .folderGrid,
 .offerSummary {
-  animation: creative-enter 180ms cubic-bezier(.2, .75, .3, 1);
+  animation: creative-enter 180ms cubic-bezier(0.2, 0.75, 0.3, 1);
 }
 .refreshIcon[data-refreshing="true"] {
   animation: creative-refresh 900ms linear infinite;
 }
 @keyframes creative-enter {
-  from { transform: translateY(4px); }
-  to { transform: translateY(0); }
+  from {
+    transform: translateY(4px);
+  }
+  to {
+    transform: translateY(0);
+  }
 }
 @keyframes creative-check-in {
-  from { transform: scale(.84); opacity: .55; }
-  to { transform: scale(1); opacity: 1; }
+  from {
+    transform: scale(0.84);
+    opacity: 0.55;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 @keyframes creative-refresh {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 .search {
   display: flex;
@@ -751,6 +764,7 @@
     animation: none;
   }
 }
-:global(html[data-tmx-motion="off"]) :is(.folderGrid, .offerSummary, .filterToggle svg, .refreshIcon) {
+:global(html[data-tmx-motion="off"])
+  :is(.folderGrid, .offerSummary, .filterToggle svg, .refreshIcon) {
   animation: none;
 }

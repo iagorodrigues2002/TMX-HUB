@@ -39,7 +39,10 @@ export const trafficAttributionResponse = z.object({
 });
 export type TrafficAttribution = z.infer<typeof trafficAttributionResponse>;
 export const tmxAttributionColumns = [
+  'tmxGross',
+  'tmxGrossRoas',
   'tmxFronts',
+  'tmxCpa',
   'upsells',
   'naturalUpsells',
   'clickedUpsells',
@@ -106,6 +109,7 @@ export function summarizeTrafficAttribution(
       tmxCpa: null,
       upsells: null,
       tmxGross: null,
+      tmxGrossRoas: null,
       funnelArpu: null,
       naturalArpu: null,
       clickedArpu: null,
@@ -134,6 +138,7 @@ export function summarizeTrafficAttribution(
     naturalUpsells: records.reduce((sum, record) => sum + record.naturalUpsells, 0),
     clickedUpsells: records.reduce((sum, record) => sum + record.clickedUpsells, 0),
     tmxGross: gross,
+    tmxGrossRoas: gross === null || spend === null || spend <= 0 ? null : gross / spend,
     funnelArpu: arpu(gross),
     naturalArpu: arpu(sumMoney(naturalKey)),
     clickedArpu: arpu(sumMoney(clickedKey)),
@@ -151,17 +156,36 @@ export function attributeTrafficRows(
   const { groups, unmatchedUpsells } = groupTrafficAttribution(meta, data, level);
   return {
     unmatchedUpsells,
-    rows: rows.map((row) => ({
-      ...row,
-      metrics: {
-        ...row.metrics,
-        ...summarizeTrafficAttribution(
-          groups.get(row.id),
-          currency,
-          row.unavailable ? null : row.metrics.spend,
-        ),
-      },
-    })),
+    rows: rows.map((row) => {
+      const records = groups.get(row.id);
+      const summary = summarizeTrafficAttribution(
+        records,
+        currency,
+        row.unavailable ? null : row.metrics.spend,
+      );
+      const key = currency === 'BRL' ? 'upsellGrossBrlMinor' : 'upsellGrossUsdMinor';
+      const upsellGross =
+        records?.length && records.every((record) => record[key] != null)
+          ? records.reduce((sum, record) => sum + Number(record[key]), 0) / 100
+          : null;
+      const metaGross =
+        row.unavailable || row.missingMetrics?.includes('metaPurchaseValue')
+          ? null
+          : row.metrics.metaPurchaseValue;
+      const gross = metaGross === null || upsellGross === null ? null : metaGross + upsellGross;
+      return {
+        ...row,
+        metrics: {
+          ...row.metrics,
+          ...summary,
+          tmxGross: gross,
+          tmxGrossRoas:
+            gross === null || row.unavailable || row.metrics.spend <= 0
+              ? null
+              : gross / row.metrics.spend,
+        },
+      };
+    }),
   };
 }
 

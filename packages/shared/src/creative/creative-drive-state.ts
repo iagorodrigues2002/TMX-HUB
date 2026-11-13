@@ -18,7 +18,10 @@ export const creativeAdReviewSchema = z.object({
   campaign: z.string().min(1).max(500),
   offer: z.string().regex(/^[A-Z0-9_]{1,80}$/),
   batch: z.string().regex(/^(Sem leva|Leva \d+)$/),
-  fileId: z.string().regex(/^[A-Za-z0-9_-]{10,200}$/).optional(),
+  fileId: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{10,200}$/)
+    .optional(),
 });
 export type CreativeAdReview = z.infer<typeof creativeAdReviewSchema>;
 export interface CreativeDriveState {
@@ -27,40 +30,58 @@ export interface CreativeDriveState {
   catalog: CreativeDriveCatalog | null;
   error: string;
   checkedAt: number;
-  metadata: Record<string, {
-    status?: CreativeStatus | null;
-    principalId?: string;
-    manualStatus?: boolean;
-    automaticRulesVersion?: number;
-  }>;
+  metadata: Record<
+    string,
+    {
+      status?: CreativeStatus | null;
+      principalId?: string;
+      manualStatus?: boolean;
+      automaticRulesVersion?: number;
+    }
+  >;
   reviewedAds?: Record<string, CreativeAdReview>;
 }
 
 export const creativeDriveAction = z.discriminatedUnion('action', [
   z.object({ action: z.literal('configure'), rootUrl: z.string().url().max(1000) }).strict(),
   z.object({ action: z.literal('sync') }).strict(),
-  z.object({
-    action: z.literal('classify'),
-    personal: z.boolean(),
-    mappings: z.record(z.string().min(1).max(127), z.string().max(99)),
-  }).strict(),
-  z.object({
-    action: z.literal('metadata'),
-    key: z.string().min(1).max(2000),
-    status: z.enum(creativeStatuses).nullable().optional(),
-    principalId: z.string().regex(/^[A-Za-z0-9_-]{10,200}$/).optional(),
-  }).strict().refine((v) => v.status !== undefined || !!v.principalId),
+  z
+    .object({
+      action: z.literal('classify'),
+      personal: z.boolean(),
+      mappings: z.record(z.string().min(1).max(127), z.string().max(99)),
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal('metadata'),
+      key: z.string().min(1).max(2000),
+      status: z.enum(creativeStatuses).nullable().optional(),
+      principalId: z
+        .string()
+        .regex(/^[A-Za-z0-9_-]{10,200}$/)
+        .optional(),
+    })
+    .strict()
+    .refine((v) => v.status !== undefined || !!v.principalId),
 ]);
 
 const creativeArchiveSchema = z.object({
   rootId: z.string(),
   reviewedAds: z.record(z.string().regex(/^\d+$/), creativeAdReviewSchema).optional(),
-  files: z.array(z.object({
-    id: z.string().regex(/^[A-Za-z0-9_-]{10,200}$/),
-    name: z.string().max(255).regex(/\.mp4$/i),
-    offer: z.string(),
-    leva: z.number().int().nonnegative().nullable(),
-  })).max(2000),
+  files: z
+    .array(
+      z.object({
+        id: z.string().regex(/^[A-Za-z0-9_-]{10,200}$/),
+        name: z
+          .string()
+          .max(255)
+          .regex(/\.mp4$/i),
+        offer: z.string(),
+        leva: z.number().int().nonnegative().nullable(),
+      }),
+    )
+    .max(2000),
 });
 
 export function withCreativeDriveArchive(state: CreativeDriveState, input: unknown) {
@@ -82,7 +103,13 @@ export function withCreativeDriveArchive(state: CreativeDriveState, input: unkno
     if (leva !== null && !identity) continue;
     ids.add(id);
     historical.push({
-      id, name, offer, batch, identity, archived: true, thumbnail: null,
+      id,
+      name,
+      offer,
+      batch,
+      identity,
+      archived: true,
+      thumbnail: null,
       url: `https://drive.google.com/file/d/${id}/view`,
     });
   }
@@ -109,7 +136,8 @@ export function applyManualCreativeMetadata(
     !state.catalog?.files.some(
       (file) =>
         file.id === patch.principalId &&
-        (creativeFileIdentity(file)?.key ?? creativeFallbackKey(file.name, file.offer, file.batch)) === key,
+        (creativeFileIdentity(file)?.key ??
+          creativeFallbackKey(file.name, file.offer, file.batch)) === key,
     )
   )
     throw Error('O arquivo principal precisa pertencer a este criativo.');
@@ -127,10 +155,21 @@ const AUTOMATIC_RULES_VERSION = 1;
 export function applyCreativeStatuses(
   current: CreativeDriveState['metadata'],
   statuses: ReadonlyMap<string, CreativeStatus>,
+  delivering: ReadonlySet<string> = new Set(),
 ) {
   let updated: CreativeDriveState['metadata'] | undefined;
   for (const [key, status] of statuses) {
     const saved = current[key];
+    if (saved?.status === 'Stand by' && delivering.has(key)) {
+      updated ??= { ...current };
+      updated[key] = {
+        ...saved,
+        status: 'Testando',
+        manualStatus: false,
+        automaticRulesVersion: AUTOMATIC_RULES_VERSION,
+      };
+      continue;
+    }
     if (
       saved?.manualStatus ||
       saved?.status === null ||

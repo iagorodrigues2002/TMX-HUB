@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { ArrowDown, ArrowUp, ArrowUpDown, Search } from 'lucide-react';
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import styles from './traffic-preview.module.css';
 import {
   type ReportMetricKey,
@@ -23,6 +23,11 @@ export function MetricsTable({
   onOpen,
   totals,
   columns = reportColumns.map((column) => column.key),
+  selection,
+  rowAction,
+  beforeName,
+  leadingColumns = [],
+  hideInlineStatus = false,
 }: {
   rows: ReportRow[];
   format: MetricFormat;
@@ -30,6 +35,15 @@ export function MetricsTable({
   onOpen?: (row: ReportRow) => void;
   totals?: ReportMetrics;
   columns?: ReportMetricKey[];
+  selection?: {
+    ids: string[];
+    toggle: (ids: string[], checked: boolean) => void;
+    disabled?: boolean;
+  };
+  rowAction?: (row: ReportRow) => ReactNode;
+  beforeName?: (row: ReportRow) => ReactNode;
+  leadingColumns?: { key: string; label: string; render: (row: ReportRow) => ReactNode }[];
+  hideInlineStatus?: boolean;
 }) {
   const [sort, setSort] = useState<{ key: ReportMetricKey; ascending: boolean } | null>(null);
   const visible = columns.flatMap((key) => reportColumns.filter((column) => column.key === key));
@@ -52,12 +66,38 @@ export function MetricsTable({
         <thead>
           <tr>
             <th scope="col">
+              {selection && (
+                <input
+                  type="checkbox"
+                  className="mr-3 size-4 accent-primary"
+                  aria-label="Selecionar todos os itens desta página"
+                  checked={rows.length > 0 && rows.every((row) => selection.ids.includes(row.id))}
+                  ref={(node) => {
+                    if (node)
+                      node.indeterminate =
+                        rows.some((row) => selection.ids.includes(row.id)) &&
+                        !rows.every((row) => selection.ids.includes(row.id));
+                  }}
+                  disabled={selection.disabled || !rows.length}
+                  onChange={(event) =>
+                    selection.toggle(
+                      rows.map((row) => row.id),
+                      event.target.checked,
+                    )
+                  }
+                />
+              )}
               {caption === 'Série diária'
                 ? 'Data'
                 : caption.includes('janela')
                   ? 'Faixa / anúncio'
                   : 'Nome'}
             </th>
+            {leadingColumns.map((column) => (
+              <th scope="col" key={column.key}>
+                {column.label}
+              </th>
+            ))}
             {visible.map((column) => (
               <th
                 scope="col"
@@ -93,8 +133,19 @@ export function MetricsTable({
         </thead>
         <tbody>
           {ordered.map((row) => (
-            <tr key={row.id}>
+            <tr key={row.id} className="[&>td]:!align-top">
               <td>
+                {selection && (
+                  <input
+                    type="checkbox"
+                    className="mr-3 size-4 accent-primary"
+                    aria-label={`Selecionar ${row.name}`}
+                    checked={selection.ids.includes(row.id)}
+                    disabled={selection.disabled}
+                    onChange={(event) => selection.toggle([row.id], event.target.checked)}
+                  />
+                )}
+                {beforeName?.(row)}
                 {onOpen ? (
                   <button type="button" className={styles.textButton} onClick={() => onOpen(row)}>
                     {row.name}
@@ -103,8 +154,12 @@ export function MetricsTable({
                   <strong>{row.name}</strong>
                 )}
                 <small>{row.subtitle}</small>
-                {row.status && <StatusPill status={row.status} />}
+                {!hideInlineStatus && row.status && <StatusPill status={row.status} />}
+                {rowAction?.(row)}
               </td>
+              {leadingColumns.map((column) => (
+                <td key={column.key}>{column.render(row)}</td>
+              ))}
               {visible.map((column) => (
                 <td className={styles.numeric} key={column.key}>
                   {format(
@@ -122,6 +177,9 @@ export function MetricsTable({
           <tfoot>
             <tr>
               <th scope="row">Total do escopo</th>
+              {leadingColumns.map((column) => (
+                <td key={column.key} />
+              ))}
               {visible.map((column) => (
                 <td className={styles.numeric} key={column.key}>
                   {format(totals[column.key], column.kind)}

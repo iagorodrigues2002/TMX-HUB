@@ -25,11 +25,40 @@ import {
 import { readMetaInventory } from '../src/services/meta-inventory.js';
 
 describe('personal System User connection', () => {
+  it('serves company campaigns immediately to an active admin without a personal token and rejects outsiders', async () => {
+    const app = Fastify();
+    const company = '00000000-0000-0000-0000-000000000001';
+    const snapshot = { from: '2026-11-12', to: '2026-11-12', accounts: [], campaigns: [], ads: [],
+      insights: [{ date: '2026-11-12', adId: '1' }], hourly: [{ date: '2026-11-12', hour: 1 }],
+      fx: { rates: {} }, failures: [] };
+    app.decorate('redis', { get: async (key: string) => key === 'creative-drive:v1:company-id' ? company :
+      key === `${trafficUserKey('lucas')}connection` ? JSON.stringify({ revision: 'personal-must-not-win' }) : null });
+    app.decorate('db', async (sql: TemplateStringsArray, ...values: unknown[]) => {
+      if (sql.join('').includes('company_memberships')) return values.includes('lucas') ? [{ company_id: company, role: 'admin', status: 'active', tools: [] }] : [];
+      if (sql.join('').includes('traffic_daily_archive')) return [{ day: '2026-11-12', snapshot }];
+      throw Error('Unexpected query');
+    });
+    app.addHook('preHandler', async (req) => { req.user = { sub: String(req.headers['x-user']), role: 'admin' } as typeof req.user; });
+    registerTrafficUserConnection(app);
+    const connection = await app.inject({ url: '/meta-control/traffic/connection', headers: { 'x-user': 'lucas' } });
+    expect(connection.json()).toMatchObject({ connected: true, shared: true, busy: false });
+    const url = '/meta-control/traffic/connection/report?from=2026-11-12&to=2026-11-12';
+    const report = await app.inject({ url: `${url}&hourly=0`, headers: { 'x-user': 'lucas' } });
+    expect(report.statusCode).toBe(200);
+    expect(report.json().insights).toHaveLength(1);
+    expect(report.json().hourly).toBeUndefined();
+    expect((await app.inject({ url: `${url}&hourly=1`, headers: { 'x-user': 'lucas' } })).json().hourly).toHaveLength(1);
+    expect((await app.inject({ url, headers: { 'x-user': 'outsider' } })).statusCode).toBe(403);
+    const refresh = await app.inject({ method: 'POST', url: '/meta-control/traffic/connection/refresh', headers: { 'x-user': 'lucas' }, payload: { from: '2026-11-12', to: '2026-11-12' } });
+    expect(refresh.json()).toEqual({ queued: false, automatic: true });
+    await app.close();
+  });
   it('encrypts tokens, isolates users and does not imply BM administration from account ownership', async () => {
     const app = Fastify();
     const storage = new Map<string, string>();
     app.decorate('redis', {
       get: async (key: string) => storage.get(key) ?? null,
+      sadd: vi.fn(),
       multi: () => {
         const writes: [string, string][] = [];
         const tx = {

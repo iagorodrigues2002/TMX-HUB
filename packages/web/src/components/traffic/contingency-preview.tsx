@@ -38,12 +38,12 @@ export function ContingencyPreview({
         .toLocaleLowerCase('pt-BR')
         .includes(search.trim().toLocaleLowerCase('pt-BR')),
   );
-  function save() {
+  async function save() {
     if (!editing) return;
     try {
       const next = saveAssetMetadata(db, kind, editing.id, editing);
-      assets.setInventory(next);
-      setNotice('Dados internos salvos nesta sessão local.');
+      await assets.setInventory(next);
+      setNotice(assets.shared ? 'Dados salvos para a empresa.' : 'Dados internos salvos nesta sessão local.');
       setEditing(null);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Não foi possível salvar.');

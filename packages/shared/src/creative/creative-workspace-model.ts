@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import {
   type CreativeDriveCatalog,
   type ImportedCreativeFile,
@@ -11,8 +12,11 @@ import {
   creativeOffer,
 } from './creative-identity.js';
 import { type DateRange, daysAgoIso, toIsoDateInTimeZone } from './date-range.js';
-import { z } from 'zod';
-import { type RealCampaignSnapshot, assignedOffer, realCampaignRows } from './real-campaigns-model.js';
+import {
+  type RealCampaignSnapshot,
+  assignedOffer,
+  realCampaignRows,
+} from './real-campaigns-model.js';
 import type { ReportMetrics } from './traffic-reports-model.js';
 
 const additive = [
@@ -266,7 +270,9 @@ export function creativeCatalogRows(
       const candidates = [...groups.keys()].filter(
         (k) =>
           k.startsWith(`${identity!.offer}:AD${identity!.ad}:L`) &&
-          groups.get(k)!.files.some((f) => f.identity?.variant === identity!.variant && !f.archived),
+          groups
+            .get(k)!
+            .files.some((f) => f.identity?.variant === identity!.variant && !f.archived),
       );
       if (candidates.length === 1) identity = groups.get(candidates[0]!)!.files[0]!.identity;
     }
@@ -278,8 +284,8 @@ export function creativeCatalogRows(
         ? reviewedKey
         : undefined;
     const key = review
-      ? confirmedKey ?? `unmatched:reviewed:${currentKey}`
-      : exactKey ?? identity?.key ?? currentKey;
+      ? (confirmedKey ?? `unmatched:reviewed:${currentKey}`)
+      : (exactKey ?? identity?.key ?? currentKey);
     const group = groups.get(key) ?? {
       name: identity?.name ?? ad.name,
       offer: creativeOffer(ad.offer),
@@ -363,12 +369,16 @@ export function creativeDeliveryAssessment(
 ) {
   const statuses = new Map<string, CreativeStatus>();
   const lowRoas: string[] = [];
-  if (!hasCreativeDeliveryCoverage(snapshot, range)) return { statuses, lowRoas };
+  const delivering = new Set<string>();
+  if (!hasCreativeDeliveryCoverage(snapshot, range)) return { statuses, lowRoas, delivering };
 
   const activeCampaigns = new Set(
     snapshot.campaigns.filter((campaign) => campaign.effectiveStatus === 'ACTIVE').map((c) => c.id),
   );
   const adsInActiveCampaigns = new Set<string>();
+  const activeAds = new Set(
+    snapshot.ads?.filter((ad) => ad.status === 'ACTIVE').map((ad) => ad.id),
+  );
   const delivery = new Map<string, Set<string>>();
   for (const insight of snapshot.insights) {
     if (!insight.adId || insight.date < range.from || insight.date > range.to) continue;
@@ -386,6 +396,10 @@ export function creativeDeliveryAssessment(
     const lastSpend = [...days].sort().at(-1);
     const { spend, metaRoas } = creativeMetrics([row]);
     const active = row.adIds.some((id) => adsInActiveCampaigns.has(id));
+    if (
+      row.adIds.some((id) => adsInActiveCampaigns.has(id) && delivery.has(id) && activeAds.has(id))
+    )
+      delivering.add(row.id);
     if (!lastSpend || (spend !== null && spend < 1000)) {
       statuses.set(row.id, active ? 'Testando' : 'Stand by');
       continue;
@@ -402,12 +416,9 @@ export function creativeDeliveryAssessment(
       Array.from({ length: 6 }, (_, i) => daysAgoIso(i, lastSpend)).every((date) => days.has(date));
     // Hoje ainda pode ter entrega. Conte somente dias encerrados para reprovar por inatividade.
     const stopped = lastSpend <= daysAgoIso(5, range.to);
-    statuses.set(
-      row.id,
-      passesDays ? 'Validado' : stopped ? 'Não validado' : 'Testando',
-    );
+    statuses.set(row.id, passesDays ? 'Validado' : stopped ? 'Não validado' : 'Testando');
   }
-  return { statuses, lowRoas };
+  return { statuses, lowRoas, delivering };
 }
 
 export function demoCreativeAds(range: DateRange, currency: 'BRL' | 'USD'): CreativeAd[] {

@@ -251,6 +251,7 @@ test('automatic status uses closed inactive days, consecutive delivery and Meta 
   assert.deepEqual(creativeDeliveryAssessment(snapshot, dates, state, {}), {
     statuses: new Map(),
     lowRoas: [],
+    delivering: new Set(),
   });
 });
 

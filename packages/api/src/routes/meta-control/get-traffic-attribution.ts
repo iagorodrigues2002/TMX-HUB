@@ -88,9 +88,8 @@ export function registerTrafficAttribution(app: FastifyInstance) {
       }
     }
     if (!app.db) return reply.code(503).send({ error: 'database_unavailable' });
-    const company = (req.query as { workspace?: string }).workspace === 'creative'
-      ? await creativeWorkspaceCompany(app.redis, app.db, req.user)
-      : null;
+    const company = await creativeWorkspaceCompany(app.redis, app.db, req.user, ['traffic-overview', 'traffic-campaigns', 'traffic-windows', 'ads-intelligence']);
+    if (!company && env.NODE_ENV !== 'test') return reply.code(403).send({ error: 'company_forbidden' });
     const offers = company
       ? await app.db<{ id: string }[]>`
           SELECT offer_id AS id FROM company_offers WHERE company_id::text=${company}`

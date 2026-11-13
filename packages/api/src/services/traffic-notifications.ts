@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { env } from '../env.js';
 import { membershipTools } from '../lib/company-tools.js';
 import { recordTrafficHealth, trafficAlertPrefix } from './meta-traffic-alerts.js';
+import { CREATIVE_WORKSPACE_COMPANY, TRAFFIC_SERVER_OWNER, creativeWorkspaceCompany } from './traffic-server-cache.js';
 
 const trafficIds = [
   'traffic-overview',
@@ -71,6 +72,11 @@ export async function trafficNotices(
       >`SELECT company_id::text,user_id FROM company_memberships WHERE company_id::text=ANY(${[...companies]}::text[]) AND status='active' AND role IN ('owner','admin')`
     : [];
   const publishers = new Set(publisherMemberships.map((m) => `${m.company_id}:${m.user_id}`));
+  const operationCompany = await app.redis.get(CREATIVE_WORKSPACE_COMPANY);
+  if (operationCompany && companies.has(operationCompany)) {
+    owners.add(TRAFFIC_SERVER_OWNER);
+    publishers.add(`${operationCompany}:${TRAFFIC_SERVER_OWNER}`);
+  }
   for (const id of companies)
     for (const owner of await app.redis.smembers(`traffic-alert-companies:v1:${id}`))
       if (publishers.has(`${id}:${owner}`)) owners.add(owner);
@@ -108,11 +114,13 @@ export async function trafficNotices(
 export function registerTrafficAlerts(app: FastifyInstance) {
   app.get('/meta-control/traffic/alerts', async (req, reply) => {
     if (!req.user) return reply.code(401).send({ error: 'unauthorized' });
-    const prefix = trafficAlertPrefix(req.user.sub);
+    const company = await creativeWorkspaceCompany(app.redis, app.db, req.user);
+    const prefix = trafficAlertPrefix(company ? TRAFFIC_SERVER_OWNER : req.user.sub);
     const state = JSON.parse((await app.redis.get(`${prefix}state`)) ?? 'null');
     return {
-      companyId: await app.redis.get(`${prefix}company`),
-      intervalMinutes: 5,
+      companyId: company ?? await app.redis.get(`${prefix}company`),
+      shared: !!company,
+      intervalMinutes: company ? 20 : 5,
       lastCheckedAt: state?.observedAt ?? null,
       accounts: state?.accounts?.length ?? 0,
       incompleteAccounts: state?.incompleteAccounts ?? 0,
@@ -122,6 +130,12 @@ export function registerTrafficAlerts(app: FastifyInstance) {
     if (!req.user) return reply.code(401).send({ error: 'unauthorized' });
     const input = z.object({ companyId: z.string().uuid().nullable() }).safeParse(req.body);
     if (!input.success || !app.db) return reply.code(400).send({ error: 'invalid_company' });
+    const company = await creativeWorkspaceCompany(app.redis, app.db, req.user);
+    if (company) {
+      if (input.data.companyId !== company || req.user.role !== 'admin')
+        return reply.code(403).send({ error: 'company_forbidden' });
+      return { saved: true, companyId: company };
+    }
     if (input.data.companyId) {
       const rows =
         await app.db`SELECT c.id FROM companies c JOIN company_memberships m ON m.company_id=c.id WHERE c.id=${input.data.companyId} AND m.user_id=${req.user.sub} AND m.status='active' AND m.role IN ('owner','admin')`;

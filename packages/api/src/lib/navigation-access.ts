@@ -6,6 +6,9 @@ export function navigationRequirements(rawPath: string, method: string): Navigat
   const path = rawPath.split('?')[0]!.replace(/^\/v1/, '');
   const read = method === 'GET' || method === 'HEAD';
   if (path.startsWith('/meta-control/traffic/ai/')) return ['ai-assistant'];
+  if (/^\/meta-control\/traffic\/settings\/(inventory|structure)$/.test(path)) return ['traffic-contingency'];
+  if (path === '/meta-control/traffic/settings/classification') return ['traffic-overview', 'traffic-campaigns', 'traffic-windows'];
+  if (path.startsWith('/meta-control/traffic/management/')) return ['traffic-campaigns'];
   if (
     /^\/meta-control\/traffic\/(attribution|finance|finance-overview|connection\/(report|refresh))$/.test(
       path,

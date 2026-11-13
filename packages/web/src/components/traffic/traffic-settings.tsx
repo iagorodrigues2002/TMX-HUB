@@ -33,7 +33,7 @@ export function TrafficSettings({
       });
       setToken('');
       setOpen(false);
-      setNotice('System User conectado para este usuário.');
+      setNotice('System User conectado para a empresa.');
       await Promise.all(
         [
           'traffic-user-connection',

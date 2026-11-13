@@ -6,8 +6,16 @@ export interface TrafficHealth {
     id: string;
     name: string;
     status: number;
-    rejected: { id: string; name: string; campaignId: string; campaignName: string }[];
+    rejected: {
+      id: string;
+      name: string;
+      campaignId: string;
+      campaignName: string;
+      adsetId?: string;
+    }[];
     adsComplete: boolean;
+    lastCheckComplete?: boolean;
+    checkedAt?: string | null;
   }[];
 }
 export interface TrafficAlert {
@@ -102,7 +110,8 @@ export async function readMetaTrafficHealth(
             name: string;
             effective_status: string;
             campaign?: { id: string; name: string };
-          }>(`${a.id}/ads`, 'id,name,effective_status,campaign{id,name}', {
+            adset?: { id: string };
+          }>(`${a.id}/ads`, 'id,name,effective_status,campaign{id,name},adset{id}', {
             effective_status: JSON.stringify(['DISAPPROVED']),
           });
           if (
@@ -123,6 +132,7 @@ export async function readMetaTrafficHealth(
             name: ad.name,
             campaignId: ad.campaign!.id,
             campaignName: ad.campaign!.name,
+            ...(ad.adset?.id ? { adsetId: ad.adset.id } : {}),
           }));
           account.adsComplete = true;
         } catch {
@@ -142,7 +152,7 @@ export function trafficHealthChanges(
   companyId?: string,
 ) {
   const old = new Map(previous?.accounts.map((a) => [a.id, a]) ?? []);
-  const merged = new Map(old);
+  const merged = new Map([...old].map(([id, account]) => [id, { ...account, lastCheckComplete: false }]));
   const events: TrafficAlert[] = [];
   for (const account of current.accounts) {
     const before = old.get(account.id);
@@ -188,11 +198,13 @@ export function trafficHealthChanges(
     merged.set(
       account.id,
       account.adsComplete
-        ? account
+        ? { ...account, lastCheckComplete: true, checkedAt: current.observedAt }
         : {
             ...account,
             rejected: before?.rejected ?? [],
             adsComplete: before?.adsComplete ?? false,
+            lastCheckComplete: false,
+            checkedAt: before?.checkedAt ?? (before?.adsComplete ? previous?.observedAt : null),
           },
     );
   }

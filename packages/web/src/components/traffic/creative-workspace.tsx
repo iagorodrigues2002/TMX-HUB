@@ -24,7 +24,7 @@ import { creativeOffer, creativeStatuses } from '@/lib/creative-identity';
 import { creativeDrivePath, creativeWorkspaceEnabled } from '@/lib/creative-workspace-release';
 import type { DateRange } from '@/lib/date-range';
 import { usePrivacy } from '@/lib/privacy-context';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { skipToken, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Activity,
   AlertTriangle,
@@ -43,7 +43,7 @@ import {
   Search,
   SlidersHorizontal,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import {
   type CreativeMetricKey,
   type CreativeRecord,
@@ -67,6 +67,7 @@ const statusTones = new Map([
 const emptyMetadata: CreativeDriveState['metadata'] = {};
 const countFormatter = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
 const creativeTmxColumns = [
+  ['tmxFronts', 'Vendas confirmadas · TMX', 'count'],
   ['upsells', 'Upsells totais · TMX', 'count'],
   ['tmxGross', 'Faturamento bruto · TMX', 'money'],
   ['funnelArpu', 'ARPU do funil · TMX', 'money'],
@@ -77,9 +78,15 @@ const tableColumns = creativeWorkspaceEnabled
   : creativeColumns;
 type CreativeColumnKey = (typeof tableColumns)[number][0];
 
-function displayedStatus(row: CreativeRecord, metadata: CreativeDriveState['metadata'], complete: boolean) {
+function displayedStatus(
+  row: CreativeRecord,
+  metadata: CreativeDriveState['metadata'],
+  complete: boolean,
+) {
   const saved = metadata[row.id]?.status;
-  return saved === undefined && complete && row.files.length && !row.adIds.length ? 'Stand by' : saved;
+  return saved === undefined && complete && row.files.length && !row.adIds.length
+    ? 'Stand by'
+    : saved;
 }
 
 function Choice({
@@ -154,7 +161,7 @@ function CreativeThumb({ item, mini = false }: { item: CreativeRecord; mini?: bo
   const [failed, setFailed] = useState('');
   const image = item.principal?.thumbnail;
   return (
-    <span className={styles.thumb + (mini ? ' ' + styles.miniThumb : '')} aria-hidden="true">
+    <span className={styles.thumb + (mini ? ` ${styles.miniThumb}` : '')} aria-hidden="true">
       {image && failed !== image ? (
         <img
           src={image}
@@ -180,6 +187,7 @@ const linkLabel = (row: CreativeRecord) =>
       : 'Vínculo pendente';
 
 export function CreativeWorkspace({
+  dateFilter,
   live,
   range,
   currency,
@@ -187,6 +195,7 @@ export function CreativeWorkspace({
   offer,
   selectOffer,
 }: {
+  dateFilter?: ReactNode;
   live: LiveTraffic;
   range: DateRange;
   currency: 'BRL' | 'USD';
@@ -237,6 +246,7 @@ export function CreativeWorkspace({
   const lastClassificationKey = [...classificationScope, 'last-success'];
   const { data: lastClassification } = useQuery<{ lowRoas: string[] }>({
     queryKey: lastClassificationKey,
+    queryFn: skipToken,
     enabled: false,
   });
   const autoClassification = useQuery({
@@ -248,7 +258,7 @@ export function CreativeWorkspace({
       live.mappings,
     ],
     enabled: complete && drive.isSuccess,
-    staleTime: Infinity,
+    staleTime: Number.POSITIVE_INFINITY,
     retry: 1,
     queryFn: async ({ signal }) => {
       const result = await request<{ lowRoas: string[] }>(creativeDrivePath, {
@@ -266,7 +276,7 @@ export function CreativeWorkspace({
       complete && live.data.data
         ? creativeAdsFromMeta(live.data.data, range, currency, live.mappings)
         : [],
-    [complete, live.data.data, range.from, range.to, currency, live.mappings],
+    [complete, live.data.data, range, currency, live.mappings],
   );
   const records = useMemo(
     () =>
@@ -282,9 +292,10 @@ export function CreativeWorkspace({
   const attribution = useTrafficAttribution(range, creativeWorkspaceEnabled && complete, true);
   const meta = live.data.data;
   const attributionByAd = useMemo(
-    () => meta && attribution.data
-      ? groupTrafficAttribution(meta, attribution.data, 'ads').groups
-      : new Map(),
+    () =>
+      meta && attribution.data
+        ? groupTrafficAttribution(meta, attribution.data, 'ads').groups
+        : new Map(),
     [meta, attribution.data],
   );
   const offers = [
@@ -302,18 +313,27 @@ export function CreativeWorkspace({
     [reportedAds],
   );
   const search = query.trim().toLocaleLowerCase('pt-BR');
-  const offerRows = useMemo(() => records.filter((r) => !code || r.offer === code), [records, code]);
+  const offerRows = useMemo(
+    () => records.filter((r) => !code || r.offer === code),
+    [records, code],
+  );
   const batches = [...new Set(offerRows.map((r) => r.batch))].sort((a, b) =>
     a.localeCompare(b, 'pt-BR', { numeric: true }),
   );
   const metricsById = useMemo(
-    () => new Map(offerRows.map((row) => {
-      const metrics = creativeMetrics([row]);
-      return [row.id, {
-        ...metrics,
-        ...summarizeCreativeAttribution([row], attributionByAd, currency, metrics),
-      }];
-    })),
+    () =>
+      new Map(
+        offerRows.map((row) => {
+          const metrics = creativeMetrics([row]);
+          return [
+            row.id,
+            {
+              ...metrics,
+              ...summarizeCreativeAttribution([row], attributionByAd, currency, metrics),
+            },
+          ];
+        }),
+      ),
     [offerRows, attributionByAd, currency],
   );
   const rows = useMemo(
@@ -326,7 +346,7 @@ export function CreativeWorkspace({
             (batch === 'Todas as levas' || r.batch === batch) &&
             (status === 'Todos os status' || displayedStatus(r, metadata, complete) === status) &&
             (!search ||
-              (r.offer + ' ' + r.name + ' ' + r.files.map((f) => f.name).join(' '))
+              `${r.offer} ${r.name} ${r.files.map((f) => f.name).join(' ')}`
                 .toLocaleLowerCase('pt-BR')
                 .includes(search)),
         )
@@ -343,7 +363,20 @@ export function CreativeWorkspace({
                   ? av - bv
                   : bv - av;
         }),
-    [offerRows, onlyLowRoas, lowRoas, onlyActive, activeAdIds, batch, status, metadata, complete, search, metricsById, sort],
+    [
+      offerRows,
+      onlyLowRoas,
+      lowRoas,
+      onlyActive,
+      activeAdIds,
+      batch,
+      status,
+      metadata,
+      complete,
+      search,
+      metricsById,
+      sort,
+    ],
   );
   const totals = useMemo(() => {
     const delivered = rows.filter((row) => row.adIds.length);
@@ -379,11 +412,11 @@ export function CreativeWorkspace({
         : kind === 'money'
           ? moneyFormatter.format(value)
           : kind === 'ratio'
-            ? value.toFixed(2).replace('.', ',') + 'x'
+            ? `${value.toFixed(2).replace('.', ',')}x`
             : kind === 'percent'
-              ? (value * 100).toFixed(1).replace('.', ',') + '%'
+              ? `${(value * 100).toFixed(1).replace('.', ',')}%`
               : countFormatter.format(value);
-  const date = (value: string) => new Date(value + 'T12:00:00').toLocaleDateString('pt-BR');
+  const date = (value: string) => new Date(`${value}T12:00:00`).toLocaleDateString('pt-BR');
   function openOffer(value: string) {
     selectOffer(value);
     setBatch('Todas as levas');
@@ -423,10 +456,10 @@ export function CreativeWorkspace({
           </Button>
         </div>
       </header>
-      <section className={styles.filters} aria-label="Dados acumulados dos criativos">
+      <section className={styles.filters} aria-label="Dados dos criativos no período selecionado">
         <div className={styles.filterRow}>
           <div className={styles.lifetime}>
-            <small>Período total</small>
+            <small>Período selecionado</small>
             <strong>
               {date(range.from)} — {date(range.to)}
             </strong>
@@ -445,14 +478,17 @@ export function CreativeWorkspace({
           />
           <div className={styles.sourceNote}>
             {complete && live.data.data
-              ? 'Meta · ' + new Date(live.data.data.fetchedAt).toLocaleString('pt-BR')
+              ? `Meta · ${new Date(live.data.data.fetchedAt).toLocaleString('pt-BR')}`
               : 'Histórico completo aguardando consulta'}
           </div>
           <Button
             size="sm"
             variant="ghost"
             disabled={
-              shared || live.refresh.isPending || live.connection.data?.busy || live.status.data?.busy
+              shared ||
+              live.refresh.isPending ||
+              live.connection.data?.busy ||
+              live.status.data?.busy
             }
             onClick={() => live.refresh.mutate()}
           >
@@ -462,15 +498,16 @@ export function CreativeWorkspace({
         </div>
       </section>
       {!complete && (
-        <div role="status" className={styles.notice}>
-          Aguardando os dados da Meta desde agosto. Métricas parciais não entram no acumulado.
-          {live.data.error ? ' ' + live.data.error.message : ''}
-        </div>
+        <output className={styles.notice}>
+          Aguardando os dados da Meta para o período selecionado. Métricas parciais não entram nos
+          totais.
+          {live.data.error ? ` ${live.data.error.message}` : ''}
+        </output>
       )}
       {complete && live.data.isError && (
-        <p role="status" className={styles.notice}>
+        <output className={styles.notice}>
           Exibindo a última consulta completa. {live.data.error.message}
-        </p>
+        </output>
       )}
       {drive.isError && (
         <p role="alert" className={styles.error}>
@@ -493,11 +530,7 @@ export function CreativeWorkspace({
           {lastClassification && ' Exibindo os últimos alertas disponíveis.'}
         </p>
       )}
-      {pending && (
-        <p role="status" className={styles.notice}>
-          Importando pastas e levas do Drive…
-        </p>
-      )}
+      {pending && <output className={styles.notice}>Importando pastas e levas do Drive…</output>}
       <div className={styles.path} aria-label="Localização nos criativos">
         <button type="button" onClick={() => openOffer('')}>
           <LayoutGrid size={15} /> Ofertas
@@ -510,11 +543,8 @@ export function CreativeWorkspace({
         )}
         <span className={styles.pathCount}>
           {code
-            ? countedRows.length +
-              ' criativos · ' +
-              countedRows.reduce((n, r) => n + r.adIds.length, 0) +
-              ' anúncios vinculados'
-            : offers.length + ' ofertas'}
+            ? `${countedRows.length} criativos · ${countedRows.reduce((n, r) => n + r.adIds.length, 0)} anúncios vinculados`
+            : `${offers.length} ofertas`}
         </span>
       </div>
       <div className={styles.toolbar}>
@@ -564,6 +594,7 @@ export function CreativeWorkspace({
           </>
         )}
       </div>
+      {dateFilter}
       {!code ? (
         <section className={styles.folderGrid} aria-label="Pastas das ofertas">
           {offers
@@ -590,7 +621,7 @@ export function CreativeWorkspace({
                   key={o}
                   className={styles.folderCard}
                   onClick={() => openOffer(o)}
-                  aria-label={'Abrir oferta ' + o}
+                  aria-label={`Abrir oferta ${o}`}
                   aria-describedby={metricsId}
                 >
                   <span className={styles.folderTab} aria-hidden="true" />
@@ -657,6 +688,7 @@ export function CreativeWorkspace({
                 ['Vendas · Meta', totals.frontSales, 'count'],
                 ['CPA', totals.cpa, 'money'],
                 ['ROAS Meta', totals.metaRoas, 'ratio'],
+                ['ROAS TMX', totals.tmxCreativeRoas, 'ratio'],
               ] as const
             ).map(([title, value, kind]) => (
               <div key={title}>
@@ -680,7 +712,9 @@ export function CreativeWorkspace({
             <span className={styles.sourceBadge}>Uma linha por criativo</span>
             {creativeWorkspaceEnabled && !attribution.data && complete && (
               <output className={styles.sourceBadge}>
-                {attribution.isError ? 'Atribuição TMX indisponível' : 'Consultando atribuição TMX…'}
+                {attribution.isError
+                  ? 'Atribuição TMX indisponível'
+                  : 'Consultando atribuição TMX…'}
               </output>
             )}
             <Choice
@@ -723,7 +757,7 @@ export function CreativeWorkspace({
             aria-label="Desempenho dos criativos; role horizontalmente para ver todas as métricas"
           >
             <table className={styles.table}>
-              <caption className="sr-only">{code} · Criativos consolidados desde agosto</caption>
+              <caption className="sr-only">{code} · Criativos no período selecionado</caption>
               <thead>
                 <tr>
                   <th scope="col">Criativo</th>
@@ -735,9 +769,11 @@ export function CreativeWorkspace({
                       <th
                         scope="col"
                         key={key}
-                        title={key === 'tmxCreativeRoas'
-                          ? '(Valor das compras da Meta + receita bruta dos upsells vinculados no TMX) ÷ investimento'
-                          : undefined}
+                        title={
+                          key === 'tmxCreativeRoas'
+                            ? '(Valor das compras da Meta + receita bruta dos upsells vinculados no TMX) ÷ investimento'
+                            : undefined
+                        }
                       >
                         {title}
                       </th>
@@ -756,7 +792,12 @@ export function CreativeWorkspace({
                         <strong>{row.name}</strong>
                         <small>
                           {linkLabel(row)} · {row.adIds.length} anúncios
-                          {onlyActive && <> · {activeCount} {activeCount === 1 ? 'ativo' : 'ativos'}</>}
+                          {onlyActive && (
+                            <>
+                              {' '}
+                              · {activeCount} {activeCount === 1 ? 'ativo' : 'ativos'}
+                            </>
+                          )}
                         </small>
                       </span>
                       {row.principal && <ExternalLink size={13} />}
@@ -771,7 +812,7 @@ export function CreativeWorkspace({
                             href={row.principal.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            aria-label={'Abrir ' + row.name + ' no Google Drive'}
+                            aria-label={`Abrir ${row.name} no Google Drive`}
                           >
                             {identity}
                           </a>
@@ -790,7 +831,7 @@ export function CreativeWorkspace({
                       </td>
                       <td>
                         <Choice
-                          label={'Status de ' + row.name}
+                          label={`Status de ${row.name}`}
                           value={displayedStatus(row, metadata, complete) ?? 'Sem classificação'}
                           change={(v) => changeStatus(row, v)}
                           options={['Sem classificação', ...creativeStatuses]}
@@ -872,11 +913,7 @@ export function CreativeWorkspace({
       )}
       <p className={styles.matchRule}>
         {drive.data?.catalog &&
-          'Drive · pasta compartilhada · ' +
-            drive.data.catalog.files.length +
-            ' vídeos · atualizado em ' +
-            new Date(drive.data.catalog.at).toLocaleString('pt-BR') +
-            ' · sincronização a cada 10 minutos.'}
+          `Drive · pasta compartilhada · ${drive.data.catalog.files.length} vídeos · atualizado em ${new Date(drive.data.catalog.at).toLocaleString('pt-BR')} · sincronização a cada 10 minutos.`}
       </p>
       <Dialog open={configuring} onOpenChange={setConfiguring}>
         <DialogContent className={styles.driveDialog}>
@@ -887,9 +924,10 @@ export function CreativeWorkspace({
               arquivo é alterado.
             </DialogDescription>
           </DialogHeader>
-          <label className={styles.formField}>
+          <label className={styles.formField} htmlFor="creative-drive-root">
             Pasta principal
             <Input
+              id="creative-drive-root"
               aria-label="Link da pasta principal do Drive"
               value={rootUrl}
               onChange={(e) => setRootUrl(e.target.value)}
@@ -946,7 +984,7 @@ export function CreativeWorkspace({
                     vinculados
                   </p>
                   <Choice
-                    label={'Editar status de ' + detail.name}
+                    label={`Editar status de ${detail.name}`}
                     value={displayedStatus(detail, metadata, complete) ?? 'Sem classificação'}
                     change={(v) => changeStatus(detail, v)}
                     options={['Sem classificação', ...creativeStatuses]}

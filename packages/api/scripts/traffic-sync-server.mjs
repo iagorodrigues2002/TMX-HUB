@@ -163,7 +163,7 @@ async function readFinance(redis, from, to) {
 
 export async function startWorker() {
   if (process.env.TMX_TRAFFIC_SYNC_ENABLED !== '1') return () => {};
-  const token = process.env.TMX_TRAFFIC_META_TOKEN;
+  let token = process.env.TMX_TRAFFIC_META_TOKEN;
   if (typeof token !== 'string' || token.length < 40) throw Error('meta_credential_required');
   const { readMetaTraffic } = await import('./traffic-meta-reader.mjs');
   const Redis = createRequire(import.meta.url)('ioredis');
@@ -171,6 +171,9 @@ export async function startWorker() {
     maxRetriesPerRequest: 1,
     connectTimeout: 10000,
   });
+  const postgres = createRequire(import.meta.url)('postgres');
+  const db = postgres(process.env.DATABASE_URL, { max: 2, ssl: 'require', connect_timeout: 10 });
+  const { archivedTraffic, saveTrafficDays, closedTrafficDay, nextTrafficCollectionDay } = await import('./traffic-daily-store.mjs');
   redis.on('error', () => {});
   let busy = false;
   let stopping = false;
@@ -219,29 +222,59 @@ export async function startWorker() {
       }, 30000);
       const date = days();
       const company = await redis.get(creativeCompanyKey);
+      const configured = company && parsed(await redis.get(`traffic-company:v1:${company}:connection`));
+      if (configured) {
+        const { decryptSecret } = await import('./traffic-secret-box.mjs');
+        if (!process.env.TRACKING_ENCRYPTION_KEY) throw Error('encryption_required');
+        token = decryptSecret(configured.encrypted, process.env.TRACKING_ENCRYPTION_KEY);
+      } else token = process.env.TMX_TRAFFIC_META_TOKEN;
       if (company) {
-        const key = `traffic-sync:v1:company:${company}:snapshot:${creativeHistoryStart}:${date.today}`;
-        const cached = parsed(await redis.get(key));
-        if (
-          Date.now() - Date.parse(cached?.updatedAt ?? '1970-01-01') >= 600000 &&
-          Date.now() - (attempts.get(key) ?? 0) >= 600000
-        ) {
-          attempts.set(key, Date.now());
-          try {
-            const { snapshot } = await readMetaTraffic(token, creativeHistoryStart, date.today);
-            if (snapshot.from !== creativeHistoryStart || snapshot.to !== date.today || snapshot.failures?.length)
-              throw Error('incomplete_company_creative_report');
-            const payload = JSON.stringify({ companyId: company, updatedAt: new Date().toISOString(), snapshot });
-            await redis.eval(
-              "if redis.call('GET',KEYS[1])==ARGV[1] and redis.call('GET',KEYS[2])==ARGV[2] then return redis.call('SET',KEYS[3],ARGV[3],'EX',ARGV[4]) end",
-              3, `${PREFIX}lock`, creativeCompanyKey, key, lock, company, payload, RETENTION,
-            );
-          } catch {
-            state.lastError = 'A consulta da empresa será tentada novamente.';
+        await redis.set(`traffic-alerts:v1:${OWNER}:company`, company);
+        const dailyPrefix = `traffic-daily:v1:${company}:`;
+        const [existing] = await db`SELECT count(*)::int AS count FROM traffic_daily_archive WHERE company_id=${company}::uuid`;
+        if (!existing.count) {
+          for (let offset = 0; offset < 7; offset++) {
+            const end = new Date(Date.parse(date.today) - offset * 86400000).toISOString().slice(0,10);
+            const prior = parsed(await redis.get(`traffic-sync:v1:company:${company}:snapshot:${creativeHistoryStart}:${end}`));
+            if (prior?.companyId !== company || prior.snapshot?.failures?.length || !prior?.snapshot) continue;
+            const closedThrough = new Date(Date.parse(date.yesterday) - 86400000).toISOString().slice(0,10);
+            const closedEnd = end < closedThrough ? end : closedThrough;
+            await saveTrafficDays(db, company, { ...prior.snapshot, to: closedEnd }, true, true);
+            if (end > closedEnd) {
+              const openFrom = new Date(Date.parse(closedEnd) + 86400000).toISOString().slice(0,10);
+              await saveTrafficDays(db, company, { ...prior.snapshot, from: openFrom }, false, true);
+            }
+            break;
           }
         }
+        if (await redis.set(dailyPrefix + 'attempt', '1', 'EX', 1200, 'NX')) {
+          try {
+            const from = await nextTrafficCollectionDay(db, company, creativeHistoryStart, date.today);
+            const { snapshot, inventory } = await readMetaTraffic(token, from, date.today);
+            if (snapshot.failures?.length) throw Error('Relatório incompleto da Meta.');
+            if (stopping || await redis.get(`${PREFIX}lock`) !== lock ||
+                await redis.get(creativeCompanyKey) !== company) return;
+            const closedThrough = closedTrafficDay(snapshot.accounts);
+            if (from <= closedThrough)
+              await saveTrafficDays(db, company, { ...snapshot, to: closedThrough }, true);
+            const nextDay = new Date(Date.parse(closedThrough) + 86400000).toISOString().slice(0,10);
+            await saveTrafficDays(db, company, { ...snapshot, from: from > nextDay ? from : nextDay }, false);
+            await redis.set(dailyPrefix + 'inventory', JSON.stringify(inventory), 'EX', RETENTION);
+            await redis.set(dailyPrefix + 'fetched-at', snapshot.fetchedAt, 'EX', RETENTION);
+            await redis.del(dailyPrefix + 'error');
+          } catch (error) {
+            state.lastError = error.message;
+            await redis.set(dailyPrefix + 'error', error.message, 'EX', 2400);
+          }
+        }
+        // Historical reads and legacy finance refreshes reuse the durable daily archive.
+        const snapshot = await archivedTraffic(db, company, creativeHistoryStart, date.today);
+        if (snapshot) {
+          await redis.set(`traffic-sync:v1:company:${company}:snapshot:${creativeHistoryStart}:${date.today}`,
+            JSON.stringify({ companyId: company, updatedAt: snapshot.fetchedAt, snapshot }), 'EX', RETENTION);
+        }
       }
-      if (await redis.get(`traffic-user:v1:${OWNER}:connection`)) return;
+      if (!company && await redis.get(`traffic-user:v1:${OWNER}:connection`)) return;
       const requests = [];
       for (let index = 0; index < 4; index++) {
         const value = await redis.rpop(`${PREFIX}requests`);
@@ -252,7 +285,8 @@ export async function startWorker() {
         } catch {}
       }
       const healthAt = await redis.get(`traffic-alerts:v1:${OWNER}:state`);
-      if (!healthAt || Date.now() - Date.parse(parsed(healthAt)?.observedAt) > 300000) {
+      if ((!healthAt || Date.now() - Date.parse(parsed(healthAt)?.observedAt) > (company ? 1200000 : 300000)) &&
+          (!company || await redis.set(`traffic-daily:v1:${company}:health-attempt`, '1', 'EX', 1200, 'NX'))) {
         try {
           await recordTrafficHealth(redis, OWNER, await readMetaTrafficHealth(token));
         } catch {
@@ -285,7 +319,16 @@ export async function startWorker() {
             to: range.to,
             redis,
             token,
-            readMeta: readMetaTraffic,
+            readMeta: company
+              ? async (_token, from, to) => {
+                  const snapshot = await archivedTraffic(db, company, from, to);
+                  if (!snapshot) throw Error('Período ainda aguardando coleta diária.');
+                  return {
+                    snapshot,
+                    inventory: parsed(await redis.get(`traffic-daily:v1:${company}:inventory`)) ?? snapshot.accounts,
+                  };
+                }
+              : readMetaTraffic,
             readFinance: (from, to) => readFinance(redis, from, to),
             canPublish: async () => !stopping,
             lock,
@@ -343,6 +386,7 @@ export async function startWorker() {
         )
         .catch(() => {});
     if (!busy) await redis.quit();
+    await db.end({ timeout: 5 });
   };
 }
 

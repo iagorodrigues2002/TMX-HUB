@@ -3,18 +3,21 @@ import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import {
-  type CreativeDriveCatalog,
-  driveFolderId,
-  readCreativeDrive,
-} from './creative-drive-reader';
-import {
   type CreativeDriveState,
   applyCreativeStatuses,
   applyManualCreativeMetadata,
   withCreativeDriveArchive,
 } from '@page-cloner/shared/creative-drive-state';
+import {
+  type CreativeDriveCatalog,
+  driveFolderId,
+  readCreativeDrive,
+} from './creative-drive-reader';
 import type { CreativeStatus } from './creative-identity';
-export type { CreativeAdReview, CreativeDriveState } from '@page-cloner/shared/creative-drive-state';
+export type {
+  CreativeAdReview,
+  CreativeDriveState,
+} from '@page-cloner/shared/creative-drive-state';
 const directory =
   process.env.NODE_ENV === 'test' && process.env.TMX_CREATIVE_DRIVE_TEST_DIRECTORY
     ? process.env.TMX_CREATIVE_DRIVE_TEST_DIRECTORY
@@ -94,8 +97,11 @@ export function updateCreativeMetadata(
 export function classifyCreativeMetadata(
   owner: string,
   classify: (state: CreativeDriveState) => ReadonlyMap<string, CreativeStatus>,
+  delivering: ReadonlySet<string> = new Set(),
 ) {
-  return writeCreativeMetadata(owner, (state) => applyCreativeStatuses(state.metadata, classify(state)));
+  return writeCreativeMetadata(owner, (state) =>
+    applyCreativeStatuses(state.metadata, classify(state), delivering),
+  );
 }
 
 const syncing = new Set<string>();

@@ -10,6 +10,7 @@ import {
   trafficAlertPrefix,
 } from './meta-traffic-alerts.js';
 import { readMetaTraffic, validTrafficRange } from './meta-traffic-reader.js';
+import { creativeWorkspaceCompany } from './traffic-server-cache.js';
 
 export const trafficUserKey = (id: string) => `traffic-user:v1:${encodeURIComponent(id)}:`;
 export function createPersonalTrafficSync(
@@ -22,6 +23,8 @@ export function createPersonalTrafficSync(
   let ownerCursor = 0;
   async function run(userId: string, from: string, to: string, minAge = 600000) {
     if (stopping || busy.has(userId) || busy.size >= 2 || !validTrafficRange(from, to)) return;
+    // The company collector owns this data; legacy personal tokens must not duplicate its reads.
+    if (await creativeWorkspaceCompany(app.redis, app.db, { sub: userId, role: 'user' })) return;
     busy.add(userId);
     const prefix = trafficUserKey(userId);
     const lease = randomUUID();

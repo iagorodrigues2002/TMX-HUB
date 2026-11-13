@@ -49,6 +49,7 @@ it('requires active company-local traffic access, excludes other companies and h
       },
     });
   const redis = {
+    get: vi.fn(async () => null),
     smembers: vi.fn(async () => ['source']),
     lrange: vi.fn(async (key: string) =>
       key.includes(':source:')

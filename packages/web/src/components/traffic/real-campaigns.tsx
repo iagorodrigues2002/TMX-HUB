@@ -11,7 +11,11 @@ import type { DateRange } from '@/lib/date-range';
 import { supportsIntradayRange } from '@/lib/intraday-range';
 import { usePrivacy } from '@/lib/privacy-context';
 import { Search } from 'lucide-react';
-import { type Dispatch, type SetStateAction, useMemo, useState } from 'react';
+import { type Dispatch, type SetStateAction, type ReactNode, useMemo, useState } from 'react';
+import { TrafficFilterSelect } from './traffic-filter-select';
+import { ManagedCampaignsTable } from './managed-campaigns-table';
+import { accountGroup, detailSnapshot } from './traffic-detail-model';
+import { TrafficDetailComparison, DetailMetrics } from './traffic-detail-comparison';
 import {
   type RealCampaignSnapshot,
   campaignOffer,
@@ -30,6 +34,11 @@ import {
   reportColumns,
   reportMetrics,
 } from './traffic-reports-model';
+import {
+  type TrafficSelection,
+  filterTrafficSelection,
+  selectionForLevel,
+} from './traffic-selection';
 import { Panel } from './traffic-ui';
 import type { LiveTraffic } from './use-live-traffic';
 import { useTrafficAttribution } from './use-traffic-attribution';
@@ -38,6 +47,7 @@ export interface TrafficFilters {
   currency: 'BRL' | 'USD';
   offer: string;
   account: string;
+  accountStatus?: '' | 'Ativo' | 'Desabilitado';
   business: string;
   status: string;
   query: string;
@@ -46,8 +56,13 @@ const defaultColumns: ReportMetricKey[] = [
   'spend',
   'frontSales',
   'cpa',
+  'tmxFronts',
+  'tmxCpa',
   'checkouts',
   'costCheckout',
+  'upsells',
+  'tmxGross',
+  'tmxGrossRoas',
   'connectRate',
   'metaGrossRoi',
   'cpm',
@@ -63,6 +78,7 @@ export function RealCampaigns({
   filters,
   setFilters,
   codes,
+  filterPanel,
 }: {
   range: DateRange;
   view: TrafficTab;
@@ -70,26 +86,37 @@ export function RealCampaigns({
   filters: TrafficFilters;
   setFilters: Dispatch<SetStateAction<TrafficFilters>>;
   codes: string[];
+  filterPanel?: ReactNode;
 }) {
   const { isPrivate } = usePrivacy();
   const [columns, setColumns] = useState<ReportMetricKey[]>(defaultColumns);
-  const [reportMode, setReportMode] = useState<'meta' | 'tmx'>('meta');
-  const attribution = useTrafficAttribution(
-    range,
-    reportMode === 'tmx' && ['overview', 'campaigns'].includes(view),
-  );
-  function changeReportMode(mode: 'meta' | 'tmx') {
-    setReportMode(mode);
-    setColumns((current) => {
-      const base = current.filter(
-        (key) => !tmxAttributionColumns.includes(key as (typeof tmxAttributionColumns)[number]),
-      );
-      return mode === 'tmx'
-        ? [...base.slice(0, 5), ...tmxAttributionColumns, ...base.slice(5)]
-        : base;
-    });
-  }
+  const attribution = useTrafficAttribution(range, ['overview', 'campaigns'].includes(view));
   const [level, setLevel] = useState<'campaigns' | 'adsets' | 'ads'>('campaigns');
+  const selectionContext = JSON.stringify([filters, range]);
+  const [selectionState, setSelectionState] = useState<{
+    context: string;
+    values: TrafficSelection;
+  }>({
+    context: selectionContext,
+    values: { campaigns: [], adsets: [], ads: [] },
+  });
+  const selections =
+    selectionState.context === selectionContext
+      ? selectionState.values
+      : { campaigns: [], adsets: [], ads: [] };
+  const changeSelection = (ids: string[]) =>
+    setSelectionState({
+      context: selectionContext,
+      values: {
+        ...selections,
+        [level]: ids,
+        ...(level === 'campaigns'
+          ? { adsets: [], ads: [] }
+          : level === 'adsets'
+            ? { ads: [] }
+            : {}),
+      },
+    });
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<ReportRow | null>(null);
   const [newOffer, setNewOffer] = useState('');
@@ -107,7 +134,13 @@ export function RealCampaigns({
           : kind === 'percent'
             ? value.toLocaleString('pt-BR', { style: 'percent', maximumFractionDigits: 2 })
             : `${value.toLocaleString('pt-BR', { maximumFractionDigits: Number.isInteger(value) ? 0 : 2 })}${kind === 'ratio' ? '×' : ''}`;
-  const data = live.data.data;
+  const inventoryAccounts = live.accountInventory?.data?.accounts ?? [];
+  const data = useMemo(() => {
+    const snapshot = live.data.data;
+    if (!snapshot || !filters.accountStatus) return snapshot;
+    const ids = new Set(inventoryAccounts.filter(account => account.status === filters.accountStatus).map(account => account.id));
+    return { ...snapshot, campaigns: snapshot.campaigns.filter(campaign => ids.has(campaign.accountId)) };
+  }, [live.data.data, live.accountInventory?.data, filters.accountStatus]);
   const scope = useMemo(
     () => ({ ...filters, mappings: live.mappings, deliveryOnly: true }),
     [filters, live.mappings],
@@ -121,9 +154,14 @@ export function RealCampaigns({
       level === 'campaigns'
         ? campaignRows
         : data
-          ? realCampaignRows(data, range, { ...scope, level })
+          ? filterTrafficSelection(
+              realCampaignRows(data, range, { ...scope, level }),
+              data.insights,
+              level,
+              selections,
+            )
           : [],
-    [data, range, scope, level, campaignRows],
+    [data, range, scope, level, campaignRows, selections],
   );
   const totals = useMemo(() => trafficTotals(campaignRows), [campaignRows]);
   const attributedCampaigns = useMemo(
@@ -145,6 +183,8 @@ export function RealCampaigns({
   );
   if (!data)
     return (
+      <div className={styles.pageStack}>
+      {filterPanel}
       <Panel title="Dados do tráfego">
         <output className={styles.subtle}>
           {live.data.isPending
@@ -152,6 +192,7 @@ export function RealCampaigns({
             : 'Consulta indisponível. Nenhum valor demonstrativo foi utilizado.'}
         </output>
       </Panel>
+      </div>
     );
   const missingSummaryKeys = new Set(campaignRows.flatMap((row) => row.missingMetrics ?? []));
   const comparisonId =
@@ -176,7 +217,7 @@ export function RealCampaigns({
   const incomplete =
     campaignRows.some((row) => row.unavailable) || range.from < data.from || range.to > data.to;
   const noNarrowScope =
-    !comparisonId && !filters.account && !filters.business && !filters.status && !filters.query;
+    !comparisonId && !filters.account && !filters.accountStatus && !filters.business && !filters.status && !filters.query;
   const general = noNarrowScope
     ? nativeTrafficFinance(
         live.general.data?.offers,
@@ -203,6 +244,13 @@ export function RealCampaigns({
         .map((account) => [account.businessId!, account.businessName ?? account.businessId!]),
     ).entries(),
   ];
+  const selectedLevel = selected && data.campaigns.some(c => c.id === selected.id) ? 'campaigns' : selected && data.insights.some(row => row.adId === selected.id) ? 'ads' : 'adsets';
+  const selectedData = selected ? detailSnapshot(data, selected.id, selectedLevel) : data;
+  const accountWarning = (row: ReportRow) => {
+    const campaign = data.campaigns.find(c => c.id === row.id) ?? data.campaigns.find(c => data.insights.some(i => i.campaignId === c.id && (i.adId === row.id || i.adsetId === row.id)));
+    const account = inventoryAccounts.find(a => a.id === campaign?.accountId);
+    return account?.status === 'Desabilitado' ? `Conta desativada · ${account.name}` : null;
+  };
   const pages = Math.max(1, Math.ceil(rows.length / 50));
   const currentPage = Math.min(page, pages - 1);
   const daily = (snapshot = data) =>
@@ -264,8 +312,29 @@ export function RealCampaigns({
   const bm = trafficTotals(b);
   const aAvailable = a.length > 0 && !a.some((row) => row.unavailable);
   const bAvailable = b.length > 0 && !b.some((row) => row.unavailable);
+  const accountFilters = (
+<div className={styles.toolbar}>
+        <label className={styles.search}>
+          <Search size={15} aria-hidden />
+          <input
+            aria-label="Buscar campanha real"
+            value={filters.query}
+            placeholder="Nome, ID ou conta"
+            onChange={(event) => {
+              setFilters({ ...filters, query: event.target.value });
+              setPage(0);
+            }}
+          />
+        </label>
+        <TrafficFilterSelect label="Status das contas" value={filters.accountStatus ?? ''} onChange={value => { setFilters({ ...filters, accountStatus: value as TrafficFilters['accountStatus'], account: '' }); setPage(0); }} options={[{ value: '', label: 'Todas as contas · status' }, { value: 'Ativo', label: 'Somente contas ativas' }, { value: 'Desabilitado', label: 'Somente contas desativadas' }]} />
+        <TrafficFilterSelect label="Conta do tráfego" value={filters.account} onChange={value => { setFilters({ ...filters, account: value }); setPage(0); }} options={[{ value: '', label: 'Todas as contas' }, ...data.accounts.filter(account => !filters.accountStatus || inventoryAccounts.find(item => item.id === account.id)?.status === filters.accountStatus).map(account => ({ value: account.id, label: `${account.name} · ${account.currency}`, group: accountGroup(inventoryAccounts.find(item => item.id === account.id)?.status) }))]} />
+        <TrafficFilterSelect label="BM do tráfego" value={filters.business} onChange={value => { setFilters({ ...filters, business: value, account: '' }); setPage(0); }} options={[{ value: '', label: 'Todas as BMs' }, ...businesses.map(([id, name]) => ({ value: id, label: name }))]} />
+        <TrafficFilterSelect label="Status do tráfego" value={filters.status} onChange={value => { setFilters({ ...filters, status: value }); setPage(0); }} options={[{ value: '', label: 'Todos os status' }, ...[...new Set(data.campaigns.map(c => c.effectiveStatus))].sort().map(status => ({ value: status, label: status }))]} />
+      </div>
+  );
   return (
     <div className={styles.pageStack}>
+      {view !== 'campaigns' && filterPanel}
       <div className={styles.pageIntro}>
         <div>
           <p className={styles.eyebrow}>
@@ -291,6 +360,7 @@ export function RealCampaigns({
       {(live.status.data?.busy || live.refresh.isPending) && (
         <output className={styles.subtle}>Atualizando dados…</output>
       )}
+      {live.classificationError && <p role="alert">{live.classificationError}</p>}
       {(live.status.data?.error || live.refresh.isError) && (
         <p className={styles.warning}>
           {live.status.data?.error || 'Não foi possível atualizar. Dados anteriores preservados.'}
@@ -303,37 +373,12 @@ export function RealCampaigns({
             : 'O período não está totalmente coberto pela consulta atual ou há cotação indisponível. Atualize a Meta; dados ausentes não são gasto zero.'}
         </p>
       )}
-      {view !== 'windows' && (
-        <div className={styles.toolbar}>
-          <div className={styles.segmented} aria-label="Fonte das métricas de campanha">
-            <Button
-              variant={reportMode === 'meta' ? 'secondary' : 'ghost'}
-              aria-pressed={reportMode === 'meta'}
-              onClick={() => changeReportMode('meta')}
-            >
-              Meta
-            </Button>
-            <Button
-              variant={reportMode === 'tmx' ? 'secondary' : 'ghost'}
-              aria-pressed={reportMode === 'tmx'}
-              onClick={() => changeReportMode('tmx')}
-            >
-              Atribuição TMX
-            </Button>
-          </div>
-          {reportMode === 'tmx' && (
-            <output className={styles.subtle}>
-              {attribution.isFetching
-                ? 'Consultando atribuição TMX…'
-                : attribution.isError
-                  ? 'Atribuição indisponível. Dados da Meta preservados.'
-                  : 'Cruzamento por IDs e vínculo da compra de entrada. Nenhum evento enviado à Meta.'}
-            </output>
-          )}
-        </div>
+      {view !== 'windows' && attribution.isError && (
+        <p role="alert" className={styles.subtle}>
+          Atribuição indisponível. Dados da Meta preservados.
+        </p>
       )}
-      {reportMode === 'tmx' &&
-        view !== 'windows' &&
+      {view !== 'windows' &&
         !filters.offer &&
         attributedCampaigns.unmatchedUpsells > 0 && (
           <p className={styles.subtle}>
@@ -341,66 +386,7 @@ export function RealCampaigns({
             confirmada nas campanhas desta consulta.
           </p>
         )}
-      <div className={styles.toolbar}>
-        <label className={styles.search}>
-          <Search size={15} aria-hidden />
-          <input
-            aria-label="Buscar campanha real"
-            value={filters.query}
-            placeholder="Nome, ID ou conta"
-            onChange={(event) => {
-              setFilters({ ...filters, query: event.target.value });
-              setPage(0);
-            }}
-          />
-        </label>
-        <select
-          className={styles.control}
-          aria-label="Conta do tráfego"
-          value={filters.account}
-          onChange={(event) => {
-            setFilters({ ...filters, account: event.target.value });
-            setPage(0);
-          }}
-        >
-          <option value="">Todas as contas · todas as moedas</option>
-          {data.accounts.map((account) => (
-            <option key={account.id} value={account.id}>
-              {account.name} · {account.currency}
-            </option>
-          ))}
-        </select>
-        <select
-          className={styles.control}
-          aria-label="BM do tráfego"
-          value={filters.business}
-          onChange={(event) => {
-            setFilters({ ...filters, business: event.target.value, account: '' });
-            setPage(0);
-          }}
-        >
-          <option value="">Todas as BMs</option>
-          {businesses.map(([id, name]) => (
-            <option key={id} value={id}>
-              {name}
-            </option>
-          ))}
-        </select>
-        <select
-          className={styles.control}
-          aria-label="Status do tráfego"
-          value={filters.status}
-          onChange={(event) => {
-            setFilters({ ...filters, status: event.target.value });
-            setPage(0);
-          }}
-        >
-          <option value="">Todos os status</option>
-          {[...new Set(data.campaigns.map((c) => c.effectiveStatus))].sort().map((status) => (
-            <option key={status}>{status}</option>
-          ))}
-        </select>
-      </div>
+      {view !== 'campaigns' && accountFilters}
       {view !== 'windows' && (
         <>
           <section className={styles.performanceBoard} aria-label="Indicadores reais do tráfego">
@@ -513,7 +499,7 @@ export function RealCampaigns({
             </p>
           )}
           <MetricsTable
-            rows={(reportMode === 'tmx' ? attributedCampaigns.rows : campaignRows).slice(0, 5)}
+            rows={attributedCampaigns.rows.slice(0, 5)}
             format={format}
             caption="Campanhas em acompanhamento"
             columns={columns}
@@ -526,6 +512,8 @@ export function RealCampaigns({
           title="Campanhas, conjuntos e anúncios"
           subtitle="Somente campanhas com gasto no período. Nos anúncios e janelas, conversões atribuídas sem gasto são preservadas para reconciliar o total."
         >
+          {filterPanel}
+          {accountFilters}
           <div className={styles.toolbar}>
             <div className={styles.segmented}>
               {(
@@ -541,6 +529,10 @@ export function RealCampaigns({
                   aria-pressed={level === key}
                   variant={level === key ? 'secondary' : 'ghost'}
                   onClick={() => {
+                    setSelectionState({
+                      context: selectionContext,
+                      values: selectionForLevel(selections, key),
+                    });
                     setLevel(key);
                     setPage(0);
                   }}
@@ -554,7 +546,7 @@ export function RealCampaigns({
               onChange={setColumns}
               allowed={[
                 ...defaultColumns,
-                ...(reportMode === 'tmx' ? tmxAttributionColumns : []),
+                ...tmxAttributionColumns,
                 'impressions',
                 'clicks',
                 'ctr',
@@ -565,13 +557,41 @@ export function RealCampaigns({
               ]}
             />
           </div>
-          <MetricsTable
-            rows={(reportMode === 'tmx' ? attributedRows : rows).slice(
-              currentPage * 50,
-              currentPage * 50 + 50,
+          {level !== 'campaigns' &&
+            (selections.campaigns.length > 0 ||
+              (level === 'ads' && selections.adsets.length > 0)) && (
+              <div className="flex items-center gap-3 text-sm">
+                <span>
+                  {level === 'adsets' ? 'Conjuntos' : 'Anúncios'} de{' '}
+                  {level === 'ads' && selections.adsets.length
+                    ? `${selections.adsets.length} conjunto(s)`
+                    : `${selections.campaigns.length} campanha(s)`}{' '}
+                  selecionado(s)
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setSelectionState({
+                      context: selectionContext,
+                      values: { campaigns: [], adsets: [], ads: [] },
+                    });
+                    setPage(0);
+                  }}
+                >
+                  Ver todos
+                </Button>
+              </div>
             )}
+          <ManagedCampaignsTable
+            accountWarning={accountWarning}
+            key={JSON.stringify([level, currentPage, filters, range])}
+            level={level}
+            selectionIds={selections[level]}
+            onSelectionChange={changeSelection}
+            rows={attributedRows.slice(currentPage * 50, currentPage * 50 + 50)}
             format={format}
-            caption="Campanhas reais da Meta"
+            currency={filters.currency}
             columns={columns}
             onOpen={setSelected}
           />
@@ -584,7 +604,10 @@ export function RealCampaigns({
                 variant="ghost"
                 size="sm"
                 disabled={!currentPage}
-                onClick={() => setPage(currentPage - 1)}
+                onClick={() => {
+                  changeSelection([]);
+                  setPage(currentPage - 1);
+                }}
               >
                 Anterior
               </Button>
@@ -592,7 +615,10 @@ export function RealCampaigns({
                 variant="ghost"
                 size="sm"
                 disabled={currentPage + 1 >= pages}
-                onClick={() => setPage(currentPage + 1)}
+                onClick={() => {
+                  changeSelection([]);
+                  setPage(currentPage + 1);
+                }}
               >
                 Próxima
               </Button>
@@ -857,7 +883,7 @@ export function RealCampaigns({
           if (!open) setSelected(null);
         }}
       >
-        <DialogContent className="max-w-5xl sm:max-w-5xl">
+        <DialogContent className="w-[96vw] max-w-[1440px] sm:max-w-[1440px]">
           <DialogHeader>
             <DialogTitle>{selected?.name}</DialogTitle>
             <DialogDescription>Dados reais da Meta · {selectedCampaign?.name}</DialogDescription>
@@ -886,28 +912,29 @@ export function RealCampaigns({
                   ))}
                 </select>
               </label>
-              <MetricsTable
+              <DetailMetrics
                 rows={[selected]}
                 format={format}
                 caption="Resumo do item real"
-                columns={metaColumns}
+                columns={columns}
               />
-              <h3>Série diária da campanha</h3>
-              <MetricsTable
-                rows={daily({ ...data, campaigns: [selectedCampaign] })}
+              <TrafficDetailComparison key={selected.id} data={selectedData} currency={filters.currency} format={format} from={range.from} to={range.to} />
+              <h3>Série diária {selectedLevel === 'ads' ? 'do anúncio' : selectedLevel === 'adsets' ? 'do conjunto' : 'da campanha'}</h3>
+              <DetailMetrics
+                rows={daily(selectedData)}
                 format={format}
                 caption="Série diária"
                 columns={metaColumns}
               />
               <h3>Anúncios vinculados</h3>
-              <MetricsTable
-                rows={realCampaignRows({ ...data, campaigns: [selectedCampaign] }, range, {
+              <DetailMetrics
+                rows={attributeTrafficRows(realCampaignRows(selectedData, range, {
                   ...scope,
                   level: 'ads',
-                })}
+                }), selectedData, attribution.data, filters.currency, 'ads').rows}
                 format={format}
                 caption="Anúncios vinculados reais"
-                columns={metaColumns}
+                columns={columns}
               />
             </div>
           )}

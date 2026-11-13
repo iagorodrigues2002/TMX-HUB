@@ -1,9 +1,9 @@
-import { CREATIVE_HISTORY_START } from '@page-cloner/shared/creative-identity';
-import { todayIso } from '@page-cloner/shared/date-range';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { CREATIVE_HISTORY_START } from '@page-cloner/shared/creative-identity';
+import { todayIso } from '@page-cloner/shared/date-range';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { env } from '../../env.js';
@@ -19,9 +19,12 @@ import {
   serverTrafficInventory,
   serverTrafficSnapshot,
   serverTrafficStatus,
+  trafficCompanyKey,
+  companyTrafficInventory,
 } from '../../services/traffic-server-cache.js';
+import { archivedTraffic } from '../../services/traffic-daily-store.js';
 
-async function connectionSecret() {
+export async function connectionSecret() {
   if (env.NODE_ENV !== 'test') return env.TRACKING_ENCRYPTION_KEY;
   // Real tokens must not use the synthetic preview's publicly known encryption key.
   const directory = join(homedir(), '.codex/local-data/tmx');
@@ -44,19 +47,22 @@ export function registerTrafficUserConnection(app: FastifyInstance) {
     const userId = req.user?.sub;
     if (!userId) return reply.code(401).send({ detail: 'Entre no TMX.' });
     reply.header('Cache-Control', 'private, no-store');
-    const company = (req.query as { workspace?: string }).workspace === 'creative'
-      ? await creativeWorkspaceCompany(app.redis, app.db, req.user)
-      : null;
+    const raw = await app.redis.get(`${trafficUserKey(userId)}connection`);
+    const company = await creativeWorkspaceCompany(app.redis, app.db, req.user);
+    if (!company && app.db && env.NODE_ENV !== 'test') return { connected: false, busy: false };
     if (company) {
+      const saved = await app.redis.get(`${trafficCompanyKey(company)}connection`);
+      const connection = saved ? JSON.parse(saved) : null;
       return {
         connected: true,
         id: `creative-company:${company}`,
-        name: 'Operação TMX',
+        companyId: company,
+        revision: connection?.revision,
+        name: connection?.name ?? 'Operação TMX',
         shared: true,
         busy: false,
       };
     }
-    const raw = await app.redis.get(`${trafficUserKey(userId)}connection`);
     if (!raw) {
       if (!hasServerTraffic(userId)) return { connected: false, busy: false };
       const state = await serverTrafficStatus(app.redis);
@@ -85,6 +91,11 @@ export function registerTrafficUserConnection(app: FastifyInstance) {
     async (req, reply) => {
       const userId = req.user?.sub;
       if (!userId) return reply.code(401).send({ detail: 'Entre no TMX.' });
+      const company = await creativeWorkspaceCompany(app.redis, app.db, req.user);
+      if (company && req.user?.role !== 'admin')
+        return reply.code(403).send({ detail: 'Somente administradores podem configurar a integração.' });
+      if (!company && app.db && env.NODE_ENV !== 'test')
+        return reply.code(403).send({ detail: 'Selecione uma empresa autorizada para configurar o Tráfego.' });
       const parsed = z
         .object({
           name: z.string().trim().min(1).max(100),
@@ -120,7 +131,7 @@ export function registerTrafficUserConnection(app: FastifyInstance) {
           detail: 'A Meta não validou o token. Confira as permissões e os ativos atribuídos.',
         });
       }
-      const prefix = trafficUserKey(userId);
+      const prefix = company ? trafficCompanyKey(company) : trafficUserKey(userId);
       const revision = randomUUID();
       const connection = {
         revision,
@@ -140,9 +151,9 @@ export function registerTrafficUserConnection(app: FastifyInstance) {
         .multi()
         .set(`${prefix}connection`, JSON.stringify(connection))
         .set(`${prefix}inventory`, JSON.stringify(classified))
-        .sadd('traffic-user:v1:owners', userId)
         .del(`${prefix}error`)
         .exec();
+      if (!company) await app.redis.sadd('traffic-user:v1:owners', userId);
       return { connected: true, name: connection.name, connectedAt: connection.connectedAt };
     },
   );
@@ -150,6 +161,13 @@ export function registerTrafficUserConnection(app: FastifyInstance) {
     const userId = req.user?.sub;
     if (!userId) return reply.code(401).send({ detail: 'Entre no TMX.' });
     reply.header('Cache-Control', 'private, no-store');
+    const company = await creativeWorkspaceCompany(app.redis, app.db, req.user, ['traffic-contingency', 'traffic-settings']);
+    if (!company && app.db && env.NODE_ENV !== 'test')
+      return reply.code(403).send({ detail: 'Empresa não autorizada.' });
+    if (company) {
+      const inventory = await companyTrafficInventory(app.redis, company);
+      return inventory ?? reply.code(409).send({ detail: 'Inventário da empresa em processamento.' });
+    }
     const raw = await app.redis.get(`${trafficUserKey(userId)}inventory`);
     if (
       !raw &&
@@ -169,20 +187,40 @@ export function registerTrafficUserConnection(app: FastifyInstance) {
     const range = z.object({ from: z.string(), to: z.string() }).safeParse(req.query);
     if (!range.success || !validTrafficRange(range.data.from, range.data.to))
       return reply.code(400).send({ detail: 'Período inválido.' });
-    const company = (req.query as { workspace?: string }).workspace === 'creative'
-      ? await creativeWorkspaceCompany(app.redis, app.db, req.user)
-      : null;
+    const raw = await app.redis.get(`${trafficUserKey(userId)}connection`);
+    const company = await creativeWorkspaceCompany(app.redis, app.db, req.user, ['traffic-overview', 'traffic-campaigns', 'traffic-windows', 'ads-intelligence']);
+    if (!company && app.db && env.NODE_ENV !== 'test')
+      return reply.code(403).send({ detail: 'Empresa não autorizada.' });
     if (company) {
-      if (range.data.from !== CREATIVE_HISTORY_START || range.data.to !== todayIso())
-        return reply.code(400).send({ detail: 'Use o período do Ads Intelligence.' });
-      const report = await companyCreativeSnapshot(app.redis, company, range.data.from, range.data.to);
-      if (!report) return reply.code(409).send({ detail: 'Consulta da empresa em processamento.' });
+      const today = todayIso();
+      if (range.data.from < CREATIVE_HISTORY_START || range.data.to > today)
+        return reply
+          .code(400)
+          .send({ detail: 'Selecione um período dentro do histórico do Ads Intelligence.' });
+      const stored = app.db ? await archivedTraffic(app.db, company, range.data.from, range.data.to) : null;
+      const report = stored ?? await companyCreativeSnapshot(
+        app.redis,
+        company,
+        CREATIVE_HISTORY_START,
+        today,
+        range.data.to,
+      );
+      if (!report) {
+        const error = await app.redis.get(`traffic-daily:v1:${company}:error`);
+        return reply.code(409).send({ detail: error || 'Aguardando a coleta diária da empresa. Atualização automática a cada 20 minutos.' });
+      }
       reply.header('Cache-Control', 'private, no-store');
       const { hourly: _hourly, ...daily } = report;
-      return daily;
+      return {
+        ...daily,
+        ...((req.query as { hourly?: string }).hourly === '1' ? { hourly: report.hourly } : {}),
+        ...range.data,
+        insights: report.insights.filter(
+          (insight) => insight.date >= range.data.from && insight.date <= range.data.to,
+        ),
+      };
     }
     const prefix = trafficUserKey(userId);
-    const raw = await app.redis.get(`${prefix}connection`);
     if (!raw) {
       if (!hasServerTraffic(userId))
         return reply.code(404).send({ detail: 'Configure o System User.' });
@@ -217,7 +255,12 @@ export function registerTrafficUserConnection(app: FastifyInstance) {
       const range = z.object({ from: z.string(), to: z.string() }).safeParse(req.body);
       if (!range.success || !validTrafficRange(range.data.from, range.data.to))
         return reply.code(400).send({ error: 'invalid_range' });
-      if (await app.redis.get(`${trafficUserKey(userId)}connection`))
+      const company = await creativeWorkspaceCompany(app.redis, app.db, req.user, ['traffic-overview', 'traffic-campaigns', 'traffic-windows', 'ads-intelligence']);
+      if (!company && app.db && env.NODE_ENV !== 'test')
+        return reply.code(403).send({ error: 'company_forbidden' });
+      if (company)
+        return reply.code(202).send({ queued: false, automatic: true });
+      else if (await app.redis.get(`${trafficUserKey(userId)}connection`))
         await sync.request(userId, range.data.from, range.data.to, true);
       else if (hasServerTraffic(userId))
         await serverTrafficSnapshot(app.redis, userId, range.data.from, range.data.to, true, 30000);

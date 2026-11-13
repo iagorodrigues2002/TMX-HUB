@@ -72,6 +72,7 @@ describe('local readonly traffic integration', () => {
     [200, 'API access blocked.', 'API access blocked'],
     [190, 'private secret-token', 'expirou ou foi revogada'],
     [4, 'private secret-token', 'limitou temporariamente'],
+    [80004, 'private secret-token', 'limitou temporariamente'],
   ])(
     'explains Meta error %s without leaking upstream credentials',
     async (code, message, expected) => {

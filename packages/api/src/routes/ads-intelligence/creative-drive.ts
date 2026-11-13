@@ -20,6 +20,7 @@ import {
   updateCloudCreativeMetadata,
 } from '../../services/creative-drive.js';
 import { trafficUserKey } from '../../services/traffic-personal-sync.js';
+import { archivedTraffic } from '../../services/traffic-daily-store.js';
 import {
   companyCreativeSnapshot,
   creativeWorkspaceCompany,
@@ -48,24 +49,32 @@ export function registerCreativeDriveRoutes(app: FastifyInstance) {
     if (input.action === 'classify') {
       const range = { from: CREATIVE_HISTORY_START, to: todayIso() };
       const prefix = trafficUserKey(owner);
-      const connection = company ? null : await app.redis.get(prefix + 'connection');
+      const connection = company ? null : await app.redis.get(`${prefix}connection`);
       let snapshot: RealCampaignSnapshot | null = null;
       if (company) {
-        snapshot = await companyCreativeSnapshot(app.redis, company, range.from, range.to);
+        snapshot = (app.db ? await archivedTraffic(app.db, company, range.from, range.to) : null)
+          ?? await companyCreativeSnapshot(app.redis, company, range.from, range.to);
       } else if (connection) {
         const { revision } = JSON.parse(connection);
         const raw = await app.redis.get(`${prefix}${revision}:${range.from}:${range.to}`);
         if (raw) snapshot = JSON.parse(raw);
       } else {
-        snapshot = (await serverTrafficSnapshot(app.redis, owner, range.from, range.to))?.snapshot ?? null;
+        snapshot =
+          (await serverTrafficSnapshot(app.redis, owner, range.from, range.to))?.snapshot ?? null;
       }
       if (!snapshot || !hasCreativeDeliveryCoverage(snapshot, range))
-        return reply.code(409).send({ detail: 'Aguardando os dados completos para atualizar os alertas.' });
+        return reply
+          .code(409)
+          .send({ detail: 'Aguardando os dados completos para atualizar os alertas.' });
       const report = snapshot;
       return updateCloudCreativeMetadata(app.redis, owner, (state) => {
         const assessment = creativeDeliveryAssessment(report, range, state, input.mappings);
         return {
-          metadata: applyCreativeStatuses(state.metadata, assessment.statuses),
+          metadata: applyCreativeStatuses(
+            state.metadata,
+            assessment.statuses,
+            assessment.delivering,
+          ),
           result: { lowRoas: assessment.lowRoas },
         };
       });
@@ -80,22 +89,28 @@ export function registerCreativeDriveRoutes(app: FastifyInstance) {
           result: undefined,
         }));
       } catch (error) {
-        const detail = error instanceof Error ? error.message : 'Não foi possível salvar o criativo.';
+        const detail =
+          error instanceof Error ? error.message : 'Não foi possível salvar o criativo.';
         if (/^(Criativo ou status inválido|O arquivo principal precisa pertencer)/.test(detail))
           return reply.code(400).send({ detail });
         throw error;
       }
     } else {
-      const rootUrl = input.action === 'configure'
-        ? input.rootUrl
-        : (await cloudCreativeDriveState(app.redis, owner)).rootUrl;
+      const rootUrl =
+        input.action === 'configure'
+          ? input.rootUrl
+          : (await cloudCreativeDriveState(app.redis, owner)).rootUrl;
       let rootId: string;
       try {
         rootId = driveFolderId(rootUrl);
       } catch {
         return reply.code(400).send({ detail: 'Use um link válido de pasta do Google Drive.' });
       }
-      await configureCloudCreativeDrive(app.redis, owner, `https://drive.google.com/drive/folders/${rootId}`);
+      await configureCloudCreativeDrive(
+        app.redis,
+        owner,
+        `https://drive.google.com/drive/folders/${rootId}`,
+      );
     }
     return cloudCreativeDriveState(app.redis, owner);
   });

@@ -38,6 +38,8 @@ describe('Meta rejection and disabled-account monitoring', () => {
     const failed = trafficHealthChanges(health([ad]), health([], 1, false), 'owner');
     expect(failed.events).toEqual([]);
     expect(failed.state.accounts[0]!.rejected).toEqual([ad]);
+    expect(failed.state.accounts[0]!.lastCheckComplete).toBe(false);
+    expect(failed.state.accounts[0]!.checkedAt).toBeTruthy();
     expect(trafficHealthChanges(failed.state, health([ad]), 'owner').events).toEqual([]);
     expect(
       trafficHealthChanges(
