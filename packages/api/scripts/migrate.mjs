@@ -129,6 +129,7 @@ const migrations = [
   '121_company_ai.sql',
   '122_company_ai_learning.sql',
   '123_upsell_operator_ambiguous_front.sql',
+  '124_spy_visual_analysis.sql',
 ];
 
 await sql`

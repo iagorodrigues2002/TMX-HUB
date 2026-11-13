@@ -5,6 +5,10 @@ import postgres from 'postgres';
 import { test } from 'vitest';
 import { registerSpyVisualPreview } from '../src/services/spy-visual-preview.js';
 
+test('production startup includes the durable visual cache migration', async () => {
+  assert.ok((await readFile(new URL('../scripts/migrate.mjs', import.meta.url), 'utf8')).includes("'124_spy_visual_analysis.sql'"));
+});
+
 test.skipIf(!process.env.SPY_VISUAL_TEST_DATABASE_URL)(
   'durable production cache: concurrent requests, restart, company isolation and no rebilling',
   async () => {
