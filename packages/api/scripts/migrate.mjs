@@ -131,6 +131,7 @@ const migrations = [
   '123_upsell_operator_ambiguous_front.sql',
   '124_spy_visual_analysis.sql',
   '125_spy_visual_legacy_offers.sql',
+  '126_spy_transcriptions.sql',
 ];
 
 await sql`

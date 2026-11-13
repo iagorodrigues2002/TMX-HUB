@@ -13,7 +13,9 @@ const visualContent=z.array(z.union([z.object({type:z.literal('input_text'),text
 const core={model:z.literal('gpt-6.1-sol'),instructions:z.string().max(10000),input:z.array(z.object({role:z.literal('user'),content:z.union([z.string().max(8000000),visualContent])}).strict()).length(1)};
 const countSchema=z.object(core).strict();
 const responseSchema=z.object({...core,store:z.literal(false),service_tier:z.literal('default'),prompt_cache_options:z.object({mode:z.literal('explicit')}).strict(),reasoning:z.object({effort:z.literal('low')}).strict(),max_output_tokens:z.literal(3000),text:z.object({format:z.object({type:z.literal('json_schema'),name:z.literal('spy_visual_comparison'),strict:z.literal(true),schema:z.record(z.string(),z.unknown())}).strict()}).strict().optional()}).strict();
-export function parseProviderRequest(path,raw){return (path==='/responses'?responseSchema:countSchema).safeParse(raw);}
+const transcriptionSchema=z.object({model:z.literal('gpt-transcribe'),audio:z.string().max(25610000).regex(/^[A-Za-z0-9+/]+=*$/)}).strict();
+const audioAnalysisSchema=z.object({model:z.literal('gpt-audio-1.5'),store:z.literal(false),modalities:z.tuple([z.literal('text')]),max_completion_tokens:z.literal(16000),messages:z.tuple([z.object({role:z.literal('system'),content:z.string().max(4000)}).strict(),z.object({role:z.literal('user'),content:z.tuple([z.object({type:z.literal('input_audio'),input_audio:z.object({data:z.string().max(25610000).regex(/^[A-Za-z0-9+/]+=*$/),format:z.literal('wav')}).strict()}).strict()])}).strict()])}).strict();
+export function parseProviderRequest(path,raw){return (path==='/audio-analysis'?audioAnalysisSchema:path==='/transcriptions'?transcriptionSchema:path==='/responses'?responseSchema:countSchema).safeParse(raw);}
 let sync;
 export function createAiBridge(){return createServer(async(req,res)=>{
  const send=(status,body)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(body));};
@@ -27,13 +29,24 @@ export function createAiBridge(){return createServer(async(req,res)=>{
    sync??=promisify(execFile)(process.execPath,[fileURLToPath(new URL('./sync-ai-preview.mjs',import.meta.url))],{timeout:180000,maxBuffer:100000}).finally(()=>{sync=undefined;});
    await sync;return send(200,{updated:true});
   }
-  if(req.url!=='/responses'&&req.url!=='/input-tokens')return send(404,{error:'Not found'});
+  if(req.url!=='/responses'&&req.url!=='/input-tokens'&&req.url!=='/transcriptions'&&req.url!=='/audio-analysis')return send(404,{error:'Not found'});
   let size=0;const chunks=[];
-  for await(const chunk of req){size+=chunk.length;if(size>8000000)return send(413,{error:'Request too large'});chunks.push(chunk);}
+  for await(const chunk of req){size+=chunk.length;if(size>(['/transcriptions','/audio-analysis'].includes(req.url)?25700000:8000000))return send(413,{error:'Request too large'});chunks.push(chunk);}
   const parsed=parseProviderRequest(req.url,JSON.parse(Buffer.concat(chunks).toString()));
   if(!parsed.success)return send(400,{error:'Unsupported request'});
   const body=parsed.data;
   if(!/^Bearer [^\s]+$/.test(req.headers.authorization??''))return send(400,{error:'Missing credential'});
+  if(req.url==='/transcriptions'){
+   const form=new FormData();form.set('model',body.model);form.set('file',new Blob([Buffer.from(body.audio,'base64')],{type:'audio/wav'}),'audio.wav');
+   const response=await fetch('https://api.openai.com/v1/audio/transcriptions',{method:'POST',headers:{authorization:req.headers.authorization},body:form,redirect:'error',signal:AbortSignal.timeout(90000)});
+   if(!response.ok)return send(response.status,{error:'Provider rejected request'});
+   return send(200,await response.json());
+  }
+  if(req.url==='/audio-analysis'){
+   const response=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{authorization:req.headers.authorization,'content-type':'application/json'},body:JSON.stringify(body),redirect:'error',signal:AbortSignal.timeout(90000)});
+   if(!response.ok)return send(response.status,{error:'Provider rejected request'});
+   return send(200,await response.json());
+  }
   const requestId=req.headers['x-client-request-id'];
   const response=await fetch(req.url==='/responses'?'https://api.openai.com/v1/responses':'https://api.openai.com/v1/responses/input_tokens',{method:'POST',headers:{authorization:req.headers.authorization,'content-type':'application/json',...(typeof requestId==='string'&&/^[a-f0-9-]{36}$/.test(requestId)?{'X-Client-Request-Id':requestId}:{})},body:JSON.stringify(body),redirect:'error',signal:AbortSignal.timeout(req.url==='/responses'?90000:25000)});
   if(!response.ok)return send(response.status,{error:'Provider rejected request'});

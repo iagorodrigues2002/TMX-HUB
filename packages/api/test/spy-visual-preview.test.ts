@@ -46,89 +46,123 @@ test('cache includes company, media, copy and comparison direction; rejects remo
     false,
   );
 });
-test('company guard, persistence across restart, no repeated billing, pending attempts fail closed', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'spy-visual-test-'));
-  const originalFetch = globalThis.fetch;
-  let calls = 0;
-  let enabled = true;
-  globalThis.fetch = async () => {
-    calls++;
-    return Response.json({
-      status: 'completed',
-      output: [
-        {
-          type: 'message',
-          content: [
-            {
-              type: 'output_text',
-              text: JSON.stringify({
-                classification: 'variation',
-                reason: 'Alteração no texto do quadro.',
-                similarities: ['Mesma cena'],
-                differences: ['Texto diferente'],
-                limitations: ['Quadros amostrados, áudio não analisado.'],
-              }),
-            },
-          ],
-        },
-      ],
-    });
-  };
-  const make = () => {
-    const app = Fastify();
-    app.decorate('redis', { eval: async () => 1 } as never);
-    registerSpyVisualPreview(app, {
-      root,
-      recheck: async () => true,
-      access: () => ({ companyId, canManage: enabled, allOffers: true, spy: true }) as never,
-      config: async () => ({
-        enabled: true,
-        dailyLimitCents: 2000,
-        headers: { authorization: 'Bearer test' },
-      }),
-    });
-    return app;
-  };
-  let app = make();
-  const call = (body = input) =>
-    app.inject({ method: 'POST', url: '/meta-control/traffic/ai/spy-visual', payload: body });
-  try {
-    assert.equal(
-      (await call({ ...input, companyId: '69706e9a-95ad-493e-b4ab-4a6de7541add' })).statusCode,
-      403,
-    );
-    assert.equal(calls, 0);
-    assert.equal(
-      (
-        await app.inject({
-          method: 'POST',
-          url: '/meta-control/traffic/ai/spy-visual?cachedOnly=1',
-          payload: input,
-        })
-      ).statusCode,
-      412,
-    );
-    assert.equal(calls, 0);
-    assert.equal((await call()).json().cached, false);
-    assert.equal(calls, 1);
-    await app.close();
-    app = make();
-    assert.equal((await call()).json().cached, true);
-    assert.equal(calls, 1);
-    enabled = false;
-    assert.equal((await call()).statusCode, 403);
-    enabled = true;
+test.each([false, true])(
+  'company guard, persistence and no repeated billing (structure=%s)',
+  async (structure) => {
+    const payload = structure
+      ? {
+          ...input,
+          kind: 'structure',
+          assetKey: 'a'.repeat(64),
+          ads: input.ads.slice(0, 1),
+          audio: null,
+        }
+      : input;
+    const root = await mkdtemp(join(tmpdir(), 'spy-visual-test-'));
+    const originalFetch = globalThis.fetch;
+    let calls = 0;
+    let enabled = true;
     globalThis.fetch = async () => {
       calls++;
-      throw Error('timeout');
+      return Response.json({
+        status: 'completed',
+        output: [
+          {
+            type: 'message',
+            content: [
+              {
+                type: 'output_text',
+                text: JSON.stringify(
+                  structure
+                    ? {
+                        hookType: 'text',
+                        hook: 'Texto inicial',
+                        endingType: 'trophy',
+                        ending: 'Troféu final',
+                        trophy: 'gold_cup',
+                        trophyDescription: 'Taça dourada',
+                        limitations: ['Quadros amostrados'],
+                      }
+                    : {
+                        classification: 'variation',
+                        reason: 'Alteração no texto do quadro.',
+                        similarities: ['Mesma cena'],
+                        differences: ['Texto diferente'],
+                        limitations: ['Quadros amostrados, áudio não analisado.'],
+                      },
+                ),
+              },
+            ],
+          },
+        ],
+      });
     };
-    const other = { ...input, ads: input.ads.map((a) => ({ ...a, text: 'new input' })) };
-    assert.equal((await call(other)).statusCode, 502);
-    assert.equal((await call(other)).statusCode, 409);
-    assert.equal(calls, 2);
-  } finally {
-    globalThis.fetch = originalFetch;
-    await app.close();
-    await rm(root, { recursive: true, force: true });
-  }
-});
+    const make = () => {
+      const app = Fastify();
+      app.decorate('redis', { eval: async () => 1 } as never);
+      registerSpyVisualPreview(app, {
+        root,
+        recheck: async () => true,
+        access: () => ({ companyId, canManage: enabled, allOffers: true, spy: true }) as never,
+        config: async () => ({
+          enabled: true,
+          dailyLimitCents: 2000,
+          headers: { authorization: 'Bearer test' },
+        }),
+      });
+      return app;
+    };
+    let app = make();
+    const call = (body = payload) =>
+      app.inject({ method: 'POST', url: '/meta-control/traffic/ai/spy-visual', payload: body });
+    try {
+      assert.equal(
+        (await call({ ...input, companyId: '69706e9a-95ad-493e-b4ab-4a6de7541add' })).statusCode,
+        403,
+      );
+      assert.equal(calls, 0);
+      assert.equal(
+        (
+          await app.inject({
+            method: 'POST',
+            url: '/meta-control/traffic/ai/spy-visual?cachedOnly=1',
+            payload,
+          })
+        ).statusCode,
+        412,
+      );
+      assert.equal(calls, 0);
+      assert.equal((await call()).json().cached, false);
+      assert.equal(calls, 1);
+      const results = await app.inject({
+        method: 'GET',
+        url: `/meta-control/traffic/ai/spy-visual/results?offerId=${input.offerId}${structure ? '&kind=structure' : ''}`,
+      });
+      assert.equal(results.json().records.length, 1);
+      const otherKind = await app.inject({
+        method: 'GET',
+        url: `/meta-control/traffic/ai/spy-visual/results?offerId=${input.offerId}${structure ? '' : '&kind=structure'}`,
+      });
+      assert.equal(otherKind.json().records.length, 0);
+      await app.close();
+      app = make();
+      assert.equal((await call()).json().cached, true);
+      assert.equal(calls, 1);
+      enabled = false;
+      assert.equal((await call()).statusCode, 403);
+      enabled = true;
+      globalThis.fetch = async () => {
+        calls++;
+        throw Error('timeout');
+      };
+      const other = { ...payload, ads: payload.ads.map((a) => ({ ...a, text: 'new input' })) };
+      assert.equal((await call(other)).statusCode, 502);
+      assert.equal((await call(other)).statusCode, 409);
+      assert.equal(calls, 2);
+    } finally {
+      globalThis.fetch = originalFetch;
+      await app.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+);
