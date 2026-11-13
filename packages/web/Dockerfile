@@ -37,6 +37,7 @@ RUN cd packages/web && node scripts/build-spy-worker.mjs && pnpm build
 
 # ---- runtime stage ----
 FROM node:22-alpine AS runtime
+RUN apk add --no-cache ffmpeg
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 WORKDIR /app

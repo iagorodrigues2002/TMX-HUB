@@ -9,9 +9,10 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
-const core={model:z.literal('gpt-6.1-sol'),instructions:z.string().max(10000),input:z.array(z.object({role:z.literal('user'),content:z.string().max(8000000)}).strict()).length(1)};
+const visualContent=z.array(z.union([z.object({type:z.literal('input_text'),text:z.string().max(7000)}).strict(),z.object({type:z.literal('input_image'),image_url:z.string().max(350000).regex(/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/),detail:z.literal('high')}).strict()])).max(26);
+const core={model:z.literal('gpt-6.1-sol'),instructions:z.string().max(10000),input:z.array(z.object({role:z.literal('user'),content:z.union([z.string().max(8000000),visualContent])}).strict()).length(1)};
 const countSchema=z.object(core).strict();
-const responseSchema=z.object({...core,store:z.literal(false),service_tier:z.literal('default'),prompt_cache_options:z.object({mode:z.literal('explicit')}).strict(),reasoning:z.object({effort:z.literal('low')}).strict(),max_output_tokens:z.literal(3000)}).strict();
+const responseSchema=z.object({...core,store:z.literal(false),service_tier:z.literal('default'),prompt_cache_options:z.object({mode:z.literal('explicit')}).strict(),reasoning:z.object({effort:z.literal('low')}).strict(),max_output_tokens:z.literal(3000),text:z.object({format:z.object({type:z.literal('json_schema'),name:z.literal('spy_visual_comparison'),strict:z.literal(true),schema:z.record(z.string(),z.unknown())}).strict()}).strict().optional()}).strict();
 export function parseProviderRequest(path,raw){return (path==='/responses'?responseSchema:countSchema).safeParse(raw);}
 let sync;
 export function createAiBridge(){return createServer(async(req,res)=>{

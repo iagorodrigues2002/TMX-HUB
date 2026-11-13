@@ -43,6 +43,7 @@ export async function aiAccess(app: FastifyInstance, company: string, userId: st
     upsells: area('tracking-upsell-intelligence'),
     reversals: area('refunds'),
     optimizations: area('traffic-campaigns'),
+    spy: area('spy-monitor', 'spy-offers'),
   };
   const revision = createHash('sha256')
     .update(JSON.stringify({ ...access, tools: [...tools].sort(), role: member.role }))

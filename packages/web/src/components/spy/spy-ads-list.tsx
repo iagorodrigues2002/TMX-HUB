@@ -264,6 +264,9 @@ export function SpyAdsList({
       <h4>
         {isPages ? 'Páginas encontradas' : all ? 'Todos os anúncios' : 'Destaques por volume'}
       </h4>
+      {!isPages && (
+        <Link href={`/spy/analise-visual?${new URLSearchParams({ id, at })}`}>Comparação visual com IA</Link>
+      )}
       {!isPages && !all && (
         <p className={s.muted}>
           Até 12 grupos com mais anúncios informados pela Library. Sem volume informado ficam ao

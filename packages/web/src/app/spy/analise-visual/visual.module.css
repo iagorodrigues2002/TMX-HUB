@@ -1,0 +1,240 @@
+.summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 20px 0;
+}
+.summary > div {
+  padding: 18px;
+  border: 1px solid #b2d7e222;
+  border-radius: 14px;
+  background: #102730e8;
+}
+.summary strong {
+  display: block;
+  font-size: 24px;
+}
+.summary span {
+  display: block;
+  font-size: 12px;
+  color: #bed1d6;
+  margin-top: 6px;
+}
+.filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+.filters button {
+  padding: 9px 12px;
+  border: 1px solid #b2d7e233;
+  border-radius: 20px;
+  font-size: 12px;
+}
+.filters button[aria-pressed="true"] {
+  background: #9cdbd4;
+  color: #102730;
+}
+.filters span {
+  margin-left: 5px;
+  opacity: 0.8;
+}
+.list .saved {
+  color: #ace8d6;
+}
+@media (max-width: 700px) {
+  .summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.page {
+  max-width: 1480px;
+  margin: auto;
+  padding: 28px;
+  color: #e9f6f7;
+}
+.page header {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  align-items: center;
+  margin: 24px 0;
+}
+.page h1 {
+  font-size: 28px;
+  font-weight: 650;
+  margin: 8px 0;
+}
+.page h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 8px 0;
+}
+.page h3 {
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.page p {
+  line-height: 1.6;
+  color: #bed1d6;
+}
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: .14em;
+  color: #a5d8df;
+}
+.badge {
+  display: inline-block;
+  border: 1px solid #8dd6cb45;
+  border-radius: 24px;
+  padding: 7px 12px;
+  color: #ace8d6;
+  font-size: 12px;
+}
+.note {
+  max-width: 900px;
+  margin-bottom: 24px;
+}
+.layout {
+  display: grid;
+  grid-template-columns: 290px minmax(0, 1fr);
+  gap: 24px;
+}
+.layout aside,
+.result,
+.pair article,
+.evidence section,
+.empty {
+  background: #102730e8;
+  border: 1px solid #b2d7e222;
+  border-radius: 18px;
+  padding: 20px;
+}
+.layout aside {
+  align-self: start;
+  position: sticky;
+  top: 20px;
+}
+.layout aside > p {
+  font-size: 12px;
+}
+.list {
+  max-height: 66vh;
+  overflow: auto;
+  margin-top: 18px;
+  display: grid;
+  gap: 8px;
+  scrollbar-width: thin;
+}
+.list button {
+  text-align: left;
+  padding: 12px;
+  border: 1px solid #c3e8ee20;
+  border-radius: 12px;
+  background: #d4eff505;
+  transition: background .16s, border-color .16s;
+}
+.list button[aria-pressed="true"] {
+  background: #86d4dc22;
+  border-color: #a2e3d6;
+}
+.list button:hover {
+  background: #bce9ee14;
+}
+.list button:focus-visible {
+  outline: 2px solid #a2e3d6;
+  outline-offset: 2px;
+}
+.list span,
+.list small {
+  display: block;
+  color: #9ebbc3;
+  font-size: 11px;
+  margin-top: 5px;
+}
+.pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 18px;
+}
+.pair a {
+  font-size: 12px;
+  color: #a9e0e4;
+}
+.frames {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 16px 0;
+}
+.frames figure {
+  margin: 0;
+  background: #06171d;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.frames img {
+  width: 100%;
+  height: 150px;
+  object-fit: contain;
+}
+.frames figcaption {
+  text-align: center;
+  font-size: 11px;
+  padding: 5px;
+  color: #b8cdd2;
+}
+.pair details {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.evidence {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+.evidence li {
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 6px 0 6px 18px;
+  list-style: disc;
+  color: #bed1d6;
+}
+.empty {
+  min-height: 260px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+}
+.error {
+  padding: 20px;
+  background: #633b322e;
+  border: 1px solid #d89e7d55;
+  border-radius: 14px;
+}
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+  .layout aside {
+    position: static;
+  }
+  .list {
+    max-height: 220px;
+  }
+  .pair {
+    grid-template-columns: 1fr;
+  }
+  .page header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .list button {
+    transition: none;
+  }
+}

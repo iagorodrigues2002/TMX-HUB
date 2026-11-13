@@ -29,6 +29,7 @@ import {
 import { AI_POLICY, aiDataSchema, aiScopeSchema } from './ai-preview-model.js';
 import { questionContext, questionScope } from './ai-question-context.js';
 
+import { registerSpyVisualPreview } from './spy-visual-preview.js';
 const root = join(homedir(), '.codex/local-data/tmx/ai-preview');
 const PREFIX = '/meta-control/traffic/ai';
 const companySchema = z.object({ companyId: z.string().uuid() });
@@ -237,6 +238,28 @@ export function registerAiPreview(app: FastifyInstance) {
       return reply
         .code(403)
         .send({ detail: 'Configuração reservada ao administrador autorizado da empresa.' });
+  });
+  registerSpyVisualPreview(app, {
+    root,
+    production: !local,
+    access: accessFor,
+    recheck: async (req, revision) =>
+      (await aiAccess(app, accessFor(req).companyId, req.user!.sub)).revision === revision,
+    config: async (company) => {
+      const c = await config(company);
+      const master = await encryptionSecret();
+      return {
+        enabled: c.enabled,
+        dailyLimitCents: c.dailyLimitCents,
+        headers: {
+          authorization: c.encryptedKey
+            ? `Bearer ${decryptSecret(c.encryptedKey, companyKey(master, company))}`
+            : '',
+          ...(local ? { 'x-tmx-ai-secret': bridgeSecret(master) } : {}),
+          'content-type': 'application/json',
+        },
+      };
+    },
   });
   async function settings(company: string) {
     const c = await config(company);
