@@ -15,6 +15,7 @@ import { type BudgetFx, convertBudget, freshBudgetFx } from '@page-cloner/shared
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Banknote, Check, Loader2, Pause, Play, X } from 'lucide-react';
 import { useState } from 'react';
+import styles from './campaign-controls.module.css';
 import { type MetricFormat, MetricsTable } from './traffic-metrics-table';
 import type { ReportMetricKey, ReportRow } from './traffic-reports-model';
 
@@ -461,12 +462,12 @@ export function ManagedCampaignsTable({
                       item &&
                       direct(item, { status: item.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE' })
                     }
-                    className={`relative mr-3 inline-flex h-6 w-10 shrink-0 items-center rounded-full border align-middle transition-colors motion-reduce:transition-none disabled:cursor-wait disabled:opacity-70 ${item?.status === 'ACTIVE' ? 'border-success bg-success' : 'border-border bg-muted'}`}
+                    className={`relative mr-3 inline-flex h-6 w-10 shrink-0 items-center rounded-full border align-middle transition-colors motion-reduce:transition-none disabled:cursor-wait disabled:opacity-70 ${item?.status === 'ACTIVE' ? styles.activeSwitch : 'border-border bg-muted'}`}
                   >
                     <span
-                      className={`inline-flex size-4 items-center justify-center rounded-full bg-background transition-transform motion-reduce:transition-none ${item?.status === 'ACTIVE' ? 'translate-x-5' : 'translate-x-1'}`}
+                      className={`${styles.switchThumb} inline-flex size-4 items-center justify-center rounded-full transition-transform motion-reduce:transition-none ${item?.status === 'ACTIVE' ? 'translate-x-5' : 'translate-x-1'}`}
                     >
-                      {(pending || busy || running) && <Loader2 className="size-3 animate-spin text-foreground" />}
+                      {(pending || busy || running) && <Loader2 className="size-3 animate-spin" />}
                     </span>
                   </button>
                 );
@@ -598,7 +599,7 @@ export function ManagedCampaignsTable({
                 <div className="min-h-[52px] min-w-[208px] max-w-60 space-y-1">
                   <div className="flex items-center gap-1.5">
                   <span
-                    className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${status === 'ACTIVE' ? 'bg-success/10 text-success' : status && ['PAUSED', 'CAMPAIGN_PAUSED', 'ADSET_PAUSED'].includes(status) ? 'bg-danger/10 text-danger' : 'bg-muted text-muted-foreground'}`}
+                    className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${status === 'ACTIVE' ? styles.activeStatus : status && ['PAUSED', 'CAMPAIGN_PAUSED', 'ADSET_PAUSED'].includes(status) ? styles.pausedStatus : 'bg-muted text-muted-foreground'}`}
                   >
                     {status === 'ACTIVE'
                       ? 'Ativo'
