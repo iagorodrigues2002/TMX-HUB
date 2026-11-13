@@ -265,6 +265,19 @@ test('Media hashes are cached per owner; failed responses never confirm a creati
     const other = { ...image, thumbnailDigest: undefined };
     await hydrateSpyThumbnails(root, 'bob', [other]);
     assert.equal(other.thumbnailDigest, undefined);
+    const batch = Array.from({ length: 19 }, (_, i) =>
+      ad(`batch-${i}`, { thumbnailUrl: `https://x.fbcdn.net/batch-${i}.jpg` }),
+    );
+    await persistSpyMedia(root, 'alice', batch, async () =>
+      new Response(new Uint8Array([255, 216, 255, 0]), {
+        headers: { 'content-type': 'image/jpeg' },
+      }),
+    );
+    await hydrateSpyThumbnails(root, 'alice', batch);
+    assert.ok(batch.every((item) => item.thumbnailDigest === image.thumbnailDigest));
+    const isolated = batch.map((item) => ({ ...item, thumbnailDigest: undefined }));
+    await hydrateSpyThumbnails(root, 'bob', isolated);
+    assert.ok(isolated.every((item) => item.thumbnailDigest === undefined));
   } finally {
     await rm(root, { recursive: true, force: true });
   }

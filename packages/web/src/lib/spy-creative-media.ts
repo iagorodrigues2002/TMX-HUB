@@ -8,25 +8,32 @@ import { readSpyImage, spyImageType } from './spy-media-cache';
 const thumbnails = new Map<string, string>();
 const missingThumbnails = new Map<string, number>();
 export async function hydrateSpyThumbnails(root: string, owner: string, ads: LibraryAd[]) {
-  for (const ad of ads) {
-    if (ad.thumbnailDigest || !ad.thumbnailKey) continue;
-    const key = `${root}:${owner}:${ad.thumbnailKey}`;
-    if ((missingThumbnails.get(key) ?? 0) > Date.now()) continue;
-    let digest = thumbnails.get(key);
-    if (!digest) {
-      const image = await readSpyImage(root, owner, ad.thumbnailKey);
-      if (!image) {
-        if (missingThumbnails.size >= 10000) missingThumbnails.clear();
-        missingThumbnails.set(key, Date.now() + 15000);
-        continue;
+  let index = 0;
+  // Cold starts must not read thousands of persisted thumbnails one at a time.
+  await Promise.all(
+    Array.from({ length: Math.min(8, ads.length) }, async () => {
+      while (index < ads.length) {
+        const ad = ads[index++]!;
+        if (ad.thumbnailDigest || !ad.thumbnailKey) continue;
+        const key = `${root}:${owner}:${ad.thumbnailKey}`;
+        if ((missingThumbnails.get(key) ?? 0) > Date.now()) continue;
+        let digest = thumbnails.get(key);
+        if (!digest) {
+          const image = await readSpyImage(root, owner, ad.thumbnailKey);
+          if (!image) {
+            if (missingThumbnails.size >= 10000) missingThumbnails.clear();
+            missingThumbnails.set(key, Date.now() + 15000);
+            continue;
+          }
+          missingThumbnails.delete(key);
+          digest = createHash('sha256').update(image.bytes).digest('hex');
+          if (thumbnails.size >= 10000) thumbnails.clear();
+          thumbnails.set(key, digest);
+        }
+        ad.thumbnailDigest = digest;
       }
-      missingThumbnails.delete(key);
-      digest = createHash('sha256').update(image.bytes).digest('hex');
-      if (thumbnails.size >= 10000) thumbnails.clear();
-      thumbnails.set(key, digest);
-    }
-    ad.thumbnailDigest = digest;
-  }
+    }),
+  );
 }
 
 // shortcut: exact file hashes do not identify re-encoded video; those remain unverified.
