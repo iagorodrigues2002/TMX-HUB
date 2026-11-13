@@ -9,7 +9,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
-const core={model:z.literal('gpt-6.1-sol'),instructions:z.string().max(10000),input:z.array(z.object({role:z.literal('user'),content:z.string().max(210000)}).strict()).length(1)};
+const core={model:z.literal('gpt-6.1-sol'),instructions:z.string().max(10000),input:z.array(z.object({role:z.literal('user'),content:z.string().max(8000000)}).strict()).length(1)};
 const countSchema=z.object(core).strict();
 const responseSchema=z.object({...core,store:z.literal(false),service_tier:z.literal('default'),prompt_cache_options:z.object({mode:z.literal('explicit')}).strict(),reasoning:z.object({effort:z.literal('low')}).strict(),max_output_tokens:z.literal(3000)}).strict();
 export function parseProviderRequest(path,raw){return (path==='/responses'?responseSchema:countSchema).safeParse(raw);}
@@ -28,7 +28,7 @@ export function createAiBridge(){return createServer(async(req,res)=>{
   }
   if(req.url!=='/responses'&&req.url!=='/input-tokens')return send(404,{error:'Not found'});
   let size=0;const chunks=[];
-  for await(const chunk of req){size+=chunk.length;if(size>220000)return send(413,{error:'Request too large'});chunks.push(chunk);}
+  for await(const chunk of req){size+=chunk.length;if(size>8000000)return send(413,{error:'Request too large'});chunks.push(chunk);}
   const parsed=parseProviderRequest(req.url,JSON.parse(Buffer.concat(chunks).toString()));
   if(!parsed.success)return send(400,{error:'Unsupported request'});
   const body=parsed.data;

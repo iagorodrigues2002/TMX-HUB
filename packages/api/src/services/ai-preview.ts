@@ -17,6 +17,7 @@ import {
 import {
   AI_MODEL,
   AI_PRICES,
+  MAX_INPUT_TOKENS,
   MAX_OUTPUT_TOKENS,
   RELEASE_LOCK,
   RESERVE_BUDGET,
@@ -26,6 +27,7 @@ import {
   reserveMicros,
 } from './ai-preview-cost.js';
 import { AI_POLICY, aiDataSchema, aiScopeSchema } from './ai-preview-model.js';
+import { questionContext, questionScope } from './ai-question-context.js';
 
 const root = join(homedir(), '.codex/local-data/tmx/ai-preview');
 const PREFIX = '/meta-control/traffic/ai';
@@ -435,15 +437,16 @@ export function registerAiPreview(app: FastifyInstance) {
       if (!(await app.redis.set(requestKey, JSON.stringify({ fingerprint }), 'EX', 86400, 'NX')))
         return reply.code(409).send({ detail: 'Solicitação já recebida.' });
       ownRequest = true;
-      const available = await data(access, input.data.scope);
-      const scope = input.data.scope ?? {
+      const requestedScope = input.data.scope ?? questionScope(input.data.question);
+      const available = await data(access, requestedScope);
+      const scope = requestedScope ?? {
         from: available.snapshot.from,
         to: available.snapshot.to,
         offer: '',
         query: '',
         level: 'campaigns' as const,
       };
-      const d = authorizedAiContext(available, scope, access);
+      const d = questionContext(available, authorizedAiContext(available, scope, access), input.data.question);
       if (d.companyId !== company) throw Error('COMPANY_MISMATCH');
       const memoryKey = `tmx-ai-preview:chat:${company}:${req.user!.sub}`;
       const history = (await app.redis.lrange(memoryKey, 0, 3))
@@ -473,10 +476,10 @@ export function registerAiPreview(app: FastifyInstance) {
           },
         ],
       };
-      if (Buffer.byteLength(JSON.stringify(body)) > 220000)
+      if (Buffer.byteLength(JSON.stringify(body)) > 8_000_000)
         return reply
           .code(422)
-          .send({ detail: 'Recorte muito grande. Selecione uma oferta ou reduza o período.' });
+          .send({ detail: 'O volume excedeu a capacidade de uma única análise. Peça a comparação em etapas.' });
       const master = await encryptionSecret();
       const headers = {
         authorization: `Bearer ${decryptSecret(c.encryptedKey, companyKey(master, company))}`,
@@ -505,12 +508,14 @@ export function registerAiPreview(app: FastifyInstance) {
             'OpenAI não permitiu a contagem prévia. Confira a chave, a cota e as permissões de Responses. Nenhuma geração foi iniciada.',
         });
       const count = z
-        .object({ input_tokens: z.number().int().min(0).max(50000) })
+        .object({ input_tokens: z.number().int().min(0) })
         .safeParse(await counted.json());
       if (!count.success)
-        return reply.code(422).send({
-          detail: 'Contexto excede o limite de 50 mil tokens. Refine a oferta ou o período.',
+        return reply.code(502).send({
+          detail: 'A OpenAI retornou uma contagem de tokens inválida. Nenhuma geração foi iniciada.',
         });
+      if (count.data.input_tokens > MAX_INPUT_TOKENS)
+        return reply.code(422).send({ detail: 'A análise excedeu a capacidade de contexto do modelo. Peça a comparação em etapas.' });
       reserved = reserveMicros(count.data.input_tokens);
       // Recheck settings after preflight so disabling/replacing the key cancels a not-yet-sent generation.
       if ((await config(company)).revision !== c.revision)

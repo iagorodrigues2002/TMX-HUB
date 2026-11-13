@@ -5,6 +5,7 @@ import { membershipTools } from '../lib/company-tools.js';
 import { HttpProblem } from '../lib/problem.js';
 import type { AiAccess } from './ai-preview-access.js';
 import { aiDataSchema, optimizationSchema } from './ai-preview-model.js';
+import { learnOptimizationOutcomes } from './ai-optimization-learning.js';
 
 export function aiCompanyRuntime(app: FastifyInstance) {
   const db = () => {
@@ -68,7 +69,6 @@ export function aiCompanyRuntime(app: FastifyInstance) {
     if (!enabled.length) return;
     const companies = new Set(enabled.map((c) => `company:${c.company_id}`));
     const jobs = await app.redis.zrange('bull:traffic-management-v1:completed', -1000, -1);
-    if (!jobs.length) return;
     const pipeline = app.redis.pipeline();
     for (const id of jobs)
       pipeline.hmget(`bull:traffic-management-v1:${id}`, 'data', 'returnvalue', 'finishedOn');
@@ -102,6 +102,29 @@ export function aiCompanyRuntime(app: FastifyInstance) {
       }
       if (event.success)
         await sql`INSERT INTO company_ai_optimizations(company_id,event_id,event,occurred_at) VALUES(${company},${event.data.id},${sql.json(event.data)},${event.data.at}) ON CONFLICT DO NOTHING`;
+    }
+    for (const { company_id: company } of enabled) {
+      const today = range().to;
+      const yesterday = new Date(Date.parse(today) - 86400000).toISOString().slice(0, 10);
+      const cached = await app.redis.mget(...[today, yesterday].map(d => `traffic-sync:v1:company:${company}:snapshot:2026-08-01:${d}`));
+      const saved = cached.find(Boolean);
+      if (!saved) continue;
+      const source = JSON.parse(saved);
+      if (source.companyId !== company) continue;
+      const events = await sql`SELECT event FROM company_ai_optimizations WHERE company_id::text=${company} ORDER BY occurred_at DESC LIMIT 1000`;
+      const classification = await app.redis.get(`traffic-company:v1:${company}:settings:classification`);
+      const names = await offers(company);
+      for (let offset = 0; offset < events.length; offset += 100) {
+        const data = aiDataSchema.parse({ companyId: company, fetchedAt: source.snapshot.fetchedAt, snapshot: source.snapshot,
+          offers: names, sales: [], reversals: [], optimizations: events.slice(offset, offset + 100).map(e => e.event),
+          classification: classification ? JSON.parse(classification).value : { campaigns: {}, links: {} } });
+        for (const observation of learnOptimizationOutcomes(data)) {
+          await sql`INSERT INTO company_ai_learning(company_id,event_id,offer_id,observation)
+            VALUES(${company},${observation.eventId},${observation.offerId},${sql.json(observation)})
+            ON CONFLICT(company_id,event_id) DO UPDATE SET observation=EXCLUDED.observation,offer_id=EXCLUDED.offer_id,learned_at=now()
+            WHERE company_ai_learning.observation IS DISTINCT FROM EXCLUDED.observation`;
+        }
+      }
     }
   }
   async function loadData(access: AiAccess, selected = range()) {
@@ -152,6 +175,12 @@ export function aiCompanyRuntime(app: FastifyInstance) {
     const events = access.optimizations
       ? await sql`SELECT event FROM company_ai_optimizations WHERE company_id::text=${company} ORDER BY occurred_at DESC LIMIT 100`
       : [];
+    const rates = access.reversals
+      ? await sql`SELECT base_currency,rate::text,fetched_at FROM exchange_rate_cache WHERE target_currency='BRL'`
+      : [];
+    const learning = access.optimizations && (access.campaigns || access.ads) && ids.length
+      ? await sql`SELECT observation FROM company_ai_learning WHERE company_id::text=${company} AND offer_id=ANY(${ids}::text[]) ORDER BY learned_at DESC`
+      : [];
     const config = await app.redis.get(`traffic-company:v1:${company}:settings:classification`);
     return {
       ...aiDataSchema.parse({
@@ -161,6 +190,8 @@ export function aiCompanyRuntime(app: FastifyInstance) {
         snapshot,
         sales,
         reversals,
+        exchangeRates: Object.fromEntries(rates.map(r => [r.base_currency, { rate: Number(r.rate), fetchedAt: new Date(r.fetched_at).toISOString() }])),
+        learning: learning.map(l => l.observation),
         optimizations: events.map((e) => e.event).reverse(),
         classification: config ? JSON.parse(config).value : { campaigns: {}, links: {} },
       }),

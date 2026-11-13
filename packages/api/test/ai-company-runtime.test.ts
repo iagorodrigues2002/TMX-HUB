@@ -87,6 +87,8 @@ describe.skipIf(!process.env.AI_TEST_DATABASE_URL)('isolated company AI integrat
     await sql.unsafe(
       await readFile(new URL('../migrations/121_company_ai.sql', import.meta.url), 'utf8'),
     );
+    await sql`CREATE TABLE exchange_rate_cache(base_currency text,target_currency text,rate numeric,fetched_at timestamptz)`;
+    await sql.unsafe(await readFile(new URL('../migrations/122_company_ai_learning.sql', import.meta.url), 'utf8'));
     directory = await mkdtemp('/tmp/tmx-ai-company-test-');
     child = spawn(
       'redis-server',
@@ -303,6 +305,33 @@ describe.skipIf(!process.env.AI_TEST_DATABASE_URL)('isolated company AI integrat
       JSON.stringify({ companyId: b, snapshot: {} }),
     );
     await expect(aiCompanyRuntime(app).loadData(access, scope)).rejects.toThrow('COMPANY_MISMATCH');
+  });
+  it('keeps learned memory company-scoped and outside ungranted areas', async () => {
+    const observation = { eventId: 'event', offerId: 'PJR_ENG', action: 'increase_budget', at: new Date().toISOString(), observedAt: new Date().toISOString(), beforeRoas: 1, afterRoas: 2, beforeSpend: 100, afterSpend: 200 };
+    await sql`INSERT INTO company_ai_learning(company_id,event_id,offer_id,observation) VALUES(${a},'event','PJR_ENG',${sql.json(observation)}),(${b},'foreign','FOREIGN',${sql.json({ ...observation, eventId: 'foreign', offerId: 'FOREIGN' })})`;
+    const runtime = aiCompanyRuntime(app);
+    const owner = await aiAccess(app, a, 'owner');
+    const member = await aiAccess(app, a, 'douglas');
+    expect((await runtime.loadData(owner, scope)).learning).toEqual([observation]);
+    expect((await runtime.loadData(member, scope)).learning).toEqual([]);
+  });
+  it('persists matured learning without duplicate cases and survives runtime restart', async () => {
+    await settings();
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+    const date = (n: number) => new Date(Date.parse(today) + n * 86400000).toISOString().slice(0, 10);
+    const event = { id: 'mature', at: date(-7) + 'T12:00:00Z', actorId: 'owner', level: 'campaigns', itemId: '123456', name: 'PJR_ENG', accountId: 'act_123456', currency: 'BRL', budgetField: 'daily_budget', before: { status: 'ACTIVE', budget: 10000 }, after: { status: 'ACTIVE', budget: 20000 } };
+    await sql`INSERT INTO company_ai_optimizations(company_id,event_id,event,occurred_at) VALUES(${a},'mature',${sql.json(event)},${event.at})`;
+    const snapshot = { from: date(-10), to: today, fetchedAt: new Date().toISOString(),
+      accounts: [{ id: 'act_123456', name: 'test', businessId: null, businessName: null, currency: 'BRL', timezone: 'America/Sao_Paulo' }],
+      campaigns: [{ id: '123456', name: 'PJR_ENG', accountId: 'act_123456', status: 'ACTIVE', effectiveStatus: 'ACTIVE', objective: 'OUTCOME_SALES', createdAt: null, updatedAt: null }], failures: [],
+      insights: [-10,-9,-8,-6,-5,-4].map(n => ({ campaignId: '123456', accountId: 'act_123456', date: date(n), currency: 'BRL', spend: '100', impressions: '1000', linkClicks: '10', actions: [{ action_type: 'purchase', value: '1' }], actionValues: [{ action_type: 'purchase', value: n < -7 ? '100' : '200' }] })) };
+    await redis.set(`traffic-sync:v1:company:${a}:snapshot:2026-08-01:${today}`, JSON.stringify({ companyId: a, snapshot }));
+    await aiCompanyRuntime(app).collectOptimizations();
+    await aiCompanyRuntime(app).collectOptimizations();
+    const learned = await sql`SELECT observation FROM company_ai_learning WHERE company_id=${a}`;
+    expect(learned).toHaveLength(1);
+    expect(learned[0].observation).toMatchObject({ offerId: 'PJR_ENG', beforeRoas: 1, afterRoas: 2 });
+    expect((await aiCompanyRuntime(app).loadData(await aiAccess(app, a, 'owner'), scope)).learning).toHaveLength(1);
   });
   it('retains only enabled company optimization events, deduplicates, and survives malformed jobs', async () => {
     await settings();

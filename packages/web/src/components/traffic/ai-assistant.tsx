@@ -228,8 +228,8 @@ export function AiSettings() {
           </div>
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
-          O TMX conta os tokens e reserva o custo máximo antes de gerar. Máximo de 50 mil tokens de
-          entrada e 3 mil de saída, incluindo raciocínio. Sem repetição automática em falhas.
+          O TMX conta os tokens e reserva o custo máximo antes de gerar, respeitando a capacidade
+          do modelo e o limite diário da empresa. Sem repetição automática em falhas.
           Reservas incertas são mantidas; a fatura da OpenAI é a referência final.
         </p>
         <label className="mt-6 flex items-center gap-3 text-sm">

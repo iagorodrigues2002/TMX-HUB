@@ -55,7 +55,9 @@ afterAll(async () => {
 it('reserves worst-case cost and rejects oversized or invalid token counts', () => {
   expect(reserveMicros(1200)).toBe(33000);
   expect(reserveMicros(50000)).toBe(155000);
-  for (const n of [-1, 1.5, 50001, NaN]) expect(() => reserveMicros(n)).toThrow();
+  expect(reserveMicros(50001)).toBe(155003);
+  expect(reserveMicros(300000)).toBe(1545000);
+  for (const n of [-1, 1.5, 1047001, NaN]) expect(() => reserveMicros(n)).toThrow();
 });
 it('prices ordinary, cached, cache-write and output tokens once, including reasoning in output', () => {
   const response = {
@@ -70,6 +72,7 @@ it('prices ordinary, cached, cache-write and output tokens once, including reaso
     },
   };
   expect(costMicros(response)).toBe(3890);
+  expect(costMicros({ ...response, usage: { input_tokens: 300000, output_tokens: 200, total_tokens: 300200, input_tokens_details: { cached_tokens: 0, cache_write_tokens: 0 } } })).toBe(1203000);
   for (const value of [
     { ...response, service_tier: 'priority' },
     { ...response, model: 'other' },
@@ -131,6 +134,7 @@ it('bridge allows only text counting/generation with fixed privacy, model and pr
   };
   expect(parseProviderRequest('/responses', body).success).toBe(true);
   expect(parseProviderRequest('/input-tokens', core).success).toBe(true);
+  expect(parseProviderRequest('/input-tokens', { ...core, input: [{ role: 'user', content: 'x'.repeat(250000) }] }).success).toBe(true);
   for (const extra of [
     { tools: [] },
     { background: true },

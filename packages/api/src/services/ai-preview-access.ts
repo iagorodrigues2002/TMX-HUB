@@ -123,6 +123,8 @@ export function authorizedAiContext(
   );
   return {
     ...result,
+    learning: access.optimizations && media ? (raw.learning ?? []).filter(l => ids.has(l.offerId) &&
+      (!scope.offer || result.offers.some(o => o.id === l.offerId))) : [],
     incomplete: media ? result.incomplete : null,
     metaFetchedAt: media ? result.metaFetchedAt : null,
     permissionNotice:

@@ -60,6 +60,12 @@ export const aiDataSchema = z.object({
     }),
   ),
   optimizations: z.array(optimizationSchema),
+  exchangeRates: z.record(z.string(), z.object({ rate: z.number().positive().finite(), fetchedAt: z.string() })).optional(),
+  learning: z.array(z.object({
+    eventId: z.string(), offerId: z.string(), action: z.enum(['increase_budget', 'decrease_budget', 'activate', 'pause']),
+    at: z.string(), observedAt: z.string(), beforeRoas: z.number().finite(), afterRoas: z.number().finite(),
+    beforeSpend: z.number().finite(), afterSpend: z.number().finite(),
+  })).optional(),
   classification: z.object({
     campaigns: z.record(z.string(), z.string()),
     links: z.record(z.string(), z.string()),
@@ -197,7 +203,6 @@ export function buildAiContext(raw: unknown, input: z.infer<typeof aiScopeSchema
     });
   const selected = rows
     .sort((a, b) => (b.metrics.spend ?? 0) - (a.metrics.spend ?? 0))
-    .slice(0, 120)
     .map((r) => ({
       id: r.id,
       name: r.name,
