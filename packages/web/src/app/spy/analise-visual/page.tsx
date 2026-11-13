@@ -101,6 +101,13 @@ function SpyVisualPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [comparison, setComparison] = useState<Comparison>();
+  const historicalAt = query.data?.ads.find((a) => a.id === selected)?.historicalAt;
+  function readingEndpoint(at?: string) {
+    if (!at) return endpoint;
+    const params = new URLSearchParams(selection);
+    params.set('at', at);
+    return `/api/spy-visual?${params}`;
+  }
   const resultRef = useRef<HTMLElement>(null);
   const comparisonRequest = useRef(0);
   const previousEndpoint = useRef(endpoint);
@@ -115,28 +122,24 @@ function SpyVisualPage() {
     setActiveLimit(24);
   }, [endpoint]);
   async function compare(ad: Ad, generate = false) {
-    if (ad.historicalAt && !generate) {
-      setReading(ad.historicalAt);
-      return;
-    }
     const ticket = ++comparisonRequest.current;
     setSelected(ad.id);
     setBusy(true);
     setError('');
     setComparison(undefined);
-    if (!ad.previous) {
+    if (!ad.previous && !ad.historicalAt) {
       setError(ad.recoveryNote ?? 'Sem referência suficiente no histórico. Nenhuma chamada à IA.');
       setBusy(false);
       return;
     }
-    if (!ad.saved && !generate) {
+    if (!ad.saved && !ad.historicalAt && !generate) {
       setBusy(false);
       return;
     }
     try {
-      const value = await request<Comparison>(endpoint, {
+      const value = await request<Comparison>(readingEndpoint(ad.historicalAt), {
         method: 'POST',
-        body: { adId: ad.id, cachedOnly: !!ad.saved },
+        body: { adId: ad.id, cachedOnly: !!ad.saved || !!ad.historicalAt },
       });
       if (ticket !== comparisonRequest.current) return;
       setComparison(value);
@@ -427,6 +430,12 @@ function SpyVisualPage() {
                       {comparison.cached ? 'Salva · sem nova chamada' : 'Nova análise salva'}
                     </span>
                     <h2>{labels[comparison.result.classification]}</h2>
+                    {historicalAt && (
+                      <p>
+                        Análise histórica · coleta de{' '}
+                        {new Date(historicalAt).toLocaleString('pt-BR')}
+                      </p>
+                    )}
                     <p>{comparison.result.reason}</p>
                     <small>
                       {new Date(comparison.at).toLocaleString('pt-BR')} ·{' '}
@@ -459,7 +468,7 @@ function SpyVisualPage() {
                         {i === 1 && (
                           <SpyTranscript
                             key={`${user!.id}:${query.data!.companyId}:${endpoint}:${ad.id}`}
-                            endpoint={endpoint}
+                            endpoint={readingEndpoint(historicalAt)}
                             companyId={query.data!.companyId}
                             userId={user!.id}
                             adId={selected}
