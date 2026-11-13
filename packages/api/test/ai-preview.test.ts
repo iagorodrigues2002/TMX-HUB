@@ -360,6 +360,27 @@ it('saves encrypted settings, never returns key and rejects stale revisions', as
     await server.close();
   }
 });
+it('limits the Spy analysis to its evidence and rejects a member without Spy access', async () => {
+  const server = await app(undefined, memberState());
+  const headers = { 'x-user': 'admin' };
+  const payload = { ...chatBody(), question: 'Analise somente estes dados do Spy, fornecidos pelo painel Escalando. 491 anúncios ativos.' };
+  try {
+    await server.inject({ method: 'PUT', url: '/meta-control/traffic/ai/settings', headers, payload: settingsBody() });
+    vi.stubGlobal('fetch', vi.fn(async (url, options) => {
+      const body = JSON.parse(String(options.body));
+      const input = JSON.parse(body.input[0].content);
+      expect(input.data.spyEvidence).toBe(payload.question);
+      expect(input.data.salesAnalysis).toBeUndefined();
+      expect(input.previousConversation).toEqual([]);
+      if (String(url).endsWith('/input-tokens')) return new Response(JSON.stringify({ input_tokens: 200 }));
+      return new Response(JSON.stringify({ status: 'completed', usage: { input_tokens: 200, output_tokens: 20 }, output: [{ type: 'message', content: [{ type: 'output_text', text: 'Crescimento observado.' }] }] }));
+    }));
+    expect((await server.inject({ method: 'POST', url: '/meta-control/traffic/ai/chat', headers, payload })).statusCode).toBe(200);
+    const calls = vi.mocked(fetch).mock.calls.length;
+    expect((await server.inject({ method: 'POST', url: '/meta-control/traffic/ai/chat', headers: { 'x-user': 'douglas' }, payload: { ...payload, requestId: randomUUID() } })).statusCode).toBe(403);
+    expect(fetch).toHaveBeenCalledTimes(calls);
+  } finally { await server.close(); }
+});
 it('requires a key and never calls model when disabled', async () => {
   const server = await app();
   const headers = { 'x-user': 'admin' };

@@ -20,6 +20,8 @@ const input = {
   })),
 };
 test('cache includes company, media, copy and comparison direction; rejects remote images', () => {
+  assert.equal(visualInput.safeParse({ ...input, offerId: 'sheet-33' }).success, true);
+  assert.equal(visualInput.safeParse({ ...input, offerId: '../other-company' }).success, false);
   const parsed = visualInput.parse(input);
   assert.notEqual(
     visualFingerprint(parsed),

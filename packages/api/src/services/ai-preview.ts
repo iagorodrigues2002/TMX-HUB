@@ -428,6 +428,9 @@ export function registerAiPreview(app: FastifyInstance) {
         .code(409)
         .send({ detail: 'Configure e habilite a OpenAI em Administração global → IA.' });
     const access = accessFor(req);
+    const spyOnly = input.data.question.startsWith('Analise somente estes dados do Spy, fornecidos pelo painel Escalando.');
+    if (spyOnly && (!access.spy || !access.canManage || !access.allOffers))
+      return reply.code(403).send({ detail: 'Análise do Spy reservada ao administrador autorizado da empresa.' });
     const fingerprint = createHash('sha256')
       .update(
         JSON.stringify({
@@ -468,6 +471,14 @@ export function registerAiPreview(app: FastifyInstance) {
       const operationalUpsells = /intellig|intelig|marca|funcion|pendente|updates/i.test(input.data.question + ' ' + (history.at(-1)?.question ?? ''));
       const requestedScope = input.data.scope ?? questionScope(input.data.question) ??
         aiScopeSchema.safeParse(history.at(-1)?.scope).data ?? (operationalUpsells ? questionScope('hoje') : undefined);
+      const d = await (async () => {
+        if (spyOnly) return {
+          companyId: company,
+          fetchedAt: new Date().toISOString(),
+          scope: questionScope('hoje')!,
+          spyEvidence: input.data.question,
+          source: 'Dados enviados pelo painel Spy; análise destes valores, sem consulta a outras áreas.',
+        };
       const available = await data(access, requestedScope, operationalUpsells);
       const scope = requestedScope ?? {
         from: available.snapshot.from,
@@ -476,7 +487,8 @@ export function registerAiPreview(app: FastifyInstance) {
         query: '',
         level: 'campaigns' as const,
       };
-      const d = questionContext(available, authorizedAiContext(available, scope, access), input.data.question);
+      return questionContext(available, authorizedAiContext(available, scope, access), input.data.question);
+      })();
       if (d.companyId !== company) throw Error('COMPANY_MISMATCH');
       const body = {
         model: AI_MODEL,
@@ -491,7 +503,7 @@ export function registerAiPreview(app: FastifyInstance) {
             role: 'user',
             content: JSON.stringify({
               administrativeGuidance: c.instructions,
-              previousConversation: history.map((v) => ({
+              previousConversation: (spyOnly ? [] : history).map((v) => ({
                 question: v.question,
                 answer: v.answer.slice(0, 5000),
               })),

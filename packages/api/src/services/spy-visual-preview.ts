@@ -16,7 +16,7 @@ import {
 export const visualInput = z
   .object({
     companyId: z.string().uuid(),
-    offerId: z.string().uuid(),
+    offerId: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/),
     ads: z
       .array(
         z
@@ -77,7 +77,7 @@ export function registerSpyVisualPreview(
   app.get('/meta-control/traffic/ai/spy-visual/results', async (req, reply) => {
     const access = deps.access(req);
     if (!allowed(access)) return reply.code(403).send({ detail: 'Acesso negado.' });
-    const { offerId } = z.object({ offerId: z.string().uuid() }).parse(req.query);
+    const { offerId } = z.object({ offerId: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/) }).parse(req.query);
     if (deps.production) {
       const rows =
         await app.db!`SELECT record FROM company_spy_visual_analyses WHERE company_id=${access.companyId} AND offer_id=${offerId} AND record->>'status'='complete'`;

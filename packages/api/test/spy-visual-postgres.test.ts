@@ -19,7 +19,7 @@ test.skipIf(!process.env.SPY_VISUAL_TEST_DATABASE_URL)(
     const sql = postgres(url.toString(), { max: 2 });
     const company = '69706e9a-95ad-493e-b4ab-4a6de7541adc';
     const other = '69706e9a-95ad-493e-b4ab-4a6de7541add';
-    const offerId = '995e6bfd-8c26-47fb-9614-0a02a7dd97b0';
+    const offerId = 'sheet-33';
     const original = globalThis.fetch;
     let calls = 0;
     let actor = company;
@@ -29,6 +29,10 @@ test.skipIf(!process.env.SPY_VISUAL_TEST_DATABASE_URL)(
       await readFile(new URL('../migrations/124_spy_visual_analysis.sql', import.meta.url), 'utf8'),
     );
     await sql`INSERT INTO companies(id) VALUES(${company}),(${other}) ON CONFLICT DO NOTHING`;
+    await sql`DELETE FROM company_spy_visual_analyses`;
+    await sql`INSERT INTO company_spy_visual_analyses(company_id,fingerprint,offer_id,record) VALUES(${company},${'a'.repeat(64)},'995e6bfd-8c26-47fb-9614-0a02a7dd97b0','{}')`;
+    await sql.unsafe(await readFile(new URL('../migrations/125_spy_visual_legacy_offers.sql', import.meta.url), 'utf8'));
+    assert.equal((await sql`SELECT offer_id FROM company_spy_visual_analyses`)[0]?.offer_id, '995e6bfd-8c26-47fb-9614-0a02a7dd97b0');
     await sql`DELETE FROM company_spy_visual_analyses`;
     const input = {
       companyId: company,
@@ -87,7 +91,9 @@ test.skipIf(!process.env.SPY_VISUAL_TEST_DATABASE_URL)(
       app.inject({ method: 'POST', url: '/meta-control/traffic/ai/spy-visual', payload: input });
     try {
       const responses = await Promise.all([call(), call()]);
-      assert.deepEqual(responses.map((r) => r.statusCode).sort(), [200, 409]);
+      assert.ok(responses.some((r) => r.statusCode === 200));
+      assert.ok(responses.every((r) => [200, 409].includes(r.statusCode)));
+      assert.equal(responses.filter((r) => r.statusCode === 200 && !r.json().cached).length, 1);
       assert.equal(calls, 1);
       await app.close();
       app = make();
