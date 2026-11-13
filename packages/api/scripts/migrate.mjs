@@ -125,6 +125,7 @@ const migrations = [
   '117_finance_notifications.sql',
   '118_pushcut_profiles.sql',
   '119_upsell_operator_sequences.sql',
+  '121_company_ai.sql',
 ];
 
 await sql`

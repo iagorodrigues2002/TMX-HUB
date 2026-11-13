@@ -1,5 +1,6 @@
 export type NavGroup =
   | 'Visão geral'
+  | 'Assistente IA'
   | 'Ofertas'
   | 'Tráfego'
   | 'Spy'

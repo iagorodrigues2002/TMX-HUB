@@ -1,4 +1,4 @@
-import { Activity, CircleGauge, ListChecks, ShieldCheck, Users } from 'lucide-react';
+import { Activity, Bot, CircleGauge, ListChecks, ShieldCheck, Users } from 'lucide-react';
 import type { NavItem } from './nav-config-nav-item';
 
 export const nav_items_admin: NavItem = {
@@ -10,6 +10,14 @@ export const nav_items_admin: NavItem = {
   roles: ['admin'],
   keywords: ['administração'],
   children: [
+    {
+      id: 'admin-ai',
+      label: 'IA da empresa',
+      href: '/admin/ia',
+      icon: Bot,
+      group: 'Administração global',
+      roles: ['admin'],
+    },
     {
       id: 'admin-overview',
       label: 'Resumo da plataforma',

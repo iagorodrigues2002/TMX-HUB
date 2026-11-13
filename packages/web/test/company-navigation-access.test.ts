@@ -13,6 +13,7 @@ test('permissions reuse sidebar labels and hierarchy, without exposing global ad
     permissionGroups.map((group) => group.label),
     [
       'Visão geral',
+      'Assistente IA',
       'Ofertas',
       'Tráfego',
       'Spy',
@@ -28,6 +29,13 @@ test('permissions reuse sidebar labels and hierarchy, without exposing global ad
       ?.entries.some((item) => item.id === 'tracking-upsell-intelligence'),
   );
   assert.ok(!permissionGroups.some((group) => group.id === 'admin'));
+});
+test('AI is explicitly delegated without granting other sections', () => {
+  assert.ok(!selectedNavigation(['ofertas']).includes('ai-assistant'));
+  const tools = navigationTools(['ai-assistant'], []);
+  assert.deepEqual(selectedNavigation(tools), ['ai-assistant']);
+  assert.ok(!tools.includes('nav:company-finance'));
+  assert.ok(!tools.includes('nav:traffic-campaigns'));
 });
 test('catalog does not enable intelligence or overview and selection survives serialization', () => {
   const tools = navigationTools(['offers-all'], []);

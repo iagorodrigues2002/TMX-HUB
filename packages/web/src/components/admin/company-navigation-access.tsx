@@ -14,6 +14,7 @@ export function selectedNavigation(tools: string[]) {
   return permissionGroups
     .flatMap((group) => group.entries)
     .filter((item) => {
+      if (item.id === 'ai-assistant') return tools.includes('nav:ai-assistant');
       if (tools.includes('nav:scoped')) return hasNavigationAccess(tools, item.id);
       if (item.id === 'operator-activity') return tools.includes('nav:operator-activity');
       if (item.roles?.includes('admin') && !item.roles.includes('user')) return false;

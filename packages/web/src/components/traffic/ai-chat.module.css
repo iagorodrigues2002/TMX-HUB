@@ -1,0 +1,9 @@
+.conversation {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--primary) / .35) transparent;
+  overscroll-behavior: contain;
+}
+.conversation::-webkit-scrollbar { width: 7px; }
+.conversation::-webkit-scrollbar-thumb { background: rgb(180 220 225 / .35); border-radius: 8px; }
+.conversation::-webkit-scrollbar-thumb:hover { background: rgb(180 220 225 / .55); }

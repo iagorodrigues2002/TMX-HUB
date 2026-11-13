@@ -41,5 +41,11 @@
       "trailingCommas": "all",
       "semicolons": "always"
     }
-  }
+  },
+  "overrides": [
+    {
+      "include": ["packages/web/src/components/traffic/ai-message-content.tsx"],
+      "linter": { "rules": { "suspicious": { "noArrayIndexKey": "off" } } }
+    }
+  ]
 }

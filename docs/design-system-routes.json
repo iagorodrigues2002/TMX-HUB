@@ -1,4 +1,6 @@
 [
+  { "route": "/assistente", "source": "packages/web/src/app/assistente/page.tsx", "frame": "hub" },
+  { "route": "/admin/ia", "source": "packages/web/src/app/admin/ia/page.tsx", "frame": "hub" },
   {
     "route": "/spy/anuncios",
     "source": "packages/web/src/app/spy/anuncios/page.tsx",

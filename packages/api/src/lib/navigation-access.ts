@@ -5,6 +5,7 @@ import { HttpProblem } from './problem.js';
 export function navigationRequirements(rawPath: string, method: string): NavigationId[] | null {
   const path = rawPath.split('?')[0]!.replace(/^\/v1/, '');
   const read = method === 'GET' || method === 'HEAD';
+  if (path.startsWith('/meta-control/traffic/ai/')) return ['ai-assistant'];
   if (
     /^\/meta-control\/traffic\/(attribution|finance|finance-overview|connection\/(report|refresh))$/.test(
       path,

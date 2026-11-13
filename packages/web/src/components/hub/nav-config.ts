@@ -1,4 +1,4 @@
-import { Activity, Copy, ScanEye, Settings2, Tags } from 'lucide-react';
+import { Activity, Bot, Copy, ScanEye, Settings2, Tags } from 'lucide-react';
 import type { NavItem } from './nav-config-nav-item';
 import { nav_items_admin } from './nav-config-nav-items-admin';
 import { nav_items_company } from './nav-config-nav-items-company';
@@ -11,6 +11,15 @@ import { nav_items_traffic } from './nav-config-nav-items-traffic';
 
 export const NAV_ITEMS: NavItem[] = [
   nav_items_overview,
+  {
+    id: 'ai-assistant',
+    label: 'Assistente IA',
+    href: '/assistente',
+    icon: Bot,
+    group: 'Assistente IA',
+    requiresTool: 'ofertas',
+    keywords: ['conversar', 'chat', 'inteligência artificial'],
+  },
   nav_items_offers,
   nav_items_traffic,
   {

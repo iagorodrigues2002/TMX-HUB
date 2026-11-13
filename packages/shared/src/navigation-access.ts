@@ -1,5 +1,6 @@
 /** Explicit navigation selection is opt-in; existing tool grants keep their legacy behavior. */
 export const NAVIGATION_IDS = [
+  'ai-assistant',
   'overview',
   'offers-all',
   'offer-detail',
@@ -46,5 +47,6 @@ export const NAVIGATION_KEYS: NavigationKey[] = [
   ...NAVIGATION_IDS.map((id) => `nav:${id}` as NavigationKey),
 ];
 export function hasNavigationAccess(tools: readonly string[] | undefined, id: string) {
+  if (id === 'ai-assistant') return !!tools?.includes('nav:ai-assistant');
   return !tools?.includes('nav:scoped') || tools.includes(`nav:${id}`);
 }

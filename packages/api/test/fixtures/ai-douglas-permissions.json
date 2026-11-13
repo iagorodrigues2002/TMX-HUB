@@ -1,0 +1,11 @@
+{
+  "companyId": "69706e9a-95ad-493e-b4ab-4a6de7541adc",
+  "userId": "01M52N5TV7KJA8KE3MABYJ6C3E",
+  "name": "Douglas Riti",
+  "verifiedAt": "2026-11-12",
+  "role": "member",
+  "status": "active",
+  "all_offers": false,
+  "tools": ["nav:scoped","nav:overview","nav:offers-all","nav:offer-detail","nav:tracking-overview","nav:tracking-journey","nav:tracking-upsell-intelligence","nav:tracking-capture","nav:tracking-diagnostics","nav:task-management","nav:tools-catalog","nav:tool-page-cloner","nav:tool-vsl","nav:tool-upsell","nav:tool-webhook","nav:tool-funnel-clone","nav:tool-video-studio","nav:integration-payments","nav:integration-syzepay","nav:integration-meta","nav:integration-utmify","nav:integration-google","nav:integration-tiktok","nav:integration-vturb","nav:integration-pushcut","nav:operator-activity","ofertas","logs","cloner","vsl","upsell-analyzer","webhook-tester","funnel-clone","video-shield","nav:spy-offers","nav:spy-monitor","nav:spy-cloning","nav:spy-settings"],
+  "offerIds": ["01KYMGGV92Y9RQMXRJ0E0WRB31","01KYNQ9FW2FSEXMMCENZZB50X8","01KZ2PXS13H88Z3NDRSV6N4PR3","01KZVMKYT6DDMSYHJCJ50E87TV","01M1H85EWPATBSYKC2EXBQSDAZ","01M6T7B40CGPCDYBMECJ717HS7"]
+}

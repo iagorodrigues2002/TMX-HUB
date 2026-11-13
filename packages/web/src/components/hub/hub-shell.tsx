@@ -1,6 +1,7 @@
 'use client';
 
 import { AuthGate } from '@/components/auth/auth-gate';
+import { AiFloatingChat } from '@/components/traffic/ai-floating-chat';
 import { type ReactNode, Suspense, useState } from 'react';
 import { AmbientBackground } from './ambient-background';
 import { CommandPalette } from './command-palette';
@@ -143,6 +144,7 @@ export function HubShell({
             onUnreadCountChange={setUnreadCount}
           />
           {fullBleed && <MicroFooter floating />}
+          <AiFloatingChat />
         </div>
       </OfferContextProvider>
     </AuthGate>
