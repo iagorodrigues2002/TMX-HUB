@@ -1,6 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { CreativeAiPanel } from './creative-ai-panel';
 import {
   Dialog,
   DialogContent,
@@ -824,6 +825,9 @@ export function CreativeWorkspace({
                           >
                             {identity}
                           </button>
+                        )}
+                        {(
+                          <CreativeAiPanel name={row.name} offer={row.offer} creativeKey={row.id} fileId={row.principal?.id} metrics={m} period={range} currency={currency} />
                         )}
                       </th>
                       <td>

@@ -343,7 +343,7 @@ export function AiAssistant({ compact = false }: { compact?: boolean } = {}) {
   // biome-ignore lint/correctness/useExhaustiveDependencies: Clear drafts on any identity or permission transition.
   useEffect(() => {
     followLatest.current = true;
-    setQuestion('');
+    setQuestion(!compact ? (new URLSearchParams(window.location.search).get('prompt') ?? '').slice(0, 3000) : '');
     setError('');
   }, [user?.id, status.data?.companyId, status.data?.accessRevision, status.isError]);
   useEffect(() => {

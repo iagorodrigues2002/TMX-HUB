@@ -10,6 +10,10 @@ const nextConfig = {
   reactStrictMode: true,
   devIndicators: false,
   typedRoutes: false,
+  // Local creative analysis can include video extraction before the model responds.
+  experimental: process.env.NEXT_PUBLIC_TMX_LOCAL_PREVIEW_KIND === 'synthetic'
+    ? { proxyTimeout: 600_000 }
+    : {},
   distDir:
     process.env.NEXT_DIST_DIR ??
     (process.env.NODE_ENV === 'production' ? '.next-build' : '.next-dev'),

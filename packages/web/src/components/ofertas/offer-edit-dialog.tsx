@@ -1,4 +1,5 @@
 'use client';
+import { OfferNiche } from './offer-niche';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -92,6 +93,7 @@ export function OfferEditDialog({ offer, open, onOpenChange }: Props) {
         <div className="space-y-5">
           <section className="space-y-3">
             <p className="hud-label">Identidade</p>
+            <OfferNiche offerId={offer.id} />
             <div className="grid gap-3 md:grid-cols-2">
               <Field label="Empresa" htmlFor="of-company">
                 <Input
