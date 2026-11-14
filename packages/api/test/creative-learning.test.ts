@@ -179,6 +179,17 @@ test('metrics include creatives below the old top-120 cut and recompute ratios a
   assert.equal(funnel.metrics.tmxGross, 100);
   assert.equal(funnel.metrics.funnelArpu, 50);
   assert.equal(funnel.metrics.tmxCreativeRoas, (40 + 60) / 1.5);
+  const file = {id:'confirmed-file-123',name:'PJR_ENG_AD01_L1.mp4',offer:'PJR_ENG',batch:'Leva 1',url:'https://drive.google.com/file/d/confirmed-file-123/view',thumbnail:null,identity:creativeIdentity('PJR_ENG_AD01_L1','PJR_ENG')};
+  const catalog = {rootId:'root',rootName:'Drive',at:raw.fetchedAt,foldersRead:1,offers:[],files:[file]};
+  const ambiguous = {...raw,snapshot:{...raw.snapshot,insights:raw.snapshot.insights.map(r=>r.adId==='999'?{...r,adName:'PJR_ENG_AD01'}:r)}};
+  const resolved = ownCreativeEvidence(ambiguous,access,{from:'2026-11-11',to:'2026-11-11'},attribution,{catalog});
+  assert.equal(resolved.find(r=>r.key===low.key)?.metrics.spend,1.5);
+  assert.equal(resolved.find(r=>r.key===low.key)?.metrics.upsells,4);
+  const reviewed = {...raw,snapshot:{...raw.snapshot,insights:raw.snapshot.insights.map(r=>r.adId==='999'?{...r,adName:'PJR_ENG_AD02_L1'}:r)}};
+  const corrected = ownCreativeEvidence(reviewed,access,{from:'2026-11-11',to:'2026-11-11'},attribution,{catalog,reviewedAds:{'999':{name:'PJR_ENG_AD02_L1',campaign:'PJR_ENG',offer:'PJR_ENG',batch:'Leva 1',fileId:file.id}}});
+  assert.equal(corrected.find(r=>r.key===low.key)?.metrics.spend,1.5);
+  assert.equal(corrected.find(r=>r.key===low.key)?.metrics.upsells,4);
+  assert.deepEqual(ownCreativeEvidence(reviewed,{...access,offerIds:[]},{from:'2026-11-11',to:'2026-11-11'},attribution,{catalog}),[]);
   assert.equal(withFunnel({ ...attribution, from: '2026-11-10' }).metrics.tmxGross, null);
   assert.equal(withFunnel({ ...attribution, rows: attribution.rows.map((r) => ({ ...r, offerId: 'hidden' })) }).metrics.upsells, null);
   assert.equal(low.metrics.tmxGross, null);

@@ -99,7 +99,7 @@ export function registerCreativeAnalysisServer(app: FastifyInstance, deps: {
           const data=await deps.data(access), store=creativePersistence(app,deps.root,access);
           const existing=await creativeMemories(deps.root,access,store);
           const state=await cloudCreativeDriveState(app.redis,`company:${access.companyId}`);
-          for(const row of ownCreativeEvidence(data,access,{from:data.snapshot.from,to:data.snapshot.to})) {
+          for(const row of ownCreativeEvidence(data,access,{from:data.snapshot.from,to:data.snapshot.to},undefined,state)) {
             if(!creativeAutomaticEligible({analyzed:existing.some(r=>r.version==='creative-structure-v1'&&r.creativeKey===row.key&&r.offerId===row.offerId),incomplete:row.incomplete,spend:row.metrics.spend}))continue;
             const offer=data.offers.find(o=>o.id===row.offerId);
             if(!offer)continue;

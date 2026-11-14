@@ -6,7 +6,8 @@ import {
   creativeFileIdentity,
   type CreativeDriveCatalog,
 } from '@page-cloner/shared/creative-drive-reader';
-import { creativeAdsFromMeta, creativeMetrics } from '@page-cloner/shared/creative-workspace-model';
+import { creativeAdsFromMeta, creativeCatalogRows, creativeMetrics } from '@page-cloner/shared/creative-workspace-model';
+import type { CreativeDriveState } from '@page-cloner/shared/creative-drive-state';
 import { groupTrafficAttribution, summarizeCreativeAttribution, type TrafficAttribution } from '@page-cloner/shared/traffic-attribution-model';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -122,11 +123,17 @@ export async function creativeNiches(root: string, access: AiAccess, data: AiDat
     .filter((o) => access.offerIds.includes(o.id))
     .map((o) => ({ ...o, niche: manual[o.id] ?? defaultCreativeNiche(o.name) }));
 }
+type EvidenceDrive = Pick<CreativeDriveState, 'catalog' | 'reviewedAds'>;
+async function evidenceDrive(root: string, access: AiAccess, store?: CreativePersistence) {
+  const owner = createHash('sha256').update(access.userId).digest('hex');
+  return (store?.read ?? readLocal)<EvidenceDrive>(join(root, '..', 'creative-drive-preview', `${owner}.catalog.json`), {catalog:null});
+}
 export function ownCreativeEvidence(
   data: AiData,
   access: AiAccess,
   scope: { from: string; to: string },
   attribution?: TrafficAttribution,
+  drive?: EvidenceDrive,
 ) {
   if (!access.ads) return [];
   const authorized = authorizedAiContext(data, { ...scope, level: 'ads' }, access);
@@ -137,20 +144,16 @@ export function ownCreativeEvidence(
     'BRL',
     data.classification.campaigns,
   ).filter((r) => ids.has(r.id));
-  const groups = new Map<string, typeof rows>();
   const attributed = attribution && attribution.from === scope.from && attribution.to === scope.to
     ? groupTrafficAttribution({ ...data.snapshot, ...scope }, {
         ...attribution,
         rows: attribution.rows.filter((r) => access.offerIds.includes(r.offerId)),
       }, 'ads').groups
     : new Map<string, TrafficAttribution['rows']>();
-  for (const row of rows) {
-    const identity = creativeIdentity(row.name, row.offer, row.batch, row.campaign);
-    if (!identity) continue;
-    groups.set(identity.key, [...(groups.get(identity.key) ?? []), row]);
-  }
-  return [...groups].flatMap(([key, ads]) => {
-    const code = ads[0]!.offer;
+  return creativeCatalogRows(rows, drive?.catalog ?? null, {}, drive?.reviewedAds).flatMap(group => {
+    const ads = group.sources, key = group.id;
+    if (!ads.length) return [];
+    const code = group.offer;
     const offer =
       data.classification.links[code] ??
       data.offers.find((o) => creativeOffer(o.name) === creativeOffer(code))?.id;
@@ -165,7 +168,7 @@ export function ownCreativeEvidence(
       {
         key,
         offerId: offer,
-        name: creativeIdentity(ads[0]!.name, code, ads[0]!.batch, ads[0]!.campaign)!.name,
+        name: group.name,
         period: scope,
         currency: 'BRL',
         observedAt: data.snapshot.fetchedAt,
@@ -194,7 +197,7 @@ export async function creativeLearningContext(
   ]);
   const owner = createHash('sha256').update(access.userId).digest('hex');
   const metadata = await read<Record<string, { status?: string }>>(join(root, '..', 'creative-drive-preview', `${owner}.metadata.json`), {});
-  const all = ownCreativeEvidence(data, access, scope, attribution);
+  const all = ownCreativeEvidence(data, access, scope, attribution, await evidenceDrive(root, access, store));
   const namedOffers = offers.filter((o) => question.toUpperCase().includes(o.name.toUpperCase()));
   const named = namedOffers.length
     ? namedOffers
@@ -454,7 +457,7 @@ export async function requestedDriveComparisons(
       (o.niche && question.toLowerCase().includes(o.niche.toLowerCase())),
   );
   if (!selected.length) return [];
-  const rows = ownCreativeEvidence(data, access, scope)
+  const rows = ownCreativeEvidence(data, access, scope, undefined, await evidenceDrive(root, access, store))
     .filter(
       (r) =>
         selected.some((o) => o.id === r.offerId) &&
@@ -503,11 +506,11 @@ export function registerCreativeLearning(
     const owner = createHash('sha256').update(access.userId).digest('hex');
     const base = join(deps.root, '..', 'creative-drive-preview', owner);
     const [state, metadata, saved] = await Promise.all([
-      read<{ catalog: CreativeDriveCatalog | null }>(`${base}.catalog.json`, {catalog:null}),
+      read<EvidenceDrive>(`${base}.catalog.json`, {catalog:null}),
       read<Record<string,{status?:string;principalId?:string}>>(`${base}.metadata.json`, {}),
       creativeMemories(deps.root, access, store),
     ]);
-    const metrics = ownCreativeEvidence(data, access, {from:data.snapshot.from,to:data.snapshot.to});
+    const metrics = ownCreativeEvidence(data, access, {from:data.snapshot.from,to:data.snapshot.to}, undefined, state);
     const groups = new Map<string, {key:string;offer:string;offerId:string;files:NonNullable<typeof state.catalog>['files']}>();
     let unresolved = 0;
     for (const file of state.catalog?.files ?? []) {

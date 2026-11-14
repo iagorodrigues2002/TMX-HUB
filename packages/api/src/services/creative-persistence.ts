@@ -27,7 +27,7 @@ export function creativePersistence(app: FastifyInstance, root: string, access: 
       const name = address(file);
       if (name.startsWith('drive/')) {
         const state = await cloudCreativeDriveState(app.redis, `company:${company}`);
-        return (name === 'drive/catalog' ? { catalog: state.catalog } : state.metadata) as T;
+        return (name === 'drive/catalog' ? { catalog: state.catalog, reviewedAds: state.reviewedAds } : state.metadata) as T;
       }
       const fingerprint = /^(spy-visual|spy-transcription)\/([a-f0-9]{64})\.json$/.exec(name);
       if (fingerprint) {
