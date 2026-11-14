@@ -10,6 +10,18 @@ const shift = (date: string, n: number) => new Date(Date.parse(date) + n * 86400
 export function questionScope(question: string, now = new Date()) {
   const text = normalize(question), today = day(now);
   const [year, month] = today.split('-').map(Number);
+  const explicit = [...text.matchAll(/\b(\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}(?:\/\d{4})?)\b/g)].map(match => {
+    const raw = match[0];
+    const [d,m,y] = raw.split('/');
+    const date = raw.includes('/') ? `${y ?? year}-${m!.padStart(2,'0')}-${d!.padStart(2,'0')}` : raw;
+    if (!Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0,10) !== date) throw Error('Período explícito inválido');
+    return date;
+  });
+  if (explicit.length) {
+    const from=explicit[0]!,to=explicit[1] ?? (/hoje|desde|ate agora/.test(text) ? today : from);
+    if (explicit.length > 2 || from > to) throw Error('Período explícito inválido');
+    return {from,to,offer:'',query:'',level:'campaigns' as const};
+  }
   const current = today.slice(0, 7) + '-01';
   const previous = new Date(Date.UTC(year!, month! - 2, 1)).toISOString().slice(0, 10);
   const lastMonth = /mes passado|ultimo mes/.test(text);

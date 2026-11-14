@@ -28,6 +28,11 @@ it('resolves both months from natural language, including year boundaries', () =
   expect(questionScope('veja se hoje estamos dentro da média de reembolsos. olhe o mes passado e olhe esse e me fale.', now)).toMatchObject({ from: '2026-10-01', to: '2026-11-12' });
   expect(questionScope('mês passado', new Date('2027-01-10T15:00:00Z'))).toMatchObject({ from: '2026-12-01', to: '2026-12-31' });
   expect(questionScope('analise a campanha PJR_ENG AD14')).toBeUndefined();
+  expect(questionScope('Analise todos os ads de 2026-08-01 a 2026-11-14',now)).toMatchObject({from:'2026-08-01',to:'2026-11-14'});
+  expect(questionScope('estrutura validada de todos os ads de 01/08 até hoje',now)).toMatchObject({from:'2026-08-01',to:'2026-11-12'});
+  expect(questionScope('de 01/08/2026 a 14/11/2026',now)).toMatchObject({from:'2026-08-01',to:'2026-11-14'});
+  expect(()=>questionScope('de 31/02/2026 até hoje',now)).toThrow();
+  expect(()=>questionScope('de 14/11/2026 a 01/08/2026',now)).toThrow();
 });
 it('consolidates every authorized currency and counts zero-record calendar days', () => {
   const raw = fixture(), d = questionContext(raw, context(raw), question, now);
