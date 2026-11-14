@@ -6,7 +6,7 @@ import { type LibraryAd, LibraryFailure, normalizeLibrarySource } from './spy-li
 const pageSchema = z.object({
   success: z.literal(true),
   credits_remaining: z.number().int().nonnegative(),
-  credits_charged: z.literal(1).optional(),
+  credits_charged: z.union([z.literal(0), z.literal(1)]).optional(),
   searchResults: z.array(
     z.object({
       ad_archive_id: z.string().regex(/^\d+$/),

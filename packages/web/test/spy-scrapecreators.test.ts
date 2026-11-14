@@ -125,6 +125,12 @@ test('ScrapeCreators queries advertiser Page IDs without a keyword and honors co
     }) as typeof fetch,
   );
 });
+test('ScrapeCreators accepts a successful zero-charge empty page', async () => {
+  const result = await readScrapeLibrary('synthetic', ['https://www.facebook.com/ads/library/?view_all_page_id=123&country=ALL'], ['ALL'], async () =>
+    Response.json({ success: true, credits_remaining: 21679, credits_charged: 0, results: [], cursor: null }));
+  assert.equal(result.ads.length, 0);
+  assert.equal(result.creditsRemaining, 21679);
+});
 test('ScrapeCreators refuses malformed, failed, repeated-cursor and over-budget reads instead of publishing zero', async () => {
   for (const body of [{ success: false }, {}, { success: true, credits_remaining: 1 }])
     await assert.rejects(
