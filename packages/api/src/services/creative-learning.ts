@@ -136,7 +136,8 @@ export function ownCreativeEvidence(
   drive?: EvidenceDrive,
 ) {
   if (!access.ads) return [];
-  const authorized = authorizedAiContext(data, { ...scope, level: 'ads' }, access);
+  // Creative offer is resolved after Drive grouping; campaign-name filters would drop linked ads.
+  const authorized = authorizedAiContext(data, { from: scope.from, to: scope.to, level: 'ads' }, access);
   const ids = new Set(authorized.rows.map((r) => r.id));
   const rows = creativeAdsFromMeta(
     data.snapshot,

@@ -189,6 +189,9 @@ test('metrics include creatives below the old top-120 cut and recompute ratios a
   const corrected = ownCreativeEvidence(reviewed,access,{from:'2026-11-11',to:'2026-11-11'},attribution,{catalog,reviewedAds:{'999':{name:'PJR_ENG_AD02_L1',campaign:'PJR_ENG',offer:'PJR_ENG',batch:'Leva 1',fileId:file.id}}});
   assert.equal(corrected.find(r=>r.key===low.key)?.metrics.spend,1.5);
   assert.equal(corrected.find(r=>r.key===low.key)?.metrics.upsells,4);
+  const chatScope={from:'2026-11-11',to:'2026-11-11',offer:'PJR_ENG',query:'campaign name differs',level:'ads'};
+  const chatRows=ownCreativeEvidence(reviewed,access,chatScope,attribution,{catalog,reviewedAds:{'999':{name:'PJR_ENG_AD02_L1',campaign:'PJR_ENG',offer:'PJR_ENG',batch:'Leva 1',fileId:file.id}}});
+  assert.deepEqual(chatRows.map(({key,metrics,ads})=>({key,metrics,ads})),corrected.map(({key,metrics,ads})=>({key,metrics,ads})));
   assert.deepEqual(ownCreativeEvidence(reviewed,{...access,offerIds:[]},{from:'2026-11-11',to:'2026-11-11'},attribution,{catalog}),[]);
   assert.equal(withFunnel({ ...attribution, from: '2026-11-10' }).metrics.tmxGross, null);
   assert.equal(withFunnel({ ...attribution, rows: attribution.rows.map((r) => ({ ...r, offerId: 'hidden' })) }).metrics.upsells, null);
