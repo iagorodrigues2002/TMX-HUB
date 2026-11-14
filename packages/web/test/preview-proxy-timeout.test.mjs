@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import { test } from 'node:test';
 import { proxyRequest } from 'next/dist/server/lib/router-utils/proxy-request.js';
 
-test('preview keeps a slow AI response alive beyond the default 30 seconds', async () => {
+test('live and preview allow slow AI responses beyond the default 30 seconds', async () => {
   const original = process.env.NEXT_PUBLIC_TMX_LOCAL_PREVIEW_KIND;
   process.env.NEXT_PUBLIC_TMX_LOCAL_PREVIEW_KIND = 'synthetic';
   const { default: preview } = await import('../next.config.mjs?preview-timeout');
@@ -12,7 +12,7 @@ test('preview keeps a slow AI response alive beyond the default 30 seconds', asy
   if (original === undefined) delete process.env.NEXT_PUBLIC_TMX_LOCAL_PREVIEW_KIND;
   else process.env.NEXT_PUBLIC_TMX_LOCAL_PREVIEW_KIND = original;
   assert.equal(preview.experimental.proxyTimeout, 600_000);
-  assert.equal(production.experimental.proxyTimeout, undefined);
+  assert.equal(production.experimental.proxyTimeout, 180_000);
   const upstream = createServer((_req, res) => {
     setTimeout(() => res.end('saved-analysis'), 31_000);
   });
@@ -21,7 +21,7 @@ test('preview keeps a slow AI response alive beyond the default 30 seconds', asy
     void proxyRequest(req, res, {
       protocol: 'http:', hostname: '127.0.0.1', port: String(upstream.address().port),
       pathname: '/analysis', query: {},
-    }, undefined, undefined, preview.experimental.proxyTimeout).catch(() => {
+    }, undefined, undefined, production.experimental.proxyTimeout).catch(() => {
       res.statusCode = 500;
       res.end('failed');
     });
