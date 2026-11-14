@@ -27,7 +27,7 @@ export const defaultCreativeNiche = (name: string) =>
     : /^SLM(?:_|\b)/i.test(creativeOffer(name))
       ? 'Relacionamento'
       : '';
-export const CREATIVE_ANALYSIS_POLICY = `Para análise criativa, use target como foco e apenas comparisonKeys como referências quantitativas comparáveis. Não use outro criativo de gasto muito inferior para declarar vencedor/perdedor. O critério de pares é uma faixa operacional, não garantia estatística; se não houver pares, conclua sobre o resultado do alvo sem forçar comparação.
+export const CREATIVE_ANALYSIS_POLICY = `Respeite analysisMode. Em portfolio, analise TODOS os creatives do escopo como conjunto, nunca escolha um alvo e substitua a pergunta por uma análise individual. Identifique estruturas recorrentes de hook, mensagem, vídeo, áudio e CTA; separe por nicho/oferta e faixa de investimento. Mostre quantos criativos sustentam cada padrão, suas chaves e evidências positivas e negativas. Diferencie status declarado de desempenho observado; baixo investimento é inconclusivo, não um vencedor. Não misture públicos/nichos como se fossem equivalentes. Use métricas de funil, preserve valores ausentes e não faça média simples de CPA, CPM ou ROAS: recalcule pelos numeradores e denominadores disponíveis. Entregue uma estrutura recorrente associada a bons resultados, com contraexemplos, não a alegação de causalidade de um elemento. Os resumos visuais/sonoros são trechos das análises salvas; não invente detalhes ausentes. Só sugira roteiro ou variação se solicitado. Em individual, use target como foco e apenas comparisonKeys como referências quantitativas comparáveis. Não use outro criativo de gasto muito inferior para declarar vencedor/perdedor. O critério de pares é uma faixa operacional, não garantia estatística; se não houver pares, conclua sobre o resultado do alvo sem forçar comparação.
 Para novas frases e narrações, preserve a intensidade, concisão e especificidade dos padrões observados; não dilua automaticamente para copy genérica. Use benefício concreto, contraste, curiosidade ou chamada direta apoiados no que se sabe da oferta. Não invente seleção individual, dinheiro garantido ou resultados não sustentados. Se faltar suporte para uma promessa factual, sugira uma alternativa forte e específica sem a falsa afirmação, mantendo o formato. Não trate todo apelo forte como proibido.
 elementLibrary contém elementos presentes em anúncios com métricas e status declarados, não componentes causalmente validados. Use-a para duas abordagens quando solicitadas: isolar UM elemento do alvo em uma execução nova, ou combinar até dois elementos de fontes identificadas. Cite o criativo de origem, o desempenho e exatamente o que foi reaproveitado. A combinação é uma hipótese nova, não sucesso garantido. Considere também anúncios com retorno baixo como evidência negativa do conjunto, sem concluir que música/frase isolada falhou. Se faltar análise de um elemento, não invente.
 Hook rate ausente não é defeito, retenção ruim nem impedimento: pode ser inaplicável a vídeos curtos ou não ter sido retornado pela Meta. Não invente a causa sem duração/metadados; não exija esse indicador para concluir sobre vendas, CPA e ROAS do funil. Use o visual para descrever o hook, sem inventar taxa.
@@ -86,6 +86,17 @@ type Saved = {
   result: unknown;
   audio?: unknown;
 };
+// Portfolio evidence uses bounded excerpts; individual analysis retains full saved evidence.
+function portfolioStructure(visual: Saved) {
+  const excerpt = (value: unknown, fields: string[]) => {
+    const row = z.record(z.string(), z.unknown()).safeParse(value);
+    return row.success ? Object.fromEntries(fields.flatMap(key => typeof row.data[key] === 'string'
+      ? [[key, (row.data[key] as string).slice(0, 220)]] : [])) : null;
+  };
+  return {excerpts:true,
+    result:excerpt(visual.result,['hookType','hook','endingType','ending','trophy','trophyDescription']),
+    audio:excerpt(visual.audio,['kind','description','musicStyle','hook','ending'])};
+}
 export function permittedCreativeMemory(record: Saved, access: AiAccess) {
   return (
     record.status === 'complete' &&
@@ -208,8 +219,10 @@ export async function creativeLearningContext(
     const offer = offers.find((o) => o.id === r.offerId);
     return offer && creativeIdentity(question, offer.name)?.key === r.key;
   });
-  const comparisonKeys = comparableCreativeKeys(selected, target).slice(0, 4);
-  const relevantKeys = new Set([...(target ? [target.key] : []), ...comparisonKeys]);
+  const explicitCreative = offers.some(o => creativeIdentity(question, o.name));
+  const portfolio = !explicitCreative;
+  const comparisonKeys = comparableCreativeKeys(selected, target).slice(0, portfolio ? selected.length : 4);
+  const relevantKeys = new Set(portfolio ? selected.map(r=>r.key) : [...(target ? [target.key] : []), ...comparisonKeys]);
   const speechFor=async(visual:Saved|null)=>{
     const fingerprint=z.object({fingerprint:z.string().regex(/^[a-f0-9]{64}$/)}).safeParse(visual?.audio);
     const transcript=fingerprint.success?await read<{status:string;analysis?:{text:string}}|null>(join(root,'spy-transcription',access.companyId,`${fingerprint.data.fingerprint}.json`),null):null;
@@ -225,7 +238,7 @@ export async function creativeLearningContext(
     declaredStatus: metadata[row.key]?.status ?? null,
     niche: offers.find((o) => o.id === row.offerId)?.niche,
     visual,
-    audioTranscript: relevantKeys.has(row.key) ? await speechFor(visual) : null,
+    audioTranscript: !portfolio && relevantKeys.has(row.key) ? await speechFor(visual) : null,
   }; }));
   const dir = await folder(root, access.companyId);
   const bulk = await read<{items:{offerId:string;state:string}[];status:string;updatedAt:string}|null>(join(dir,'bulk-analysis.json'),null);
@@ -315,6 +328,7 @@ export async function creativeLearningContext(
     activeGroups.get(key)!.add(ad.id);
   }
   return {
+    analysisMode: portfolio ? 'portfolio' : 'individual',
     offers: named.length ? named : offers,
     coverage: bulk ? { status:bulk.status, updatedAt:bulk.updatedAt, total:bulkItems.length, analyzed:bulkItems.filter(r=>r.state==='complete').length, pending:bulkItems.filter(r=>r.state!=='complete').length } : null,
     previousAnalyses: previousAnalyses.filter((n) => !target || n.sourceKeys.includes(target.key)).slice(-2).map((n) => ({ ...n, conclusion: n.conclusion.slice(0, 1500) })),
@@ -325,7 +339,11 @@ export async function creativeLearningContext(
     target: target ? records.find((r) => r.key === target.key) : unmeasuredTarget,
     comparisonKeys,
     comparisonRule: target ? 'Mesma oferta e período; investimento entre 0,5x e 2x o alvo; mínimo 1.000 impressões. Sem pares, não forçar comparação.' : 'Referências com pelo menos R$ 1.500 de investimento e 1.000 impressões.',
-    creatives: records.filter((r) => relevantKeys.has(r.key)),
+    creatives: records.filter((r) => relevantKeys.has(r.key)).map(r => portfolio ? {
+      key:r.key, offerId:r.offerId, niche:r.niche, declaredStatus:r.declaredStatus,
+      incomplete:r.incomplete, metrics:r.metrics,
+      visual: r.visual ? {at:r.visual.at, ...portfolioStructure(r.visual)} : null,
+    } : r),
     lowestCpm: rank('cpm'),
     lowestCpc: rank('cpc'),
     bestHooks: rank('hookRate', true),

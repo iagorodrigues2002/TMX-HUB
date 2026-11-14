@@ -206,6 +206,17 @@ test('metrics include creatives below the old top-120 cut and recompute ratios a
     const context=await creativeLearningContext(root,access,raw,'Analise PJR_ENG_AD01_L1');
     assert.equal(context.target?.audioTranscript?.text,'Tap below to see the offer.');
     assert.equal(context.target?.audioTranscript?.truncated,false);
+    assert.equal(context.analysisMode,'individual');
+    const general=await creativeLearningContext(root,access,raw,'Analise todos os ads para encontrar a estrutura validada');
+    assert.equal(general.analysisMode,'portfolio');
+    assert.equal(general.target,null);
+    assert.equal(general.creatives.length,150);
+    assert.equal(general.creatives.find(r=>r.key===low.key)?.metrics.spend,1.5);
+    assert.ok(general.creatives.find(r=>r.key==='PJR_ENG:AD150:L1'));
+    assert.equal(general.analyzedCreatives,1);
+    assert.ok(JSON.stringify(general).length<180000);
+    const denied=await creativeLearningContext(root,{...access,offerIds:[]},raw,'Analise todos os ads');
+    assert.equal(denied.creatives.length,0);
   } finally { await rm(root,{recursive:true,force:true}); }
   assert.throws(() => ownCreativeEvidence({ ...raw, companyId: 'other' }, access,
     { from: '2026-11-11', to: '2026-11-11' }, attribution));
