@@ -6,6 +6,8 @@ import { HttpProblem } from '../lib/problem.js';
 import type { AiAccess } from './ai-preview-access.js';
 import { aiDataSchema, optimizationSchema } from './ai-preview-model.js';
 import { learnOptimizationOutcomes } from './ai-optimization-learning.js';
+import { archivedTraffic } from './traffic-daily-store.js';
+import { companyCreativeSnapshot } from './traffic-server-cache.js';
 
 export function aiCompanyRuntime(app: FastifyInstance) {
   const db = () => {
@@ -151,7 +153,12 @@ export function aiCompanyRuntime(app: FastifyInstance) {
     const saved = raw ? JSON.parse(raw) : null;
     if (saved && saved.companyId !== company) throw Error('COMPANY_MISMATCH');
     const now = new Date().toISOString();
-    const snapshot = saved?.snapshot ?? {
+    // Use the same daily archive as Ads Intelligence, not an older aggregate Redis snapshot.
+    const creativeSnapshot = access.ads
+      ? await archivedTraffic(sql, company, selected.from, selected.to)
+        ?? await companyCreativeSnapshot(app.redis, company, selected.from, selected.to)
+      : null;
+    const snapshot = creativeSnapshot ?? saved?.snapshot ?? {
       ...selected,
       fetchedAt: now,
       accounts: [],
@@ -229,7 +236,7 @@ export function aiCompanyRuntime(app: FastifyInstance) {
         classification: config ? JSON.parse(config).value : { campaigns: {}, links: {} },
       }),
       trafficStale:
-        !saved || (selected.to >= today && Date.now() - Date.parse(snapshot.fetchedAt) > 3600000),
+        (!creativeSnapshot && !saved) || (selected.to >= today && Date.now() - Date.parse(snapshot.fetchedAt) > 3600000),
     };
   }
   return {

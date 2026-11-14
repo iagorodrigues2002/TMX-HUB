@@ -97,7 +97,7 @@ describe.skipIf(!process.env.AI_TEST_DATABASE_URL)('isolated company AI integrat
       CREATE TABLE tracking_upsell_manual_test_results(project_id text,order_id text,stage_id text,result text,checked_at timestamptz);`);
     await sql`CREATE TABLE tracking_events(id text,project_id text,visitor_id text,journey_id text,event_name text,received_at timestamptz,source jsonb)`;
     await sql.unsafe(await readFile(new URL('../migrations/122_company_ai_learning.sql', import.meta.url), 'utf8'));
-    for (const name of ['124_spy_visual_analysis.sql','125_spy_visual_legacy_offers.sql','126_spy_transcriptions.sql','127_company_creative_learning.sql'])
+    for (const name of ['120_traffic_daily_archive.sql','124_spy_visual_analysis.sql','125_spy_visual_legacy_offers.sql','126_spy_transcriptions.sql','127_company_creative_learning.sql'])
       await sql.unsafe(await readFile(new URL(`../migrations/${name}`, import.meta.url),'utf8'));
     directory = await mkdtemp('/tmp/tmx-ai-company-test-');
     child = spawn(
@@ -244,6 +244,19 @@ describe.skipIf(!process.env.AI_TEST_DATABASE_URL)('isolated company AI integrat
       expect(workers.length).toBeGreaterThan(0);
       expect(provider).not.toHaveBeenCalled();
     }finally{await queue.close();}
+  });
+  it('uses the same complete daily archive as Ads Intelligence instead of an older aggregate cache',async()=>{
+    const from='2026-11-11',to='2026-11-12';
+    const older={from,to,fetchedAt:'2026-11-12T12:00:00Z',accounts:[],campaigns:[],ads:[],insights:[],hourly:[],failures:[],fx:{rates:{},base:'USD',provider:'fixture',fetchedAt:'2026-11-12T12:00:00Z'}};
+    await redis.set(`traffic-sync:v1:company:${a}:snapshot:2026-08-01:${to}`,JSON.stringify({companyId:a,snapshot:older}));
+    for(const day of [from,to]){
+      const daily={...older,from:day,to:day,fetchedAt:'2026-11-12T15:00:00Z'};
+      await sql`INSERT INTO traffic_daily_archive(company_id,day,snapshot,finalized,captured_at) VALUES(${a},${day},${sql.json(daily)},true,now())`;
+    }
+    const result=await aiCompanyRuntime(app).loadData(await aiAccess(app,a,'owner'),{from,to});
+    expect(result.snapshot.fetchedAt).toBe('2026-11-12T15:00:00Z');
+    expect(result.snapshot.from).toBe(from);expect(result.snapshot.to).toBe(to);
+    expect(provider).not.toHaveBeenCalled();
   });
   it('keeps persisted credentials company-bound after server restart and rejects stale writes', async () => {
     expect((await settings()).statusCode).toBe(200);
