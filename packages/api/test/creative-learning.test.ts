@@ -211,12 +211,37 @@ test('metrics include creatives below the old top-120 cut and recompute ratios a
     assert.equal(general.analysisMode,'portfolio');
     assert.equal(general.target,null);
     assert.equal(general.creatives.length,150);
-    assert.equal(general.creatives.find(r=>r.key===low.key)?.metrics.spend,1.5);
+    assert.equal(general.creatives.find(r=>r.key===low.key)?.metrics?.spend,1.5);
     assert.ok(general.creatives.find(r=>r.key==='PJR_ENG:AD150:L1'));
     assert.equal(general.analyzedCreatives,1);
     assert.ok(JSON.stringify(general).length<180000);
+    const savedOnly={status:'complete',version:'creative-structure-v1',companyId,offerId,creativeKey:'PJR_ENG:AD1:L2',at:'2026-11-12T12:00:00Z',ads:['saved-file'],result:{hook:'Abertura salva'},audio:{description:'Música sob narração'}};
+    const savedDir=join(root,'spy-visual',companyId);
+    await writeFile(join(savedDir,`${'c'.repeat(64)}.json`),JSON.stringify(savedOnly));
+    await writeFile(join(savedDir,`${'d'.repeat(64)}.json`),JSON.stringify({...savedOnly,at:'2026-11-11T12:00:00Z',result:{hook:'Versão antiga'}}));
+    await writeFile(join(savedDir,`${'e'.repeat(64)}.json`),JSON.stringify({...savedOnly,offerId:'hidden',creativeKey:'SLM_DE:AD1:L2'}));
+    await writeFile(join(savedDir,`${'f'.repeat(64)}.json`),JSON.stringify({...savedOnly,companyId:'other',creativeKey:'PJR_ENG:AD2:L2'}));
+    const fetchSpy=vi.spyOn(globalThis,'fetch').mockRejectedValue(new Error('No paid analysis allowed'));
+    try {
+      const full=await creativeLearningContext(root,access,raw,'Analise todos os ads');
+      assert.equal(full.totalCreatives,151);
+      assert.equal(full.metricCreatives,150);
+      assert.equal(full.analyzedCreatives,2);
+      assert.equal(full.savedWithoutMetrics,1);
+      const restored=full.creatives.find(r=>r.key===savedOnly.creativeKey)!;
+      assert.equal(restored.metrics,null);
+      assert.deepEqual(restored.visual?.result,{hook:'Abertura salva'});
+      assert.deepEqual(restored.visual?.audio,{description:'Música sob narração'});
+      assert.equal(full.creatives.filter(r=>r.key===savedOnly.creativeKey).length,1);
+      assert.equal(full.creatives.find(r=>r.key===low.key)?.metrics?.spend,1.5);
+      const individual=await creativeLearningContext(root,access,raw,'Analise PJR_ENG_AD01_L1');
+      assert.equal(individual.savedWithoutMetrics,0);
+      assert.ok(!individual.creatives.some(r=>r.key===savedOnly.creativeKey));
+      assert.equal(fetchSpy.mock.calls.length,0);
+    } finally { fetchSpy.mockRestore(); }
     const denied=await creativeLearningContext(root,{...access,offerIds:[]},raw,'Analise todos os ads');
     assert.equal(denied.creatives.length,0);
+    assert.equal(denied.analyzedCreatives,0);
   } finally { await rm(root,{recursive:true,force:true}); }
   assert.throws(() => ownCreativeEvidence({ ...raw, companyId: 'other' }, access,
     { from: '2026-11-11', to: '2026-11-11' }, attribution));

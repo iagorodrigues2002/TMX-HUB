@@ -28,6 +28,7 @@ export const defaultCreativeNiche = (name: string) =>
       ? 'Relacionamento'
       : '';
 export const CREATIVE_ANALYSIS_POLICY = `Respeite analysisMode. Em portfolio, analise TODOS os creatives do escopo como conjunto, nunca escolha um alvo e substitua a pergunta por uma análise individual. Identifique estruturas recorrentes de hook, mensagem, vídeo, áudio e CTA; separe por nicho/oferta e faixa de investimento. Mostre quantos criativos sustentam cada padrão, suas chaves e evidências positivas e negativas. Diferencie status declarado de desempenho observado; baixo investimento é inconclusivo, não um vencedor. Não misture públicos/nichos como se fossem equivalentes. Use métricas de funil, preserve valores ausentes e não faça média simples de CPA, CPM ou ROAS: recalcule pelos numeradores e denominadores disponíveis. Entregue uma estrutura recorrente associada a bons resultados, com contraexemplos, não a alegação de causalidade de um elemento. Os resumos visuais/sonoros são trechos das análises salvas; não invente detalhes ausentes. Só sugira roteiro ou variação se solicitado. Em individual, use target como foco e apenas comparisonKeys como referências quantitativas comparáveis. Não use outro criativo de gasto muito inferior para declarar vencedor/perdedor. O critério de pares é uma faixa operacional, não garantia estatística; se não houver pares, conclua sobre o resultado do alvo sem forçar comparação.
+metricCreatives conta criativos com métricas; savedWithoutMetrics conta análises salvas adicionais sem vínculo de métricas no período. Inclua essas análises no levantamento visual e sonoro, mas não as use para provar desempenho, nem associe números de outro AD, oferta ou leva. metrics=null não significa zero. analyzedCreatives inclui as análises com e sem métricas, sem repetir versões da mesma chave.
 Para novas frases e narrações, preserve a intensidade, concisão e especificidade dos padrões observados; não dilua automaticamente para copy genérica. Use benefício concreto, contraste, curiosidade ou chamada direta apoiados no que se sabe da oferta. Não invente seleção individual, dinheiro garantido ou resultados não sustentados. Se faltar suporte para uma promessa factual, sugira uma alternativa forte e específica sem a falsa afirmação, mantendo o formato. Não trate todo apelo forte como proibido.
 elementLibrary contém elementos presentes em anúncios com métricas e status declarados, não componentes causalmente validados. Use-a para duas abordagens quando solicitadas: isolar UM elemento do alvo em uma execução nova, ou combinar até dois elementos de fontes identificadas. Cite o criativo de origem, o desempenho e exatamente o que foi reaproveitado. A combinação é uma hipótese nova, não sucesso garantido. Considere também anúncios com retorno baixo como evidência negativa do conjunto, sem concluir que música/frase isolada falhou. Se faltar análise de um elemento, não invente.
 Hook rate ausente não é defeito, retenção ruim nem impedimento: pode ser inaplicável a vídeos curtos ou não ter sido retornado pela Meta. Não invente a causa sem duração/metadados; não exija esse indicador para concluir sobre vendas, CPA e ROAS do funil. Use o visual para descrever o hook, sem inventar taxa.
@@ -240,6 +241,19 @@ export async function creativeLearningContext(
     visual,
     audioTranscript: !portfolio && relevantKeys.has(row.key) ? await speechFor(visual) : null,
   }; }));
+  const savedOnly = portfolio ? memories.filter((m, index) =>
+    m.version === 'creative-structure-v1' && m.creativeKey &&
+    (!named.length || named.some(o => o.id === m.offerId)) &&
+    !records.some(r => r.key === m.creativeKey && r.offerId === m.offerId) &&
+    !memories.slice(0, index).some(previous => previous.version === m.version && previous.offerId === m.offerId && previous.creativeKey === m.creativeKey)
+  ).map(visual => ({
+    key: visual.creativeKey!, offerId: visual.offerId,
+    niche: offers.find(o => o.id === visual.offerId)?.niche,
+    declaredStatus: metadata[visual.creativeKey!]?.status ?? null,
+    metrics: null,
+    metricsStatus: 'Análise salva sem métricas vinculadas neste período; não significa gasto zero nem desempenho validado.',
+    visual: {at: visual.at, ...portfolioStructure(visual)},
+  })) : [];
   const dir = await folder(root, access.companyId);
   const bulk = await read<{items:{offerId:string;state:string}[];status:string;updatedAt:string}|null>(join(dir,'bulk-analysis.json'),null);
   const bulkItems = bulk?.items.filter(r=>access.offerIds.includes(r.offerId)) ?? [];
@@ -334,16 +348,18 @@ export async function creativeLearningContext(
     previousAnalyses: previousAnalyses.filter((n) => !target || n.sourceKeys.includes(target.key)).slice(-2).map((n) => ({ ...n, conclusion: n.conclusion.slice(0, 1500) })),
     elementLibrary: /varia|combin|compil|super.?ad/i.test(question) ? records.filter((r) => r.visual && r.key !== target?.key && (!target || r.offerId === target.offerId) && (r.metrics.spend ?? 0) >= 1500).sort((a,b)=>(b.metrics.spend ?? 0)-(a.metrics.spend ?? 0)).slice(0,8).map((r)=>({key:r.key,name:r.name,declaredStatus:r.declaredStatus,metrics:r.metrics,visual:r.visual})) : [],
     trends: trends.slice(-2),
-    totalCreatives: records.length,
-    analyzedCreatives: records.filter((r) => r.visual).length,
+    totalCreatives: records.length + savedOnly.length,
+    metricCreatives: records.length,
+    savedWithoutMetrics: savedOnly.length,
+    analyzedCreatives: records.filter((r) => r.visual).length + savedOnly.length,
     target: target ? records.find((r) => r.key === target.key) : unmeasuredTarget,
     comparisonKeys,
     comparisonRule: target ? 'Mesma oferta e período; investimento entre 0,5x e 2x o alvo; mínimo 1.000 impressões. Sem pares, não forçar comparação.' : 'Referências com pelo menos R$ 1.500 de investimento e 1.000 impressões.',
-    creatives: records.filter((r) => relevantKeys.has(r.key)).map(r => portfolio ? {
+    creatives: [...records.filter((r) => relevantKeys.has(r.key)).map(r => portfolio ? {
       key:r.key, offerId:r.offerId, niche:r.niche, declaredStatus:r.declaredStatus,
       incomplete:r.incomplete, metrics:r.metrics,
       visual: r.visual ? {at:r.visual.at, ...portfolioStructure(r.visual)} : null,
-    } : r),
+    } : r), ...savedOnly],
     lowestCpm: rank('cpm'),
     lowestCpc: rank('cpc'),
     bestHooks: rank('hookRate', true),
