@@ -19,6 +19,7 @@ import {
   AI_PRICES,
   MAX_INPUT_TOKENS,
   MAX_OUTPUT_TOKENS,
+  PORTFOLIO_OUTPUT_TOKENS,
   RELEASE_LOCK,
   RESERVE_BUDGET,
   SETTLE_BUDGET,
@@ -552,7 +553,7 @@ export function registerAiPreview(app: FastifyInstance) {
         service_tier: 'default',
         prompt_cache_options: { mode: 'explicit' },
         reasoning: { effort: 'low' },
-        max_output_tokens: MAX_OUTPUT_TOKENS,
+        max_output_tokens: 'creativeLearning' in d && d.creativeLearning?.analysisMode === 'portfolio' ? PORTFOLIO_OUTPUT_TOKENS : MAX_OUTPUT_TOKENS,
         instructions: AI_POLICY + ('creativeLearning' in d ? '\n' + CREATIVE_ANALYSIS_POLICY : ''),
         input: [
           {
@@ -610,7 +611,7 @@ export function registerAiPreview(app: FastifyInstance) {
         });
       if (count.data.input_tokens > MAX_INPUT_TOKENS)
         return reply.code(422).send({ detail: 'A análise excedeu a capacidade de contexto do modelo. Peça a comparação em etapas.' });
-      reserved = reserveMicros(count.data.input_tokens);
+      reserved = reserveMicros(count.data.input_tokens, body.max_output_tokens);
       // Recheck settings after preflight so disabling/replacing the key cancels a not-yet-sent generation.
       if ((await config(company)).revision !== c.revision)
         return reply
@@ -654,6 +655,7 @@ export function registerAiPreview(app: FastifyInstance) {
             'OpenAI recusou ou interrompeu a análise. Confira chave, permissões e cota. A reserva de custo foi mantida por segurança; não houve repetição automática.',
         });
       const raw = await response.json();
+      if (raw.status !== 'completed') app.log.warn({providerStatus:raw.status,reason:raw.incomplete_details?.reason}, 'Company AI response incomplete');
       stage = 'save';
       const actual = costMicros(raw);
       if (actual !== null) await app.redis.eval(SETTLE_BUDGET, 2, daily, reservation, actual);

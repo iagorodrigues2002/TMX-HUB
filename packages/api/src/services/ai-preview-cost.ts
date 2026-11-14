@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export const AI_MODEL = 'gpt-6.1-sol';
 export const MAX_OUTPUT_TOKENS = 3_000;
+export const PORTFOLIO_OUTPUT_TOKENS = 8_000;
 export const MAX_INPUT_TOKENS = 1_050_000 - MAX_OUTPUT_TOKENS;
 // Standard tier, USD per million tokens, verified against official pricing on 2026-11-12.
 export const AI_PRICES = {
@@ -19,11 +20,12 @@ export const usageSchema = z.object({
   input_tokens_details: z.object({ cached_tokens: tokens, cache_write_tokens: tokens }),
 });
 
-export function reserveMicros(inputTokens: number) {
+export function reserveMicros(inputTokens: number, outputTokens = MAX_OUTPUT_TOKENS) {
   if (!Number.isInteger(inputTokens) || inputTokens < 0 || inputTokens > MAX_INPUT_TOKENS)
     throw Error('INPUT_LIMIT');
+  if (![MAX_OUTPUT_TOKENS, PORTFOLIO_OUTPUT_TOKENS].includes(outputTokens) || inputTokens + outputTokens > 1_050_000) throw Error('OUTPUT_LIMIT');
   const long = inputTokens > 272_000;
-  return Math.ceil(inputTokens * AI_PRICES.write * (long ? 2 : 1) + MAX_OUTPUT_TOKENS * AI_PRICES.output * (long ? 1.5 : 1));
+  return Math.ceil(inputTokens * AI_PRICES.write * (long ? 2 : 1) + outputTokens * AI_PRICES.output * (long ? 1.5 : 1));
 }
 
 export function costMicros(raw: unknown): number | null {
@@ -41,7 +43,7 @@ export function costMicros(raw: unknown): number | null {
     u.total_tokens !== u.input_tokens + u.output_tokens ||
     cached + written > u.input_tokens ||
     u.input_tokens > MAX_INPUT_TOKENS ||
-    u.output_tokens > MAX_OUTPUT_TOKENS
+    u.output_tokens > PORTFOLIO_OUTPUT_TOKENS || u.total_tokens > 1_050_000
   )
     return null;
   const long = u.input_tokens > 272_000;
