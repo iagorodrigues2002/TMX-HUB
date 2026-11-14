@@ -477,7 +477,8 @@ export function registerAiPreview(app: FastifyInstance) {
         .reverse()
         .map((v) => JSON.parse(v))
         .filter((v) => permittedHistory(v, access));
-      const operationalUpsells = /intellig|intelig|marca|funcion|pendente|updates/i.test(input.data.question + ' ' + (history.at(-1)?.question ?? ''));
+      const creativeRequest = /criativ|roteiro|hook|cpm|cpc|varia[çc][aã]o|concorr|tend[eê]nc|temas? em alta|\bads?\b/i.test(input.data.question);
+      const operationalUpsells = !creativeRequest && /intellig|intelig|marca|funcion|pendente|updates/i.test(input.data.question + ' ' + (history.at(-1)?.question ?? ''));
       const requestedScope = input.data.scope ?? questionScope(input.data.question) ??
         aiScopeSchema.safeParse(history.at(-1)?.scope).data ?? (operationalUpsells ? questionScope('hoje') : undefined);
       const d = await (async () => {
@@ -496,7 +497,7 @@ export function registerAiPreview(app: FastifyInstance) {
         query: '',
         level: 'campaigns' as const,
       };
-      if (/criativ|roteiro|hook|cpm|cpc|varia[çc][aã]o|concorr|tend[eê]nc|temas? em alta|\bads?\b/i.test(input.data.question) &&
+      if (creativeRequest &&
         (local || (await persistence(access)!.read<{ready:boolean}|null>(join(root,'creative-learning',company,'release.json'),null))?.ready)) {
         let researchError: string | null = null;
         let trendResearch: {cached:boolean;creditsCharged:number|null;source:string}|null=null;

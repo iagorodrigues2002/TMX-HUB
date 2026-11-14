@@ -25,6 +25,7 @@ describe.skipIf(!process.env.AI_TEST_DATABASE_URL)('isolated company AI integrat
   const scope = { from: '2026-11-11', to: '2026-11-12', offer: '', query: '', level: 'campaigns' };
   let sql: Sql, redis: Redis, child: ChildProcess, directory: string, app: FastifyInstance;
   const provider = vi.fn();
+  const queries: string[] = [];
   const servers: FastifyInstance[] = [];
   async function server() {
     const s = Fastify();
@@ -80,7 +81,7 @@ describe.skipIf(!process.env.AI_TEST_DATABASE_URL)('isolated company AI integrat
     const target = new URL(url);
     if (target.hostname !== '127.0.0.1' || target.pathname !== '/tmx_ai_test')
       throw Error('Dedicated local AI test database required');
-    sql = postgres(url, { max: 1, onnotice: () => {} });
+    sql = postgres(url, { max: 1, onnotice: () => {}, debug: (_connection, query) => { queries.push(query); } });
     const schema = 'ai_' + randomUUID().replaceAll('-', '');
     await sql.unsafe(`CREATE SCHEMA ${schema}`);
     await sql.unsafe(`SET search_path TO ${schema}`);
@@ -229,6 +230,11 @@ describe.skipIf(!process.env.AI_TEST_DATABASE_URL)('isolated company AI integrat
     expect(bodies.join('\n')).toContain('Saved violet skyline hook');
     expect(bodies.join('\n')).toContain('Saved spoken CTA');
     expect(provider.mock.calls.every(call=>!String(call[0]).includes('chat/completions')&&!String(call[0]).includes('transcriptions'))).toBe(true);
+    queries.length=0;
+    const portfolio=await restarted.inject({method:'POST',url:base+'/chat',headers:headers(),payload:{companyId:a,requestId:randomUUID(),question:'Analise todos os ads e compare os que funcionaram com os que não funcionaram',scope}});
+    expect(portfolio.statusCode,portfolio.body).toBe(200);
+    expect(queries.some(q=>q.includes('tracking_upsell_manual_test_results'))).toBe(false);
+    expect(provider.mock.calls.map(call=>JSON.stringify(call[1])).join('\n')).toContain('portfolio');
   });
   it('starts the production creative worker with a dedicated Redis connection without provider calls',async()=>{
     vi.stubEnv('NODE_ENV','production');
