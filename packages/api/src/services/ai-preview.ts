@@ -464,6 +464,8 @@ export function registerAiPreview(app: FastifyInstance) {
     let sent = false;
     let ownRequest = false;
     let reserved = 0;
+    let stage = 'context';
+    const startedAt = Date.now();
     const daily = budgetKey(company);
     const reservation = `${requestKey}:reservation`;
     try {
@@ -576,6 +578,7 @@ export function registerAiPreview(app: FastifyInstance) {
         ...(local ? { 'x-tmx-ai-secret': bridgeSecret(master) } : {}),
         'content-type': 'application/json',
       };
+      stage = 'preflight';
       const counted = await fetch(
         local
           ? 'http://127.0.0.1:4121/input-tokens'
@@ -633,6 +636,7 @@ export function registerAiPreview(app: FastifyInstance) {
             'O limite diário de IA da empresa não comporta esta consulta. Reduza o recorte ou ajuste o limite na Administração.',
         });
       sent = true;
+      stage = 'generation';
       const response = await fetch(
         local ? 'http://127.0.0.1:4121/responses' : 'https://api.openai.com/v1/responses',
         {
@@ -649,6 +653,7 @@ export function registerAiPreview(app: FastifyInstance) {
             'OpenAI recusou ou interrompeu a análise. Confira chave, permissões e cota. A reserva de custo foi mantida por segurança; não houve repetição automática.',
         });
       const raw = await response.json();
+      stage = 'save';
       const actual = costMicros(raw);
       if (actual !== null) await app.redis.eval(SETTLE_BUDGET, 2, daily, reservation, actual);
       if ((await aiAccess(app, company, req.user!.sub)).revision !== access.revision)
@@ -676,6 +681,7 @@ export function registerAiPreview(app: FastifyInstance) {
       if('creativeLearning' in d && d.creativeLearning) await saveCreativeLearningNote(root,access,record,d.creativeLearning,persistence(access));
       return record;
     } catch (error) {
+      app.log.error({stage, elapsedMs:Date.now()-startedAt, errorName:error instanceof Error?error.name:'unknown', sent}, 'Company AI analysis interrupted');
       if (error instanceof HttpProblem && error.status === 403)
         return reply
           .code(403)
