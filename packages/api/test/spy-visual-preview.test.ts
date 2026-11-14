@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Fastify from 'fastify';
@@ -46,15 +46,18 @@ test('cache includes company, media, copy and comparison direction; rejects remo
     false,
   );
 });
-test.each([false, true])(
+test.each([false, true, 'creative'])(
   'company guard, persistence and no repeated billing (structure=%s)',
   async (structure) => {
     const payload = structure
       ? {
           ...input,
-          kind: 'structure',
+          kind: structure === 'creative' ? 'creative' : 'structure',
+          ...(structure === 'creative' ? { creativeKey: 'PJR_ENG:AD01:L2' } : {}),
           assetKey: 'a'.repeat(64),
-          ads: input.ads.slice(0, 1),
+          ads: input.ads
+            .slice(0, 1)
+            .map((a) => ({ ...a, id: structure === 'creative' ? 'DriveFile123456' : a.id })),
           audio: null,
         }
       : input;
@@ -103,7 +106,15 @@ test.each([false, true])(
       registerSpyVisualPreview(app, {
         root,
         recheck: async () => true,
-        access: () => ({ companyId, canManage: enabled, allOffers: true, spy: true }) as never,
+        access: () =>
+          ({
+            companyId,
+            canManage: enabled,
+            allOffers: true,
+            spy: true,
+            ads: enabled,
+            offerIds: [input.offerId],
+          }) as never,
         config: async () => ({
           enabled: true,
           dailyLimitCents: 2000,
@@ -136,7 +147,7 @@ test.each([false, true])(
       assert.equal(calls, 1);
       const results = await app.inject({
         method: 'GET',
-        url: `/meta-control/traffic/ai/spy-visual/results?offerId=${input.offerId}${structure ? '&kind=structure' : ''}`,
+        url: `/meta-control/traffic/ai/spy-visual/results?offerId=${input.offerId}${structure === 'creative' ? '&kind=creative' : structure ? '&kind=structure' : ''}`,
       });
       assert.equal(results.json().records.length, 1);
       const otherKind = await app.inject({
@@ -159,6 +170,17 @@ test.each([false, true])(
       assert.equal((await call(other)).statusCode, 502);
       assert.equal((await call(other)).statusCode, 409);
       assert.equal(calls, 2);
+      const malformed = { status:'completed', output:[{type:'message',content:[{type:'output_text',text:'not JSON'}]}] };
+      globalThis.fetch=async()=>{calls++;return Response.json(malformed);};
+      const invalid={...payload,ads:payload.ads.map(a=>({...a,text:'invalid output'}))};
+      assert.equal((await call(invalid)).statusCode,502);
+      const directory=join(root,'spy-visual',companyId);
+      const rows=await Promise.all((await readdir(directory)).map(async name=>JSON.parse(await readFile(join(directory,name),'utf8'))));
+      const saved=rows.find(row=>row.provider);
+      assert.deepEqual(saved.provider,malformed);
+      assert.equal(saved.providerStatus,200);
+      assert.equal((await call(invalid)).statusCode,409);
+      assert.equal(calls,3);
     } finally {
       globalThis.fetch = originalFetch;
       await app.close();

@@ -1,6 +1,7 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import postgres, { type Sql } from 'postgres';
 import Redis from 'ioredis';
+import { Queue } from 'bullmq';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -14,6 +15,8 @@ import { aiCompanyRuntime } from '../src/services/ai-company-runtime.js';
 import { aiAccess } from '../src/services/ai-preview-access.js';
 import { decryptSecret } from '../src/lib/secret-box.js';
 import douglas from './fixtures/ai-douglas-permissions.json';
+import { creativePersistence } from '../src/services/creative-persistence.js';
+import { creativeIdentity } from '@page-cloner/shared/creative-identity';
 
 describe.skipIf(!process.env.AI_TEST_DATABASE_URL)('isolated company AI integration', () => {
   const a = '00000000-0000-4000-8000-000000000001',
@@ -94,6 +97,8 @@ describe.skipIf(!process.env.AI_TEST_DATABASE_URL)('isolated company AI integrat
       CREATE TABLE tracking_upsell_manual_test_results(project_id text,order_id text,stage_id text,result text,checked_at timestamptz);`);
     await sql`CREATE TABLE tracking_events(id text,project_id text,visitor_id text,journey_id text,event_name text,received_at timestamptz,source jsonb)`;
     await sql.unsafe(await readFile(new URL('../migrations/122_company_ai_learning.sql', import.meta.url), 'utf8'));
+    for (const name of ['124_spy_visual_analysis.sql','125_spy_visual_legacy_offers.sql','126_spy_transcriptions.sql','127_company_creative_learning.sql'])
+      await sql.unsafe(await readFile(new URL(`../migrations/${name}`, import.meta.url),'utf8'));
     directory = await mkdtemp('/tmp/tmx-ai-company-test-');
     child = spawn(
       'redis-server',
@@ -167,6 +172,7 @@ describe.skipIf(!process.env.AI_TEST_DATABASE_URL)('isolated company AI integrat
   afterEach(async () => {
     for (const s of servers.splice(0)) await s.close();
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
   afterAll(async () => {
     if (sql) {
@@ -201,6 +207,43 @@ describe.skipIf(!process.env.AI_TEST_DATABASE_URL)('isolated company AI integrat
       (await app.inject({ url: base + '/status', headers: headers('douglas') })).statusCode,
     ).toBe(403);
     expect(provider).not.toHaveBeenCalled();
+  });
+  it('retains creative evidence across restart, isolates companies and supplies saved visual/audio to the assistant', async()=>{
+    await settings();
+    const key=creativeIdentity('PJR_ENG_AD05_L17','PJR_ENG')!.key;
+    const fingerprint='a'.repeat(64),audioKey='b'.repeat(64);
+    const record={status:'complete',companyId:a,offerId:'PJR_ENG',version:'creative-structure-v1',creativeKey:key,key:fingerprint,ads:['drive-file-test'],at:new Date().toISOString(),result:{hook:'Saved violet skyline hook'},audio:{fingerprint:audioKey,description:'Electronic music'}};
+    await sql`INSERT INTO company_spy_visual_analyses(company_id,fingerprint,offer_id,record) VALUES(${a},${fingerprint},'PJR_ENG',${sql.json(record)})`;
+    await sql`INSERT INTO company_spy_transcriptions(company_id,fingerprint,record) VALUES(${a},${audioKey},${sql.json({status:'complete',analysis:{text:'Saved spoken CTA'}})})`;
+    const root='/tmp/tmx-company-creative-persistence';
+    const ownerAccess=await aiAccess(app,a,'owner');
+    await creativePersistence(app,root,ownerAccess).save(join(root,'creative-learning',a,'niches.json'),{PJR_ENG:'Renda extra'});
+    await creativePersistence(app,root,ownerAccess).save(join(root,'creative-learning',a,'release.json'),{ready:true});
+    const restarted=await server();
+    expect(await creativePersistence(restarted,root,ownerAccess).read(join(root,'creative-learning',a,'niches.json'),{})).toEqual({PJR_ENG:'Renda extra'});
+    const foreign=await aiAccess(restarted,b,'owner');
+    expect(await creativePersistence(restarted,root,foreign).read(join(root,'creative-learning',b,'niches.json'),{})).toEqual({});
+    const result=await restarted.inject({method:'POST',url:base+'/chat',headers:headers(),payload:{companyId:a,requestId:randomUUID(),question:'Analise o criativo PJR_ENG_AD05_L17',scope}});
+    expect(result.statusCode,result.body).toBe(200);
+    const bodies=provider.mock.calls.map(call=>JSON.stringify(call[1]));
+    expect(bodies.join('\n')).toContain('Saved violet skyline hook');
+    expect(bodies.join('\n')).toContain('Saved spoken CTA');
+    expect(provider.mock.calls.every(call=>!String(call[0]).includes('chat/completions')&&!String(call[0]).includes('transcriptions'))).toBe(true);
+  });
+  it('starts the production creative worker with a dedicated Redis connection without provider calls',async()=>{
+    vi.stubEnv('NODE_ENV','production');
+    await server();
+    const queue=new Queue('company-creative-analysis',{connection:redis});
+    try{
+      let workers=[];
+      for(let i=0;i<30;i++){
+        workers=await queue.getWorkers();
+        if(workers.length)break;
+        await new Promise(resolve=>setTimeout(resolve,100));
+      }
+      expect(workers.length).toBeGreaterThan(0);
+      expect(provider).not.toHaveBeenCalled();
+    }finally{await queue.close();}
   });
   it('keeps persisted credentials company-bound after server restart and rejects stale writes', async () => {
     expect((await settings()).statusCode).toBe(200);

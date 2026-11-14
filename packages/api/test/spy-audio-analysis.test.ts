@@ -21,6 +21,8 @@ describe('Spy audio and creative patterns', () => {
       audioAnalysisSchema.safeParse({ ...base, kind: 'speech_music', text: 'Fala real' }).success,
     ).toBe(true);
     expect(audioAnalysisRequest('QQ==').store).toBe(false);
+    expect(audioAnalysisSchema.parse({...base,musicStyle:'hiphop'}).musicStyle).toBe('other');
+    expect(audioAnalysisSchema.safeParse({...base,musicStyle:123}).success).toBe(false);
   });
   it('uses observed token usage and rejects unknown pricing', () => {
     const result = {

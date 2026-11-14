@@ -11,6 +11,7 @@ import {
   audioAnalysisSchema,
 } from './spy-audio-analysis.js';
 import type { registerSpyVisualPreview } from './spy-visual-preview.js';
+import { creativeAudioTransport } from './creative-audio-transport.js';
 
 const MODEL = 'gpt-transcribe';
 const inputSchema = z
@@ -19,12 +20,12 @@ const inputSchema = z
     analyze: z.boolean().optional(),
     audio: z
       .string()
-      .max(25610000)
+      .max(76810000)
       .regex(/^[A-Za-z0-9+/]+=*$/),
   })
   .strict();
 
-export function spyWavDuration(audio: Buffer) {
+export function spyWavDuration(audio: Buffer, maxSeconds = 600) {
   if (
     audio.length < 44 ||
     audio.toString('ascii', 0, 4) !== 'RIFF' ||
@@ -55,8 +56,8 @@ export function spyWavDuration(audio: Buffer) {
     if (kind === 'data') bytes += size;
     offset = start + size + (size % 2);
   }
-  if (!format || !bytes || bytes % 2 || bytes > 600 * 32000)
-    throw Error('Áudio vazio ou acima de dez minutos.');
+  if (!format || !bytes || bytes % 2 || bytes > maxSeconds * 32000)
+    throw Error('Áudio vazio ou acima da duração permitida.');
   return bytes / 32000;
 }
 
@@ -66,10 +67,13 @@ export function registerSpyTranscription(
 ) {
   app.post(
     '/meta-control/traffic/ai/spy-transcription',
-    { bodyLimit: 25700000 },
+    { bodyLimit: 76900000 },
     async (req, reply) => {
       const access = deps.access(req);
-      if (!access?.canManage || !access.allOffers || !access.spy)
+      const creativeOfferId = (req.query as { creativeOfferId?: string }).creativeOfferId;
+      if (creativeOfferId
+        ? !access?.ads || !access.offerIds.includes(creativeOfferId)
+        : !access?.canManage || !access.allOffers || !access.spy)
         return reply.code(403).send({ detail: 'Acesso negado.' });
       const parsed = inputSchema.safeParse(req.body);
       if (!parsed.success) return reply.code(400).send({ detail: 'Áudio inválido.' });
@@ -78,9 +82,9 @@ export function registerSpyTranscription(
       const audio = Buffer.from(parsed.data.audio, 'base64');
       let duration: number;
       try {
-        duration = spyWavDuration(audio);
+        duration = spyWavDuration(audio, parsed.data.analyze ? 1800 : 600);
       } catch {
-        return reply.code(400).send({ detail: 'Áudio inválido ou acima de dez minutos.' });
+        return reply.code(400).send({ detail: 'Áudio inválido ou acima da duração permitida.' });
       }
       const model = parsed.data.analyze ? AUDIO_MODEL : MODEL;
       const fingerprint = createHash('sha256').update(`${model}:v1:`).update(audio).digest('hex');
@@ -128,6 +132,7 @@ export function registerSpyTranscription(
       }
       if ((req.query as { cachedOnly?: string }).cachedOnly === '1')
         return reply.code(412).send({ detail: 'Transcrição ainda não gerada.' });
+      const providerBody = parsed.data.analyze && deps.production ? await creativeAudioTransport(parsed.data.audio) : null;
       const config = await deps.config(access.companyId);
       if (!config.enabled || !config.headers.authorization)
         return reply.code(409).send({ detail: 'Configure a IA da empresa primeiro.' });
@@ -184,6 +189,7 @@ export function registerSpyTranscription(
         }
         return reply.code(429).send({ detail: 'Limite diário da empresa insuficiente.' });
       }
+      let receipt: { providerStatus?: number; requestId?: string; provider?: unknown; rejection?: unknown; costMicros?: number; costReserved?: boolean } = {};
       try {
         let response: Response;
         if (parsed.data.analyze) {
@@ -194,7 +200,7 @@ export function registerSpyTranscription(
             {
               method: 'POST',
               headers: config.headers,
-              body: JSON.stringify(audioAnalysisRequest(parsed.data.audio)),
+              body: JSON.stringify(providerBody ?? audioAnalysisRequest(parsed.data.audio)),
               redirect: 'error',
               signal: AbortSignal.timeout(95000),
             },
@@ -218,8 +224,15 @@ export function registerSpyTranscription(
             redirect: 'error',
             signal: AbortSignal.timeout(95000),
           });
-        if (!response.ok) throw Error('Provider rejected');
+        receipt.providerStatus = response.status;
+        receipt.requestId = response.headers.get('x-request-id') ?? undefined;
+        if (!response.ok) {
+          receipt.rejection=await response.json().catch(()=>({error:'Unreadable rejection'}));
+          throw Error('Provider rejected');
+        }
         const provider = await response.json();
+        // Keep a successful provider response if parsing fails: recovery must not bill again.
+        receipt.provider = provider;
         const analysis = parsed.data.analyze
           ? audioAnalysisSchema.parse(
               JSON.parse(
@@ -261,8 +274,8 @@ export function registerSpyTranscription(
         if (!(await deps.recheck(req, access.revision)))
           return reply.code(403).send({ detail: 'Permissões alteradas durante a transcrição.' });
         return { ...publicRecord(record), cached: false };
-      } catch {
-        await save({ ...pending, status: 'uncertain' });
+      } catch (error) {
+        await save({ ...pending, status: 'uncertain', ...receipt, error: error instanceof Error ? error.name : 'UnknownError' });
         return reply.code(502).send({
           detail:
             'Transcrição não concluída. Tentativa salva, sem repetição automática para evitar cobrança duplicada.',

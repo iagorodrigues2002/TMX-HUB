@@ -31,6 +31,10 @@ test('duration is measured from bounded PCM bytes, not user supplied duration', 
   const truncated = wav();
   truncated.writeUInt32LE(64000, 40);
   assert.throws(() => spyWavDuration(truncated));
+  const long=Buffer.alloc(770*32000+44);wav().copy(long,0,0,44);
+  long.writeUInt32LE(long.length-8,4);long.writeUInt32LE(long.length-44,40);
+  assert.throws(()=>spyWavDuration(long));
+  assert.equal(spyWavDuration(long,1800),770);
 });
 test.each([false, true])(
   'transcripts and audio analyses persist, deduplicate and isolate companies (analyze=%s)',

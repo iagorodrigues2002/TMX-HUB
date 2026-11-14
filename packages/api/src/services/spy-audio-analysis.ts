@@ -15,7 +15,7 @@ export const audioAnalysisSchema = z
       'percussion',
       'other',
       'uncertain',
-    ]),
+    ]).or(z.string().min(1).max(30).transform(() => 'other' as const)),
     hook: z.string().max(1500),
     ending: z.string().max(1500),
     text: z.string().max(50000),

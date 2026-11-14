@@ -30,6 +30,10 @@ import { AI_POLICY, aiDataSchema, aiScopeSchema } from './ai-preview-model.js';
 import { questionContext, questionScope } from './ai-question-context.js';
 
 import { registerSpyVisualPreview } from './spy-visual-preview.js';
+import { creativePersistence } from './creative-persistence.js';
+import { registerCreativeAnalysisServer } from './creative-analysis-server.js';
+import { CREATIVE_ANALYSIS_POLICY, creativeLearningContext, creativeNiches, registerCreativeLearning, requestedDriveCreative, requestedDriveComparisons, saveCreativeLearningNote } from './creative-learning.js';
+import { trafficAttributionResponse, type TrafficAttribution } from '@page-cloner/shared/traffic-attribution-model';
 const root = join(homedir(), '.codex/local-data/tmx/ai-preview');
 const PREFIX = '/meta-control/traffic/ai';
 const companySchema = z.object({ companyId: z.string().uuid() });
@@ -352,6 +356,9 @@ export function registerAiPreview(app: FastifyInstance) {
     if (d.companyId !== company) throw Error('COMPANY_MISMATCH');
     return d;
   }
+  const persistence = (access: AiAccess) => local ? undefined : creativePersistence(app, root, access);
+  registerCreativeLearning(app, { root, access: accessFor, data, ...(!local ? { persistence: (access: AiAccess) => creativePersistence(app, root, access) } : {}) });
+  if (!local) registerCreativeAnalysisServer(app, { root, access: accessFor, data, offers: (company) => runtime!.offers(company) });
   app.get(`${PREFIX}/status`, async (req) => {
     try {
       const access = accessFor(req);
@@ -452,7 +459,7 @@ export function registerAiPreview(app: FastifyInstance) {
     }
     const lock = `tmx-ai-preview:lock:${company}`;
     const lockToken = randomUUID();
-    if (!(await app.redis.set(lock, lockToken, 'EX', 240, 'NX')))
+    if (!(await app.redis.set(lock, lockToken, 'EX', local ? 600 : 240, 'NX')))
       return reply.code(429).send({ detail: 'Aguarde a análise atual da empresa terminar.' });
     let sent = false;
     let ownRequest = false;
@@ -487,6 +494,52 @@ export function registerAiPreview(app: FastifyInstance) {
         query: '',
         level: 'campaigns' as const,
       };
+      if (/criativ|roteiro|hook|cpm|cpc|varia[çc][aã]o|concorr|tend[eê]nc|temas? em alta|\bads?\b/i.test(input.data.question) &&
+        (local || (await persistence(access)!.read<{ready:boolean}|null>(join(root,'creative-learning',company,'release.json'),null))?.ready)) {
+        let researchError: string | null = null;
+        let trendResearch: {cached:boolean;creditsCharged:number|null;source:string}|null=null;
+        const creative = await requestedDriveCreative(root, access, available, input.data.question, persistence(access));
+        const comparisons=await requestedDriveComparisons(root,access,available,input.data.question,scope,persistence(access));
+        const candidates=[...(creative?[creative]:[]),...comparisons].filter((r,i,all)=>all.findIndex(v=>v.key===r.key)===i).slice(0,2);
+        const errors=await Promise.all(candidates.map(async candidate=>{try {
+          if (!local) {
+            const response = await app.inject({method:'POST',url:'/v1/meta-control/traffic/ai/creative-analysis',headers:{authorization:req.headers.authorization!},payload:{...candidate,companyId:company}});
+            return response.statusCode === 202 ? 'Análise do vídeo adicionada à fila da empresa. Ainda não está disponível; não invente cenas ou áudio.' : response.statusCode === 200 ? null : 'Não foi possível preparar a análise do Drive; use apenas as evidências salvas.';
+          }
+          const response=await fetch('http://localhost:3120/api/creative-analysis',{method:'POST',headers:{authorization:req.headers.authorization!,origin:'http://localhost:3120','content-type':'application/json'},body:JSON.stringify(candidate),redirect:'error',signal:AbortSignal.timeout(240000)});
+          return response.ok?null:(await response.json() as {detail:string}).detail;
+        }catch{return 'Não foi possível obter uma referência do Drive; analise apenas as evidências salvas.';}}));
+        researchError=errors.filter(Boolean).join(' ')||null;
+        if (local && /(pesquis|busqu|encontre|procure).*(tend[eê]nc|em alta)|tend[eê]nc.*(pesquis|busqu)/i.test(input.data.question)) {
+          if (!access.canManage || !access.ads) researchError='Pesquisa externa exige administração e acesso ao Ads Intelligence.';
+          else {
+            const niches=await creativeNiches(root,access,available);
+            const matched=niches.find((o)=>input.data.question.toUpperCase().includes(o.name.toUpperCase()))??niches.find((o)=>o.niche&&input.data.question.toLowerCase().includes(o.niche.toLowerCase()));
+            if(!matched) researchError='Informe a oferta ou o nicho para pesquisar tendências.';
+            else {
+              const english=/_ENG$/i.test(matched.name),niche=matched.niche;
+              const query=english?(niche==='Renda extra'?'side hustle ideas':niche==='Relacionamento'?'dating relationships':niche):niche;
+              const response=await fetch('http://127.0.0.1:4121/creative-trends',{method:'POST',headers:{'x-tmx-ai-secret':bridgeSecret(await secret()),'content-type':'application/json'},body:JSON.stringify({companyId:company,owner:access.userId,niche,query,region:english?'US':'BR'}),redirect:'error',signal:AbortSignal.timeout(70000)});
+              if(!response.ok)researchError=(await response.json() as {detail?:string}).detail??'Pesquisa externa indisponível.';
+              else {const result=await response.json() as {cached:boolean;creditsCharged:number|null;source:string};trendResearch={cached:result.cached,creditsCharged:result.cached?0:result.creditsCharged,source:result.source};}
+            }
+          }
+        }
+        let attribution: TrafficAttribution | undefined;
+        let attributionError: string | null = null;
+        if (access.ads) {
+          try {
+            const response = await app.inject({ method: 'GET', url: `/v1/meta-control/traffic/attribution?${new URLSearchParams({ from: scope.from, to: scope.to, workspace: 'creative' })}`, headers: { authorization: req.headers.authorization! } });
+            if (response.statusCode !== 200) throw Error('attribution_unavailable');
+            attribution = trafficAttributionResponse.parse(response.json());
+            if (attribution.from !== scope.from || attribution.to !== scope.to) throw Error('attribution_period');
+          } catch {
+            attribution = undefined;
+            attributionError = 'Atribuição TMX indisponível para este período. Não interpretar valores ausentes como zero.';
+          }
+        }
+        return { companyId: company, fetchedAt: available.fetchedAt, scope, researchError, trendResearch, attributionError, creativeLearning: await creativeLearningContext(root, access, available, input.data.question, scope, attribution, persistence(access)) };
+      }
       return questionContext(available, authorizedAiContext(available, scope, access), input.data.question);
       })();
       if (d.companyId !== company) throw Error('COMPANY_MISMATCH');
@@ -497,15 +550,15 @@ export function registerAiPreview(app: FastifyInstance) {
         prompt_cache_options: { mode: 'explicit' },
         reasoning: { effort: 'low' },
         max_output_tokens: MAX_OUTPUT_TOKENS,
-        instructions: AI_POLICY,
+        instructions: AI_POLICY + ('creativeLearning' in d ? '\n' + CREATIVE_ANALYSIS_POLICY : ''),
         input: [
           {
             role: 'user',
             content: JSON.stringify({
               administrativeGuidance: c.instructions,
-              previousConversation: (spyOnly ? [] : history).map((v) => ({
+              previousConversation: (spyOnly ? [] : 'creativeLearning' in d ? history.slice(-1) : history).map((v) => ({
                 question: v.question,
-                answer: v.answer.slice(0, 5000),
+                answer: v.answer.slice(0, 'creativeLearning' in d ? 1200 : 5000),
               })),
               data: d,
               question: input.data.question,
@@ -620,6 +673,7 @@ export function registerAiPreview(app: FastifyInstance) {
       await app.redis.lpush(memoryKey, JSON.stringify(record));
       await app.redis.ltrim(memoryKey, 0, 49);
       await app.redis.expire(memoryKey, 30 * 86400);
+      if('creativeLearning' in d && d.creativeLearning) await saveCreativeLearningNote(root,access,record,d.creativeLearning,persistence(access));
       return record;
     } catch (error) {
       if (error instanceof HttpProblem && error.status === 403)

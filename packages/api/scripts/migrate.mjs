@@ -132,6 +132,7 @@ const migrations = [
   '124_spy_visual_analysis.sql',
   '125_spy_visual_legacy_offers.sql',
   '126_spy_transcriptions.sql',
+  '127_company_creative_learning.sql',
 ];
 
 await sql`

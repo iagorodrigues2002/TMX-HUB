@@ -70,6 +70,11 @@ export const structureInput = visualInput.extend({
     .strict()
     .nullable(),
 });
+export const creativeInput = structureInput.extend({
+  kind: z.literal('creative'),
+  creativeKey: z.string().min(1).max(160),
+  ads: structureInput.shape.ads.element.extend({ id: z.string().regex(/^[A-Za-z0-9_-]{10,200}$/) }).array().length(1),
+});
 export const structureResult = z
   .object({
     hookType: z.enum([
@@ -125,13 +130,15 @@ export function registerSpyVisualPreview(
   const allowed = (access: AiAccess) => access?.canManage && access.allOffers && access.spy;
   app.get('/meta-control/traffic/ai/spy-visual/results', async (req, reply) => {
     const access = deps.access(req);
-    if (!allowed(access)) return reply.code(403).send({ detail: 'Acesso negado.' });
     const { offerId } = z
       .object({ offerId: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/) })
       .parse(req.query);
+    const creative = (req.query as { kind?: string }).kind === 'creative';
+    if (creative ? !access?.ads || !access.offerIds.includes(offerId) : !allowed(access))
+      return reply.code(403).send({ detail: 'Acesso negado.' });
     const structure = (req.query as { kind?: string }).kind === 'structure';
     const keep = (r: { version?: string }) =>
-      structure ? r.version === 'spy-structure-v1' : r.version !== 'spy-structure-v1';
+      r.version === (creative ? 'creative-structure-v1' : structure ? 'spy-structure-v1' : VISUAL_VERSION);
     if (deps.production) {
       const rows =
         await app.db!`SELECT record FROM company_spy_visual_analyses WHERE company_id=${access.companyId} AND offer_id=${offerId} AND record->>'status'='complete'`;
@@ -165,14 +172,17 @@ export function registerSpyVisualPreview(
   });
   app.post('/meta-control/traffic/ai/spy-visual', { bodyLimit: 4500000 }, async (req, reply) => {
     const access = deps.access(req);
+    const parsed = z.union([visualInput, structureInput, creativeInput]).safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ detail: 'Comparação visual inválida.' });
+    const input = parsed.data;
+    const creative = 'kind' in input && input.kind === 'creative';
     // Spy catalog is company-wide; restricted-offer members cannot inspect the full catalog.
-    if (!access?.canManage || !access.allOffers || !access.spy)
+    if (creative
+      ? !access?.ads || !access.offerIds.includes(input.offerId)
+      : !access?.canManage || !access.allOffers || !access.spy)
       return reply.code(403).send({
         detail: 'Análise visual reservada ao administrador da empresa com acesso ao Spy e à IA.',
       });
-    const parsed = z.union([visualInput, structureInput]).safeParse(req.body);
-    if (!parsed.success) return reply.code(400).send({ detail: 'Comparação visual inválida.' });
-    const input = parsed.data;
     const structure = 'kind' in input ? input : null;
     if (
       input.companyId !== access.companyId ||
@@ -187,6 +197,8 @@ export function registerSpyVisualPreview(
     const dir = join(deps.root, 'spy-visual', access.companyId);
     const file = join(dir, `${key}.json`);
     if (!deps.production) await mkdir(dir, { recursive: true, mode: 0o700 });
+    if (deps.production && (req.query as { cachedOnly?: string }).cachedOnly !== '1')
+      await app.db!`DELETE FROM company_spy_visual_analyses WHERE company_id=${access.companyId} AND fingerprint=${key} AND record->>'status'='blocked' AND record->>'reason'='daily_budget'`;
     try {
       const existing = deps.production
         ? (
@@ -250,6 +262,7 @@ export function registerSpyVisualPreview(
         .code(429)
         .send({ detail: 'Limite diário da empresa insuficiente para esta análise.' });
     }
+    let receipt: {providerStatus?:number; provider?:unknown; costMicros?:number; costReserved?:boolean} = {};
     try {
       const content = input.ads.flatMap((ad, index) => [
         { type: 'input_text', text: `${index === 0 ? 'A' : 'B'} · ID ${ad.id}\nCopy: ${ad.text}` },
@@ -277,7 +290,7 @@ export function registerSpyVisualPreview(
             prompt_cache_options: { mode: 'explicit' },
             reasoning: { effort: 'low' },
             max_output_tokens: 3000,
-            instructions: structure ? structureInstructions : instructions,
+            instructions: structure ? structureInstructions + (creative ? ' Para criativos longos, há mais quadros no início e apenas uma referência no final. Se o final mostrar contador, descreva-o separadamente; priorize mensagem e CTA nos primeiros 20 segundos. Não confunda apêndice de contagem com a peça principal, não infira motivo de aprovação nem sua eficácia. Integre música e narração da análise de áudio quando disponíveis.' : '') : instructions,
             input: [{ role: 'user', content }],
             text: {
               format: {
@@ -290,12 +303,14 @@ export function registerSpyVisualPreview(
           }),
         },
       );
+      receipt.providerStatus=response.status;
       if (!response.ok) throw Error('PROVIDER_REJECTED');
       const raw = (await response.json()) as {
         status?: string;
         output?: { type: string; content?: { type: string; text?: string }[] }[];
       };
       const cost = costMicros(raw);
+      receipt={...receipt,provider:raw,costMicros:cost??reserved,costReserved:cost===null};
       if (cost !== null) await app.redis.eval(SETTLE_BUDGET, 2, daily, reservation, cost);
       if (raw.status !== 'completed') throw Error('INCOMPLETE_RESPONSE');
       const answer = raw.output
@@ -311,7 +326,8 @@ export function registerSpyVisualPreview(
         companyId: access.companyId,
         offerId: input.offerId,
         ads: input.ads.map((a) => a.id),
-        version: structure ? 'spy-structure-v1' : VISUAL_VERSION,
+        version: creative ? 'creative-structure-v1' : structure ? 'spy-structure-v1' : VISUAL_VERSION,
+        ...(creative ? { creativeKey: input.creativeKey } : {}),
         ...(structure ? { assetKey: structure.assetKey, audio: structure.audio } : {}),
         model: AI_MODEL,
         at: new Date().toISOString(),
@@ -323,8 +339,8 @@ export function registerSpyVisualPreview(
       if (!(await deps.recheck(req, access.revision)))
         return reply.code(403).send({ detail: 'Permissões alteradas durante a análise.' });
       return { ...record, cached: false };
-    } catch {
-      await save({ status: 'uncertain', at: new Date().toISOString() });
+    } catch (error) {
+      await save({ status: 'uncertain', at: new Date().toISOString(), ...receipt, error:error instanceof Error?error.message:'Unknown error' });
       return reply.code(502).send({
         detail:
           'Análise não concluída. Tentativa salva e sem repetição automática para evitar cobrança duplicada.',

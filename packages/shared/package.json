@@ -6,6 +6,7 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
+    "./drive-creative-media": "./src/creative/drive-creative-media.ts",
     ".": "./src/index.ts",
     "./creative-drive-reader": "./src/creative/creative-drive-reader.ts",
     "./creative-drive-state": "./src/creative/creative-drive-state.ts",
@@ -13,6 +14,7 @@
     "./creative-workspace-model": "./src/creative/creative-workspace-model.ts",
     "./traffic-campaigns-model": "./src/creative/real-campaigns-model.ts",
     "./traffic-reports-model": "./src/creative/traffic-reports-model.ts",
+    "./traffic-attribution-model": "./src/creative/traffic-attribution-model.ts",
     "./budget-fx": "./src/creative/budget-fx.ts",
     "./date-range": "./src/creative/date-range.ts"
   },
