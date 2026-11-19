@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { DataState } from '@/components/ui/data-state';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatRefundDate, formatRefundElapsed } from '@/lib/refund-dates';
+import { refundOriginLabel } from '@/lib/refund-origin';
 import { useState } from 'react';
 import { renderRefundFilters } from './refunds-dashboard-render-refund-filters';
 import { Empty, panel } from './refunds-dashboard-support';
@@ -188,6 +189,7 @@ export function RefundsDashboard() {
                           'Gateway / conta',
                           'Pedido',
                           'Cliente',
+                          'Origem da venda',
                           'Devolução',
                         ].map((h) => (
                           <th
@@ -229,6 +231,14 @@ export function RefundsDashboard() {
                           </td>
                           <td className="px-3 py-3 text-xs">
                             {isPrivate ? '****' : item.buyer?.name || item.buyer?.email || '—'}
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-3 text-xs">
+                            <span
+                              className={item.origin === 'assisted' ? 'text-primary' : 'text-muted-foreground'}
+                              title="Origem operacional da venda: clique do operador registrado antes da aprovação, incluindo sequências atribuídas. Não é clique de anúncio da Meta."
+                            >
+                              {refundOriginLabel(item.origin)}
+                            </span>
                           </td>
                           <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums text-danger">
                             {item.amount_brl_minor == null

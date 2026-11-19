@@ -91,8 +91,10 @@ self.addEventListener('push', (event) =>
       if (!(await claim(message))) return;
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
       if (windows.some((client) => client.visibilityState === 'visible' && client.focused)) return;
-      await self.registration.showNotification('Nova venda aprovada · TMX', {
-        body: 'Abra o TMX para ver os detalhes.',
+      const title = typeof message.title === 'string' && message.title.trim();
+      const body = typeof message.body === 'string' && message.body.trim();
+      await self.registration.showNotification(title || 'Nova venda aprovada · TMX', {
+        body: body || 'Abra o TMX para ver os detalhes.',
         tag: `tmx-sale:${message.id}`,
         icon: '/brand/the-minex-mark.png',
         badge: '/favicon.ico',

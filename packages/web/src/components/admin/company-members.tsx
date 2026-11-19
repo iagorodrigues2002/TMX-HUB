@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth-context';
 import { ALL_TOOL_KEYS } from '@page-cloner/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
+import { CompanyVault } from './company-vault';
 import { CompanyMemberAccess, roleLabels } from './company-member-access';
 
 function CompanyTeam({ company, userId }: { company: Company; userId: string }) {
@@ -62,6 +63,7 @@ function CompanyTeam({ company, userId }: { company: Company; userId: string }) 
     );
   return (
     <div className="space-y-5">
+      {members.data && <CompanyVault companyId={company.id} members={members.data.members} />}
       <form
         className="glass-card rounded-xl border border-border bg-card p-5"
         onSubmit={(event) => {

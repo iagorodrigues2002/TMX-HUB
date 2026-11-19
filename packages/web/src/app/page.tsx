@@ -1,5 +1,6 @@
 'use client';
 
+import { BrowserPushMenu } from '@/components/hub/browser-push-menu';
 import { HubShell } from '@/components/hub/hub-shell';
 import { ToolCard } from '@/components/hub/tool-card';
 import { OverviewDashboard } from '@/components/overview/overview-dashboard';
@@ -22,6 +23,7 @@ export default function HubLandingPage() {
 
   return (
     <HubShell>
+      {SIGNAL_PREVIEW && user && <BrowserPushMenu userId={user.id} placement="home" />}
       {!SIGNAL_PREVIEW && (
         <header className="glass-card tmx-command-hero animate-[tmx-reveal_240ms_cubic-bezier(0,0,0.2,1)_both] rounded-2xl border border-border p-5 motion-reduce:animate-none sm:p-7 md:p-8">
           <div className="mb-4 flex flex-wrap items-center gap-3">

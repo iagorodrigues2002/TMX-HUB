@@ -31,6 +31,7 @@ it.skipIf(!url)(
         await sql`CREATE TEMP TABLE tracking_gateway_connections(id text,project_id text,name text,provider text,fee_settings jsonb) ON COMMIT DROP`;
         await sql`CREATE TEMP TABLE syzepay_company_connections(id text,name text,fee_settings jsonb,company_name text,owner_id text) ON COMMIT DROP`;
         await sql`CREATE TEMP TABLE exchange_rate_cache(base_currency text,target_currency text,rate numeric) ON COMMIT DROP`;
+        await sql`CREATE TEMP TABLE tracking_fee_settings(project_id text,vendepay_fee_pct numeric,extra_fee_minor bigint,extra_fee_currency text,reserve_pct numeric) ON COMMIT DROP`;
         await sql`CREATE TEMP TABLE tracking_upsell_operator_attempts(project_id text,order_id text,view_only boolean,opened_at timestamptz) ON COMMIT DROP`;
         await sql`CREATE TEMP TABLE tracking_upsell_operator_credits(project_id text,order_id text,operator_id text,reason text,front_order_id text) ON COMMIT DROP`;
         await sql`CREATE TEMP TABLE webhook_receipts(id text,order_id text,connection_id text,payload jsonb,received_at timestamptz,state text) ON COMMIT DROP`;
@@ -107,6 +108,8 @@ it.skipIf(!url)(
           )) as ReturnType<typeof buildRefundAnalytics>;
         };
         const general = await report('general');
+        expect(Object.fromEntries((general as unknown as { items: Array<{id:string;origin:string}> }).items.map(row => [row.id,row.origin])))
+          .toEqual({natural:'natural',assisted:'assisted',unknown:'unknown',legacy:'unknown'});
         expect(general.totals.count).toBe(4);
         expect(general.totals.brl_minor).toBe(95000);
         expect(general.origin_totals.natural.brl_minor).toBe(10000);

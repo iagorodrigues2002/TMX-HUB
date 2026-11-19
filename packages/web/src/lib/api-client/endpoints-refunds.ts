@@ -117,6 +117,7 @@ export const endpoints = {
       brl_minor: number | null;
       product_name: string;
       order_kind: string;
+      origin?: 'natural' | 'assisted' | 'unknown';
       lifecycle_at: string;
       paid_at?: string | null;
       delay_paid_at?: string | null;

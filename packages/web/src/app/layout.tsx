@@ -9,6 +9,7 @@ export const metadata: Metadata = {
   title: 'TMX HUB · TERMINAL DE CONTROLE',
   description: 'Hub de ferramentas TMX',
   manifest: '/manifest.webmanifest',
+  icons: { apple: { url: '/brand/tmx-app-icon-v2-180.png', sizes: '180x180' } },
   appleWebApp: { capable: true, title: 'TMX HUB', statusBarStyle: 'black-translucent' },
 };
 
