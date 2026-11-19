@@ -19,3 +19,11 @@ Auditoria mostra `assisted` como Com clique, `natural` como Sem clique e origem 
 - 21 testes Web aprovados sem skips; typecheck aprovado.
 - Leitura autenticada do live em 19/11: HTTP 200, 31 devoluções, 18 naturais e 13 assistidas, nenhuma origem ausente. Nenhum comprador ou segredo no recibo.
 - Publicação exclusivamente do serviço Web; nenhuma migração ou alteração de dados em produção.
+
+## Publicação verificada
+
+- Commit `d8d566a` salvo na branch remota `codex/refund-origin-column`.
+- Deployment Web `fbf7c16f-37ba-4f70-84e8-f0bddd48252b`: SUCCESS, healthcheck /login aprovado.
+- /reembolsos, /cofre/conectar e /login: HTTP 200. Bundle servido contém a coluna Origem da venda e os rótulos Com clique/Sem clique; Cofre continua presente.
+- API pós-publicação: HTTP 200, mesmas 31 devoluções (18 naturais, 13 assistidas). API não republicada.
+- Build Web aprovado. Não foi realizado teste de preenchimento/desbloqueio do Cofre com senhas reais.
